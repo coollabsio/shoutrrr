@@ -1,0 +1,38 @@
+<?php
+
+use App\Dto\Post\DraftData;
+
+test('it builds from a full payload', function () {
+    $data = DraftData::fromArray([
+        'base_text' => 'hello',
+        'destination' => ['kind' => 'account', 'id' => 'acc-1'],
+        'targets' => [
+            ['connected_account_id' => 'acc-1', 'auto_split' => false, 'content_override' => ['text' => 'hi x']],
+        ],
+        'media_ids' => ['m1', 'm2'],
+        'expected_updated_at' => '2026-06-12T10:00:00+00:00',
+    ]);
+
+    expect($data->baseText)->toBe('hello')
+        ->and($data->destinationKind)->toBe('account')
+        ->and($data->destinationId)->toBe('acc-1')
+        ->and($data->mediaIds)->toBe(['m1', 'm2'])
+        ->and($data->autoSplitFor('acc-1'))->toBeFalse()
+        ->and($data->hasOverrideFor('acc-1'))->toBeTrue()
+        ->and($data->overrideFor('acc-1'))->toBe(['text' => 'hi x'])
+        ->and($data->expectedUpdatedAt)->toBe('2026-06-12T10:00:00+00:00');
+});
+
+test('it defaults missing pieces sensibly', function () {
+    $data = DraftData::fromArray([
+        'base_text' => '',
+        'destination' => ['kind' => 'all'],
+    ]);
+
+    expect($data->destinationKind)->toBe('all')
+        ->and($data->destinationId)->toBeNull()
+        ->and($data->mediaIds)->toBe([])
+        ->and($data->autoSplitFor('whatever'))->toBeTrue()
+        ->and($data->hasOverrideFor('whatever'))->toBeFalse()
+        ->and($data->overrideFor('whatever'))->toBeNull();
+});

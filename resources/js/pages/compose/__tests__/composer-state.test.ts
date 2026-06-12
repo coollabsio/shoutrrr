@@ -1,0 +1,404 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+    buildPutBody,
+    composerReducer,
+    firstLineTitle,
+    initialComposerState,
+} from '../composer-state';
+import type { PostView } from '../types';
+
+function hydrated(): ReturnType<typeof composerReducer> {
+    const post: PostView = {
+        id: 'post-1',
+        base_text: 'hello',
+        status: 'draft',
+        updated_at: '2026-06-12T10:00:00+00:00',
+        scheduled_at: null,
+        destination: { kind: 'all', id: null },
+        targets: [
+            {
+                id: 't1',
+                connected_account_id: 'a1',
+                platform: 'x',
+                handle: '@a',
+                display_name: null,
+                avatar_url: null,
+                sections: ['hello'],
+                content_override: null,
+                auto_split: true,
+                issues: [],
+            },
+            {
+                id: 't2',
+                connected_account_id: 'a2',
+                platform: 'bluesky',
+                handle: '@b',
+                display_name: null,
+                avatar_url: null,
+                sections: ['hello'],
+                content_override: null,
+                auto_split: true,
+                issues: [],
+            },
+        ],
+        media: [],
+    };
+
+    return composerReducer(initialComposerState(), { type: 'hydrate', post });
+}
+
+describe('composerReducer', () => {
+    it('starts with no post and an idle save state', () => {
+        const state = initialComposerState();
+        expect(state.postId).toBeNull();
+        expect(state.saveState).toBe('idle');
+        expect(state.activeTab).toBe('__base__');
+    });
+
+    it('hydrates base text, destination, baseline, and per-account maps', () => {
+        const state = hydrated();
+        expect(state.postId).toBe('post-1');
+        expect(state.baseText).toBe('hello');
+        expect(state.baselineUpdatedAt).toBe('2026-06-12T10:00:00+00:00');
+        expect(state.autoSplitByAccount).toEqual({ a1: true, a2: true });
+        expect(state.saveState).toBe('saved');
+    });
+
+    it('marks dirty when base text changes', () => {
+        const state = composerReducer(hydrated(), {
+            type: 'updateBaseText',
+            text: 'new',
+        });
+        expect(state.baseText).toBe('new');
+        expect(state.saveState).toBe('dirty');
+    });
+
+    it('stores a per-account override and marks dirty', () => {
+        const state = composerReducer(hydrated(), {
+            type: 'setOverrideText',
+            accountId: 'a1',
+            text: 'just for x',
+        });
+        expect(state.overrideByAccount.a1).toBe('just for x');
+        expect(state.saveState).toBe('dirty');
+    });
+
+    it('discards a per-account override', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'setOverrideText',
+            accountId: 'a1',
+            text: 'x',
+        });
+        state = composerReducer(state, {
+            type: 'discardOverride',
+            accountId: 'a1',
+        });
+        expect(state.overrideByAccount.a1).toBeUndefined();
+    });
+
+    it('toggles auto split per account', () => {
+        const state = composerReducer(hydrated(), {
+            type: 'toggleAutoSplit',
+            accountId: 'a1',
+        });
+        expect(state.autoSplitByAccount.a1).toBe(false);
+    });
+
+    it('transitions through a successful save', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'updateBaseText',
+            text: 'new',
+        });
+        state = composerReducer(state, { type: 'saveStarted' });
+        expect(state.saveState).toBe('saving');
+
+        const view: PostView = {
+            id: 'post-1',
+            base_text: 'new',
+            status: 'draft',
+            updated_at: '2026-06-12T11:00:00+00:00',
+            scheduled_at: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        state = composerReducer(state, { type: 'saveSucceeded', post: view });
+        expect(state.saveState).toBe('saved');
+        expect(state.baselineUpdatedAt).toBe('2026-06-12T11:00:00+00:00');
+    });
+
+    it('keeps dirty on save success when edits arrived mid-flight', () => {
+        let state = composerReducer(hydrated(), { type: 'saveStarted' });
+        // user types while the save is in flight
+        state = composerReducer(state, {
+            type: 'updateBaseText',
+            text: 'typed during save',
+        });
+        expect(state.saveState).toBe('dirty');
+
+        const view: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            status: 'draft',
+            updated_at: '2026-06-12T11:30:00+00:00',
+            scheduled_at: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        state = composerReducer(state, { type: 'saveSucceeded', post: view });
+        // stays dirty so the debounce reschedules and the edit is not lost
+        expect(state.saveState).toBe('dirty');
+        expect(state.baselineUpdatedAt).toBe('2026-06-12T11:30:00+00:00');
+        expect(state.conflict).toBeNull();
+    });
+
+    it('tracks media via addMedia and removeMedia and marks dirty', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'addMedia',
+            media: {
+                id: 'm1',
+                url: 'http://x/m1.png',
+                mime: 'image/png',
+                alt_text: null,
+                position: 0,
+            },
+        });
+        expect(state.media.map((m) => m.id)).toEqual(['m1']);
+        expect(state.saveState).toBe('dirty');
+
+        state = composerReducer(state, {
+            type: 'addMedia',
+            media: {
+                id: 'm2',
+                url: 'http://x/m2.png',
+                mime: 'image/png',
+                alt_text: null,
+                position: 1,
+            },
+        });
+        expect(state.media.map((m) => m.id)).toEqual(['m1', 'm2']);
+
+        state = composerReducer(state, {
+            type: 'removeMedia',
+            mediaId: 'm1',
+        });
+        expect(state.media.map((m) => m.id)).toEqual(['m2']);
+        expect(state.saveState).toBe('dirty');
+    });
+
+    it('reorders media to match the given id sequence and marks dirty', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'addMedia',
+            media: {
+                id: 'm1',
+                url: 'http://x/m1.png',
+                mime: 'image/png',
+                alt_text: null,
+                position: 0,
+            },
+        });
+        state = composerReducer(state, {
+            type: 'addMedia',
+            media: {
+                id: 'm2',
+                url: 'http://x/m2.png',
+                mime: 'image/png',
+                alt_text: null,
+                position: 1,
+            },
+        });
+        state = composerReducer(state, {
+            type: 'reorderMedia',
+            ids: ['m2', 'm1'],
+        });
+        expect(state.media.map((m) => m.id)).toEqual(['m2', 'm1']);
+        expect(state.saveState).toBe('dirty');
+    });
+
+    it('appends media missing from a partial reorder sequence', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'addMedia',
+            media: {
+                id: 'm1',
+                url: 'http://x/m1.png',
+                mime: 'image/png',
+                alt_text: null,
+                position: 0,
+            },
+        });
+        state = composerReducer(state, {
+            type: 'addMedia',
+            media: {
+                id: 'm2',
+                url: 'http://x/m2.png',
+                mime: 'image/png',
+                alt_text: null,
+                position: 1,
+            },
+        });
+        // unknown id ignored; m1 missing from the sequence is appended
+        state = composerReducer(state, {
+            type: 'reorderMedia',
+            ids: ['m2', 'ghost'],
+        });
+        expect(state.media.map((m) => m.id)).toEqual(['m2', 'm1']);
+    });
+
+    it('enters conflict on a stale save and resolves use-server', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'updateBaseText',
+            text: 'mine',
+        });
+        const server: PostView = {
+            id: 'post-1',
+            base_text: 'theirs',
+            status: 'draft',
+            updated_at: '2026-06-12T12:00:00+00:00',
+            scheduled_at: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        state = composerReducer(state, {
+            type: 'saveFailedStale',
+            post: server,
+        });
+        expect(state.saveState).toBe('conflict');
+        expect(state.conflict?.base_text).toBe('theirs');
+
+        state = composerReducer(state, { type: 'resolveConflictUseServer' });
+        expect(state.baseText).toBe('theirs');
+        expect(state.saveState).toBe('saved');
+        expect(state.conflict).toBeNull();
+    });
+
+    it('replaces the schedule tray without touching saveState', () => {
+        const state = hydrated();
+        expect(state.scheduleTray).toEqual({ mode: 'now', pickedAt: null });
+        const next = composerReducer(state, {
+            type: 'setScheduleTray',
+            tray: { mode: 'pick', pickedAt: '2026-06-20T15:00:00+00:00' },
+        });
+        expect(next.scheduleTray).toEqual({
+            mode: 'pick',
+            pickedAt: '2026-06-20T15:00:00+00:00',
+        });
+        // scheduling is separate from the autosave dirty flow
+        expect(next.saveState).toBe(state.saveState);
+    });
+
+    it('resolves keep-mine by adopting the server baseline but keeping my text', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'updateBaseText',
+            text: 'mine',
+        });
+        const server: PostView = {
+            id: 'post-1',
+            base_text: 'theirs',
+            status: 'draft',
+            updated_at: '2026-06-12T12:00:00+00:00',
+            scheduled_at: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            media: [],
+        };
+        state = composerReducer(state, {
+            type: 'saveFailedStale',
+            post: server,
+        });
+        state = composerReducer(state, { type: 'resolveConflictKeepMine' });
+        expect(state.baseText).toBe('mine');
+        expect(state.baselineUpdatedAt).toBe('2026-06-12T12:00:00+00:00');
+        expect(state.saveState).toBe('dirty');
+    });
+});
+
+describe('buildPutBody', () => {
+    it('sends content_override: null for accounts without an override', () => {
+        const state = hydrated();
+        const body = buildPutBody(state, ['a1', 'a2']);
+        expect(body.targets[0]).toEqual({
+            connected_account_id: 'a1',
+            auto_split: true,
+            content_override: null,
+        });
+        expect(body.targets[0].content_override).toBeNull();
+    });
+
+    it('includes content_override only for overridden accounts and clears the rest', () => {
+        const state = composerReducer(hydrated(), {
+            type: 'setOverrideText',
+            accountId: 'a1',
+            text: 'x only',
+        });
+        const body = buildPutBody(state, ['a1', 'a2']);
+        expect(body.targets[0].content_override).toEqual({
+            text: 'x only',
+            media_ids: [],
+        });
+        expect(body.targets[1].content_override).toBeNull();
+    });
+
+    it('carries base_text, destination, media, and the baseline', () => {
+        const state = hydrated();
+        const body = buildPutBody(state, ['a1', 'a2']);
+        expect(body.base_text).toBe('hello');
+        expect(body.destination).toEqual({ kind: 'all' });
+        expect(body.expected_updated_at).toBe('2026-06-12T10:00:00+00:00');
+    });
+
+    it('emits media_ids from state.media', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'addMedia',
+            media: {
+                id: 'm1',
+                url: 'http://x/m1.png',
+                mime: 'image/png',
+                alt_text: null,
+                position: 0,
+            },
+        });
+        state = composerReducer(state, {
+            type: 'addMedia',
+            media: {
+                id: 'm2',
+                url: 'http://x/m2.png',
+                mime: 'image/png',
+                alt_text: null,
+                position: 1,
+            },
+        });
+        const body = buildPutBody(state, ['a1', 'a2']);
+        expect(body.media_ids).toEqual(['m1', 'm2']);
+    });
+});
+
+describe('firstLineTitle', () => {
+    it('returns an empty string for empty text', () => {
+        expect(firstLineTitle('')).toBe('');
+    });
+
+    it('returns an empty string when there is no non-empty line', () => {
+        expect(firstLineTitle('   \n\n  \n')).toBe('');
+    });
+
+    it('picks the first non-empty line, trimmed', () => {
+        expect(firstLineTitle('\n  \n  hello world  \nsecond')).toBe(
+            'hello world',
+        );
+    });
+
+    it('truncates lines longer than 80 chars with an ellipsis', () => {
+        const long = 'a'.repeat(120);
+        const title = firstLineTitle(long);
+        expect(title).toBe(`${'a'.repeat(80)}…`);
+        expect(title.length).toBe(81);
+    });
+
+    it('keeps lines of exactly 80 chars untouched', () => {
+        const exact = 'b'.repeat(80);
+        expect(firstLineTitle(exact)).toBe(exact);
+    });
+});

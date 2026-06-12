@@ -1,27 +1,63 @@
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 
-import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
+import { RecentFeed } from '@/components/recent-feed';
+import Composer from '@/pages/compose/Composer';
+import type {
+    Account,
+    AccountSet,
+    PlatformLimits,
+} from '@/pages/compose/types';
+import type { PostRowData } from '@/pages/posts/post-row';
 import { dashboard } from '@/routes';
 
-export default function Dashboard() {
+type Props = {
+    accounts: Account[];
+    sets: AccountSet[];
+    limits: PlatformLimits[];
+    posts: PostRowData[];
+};
+
+function timeGreeting(): string {
+    const hour = new Date().getHours();
+    if (hour < 5) {
+        return 'Working late';
+    }
+    if (hour < 12) {
+        return 'Good morning';
+    }
+    if (hour < 18) {
+        return 'Good afternoon';
+    }
+
+    return 'Good evening';
+}
+
+export default function Dashboard({ accounts, sets, limits, posts }: Props) {
+    const { auth } = usePage().props;
+    const firstName = (auth.user?.name ?? '').split(/\s+/)[0] || 'there';
+
     return (
         <>
             <Head title="Dashboard" />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-                <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-                    <div className="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
-                    </div>
-                    <div className="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
-                    </div>
-                    <div className="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
-                    </div>
-                </div>
-                <div className="relative min-h-[100vh] flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border">
-                    <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
-                </div>
+            <div className="mx-auto w-full max-w-[880px] px-4 pt-8 pb-16 sm:px-6 sm:pt-12">
+                <h1 className="text-[26px] leading-tight font-semibold tracking-tight">
+                    {timeGreeting()},{' '}
+                    <span className="bg-gradient-to-br from-primary to-primary/60 bg-clip-text text-transparent">
+                        {firstName}
+                    </span>
+                </h1>
+                <p className="mt-1.5 mb-7 text-[13.5px] tracking-tight text-muted-foreground">
+                    Write something new — it autosaves as you go.
+                </p>
+
+                <Composer
+                    post={null}
+                    accounts={accounts}
+                    sets={sets}
+                    limits={limits}
+                />
+
+                <RecentFeed posts={posts} />
             </div>
         </>
     );

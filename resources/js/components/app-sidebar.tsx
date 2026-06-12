@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpen,
+    FileText,
     FolderGit2,
     LayoutGrid,
     Settings,
@@ -24,6 +25,7 @@ import {
 import { WorkspaceSelector } from '@/components/workspace-selector';
 import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
+import { index as postsRoute } from '@/routes/posts';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -31,6 +33,11 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'Posts',
+        href: postsRoute(),
+        icon: FileText,
     },
     {
         title: 'Accounts',

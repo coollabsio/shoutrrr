@@ -1,0 +1,72 @@
+export const BASE_TAB = '__base__';
+
+export type PlatformName = 'x' | 'bluesky' | 'linkedin';
+
+export type Destination =
+    | { kind: 'all' }
+    | { kind: 'set'; id: string }
+    | { kind: 'account'; id: string };
+
+export type Account = {
+    id: string;
+    platform: PlatformName;
+    handle: string;
+    display_name: string | null;
+    avatar_url: string | null;
+};
+
+export type AccountSet = {
+    id: string;
+    name: string;
+    connected_account_ids: string[];
+};
+
+export type PlatformLimits = {
+    platform: PlatformName;
+    maxLength: number;
+    maxBytes: number | null;
+    maxMedia: number;
+    maxMediaBytes: number;
+    allowedMime: string[];
+    threadMax: number | null;
+    maxImageDimensions: { width: number; height: number };
+};
+
+export type MediaView = {
+    id: string;
+    url: string;
+    mime: string;
+    alt_text: string | null;
+    position: number;
+};
+
+export type TargetView = {
+    id: string;
+    connected_account_id: string;
+    platform: PlatformName;
+    handle: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    sections: string[];
+    content_override: { text?: string | null; media_ids?: string[] } | null;
+    auto_split: boolean;
+    issues: string[];
+};
+
+export type PostView = {
+    id: string;
+    base_text: string;
+    status: string;
+    updated_at: string;
+    scheduled_at: string | null;
+    destination: { kind: string; id: string | null };
+    targets: TargetView[];
+    media: MediaView[];
+};
+
+export type ComposePageProps = {
+    post: PostView | null;
+    accounts: Account[];
+    sets: AccountSet[];
+    limits: PlatformLimits[];
+};

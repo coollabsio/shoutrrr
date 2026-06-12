@@ -10,7 +10,9 @@
         "format:check": "oxfmt --check resources/",
         "lint": "oxlint --fix",
         "lint:check": "oxlint",
-        "types:check": "tsc --noEmit"
+        "types:check": "tsc --noEmit",
+        "test": "vitest run",
+        "test:watch": "vitest"
     },
     "devDependencies": {
         "@laravel/vite-plugin-wayfinder": "^0.1.3",
@@ -18,7 +20,8 @@
         "babel-plugin-react-compiler": "^1.0.0",
         "oxfmt": "^0.53.0",
         "oxlint": "^1.68.0",
-        "oxlint-tsgolint": "^0.23.0"
+        "oxlint-tsgolint": "^0.23.0",
+        "vitest": "^4.1.8"
     },
     "dependencies": {
         "@inertiajs/react": "^3.0.0",
@@ -38,17 +41,23 @@
         "@radix-ui/react-toggle-group": "^1.1.2",
         "@radix-ui/react-tooltip": "^1.1.8",
         "@tailwindcss/vite": "^4.1.11",
+        "@tiptap/pm": "^3.26.0",
+        "@tiptap/react": "^3.26.0",
+        "@tiptap/starter-kit": "^3.26.0",
         "@types/react": "^19.2.0",
         "@types/react-dom": "^19.2.0",
         "@vitejs/plugin-react": "^5.2.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "concurrently": "^9.0.1",
+        "date-fns": "^4.4.0",
         "globals": "^15.14.0",
         "input-otp": "^1.4.2",
         "laravel-vite-plugin": "^3.0.0",
         "lucide-react": "^0.475.0",
+        "radix-ui": "^1.4.3",
         "react": "^19.2.0",
+        "react-day-picker": "10",
         "react-dom": "^19.2.0",
         "sonner": "^2.0.0",
         "tailwind-merge": "^3.0.1",

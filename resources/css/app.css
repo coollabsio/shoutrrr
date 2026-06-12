@@ -141,3 +141,98 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Editor body paragraph spacing (no @tailwindcss/typography in this project). */
+.ProseMirror p {
+    margin: 0;
+}
+.ProseMirror p + p {
+    margin-top: 0.85em;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: var(--muted-foreground);
+    pointer-events: none;
+    height: 0;
+}
+
+/* Composer section-break widget decorations rendered by SectionMarkers extension. */
+.ProseMirror .section-marker {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.875rem 0 1.125rem 0;
+    user-select: none;
+}
+.ProseMirror .section-marker .sm-rule {
+    flex: 1 1 0;
+    height: 1px;
+    background: linear-gradient(
+        to right,
+        transparent,
+        var(--border),
+        var(--border)
+    );
+}
+.ProseMirror .section-marker .sm-rule:last-child {
+    background: linear-gradient(
+        to left,
+        transparent,
+        var(--border),
+        var(--border)
+    );
+}
+.ProseMirror .section-marker .sm-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.18rem 0.56rem;
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+    background: var(--background);
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.02);
+    transition:
+        color 150ms ease,
+        background-color 150ms ease,
+        border-color 150ms ease;
+}
+.ProseMirror .section-marker .sm-num {
+    font-weight: 500;
+    color: var(--foreground);
+}
+.ProseMirror .section-marker .sm-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: color-mix(in oklch, var(--muted-foreground) 50%, transparent);
+}
+/* Warn severity: amber stand-in (no shadcn --warning token in this project). */
+.ProseMirror .section-marker[data-state='warn'] .sm-chip {
+    border-color: color-mix(
+        in oklch,
+        oklch(0.769 0.188 70.08) 40%,
+        var(--border)
+    );
+    background: color-mix(
+        in oklch,
+        oklch(0.769 0.188 70.08) 12%,
+        var(--background)
+    );
+    color: oklch(0.555 0.163 70.08);
+}
+.ProseMirror .section-marker[data-state='warn'] .sm-num {
+    color: oklch(0.47 0.15 70.08);
+}
+.ProseMirror .section-marker[data-state='over'] .sm-chip {
+    border-color: color-mix(in oklch, var(--destructive) 35%, var(--border));
+    background: color-mix(in oklch, var(--destructive) 12%, var(--background));
+    color: var(--destructive);
+}
+.ProseMirror .section-marker[data-state='over'] .sm-num {
+    color: var(--destructive);
+}
