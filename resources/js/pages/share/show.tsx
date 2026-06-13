@@ -244,7 +244,7 @@ export default function ShareShow({ post }: Props) {
 
 /*
  * This page renders bare (no app sidebar/shell). The opt-out lives in the
- * global layout resolver in `app.tsx` — pages under `share/` return `null`,
- * alongside `welcome`. A per-page `.layout` property is NOT honored by that
+ * global layout resolver in `app.tsx` — pages under `share/` return `null`.
+ * A per-page `.layout` property is NOT honored by that
  * name-based resolver, so the override must stay in app.tsx.
  */
