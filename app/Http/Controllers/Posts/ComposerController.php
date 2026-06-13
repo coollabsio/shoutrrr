@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
+use App\Models\PostTarget;
 use App\Support\PostView;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -64,7 +65,15 @@ class ComposerController extends Controller
                 'target_count' => $post->targets->count(),
                 'updated_at' => $post->updated_at->toIso8601String(),
                 'scheduled_at' => $post->scheduled_at?->toIso8601String(),
+                'published_at' => $post->published_at?->toIso8601String(),
                 'platforms' => $post->targets->pluck('platform')->map(fn ($p) => $p->value)->unique()->values()->all(),
+                'targets' => $post->targets->map(fn (PostTarget $t): array => [
+                    'id' => $t->id,
+                    'platform' => $t->platform->value,
+                    'status' => $t->status->value,
+                    'error_kind' => $t->error_kind?->value,
+                    'error_message' => $t->error_message,
+                ])->all(),
             ])->all();
 
         return Inertia::render('posts/index', ['posts' => $posts]);

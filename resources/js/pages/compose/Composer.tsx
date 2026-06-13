@@ -7,6 +7,7 @@ import CharCounter from './CharCounter';
 import {
     composerReducer,
     initialComposerState,
+    pickActiveAccount,
     type ComposerState,
 } from './composer-state';
 import { ComposerToolbar } from './ComposerToolbar';
@@ -17,6 +18,7 @@ import PlatformTabs from './PlatformTabs';
 import SaveIndicator from './SaveIndicator';
 import { ScheduleTray } from './ScheduleTray';
 import { SubmitBar } from './SubmitBar';
+import { TargetStatusChips } from './TargetStatusChips';
 import {
     BASE_TAB,
     type Account,
@@ -26,6 +28,7 @@ import {
     type PostView,
 } from './types';
 import { useAutosave } from './use-autosave';
+import { usePublishStatus } from './use-publish-status';
 
 type ComposerProps = {
     post: PostView | null;
@@ -81,9 +84,9 @@ export default function Composer({
         accountIds: destinationAccountIds,
         dispatch,
     });
+    const publishStatus = usePublishStatus({ pagePost: post });
 
-    const activeAccount =
-        tabAccounts.find((a) => a.id === state.activeTab) ?? null;
+    const activeAccount = pickActiveAccount(tabAccounts, state.activeTab);
     const activeText =
         activeAccount && state.overrideByAccount[activeAccount.id] !== undefined
             ? (state.overrideByAccount[activeAccount.id] as string)
@@ -156,7 +159,7 @@ export default function Composer({
             <div className="flex items-center border-b border-border px-2 pt-2">
                 <PlatformTabs
                     accounts={tabAccounts}
-                    activeTab={state.activeTab}
+                    activeTab={activeAccount?.id ?? state.activeTab}
                     onChange={(tab) => dispatch({ type: 'setActiveTab', tab })}
                     chipFor={chipFor}
                     stateFor={severityFor}
@@ -310,11 +313,27 @@ export default function Composer({
                     disabled={accounts.length === 0}
                     onSaveDraft={flush}
                     onEnsurePost={ensurePost}
-                    onScheduled={(post) =>
-                        dispatch({ type: 'saveSucceeded', post })
-                    }
+                    onSubmitted={(submitted) => {
+                        dispatch({ type: 'saveSucceeded', post: submitted });
+                        publishStatus.applyServerPost(submitted);
+                    }}
                 />
             </div>
+
+            {/* Live publish status — only once a publish/queue/schedule has run */}
+            {publishStatus.snapshot &&
+                publishStatus.snapshot.status !== 'draft' &&
+                publishStatus.snapshot.targets.length > 0 && (
+                    <div className="border-t border-border px-3 py-3 sm:px-[14px]">
+                        <TargetStatusChips
+                            targets={publishStatus.snapshot.targets}
+                            retryingIds={publishStatus.retryingIds}
+                            onRetry={(targetId) =>
+                                void publishStatus.retry(targetId)
+                            }
+                        />
+                    </div>
+                )}
 
             {state.conflict !== null && (
                 <ConflictDialog

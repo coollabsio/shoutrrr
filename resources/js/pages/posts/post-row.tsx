@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, useHttp } from '@inertiajs/react';
 import { format, isToday, isTomorrow, isYesterday, parseISO } from 'date-fns';
 import { MoreHorizontal } from 'lucide-react';
 import { Fragment, useState } from 'react';
@@ -15,15 +15,14 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import type { PlatformName } from '@/pages/compose/types';
+import {
+    type ChipTarget,
+    TargetStatusChips,
+} from '@/pages/compose/TargetStatusChips';
+import type { PlatformName, PostStatus, PostView } from '@/pages/compose/types';
+import { retry as retryRoute } from '@/routes/posts/targets';
 
-export type PostStatus =
-    | 'draft'
-    | 'scheduled'
-    | 'publishing'
-    | 'published'
-    | 'partial'
-    | 'failed';
+export type { PostStatus } from '@/pages/compose/types';
 
 export type PostRowData = {
     id: string;
@@ -34,7 +33,9 @@ export type PostRowData = {
     target_count: number;
     updated_at: string;
     scheduled_at: string | null;
+    published_at: string | null;
     platforms: PlatformName[];
+    targets: ChipTarget[];
 };
 
 // Status badge styling (semantic shadcn classes + tinted overrides where shadcn
@@ -72,6 +73,7 @@ const STATUS_META: Record<
         label: 'Partial',
     },
     failed: { variant: 'destructive', label: 'Failed' },
+    deleted: { variant: 'secondary', label: 'Deleted' },
 };
 
 function formatWhen(dateStr: string): { when: string; time: string } {
@@ -165,8 +167,39 @@ function PostRowActions({ post }: { post: PostRowData }) {
 export function PostRow({ post }: { post: PostRowData }) {
     const timestampStr = post.scheduled_at ?? post.updated_at;
     const { when, time } = formatWhen(timestampStr);
-    const platforms = post.platforms;
-    const accounts = post.target_count;
+    // Default the optional list fields: an older/partial Inertia payload (e.g. a
+    // page loaded before the index exposed per-target data) must not crash the row.
+    const platforms = post.platforms ?? [];
+    const accounts = post.target_count ?? 0;
+
+    // The list does not poll; chips seed from the row payload and only the row
+    // whose target was just retried live-updates from the retry response.
+    const http = useHttp<Record<string, never>, { post: PostView }>({});
+    const [targets, setTargets] = useState<ChipTarget[]>(post.targets ?? []);
+    const [retryingIds, setRetryingIds] = useState<ReadonlySet<string>>(
+        () => new Set(),
+    );
+
+    async function retryTarget(targetId: string) {
+        if (retryingIds.has(targetId)) {
+            return;
+        }
+        setRetryingIds((prev) => new Set(prev).add(targetId));
+        try {
+            const result = await http.post(
+                retryRoute({ post: post.id, target: targetId }).url,
+                { onNetworkError: () => undefined },
+            );
+            setTargets(result.post.targets);
+        } finally {
+            setRetryingIds((prev) => {
+                const next = new Set(prev);
+                next.delete(targetId);
+
+                return next;
+            });
+        }
+    }
 
     function openCompose() {
         router.visit(ComposerController.show(post.id).url);
@@ -248,6 +281,24 @@ export function PostRow({ post }: { post: PostRowData }) {
                             </Fragment>
                         ))}
                     </div>
+                    {post.status !== 'draft' &&
+                        targets.length > 0 && (
+                            // oxlint-disable-next-line prefer-tag-over-role -- stop row-click bubbling on retry
+                            <div
+                                role="presentation"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                className="mt-2.5"
+                            >
+                                <TargetStatusChips
+                                    targets={targets}
+                                    retryingIds={retryingIds}
+                                    onRetry={(targetId) =>
+                                        void retryTarget(targetId)
+                                    }
+                                />
+                            </div>
+                        )}
                 </div>
 
                 {/* Right: badge + actions */}

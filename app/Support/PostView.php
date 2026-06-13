@@ -24,6 +24,7 @@ final class PostView
             'base_text' => $post->base_text,
             'status' => $post->status->value,
             'scheduled_at' => $post->scheduled_at?->toIso8601String(),
+            'published_at' => $post->published_at?->toIso8601String(),
             'updated_at' => $post->updated_at->toIso8601String(),
             'destination' => self::destination($post),
             'targets' => $post->targets->map(fn (PostTarget $target): array => [
@@ -36,6 +37,10 @@ final class PostView
                 'sections' => $target->sections,
                 'content_override' => $target->content_override,
                 'auto_split' => $target->auto_split,
+                'status' => $target->status->value,
+                'error_kind' => $target->error_kind?->value,
+                'error_message' => $target->error_message,
+                'remote_id' => $target->remote_id,
                 'issues' => $splitter->validateSections($target->sections, $target->platform, $mediaCount),
             ])->all(),
             'media' => $post->media->map(fn (PostMedia $media): array => [

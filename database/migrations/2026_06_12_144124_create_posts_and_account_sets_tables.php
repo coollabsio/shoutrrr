@@ -52,6 +52,7 @@ return new class extends Migration
             $table->boolean('auto_split')->default(true);
             $table->string('status')->default('pending');
             $table->string('remote_id')->nullable();
+            $table->json('remote_ids')->nullable();
             $table->string('error_kind')->nullable();
             $table->text('error_message')->nullable();
             $table->unsignedInteger('attempts')->default(0);
@@ -77,10 +78,27 @@ return new class extends Migration
             $table->unsignedInteger('position')->default(0);
             $table->timestamps();
         });
+
+        Schema::create('post_target_attempts', function (Blueprint $table): void {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('post_target_id')->constrained('post_targets')->cascadeOnDelete();
+            $table->unsignedInteger('attempt_no');
+            $table->string('status');
+            $table->string('error_kind')->nullable();
+            $table->text('error_message')->nullable();
+            $table->unsignedSmallInteger('http_status')->nullable();
+            $table->text('response_excerpt')->nullable();
+            $table->timestamp('started_at')->nullable();
+            $table->timestamp('finished_at')->nullable();
+            $table->timestamps();
+
+            $table->index(['post_target_id', 'attempt_no']);
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('post_target_attempts');
         Schema::dropIfExists('post_media');
         Schema::dropIfExists('post_targets');
         Schema::dropIfExists('posts');

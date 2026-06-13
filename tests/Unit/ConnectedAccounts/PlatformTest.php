@@ -15,7 +15,9 @@ test('x scopes include users.email so Socialite can read confirmed_email', funct
     // Socialite's X driver always requests the confirmed_email user field, which
     // 403s unless the users.email scope was granted. Regression guard for that.
     expect(Platform::X->scopes())->toContain('users.email')
-        ->and(Platform::X->scopes())->toContain('tweet.write');
+        ->and(Platform::X->scopes())->toContain('tweet.write')
+        // media.write is required for v2 media upload (/2/media/upload).
+        ->and(Platform::X->scopes())->toContain('media.write');
 });
 
 test('socialite driver names match core socialite keys', function () {

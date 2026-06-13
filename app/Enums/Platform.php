@@ -37,7 +37,9 @@ enum Platform: string
             // `users.email` is required because Socialite's X driver always
             // requests the `confirmed_email` field from /2/users/me; without the
             // scope that call 403s ("Missing required OAuth2 scopes: users.email").
-            self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'offline.access'],
+            // `media.write` is required to upload media to the v2 /2/media/upload
+            // endpoint (the v1.1 endpoint was deprecated 2025-03-31).
+            self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'media.write', 'offline.access'],
             self::LinkedIn => ['openid', 'profile', 'email', 'w_member_social'],
             self::Bluesky => [],
         };

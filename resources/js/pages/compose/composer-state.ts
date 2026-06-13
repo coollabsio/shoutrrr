@@ -1,4 +1,5 @@
 import {
+    type Account,
     BASE_TAB,
     type Destination,
     type MediaView,
@@ -55,6 +56,21 @@ export type ComposerAction =
     | { type: 'saveFailedStale'; post: PostView }
     | { type: 'resolveConflictUseServer' }
     | { type: 'resolveConflictKeepMine' };
+
+/**
+ * Resolve which account the editor surfaces. `activeTab` is seeded from the
+ * post's first target (or BASE_TAB for a target-less draft), so when a draft has
+ * no targets yet we fall back to the first available account — otherwise a
+ * connected account would still show the "connect an account" nudge.
+ */
+export function pickActiveAccount(
+    tabAccounts: Account[],
+    activeTab: string,
+): Account | null {
+    return (
+        tabAccounts.find((a) => a.id === activeTab) ?? tabAccounts[0] ?? null
+    );
+}
 
 export function initialComposerState(): ComposerState {
     return {

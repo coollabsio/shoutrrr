@@ -1,14 +1,12 @@
-import { useHttp } from '@inertiajs/react';
+import { Link, useHttp } from '@inertiajs/react';
 import { Send } from 'lucide-react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import PostScheduleController from '@/actions/App/Http/Controllers/Posts/PostScheduleController';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { publish, queue } from '@/routes/posts';
+import { postingSchedule } from '@/routes/settings';
 
 import type { ScheduleTray } from './composer-state';
 import type { PostView } from './types';
@@ -19,10 +17,10 @@ type Props = {
     disabled?: boolean;
     /** Flush the autosave (called before scheduling and on Save draft). */
     onSaveDraft: () => void;
-    /** Ensure a persisted post id before scheduling; returns the post id. */
+    /** Ensure a persisted post id before publishing; returns the post id. */
     onEnsurePost: () => Promise<string>;
-    /** Adopt the server's post after a successful schedule. */
-    onScheduled?: (post: PostView) => void;
+    /** Adopt the server's post after a successful publish/queue/schedule. */
+    onSubmitted?: (post: PostView) => void;
 };
 
 export function SubmitBar({
@@ -31,67 +29,91 @@ export function SubmitBar({
     disabled,
     onSaveDraft,
     onEnsurePost,
-    onScheduled,
+    onSubmitted,
 }: Props) {
     // useHttp verbs take NO inline data — the body is injected via transform()
     // at submit time so it always reflects the latest reducer state.
     const http = useHttp<Record<string, never>, { post: PostView }>({});
+    const [noSlot, setNoSlot] = useState(false);
 
-    // Only mode `pick` actually publishes/schedules in M2.5; `now` and `queue`
-    // arrive in M3 and keep the primary button disabled with a tooltip.
-    const canPublish = tray.mode === 'pick';
-    const submitLabel = tray.mode === 'now' ? 'Publish now' : 'Schedule';
+    const submitLabel =
+        tray.mode === 'now'
+            ? 'Publish now'
+            : tray.mode === 'queue'
+              ? 'Add to queue'
+              : 'Schedule';
 
     async function handleSubmit() {
-        if (!canPublish) {
-            return;
-        }
-        // Flush any pending edits, then persist scheduled_at.
+        setNoSlot(false);
+        // Flush any pending edits, then issue the publish/queue/schedule call.
         onSaveDraft();
         const id = postId ?? (await onEnsurePost());
         if (!id) {
             return;
         }
+
+        if (tray.mode === 'now') {
+            http.transform(() => ({}));
+            const result = await http.post(publish(id).url, {
+                onNetworkError: () => undefined,
+            });
+            onSubmitted?.(result.post);
+
+            return;
+        }
+
+        if (tray.mode === 'queue') {
+            http.transform(() => ({}));
+            await http.post(queue(id).url, {
+                onSuccess: (data) => onSubmitted?.(data.post),
+                // 422 = no open slot in the workspace posting schedule.
+                onHttpException: (response) => {
+                    if (response.status === 422) {
+                        setNoSlot(true);
+                    }
+                },
+                onNetworkError: () => undefined,
+            });
+
+            return;
+        }
+
+        // mode === 'pick' → schedule at the chosen time (existing M2 path).
         http.transform(() => ({ scheduled_at: tray.pickedAt }));
         const result = await http.put(PostScheduleController.update(id).url, {
             onNetworkError: () => undefined,
         });
-        onScheduled?.(result.post);
+        onSubmitted?.(result.post);
     }
 
-    const submitButton = (
-        <TrayButton
-            variant="primary"
-            disabled={disabled || !canPublish}
-            onClick={() => void handleSubmit()}
-        >
-            <Send className="size-3.5" aria-hidden="true" />
-            <span>{submitLabel}</span>
-            <kbd className="ml-0.5 hidden h-4 items-center rounded border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex">
-                ⌘↵
-            </kbd>
-        </TrayButton>
-    );
-
     return (
-        <div className="flex items-center gap-1.5 justify-self-end">
-            <TrayButton onClick={onSaveDraft} disabled={disabled}>
-                Save draft
-            </TrayButton>
-            {canPublish ? (
-                submitButton
-            ) : (
-                <Tooltip>
-                    {/* A disabled button swallows pointer events, so the span
-                        carries the hover/focus that opens the tooltip. */}
-                    <TooltipTrigger asChild>
-                        {/* oxlint-disable-next-line no-noninteractive-tabindex -- intentional: the span must be focusable so a disabled button still surfaces its tooltip */}
-                        <span tabIndex={0} className="inline-flex">
-                            {submitButton}
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent>Publishing arrives in M3</TooltipContent>
-                </Tooltip>
+        <div className="flex flex-col items-end gap-1.5 justify-self-end">
+            <div className="flex items-center gap-1.5">
+                <TrayButton onClick={onSaveDraft} disabled={disabled}>
+                    Save draft
+                </TrayButton>
+                <TrayButton
+                    variant="primary"
+                    disabled={disabled || http.processing}
+                    onClick={() => void handleSubmit()}
+                >
+                    <Send className="size-3.5" aria-hidden="true" />
+                    <span>{submitLabel}</span>
+                    <kbd className="ml-0.5 hidden h-4 items-center rounded border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex">
+                        ⌘↵
+                    </kbd>
+                </TrayButton>
+            </div>
+            {noSlot && (
+                <p className="text-[12px] text-muted-foreground">
+                    No open slot in your posting schedule.{' '}
+                    <Link
+                        href={postingSchedule().url}
+                        className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                    >
+                        Add slots
+                    </Link>
+                </p>
             )}
         </div>
     );

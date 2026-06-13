@@ -40,6 +40,23 @@ export type MediaView = {
     position: number;
 };
 
+export type TargetStatus =
+    | 'pending'
+    | 'publishing'
+    | 'published'
+    | 'failed'
+    | 'deleting'
+    | 'deleted';
+
+export type PostStatus =
+    | 'draft'
+    | 'scheduled'
+    | 'publishing'
+    | 'published'
+    | 'partial'
+    | 'failed'
+    | 'deleted';
+
 export type TargetView = {
     id: string;
     connected_account_id: string;
@@ -51,12 +68,17 @@ export type TargetView = {
     content_override: { text?: string | null; media_ids?: string[] } | null;
     auto_split: boolean;
     issues: string[];
+    status: TargetStatus;
+    error_kind: string | null;
+    error_message: string | null;
+    remote_id: string | null;
 };
 
 export type PostView = {
     id: string;
     base_text: string;
-    status: string;
+    status: PostStatus;
+    published_at: string | null;
     updated_at: string;
     scheduled_at: string | null;
     destination: { kind: string; id: string | null };

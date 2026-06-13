@@ -5,14 +5,26 @@ import {
     composerReducer,
     firstLineTitle,
     initialComposerState,
+    pickActiveAccount,
 } from '../composer-state';
-import type { PostView } from '../types';
+import { BASE_TAB, type Account, type PostView } from '../types';
+
+function account(id: string): Account {
+    return {
+        id,
+        platform: 'x',
+        handle: `@${id}`,
+        display_name: null,
+        avatar_url: null,
+    };
+}
 
 function hydrated(): ReturnType<typeof composerReducer> {
     const post: PostView = {
         id: 'post-1',
         base_text: 'hello',
         status: 'draft',
+        published_at: null,
         updated_at: '2026-06-12T10:00:00+00:00',
         scheduled_at: null,
         destination: { kind: 'all', id: null },
@@ -28,6 +40,10 @@ function hydrated(): ReturnType<typeof composerReducer> {
                 content_override: null,
                 auto_split: true,
                 issues: [],
+                status: 'pending',
+                error_kind: null,
+                error_message: null,
+                remote_id: null,
             },
             {
                 id: 't2',
@@ -40,6 +56,10 @@ function hydrated(): ReturnType<typeof composerReducer> {
                 content_override: null,
                 auto_split: true,
                 issues: [],
+                status: 'pending',
+                error_kind: null,
+                error_message: null,
+                remote_id: null,
             },
         ],
         media: [],
@@ -47,6 +67,32 @@ function hydrated(): ReturnType<typeof composerReducer> {
 
     return composerReducer(initialComposerState(), { type: 'hydrate', post });
 }
+
+describe('pickActiveAccount', () => {
+    it('returns the account matching the active tab', () => {
+        const accounts = [account('a1'), account('a2')];
+
+        expect(pickActiveAccount(accounts, 'a2')?.id).toBe('a2');
+    });
+
+    it('falls back to the first account when the active tab is BASE_TAB (target-less draft with accounts connected)', () => {
+        const accounts = [account('a1'), account('a2')];
+
+        // A draft with no targets leaves activeTab at BASE_TAB; with accounts
+        // connected the composer must still surface one (not the connect nudge).
+        expect(pickActiveAccount(accounts, BASE_TAB)?.id).toBe('a1');
+    });
+
+    it('falls back to the first account when the active tab matches nothing', () => {
+        const accounts = [account('a1')];
+
+        expect(pickActiveAccount(accounts, 'stale-id')?.id).toBe('a1');
+    });
+
+    it('returns null when there are no accounts (genuine connect-an-account state)', () => {
+        expect(pickActiveAccount([], BASE_TAB)).toBeNull();
+    });
+});
 
 describe('composerReducer', () => {
     it('starts with no post and an idle save state', () => {
@@ -117,6 +163,7 @@ describe('composerReducer', () => {
             id: 'post-1',
             base_text: 'new',
             status: 'draft',
+            published_at: null,
             updated_at: '2026-06-12T11:00:00+00:00',
             scheduled_at: null,
             destination: { kind: 'all', id: null },
@@ -141,6 +188,7 @@ describe('composerReducer', () => {
             id: 'post-1',
             base_text: 'hello',
             status: 'draft',
+            published_at: null,
             updated_at: '2026-06-12T11:30:00+00:00',
             scheduled_at: null,
             destination: { kind: 'all', id: null },
@@ -255,6 +303,7 @@ describe('composerReducer', () => {
             id: 'post-1',
             base_text: 'theirs',
             status: 'draft',
+            published_at: null,
             updated_at: '2026-06-12T12:00:00+00:00',
             scheduled_at: null,
             destination: { kind: 'all', id: null },
@@ -298,6 +347,7 @@ describe('composerReducer', () => {
             id: 'post-1',
             base_text: 'theirs',
             status: 'draft',
+            published_at: null,
             updated_at: '2026-06-12T12:00:00+00:00',
             scheduled_at: null,
             destination: { kind: 'all', id: null },

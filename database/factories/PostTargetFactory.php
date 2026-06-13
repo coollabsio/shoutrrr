@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
 use App\Models\ConnectedAccount;
@@ -28,5 +29,24 @@ class PostTargetFactory extends Factory
             'auto_split' => true,
             'status' => PostTargetStatus::Pending->value,
         ];
+    }
+
+    public function failed(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'status' => PostTargetStatus::Failed->value,
+            'error_kind' => ErrorKind::Validation->value,
+            'error_message' => 'rejected',
+            'attempts' => 1,
+        ]);
+    }
+
+    public function published(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'status' => PostTargetStatus::Published->value,
+            'remote_id' => 'remote-'.fake()->uuid(),
+            'posted_at' => now(),
+        ]);
     }
 }

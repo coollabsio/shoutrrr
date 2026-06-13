@@ -1,0 +1,140 @@
+<?php
+
+use App\Dto\Publishing\PublishContext;
+use App\Enums\ErrorKind;
+use App\Enums\Platform;
+use App\Models\ConnectedAccount;
+use App\Models\PostMedia;
+use App\Models\PostTarget;
+use App\Services\Publishing\Connectors\LinkedInConnector;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+
+/**
+ * @param  list<PostMedia>  $media
+ */
+function liContext(array $segments, array $media = []): PublishContext
+{
+    $target = PostTarget::factory()->create(['platform' => Platform::LinkedIn->value]);
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::LinkedIn->value,
+        'remote_account_id' => 'person123',
+    ]);
+
+    return new PublishContext(
+        target: $target,
+        segments: $segments,
+        media: $media,
+        account: $account,
+        credentials: ['access_token' => 'tok'],
+    );
+}
+
+test('linkedin creates a single post and returns the urn', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:99']),
+    ]);
+
+    $result = app(LinkedInConnector::class)->publish(liContext(['hello']));
+
+    expect($result->isSuccessful())->toBeTrue()
+        ->and($result->remoteIds)->toBe(['urn:li:share:99']);
+
+    Http::assertSent(fn ($request) => $request['commentary'] === 'hello'
+        && $request['author'] === 'urn:li:person:person123');
+});
+
+test('linkedin registers + uploads media and references the asset urn', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/pic.png', 'png-bytes');
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/pic.png',
+        'mime' => 'image/png',
+        'alt_text' => 'a picture',
+    ]);
+
+    Http::fake([
+        'https://api.linkedin.com/rest/images?action=initializeUpload' => Http::response([
+            'value' => ['uploadUrl' => 'https://upload.linkedin.com/put/abc', 'image' => 'urn:li:image:42'],
+        ]),
+        'https://upload.linkedin.com/put/abc' => Http::response('', 201),
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:7']),
+    ]);
+
+    $result = app(LinkedInConnector::class)->publish(liContext(['look'], [$media]));
+
+    expect($result->isSuccessful())->toBeTrue()
+        ->and($result->remoteIds)->toBe(['urn:li:share:7']);
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.linkedin.com/rest/images?action=initializeUpload'
+        && ($request['initializeUploadRequest']['owner'] ?? null) === 'urn:li:person:person123');
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://upload.linkedin.com/put/abc'
+        && $request->body() === 'png-bytes');
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.linkedin.com/rest/posts'
+        && ($request['content']['media']['id'] ?? null) === 'urn:li:image:42'
+        && ($request['content']['media']['altText'] ?? null) === 'a picture');
+});
+
+test('linkedin includes alt text per image for a multi-image post', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/a.png', 'a-bytes');
+    Storage::disk('public')->put('media/b.png', 'b-bytes');
+
+    $first = PostMedia::factory()->create(['disk' => 'public', 'path' => 'media/a.png', 'mime' => 'image/png', 'alt_text' => 'first']);
+    $second = PostMedia::factory()->create(['disk' => 'public', 'path' => 'media/b.png', 'mime' => 'image/png', 'alt_text' => 'second']);
+
+    Http::fake([
+        'https://api.linkedin.com/rest/images?action=initializeUpload' => Http::sequence()
+            ->push(['value' => ['uploadUrl' => 'https://upload.linkedin.com/put/a', 'image' => 'urn:li:image:1']])
+            ->push(['value' => ['uploadUrl' => 'https://upload.linkedin.com/put/b', 'image' => 'urn:li:image:2']]),
+        'https://upload.linkedin.com/put/*' => Http::response('', 201),
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:9']),
+    ]);
+
+    app(LinkedInConnector::class)->publish(liContext(['look'], [$first, $second]));
+
+    Http::assertSent(function ($request) {
+        if ($request->url() !== 'https://api.linkedin.com/rest/posts') {
+            return false;
+        }
+
+        $images = $request['content']['multiImage']['images'] ?? null;
+
+        return is_array($images)
+            && ($images[0]['altText'] ?? null) === 'first'
+            && ($images[1]['altText'] ?? null) === 'second';
+    });
+});
+
+test('linkedin fails when no post id is returned', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201),
+    ]);
+
+    $result = app(LinkedInConnector::class)->publish(liContext(['hi']));
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::ServerError)
+        ->and($result->errorMessage)->toBe('LinkedIn did not return a post id');
+});
+
+test('linkedin sends only the first segment (threadMax 1)', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    app(LinkedInConnector::class)->publish(liContext(['first', 'second']));
+
+    Http::assertSentCount(1);
+});
+
+test('linkedin maps 401 to AuthExpired', function () {
+    Http::fake(['https://api.linkedin.com/rest/posts' => Http::response(['message' => 'expired'], 401)]);
+
+    expect(app(LinkedInConnector::class)->publish(liContext(['hi']))->errorKind)
+        ->toBe(ErrorKind::AuthExpired);
+});

@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
+use Carbon\CarbonImmutable;
 use Database\Factories\PostTargetFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Override;
 
 /**
@@ -23,6 +26,14 @@ use Override;
  * @property array{text?: string|null, media_ids?: list<string>}|null $content_override
  * @property bool $auto_split
  * @property PostTargetStatus $status
+ * @property string|null $remote_id
+ * @property list<string>|null $remote_ids
+ * @property ErrorKind|null $error_kind
+ * @property string|null $error_message
+ * @property int $attempts
+ * @property CarbonImmutable|null $next_attempt_at
+ * @property string|null $idempotency_key
+ * @property CarbonImmutable|null $posted_at
  */
 #[Fillable([
     'post_id',
@@ -32,12 +43,23 @@ use Override;
     'content_override',
     'auto_split',
     'status',
+    'remote_id',
+    'remote_ids',
+    'error_kind',
+    'error_message',
+    'attempts',
+    'next_attempt_at',
+    'idempotency_key',
+    'posted_at',
 ])]
 class PostTarget extends Model
 {
     /** @use HasFactory<PostTargetFactory> */
     use HasFactory, HasUuids;
 
+    /**
+     * @return array<string, string>
+     */
     #[Override]
     protected function casts(): array
     {
@@ -47,6 +69,11 @@ class PostTarget extends Model
             'sections' => 'array',
             'content_override' => 'array',
             'auto_split' => 'boolean',
+            'remote_ids' => 'array',
+            'error_kind' => ErrorKind::class,
+            'attempts' => 'integer',
+            'next_attempt_at' => 'immutable_datetime',
+            'posted_at' => 'immutable_datetime',
         ];
     }
 
@@ -64,5 +91,13 @@ class PostTarget extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(ConnectedAccount::class, 'connected_account_id');
+    }
+
+    /**
+     * @return HasMany<PostTargetAttempt, $this>
+     */
+    public function attemptLogs(): HasMany
+    {
+        return $this->hasMany(PostTargetAttempt::class, 'post_target_id');
     }
 }
