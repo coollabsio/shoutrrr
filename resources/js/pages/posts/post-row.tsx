@@ -67,6 +67,12 @@ const STATUS_META: Record<
         label: 'Partial',
     },
     failed: { variant: 'destructive', label: 'Failed' },
+    missed: {
+        variant: null,
+        className:
+            'border-transparent bg-slate-500/10 text-slate-600 dark:text-slate-400',
+        label: 'Missed',
+    },
     deleted: { variant: 'secondary', label: 'Deleted' },
 };
 

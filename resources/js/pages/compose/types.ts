@@ -55,6 +55,7 @@ export type PostStatus =
     | 'published'
     | 'partial'
     | 'failed'
+    | 'missed'
     | 'deleted';
 
 export type TargetView = {

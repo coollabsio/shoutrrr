@@ -12,6 +12,7 @@ enum PostStatus: string
     case Published = 'published';
     case Partial = 'partial';
     case Failed = 'failed';
+    case Missed = 'missed';
     case Deleted = 'deleted';
 
     public function label(): string
@@ -23,6 +24,7 @@ enum PostStatus: string
             self::Published => 'Published',
             self::Partial => 'Partially published',
             self::Failed => 'Failed',
+            self::Missed => 'Missed',
             self::Deleted => 'Deleted',
         };
     }

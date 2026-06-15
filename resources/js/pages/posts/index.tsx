@@ -21,7 +21,7 @@ import { PostRow, type PostRowData } from '@/pages/posts/post-row';
 import { dashboard } from '@/routes';
 import { index as postsRoute } from '@/routes/posts';
 
-type StatusTab = 'all' | 'scheduled' | 'draft' | 'published';
+type StatusTab = 'all' | 'scheduled' | 'draft' | 'published' | 'missed';
 
 type Props = {
     posts: { data: PostRowData[] };
@@ -34,6 +34,7 @@ const STATUS_TABS: { value: StatusTab; label: string }[] = [
     { value: 'scheduled', label: 'Scheduled' },
     { value: 'draft', label: 'Drafts' },
     { value: 'published', label: 'Published' },
+    { value: 'missed', label: 'Missed' },
 ];
 
 const PLATFORM_OPTIONS: { value: string; label: string }[] = [

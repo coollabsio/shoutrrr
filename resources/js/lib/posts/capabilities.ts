@@ -39,6 +39,10 @@ export function postCapabilities(post: PostView): PostCapabilities {
                 canUnschedule: true,
                 canDelete: true,
             };
+        case 'missed':
+            // A post the scheduler skipped as too stale: let the user reschedule
+            // it back into the pipeline (→ scheduled) or discard it.
+            return { ...NONE, canReschedule: true, canDelete: true };
         case 'published':
         case 'partial':
         case 'failed':

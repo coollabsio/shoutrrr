@@ -48,6 +48,11 @@ const STATUS_CHIP: Record<string, { label: string; className: string }> = {
         label: 'Draft',
         className: 'bg-muted text-muted-foreground ring-border',
     },
+    missed: {
+        label: 'Missed',
+        className:
+            'bg-slate-500/10 text-slate-600 dark:text-slate-400 ring-slate-500/20',
+    },
 };
 
 export function StatusChip({ status }: { status: string | null }) {

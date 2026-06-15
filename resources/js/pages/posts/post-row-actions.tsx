@@ -1,4 +1,5 @@
 import { router, useHttp } from '@inertiajs/react';
+import dayjs from 'dayjs';
 import { MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 
@@ -68,7 +69,14 @@ export function PostRowActions({ post }: Props) {
     }
 
     function openReschedule() {
-        setPickedAt(post.scheduled_at ?? defaultPickedAt(tz));
+        // A missed post's stored time is in the past, which the picker rejects;
+        // only prefill the existing time when it is still in the future.
+        const existing = post.scheduled_at;
+        const prefill =
+            existing && dayjs(existing).isAfter(dayjs())
+                ? existing
+                : defaultPickedAt(tz);
+        setPickedAt(prefill);
         setMode('rescheduling');
     }
 

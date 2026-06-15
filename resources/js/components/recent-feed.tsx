@@ -23,6 +23,7 @@ function filterBucket(status: PostStatus): FilterId | null {
     switch (status) {
         case 'scheduled':
         case 'publishing':
+        case 'missed':
             return 'scheduled';
         case 'published':
         case 'partial':
