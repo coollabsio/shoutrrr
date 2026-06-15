@@ -53,3 +53,28 @@ test('the slot unique constraint blocks duplicate weekday+hour per schedule', fu
         'hour' => 8,
     ]))->toThrow(QueryException::class);
 });
+
+test('a slot persists its minute and slots order by weekday, hour, then minute', function () {
+    $schedule = PostingSchedule::factory()->create();
+
+    PostingScheduleSlot::factory()->create([
+        'posting_schedule_id' => $schedule->id,
+        'weekday' => 1,
+        'hour' => 9,
+        'minute' => 30,
+        'position' => 1,
+    ]);
+    PostingScheduleSlot::factory()->create([
+        'posting_schedule_id' => $schedule->id,
+        'weekday' => 1,
+        'hour' => 9,
+        'minute' => 0,
+        'position' => 0,
+    ]);
+
+    $slots = $schedule->refresh()->slots;
+    expect($slots)->toHaveCount(2);
+    // ordered by weekday, hour, minute → (1,9,0) before (1,9,30)
+    expect($slots->first()->minute)->toBe(0);
+    expect($slots->last()->minute)->toBe(30);
+});

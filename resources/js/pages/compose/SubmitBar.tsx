@@ -3,10 +3,10 @@ import { Send } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import PostScheduleController from '@/actions/App/Http/Controllers/Posts/PostScheduleController';
 import { cn } from '@/lib/utils';
 import { publish, queue } from '@/routes/posts';
-import { postingSchedule } from '@/routes/settings';
 
 import type { ScheduleTray } from './composer-state';
 import type { PostView } from './types';
@@ -21,6 +21,8 @@ type Props = {
     onEnsurePost: () => Promise<string>;
     /** Adopt the server's post after a successful publish/queue/schedule. */
     onSubmitted?: (post: PostView) => void;
+    /** When in queue mode, true if there is no slot to queue into (no schedule, full, loading, or error). */
+    queueDisabled?: boolean;
 };
 
 export function SubmitBar({
@@ -30,6 +32,7 @@ export function SubmitBar({
     onSaveDraft,
     onEnsurePost,
     onSubmitted,
+    queueDisabled,
 }: Props) {
     // useHttp verbs take NO inline data — the body is injected via transform()
     // at submit time so it always reflects the latest reducer state.
@@ -102,7 +105,11 @@ export function SubmitBar({
                 </TrayButton>
                 <TrayButton
                     variant="primary"
-                    disabled={disabled || http.processing}
+                    disabled={
+                        disabled ||
+                        http.processing ||
+                        (tray.mode === 'queue' && Boolean(queueDisabled))
+                    }
                     onClick={() => void handleSubmit()}
                 >
                     <Send className="size-3.5" aria-hidden="true" />
@@ -116,7 +123,7 @@ export function SubmitBar({
                 <p className="text-[12px] text-muted-foreground">
                     No open slot in your posting schedule.{' '}
                     <Link
-                        href={postingSchedule().url}
+                        href={PostingScheduleController.show().url}
                         className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
                     >
                         Add slots

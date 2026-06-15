@@ -5,7 +5,9 @@ declare(strict_types=1);
 use App\Http\Controllers\AccountSets\AccountSetController;
 use App\Http\Controllers\Posts\CalendarController;
 use App\Http\Controllers\Posts\ComposerController;
+use App\Http\Controllers\Posts\NextSlotController;
 use App\Http\Controllers\Posts\PostController;
+use App\Http\Controllers\Posts\PostingScheduleController;
 use App\Http\Controllers\Posts\PostMediaController;
 use App\Http\Controllers\Posts\PostQueueController;
 use App\Http\Controllers\Posts\PostScheduleController;
@@ -50,6 +52,10 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('calendar/{yyyymm}', [CalendarController::class, 'show'])
         ->where('yyyymm', '\d{4}-\d{2}')->name('calendar.month');
 
+    Route::get('queue', [PostingScheduleController::class, 'show'])->name('queue.show');
+    Route::put('queue', [PostingScheduleController::class, 'update'])->name('queue.update');
+
+    Route::get('posts/next-slot', [NextSlotController::class, 'show'])->name('posts.next-slot');
     Route::get('posts', [PostController::class, 'index'])->name('posts.index');
 
     Route::post('posts', [PostController::class, 'store'])->name('posts.store');

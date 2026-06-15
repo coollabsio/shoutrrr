@@ -1,7 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
 
-import PostingScheduleController from '@/actions/App/Http/Controllers/Settings/PostingScheduleController';
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
@@ -19,11 +18,6 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Members',
         href: WorkspaceSettingsController.showMembers(),
-        icon: null,
-    },
-    {
-        title: 'Posting schedule',
-        href: PostingScheduleController.show(),
         icon: null,
     },
 ];

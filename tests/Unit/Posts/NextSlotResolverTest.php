@@ -172,3 +172,65 @@ test('returns null when no slot is free within the 14-day horizon', function () 
 
     expect(app(NextSlotResolver::class)->resolve($workspace))->toBeNull();
 });
+
+test('resolves a slot with a non-zero minute', function () {
+    CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00'); // Monday 08:30 UTC
+    $workspace = Workspace::factory()->create();
+    $schedule = PostingSchedule::factory()->create(['workspace_id' => $workspace->id, 'timezone' => 'UTC']);
+    PostingScheduleSlot::factory()->create([
+        'posting_schedule_id' => $schedule->id, 'weekday' => 1, 'hour' => 9, 'minute' => 30, 'position' => 0,
+    ]);
+
+    $slot = app(NextSlotResolver::class)->resolve($workspace);
+
+    expect($slot?->toIso8601String())->toBe('2026-05-18T09:30:00+00:00');
+});
+
+test('orders same-hour slots by minute', function () {
+    CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00');
+    $workspace = Workspace::factory()->create();
+    $schedule = PostingSchedule::factory()->create(['workspace_id' => $workspace->id, 'timezone' => 'UTC']);
+    foreach ([[1, 9, 45], [1, 9, 15]] as [$w, $h, $m]) {
+        PostingScheduleSlot::factory()->create([
+            'posting_schedule_id' => $schedule->id, 'weekday' => $w, 'hour' => $h, 'minute' => $m, 'position' => 0,
+        ]);
+    }
+
+    $slot = app(NextSlotResolver::class)->resolve($workspace);
+
+    expect($slot?->toIso8601String())->toBe('2026-05-18T09:15:00+00:00');
+});
+
+test('skips an occupied minute-precise slot and uses the next', function () {
+    CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00');
+    $workspace = Workspace::factory()->create();
+    $schedule = PostingSchedule::factory()->create(['workspace_id' => $workspace->id, 'timezone' => 'UTC']);
+    foreach ([[1, 9, 15], [1, 9, 45]] as [$w, $h, $m]) {
+        PostingScheduleSlot::factory()->create([
+            'posting_schedule_id' => $schedule->id, 'weekday' => $w, 'hour' => $h, 'minute' => $m, 'position' => 0,
+        ]);
+    }
+    Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'status' => PostStatus::Scheduled,
+        'scheduled_at' => '2026-05-18T09:15:00+00:00',
+    ]);
+
+    $slot = app(NextSlotResolver::class)->resolve($workspace);
+
+    expect($slot?->toIso8601String())->toBe('2026-05-18T09:45:00+00:00');
+});
+
+test('a non-zero minute slot is converted from a non-UTC schedule timezone', function () {
+    // 09:30 Europe/Berlin (CEST, UTC+2 in summer) === 07:30 UTC. 2026-05-18 is a Monday.
+    CarbonImmutable::setTestNow('2026-05-18T05:00:00+00:00');
+    $workspace = Workspace::factory()->create();
+    $schedule = PostingSchedule::factory()->create(['workspace_id' => $workspace->id, 'timezone' => 'Europe/Berlin']);
+    PostingScheduleSlot::factory()->create([
+        'posting_schedule_id' => $schedule->id, 'weekday' => 1, 'hour' => 9, 'minute' => 30, 'position' => 0,
+    ]);
+
+    $slot = app(NextSlotResolver::class)->resolve($workspace);
+
+    expect($slot?->toIso8601String())->toBe('2026-05-18T07:30:00+00:00');
+});

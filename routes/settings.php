@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Settings\ConnectionsController;
-use App\Http\Controllers\Settings\PostingScheduleController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\Settings\WorkspaceSettingsController;
@@ -16,14 +15,12 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/workspace', [WorkspaceSettingsController::class, 'showOverview'])->name('settings.workspace');
     Route::patch('settings/workspace', [WorkspaceSettingsController::class, 'update'])->name('settings.workspace.update');
+    Route::put('settings/workspace/timezone', [WorkspaceSettingsController::class, 'updateTimezone'])->name('settings.workspace.timezone');
     Route::get('settings/workspace/members', [WorkspaceSettingsController::class, 'showMembers'])->name('settings.workspace.members');
     Route::post('settings/workspace/invite', [WorkspaceSettingsController::class, 'inviteUser'])->name('settings.workspace.invite');
     Route::patch('settings/workspace/members/{membership}', [WorkspaceSettingsController::class, 'updateMemberRole'])->name('settings.workspace.members.update');
     Route::delete('settings/workspace/members/{membership}', [WorkspaceSettingsController::class, 'removeMember'])->name('settings.workspace.members.remove');
     Route::delete('settings/workspace/invitations/{invitation}', [WorkspaceSettingsController::class, 'cancelInvitation'])->name('settings.workspace.invitations.cancel');
-
-    Route::get('settings/posting-schedule', [PostingScheduleController::class, 'show'])->name('settings.posting-schedule');
-    Route::put('settings/posting-schedule', [PostingScheduleController::class, 'update'])->name('settings.posting-schedule.update');
 
     Route::get('settings/connections', [ConnectionsController::class, 'edit'])->name('connections.edit');
     Route::delete('settings/connections/{socialAccount}', [ConnectionsController::class, 'destroy'])->name('connections.destroy');

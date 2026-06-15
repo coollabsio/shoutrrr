@@ -21,6 +21,7 @@ class PostingScheduleSlotFactory extends Factory
             'posting_schedule_id' => PostingSchedule::factory(),
             'weekday' => fake()->numberBetween(0, 6),
             'hour' => fake()->numberBetween(0, 23),
+            'minute' => 0,
             'position' => 0,
         ];
     }

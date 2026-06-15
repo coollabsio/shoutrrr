@@ -22,7 +22,7 @@ function scheduleMember(WorkspaceRole $role): array
     return [$user, $workspace];
 }
 
-test('the posting-schedule settings page renders', function () {
+test('the queue page renders', function () {
     [$user, $workspace] = scheduleMember(WorkspaceRole::Admin);
 
     $schedule = PostingSchedule::factory()->create([
@@ -33,86 +33,84 @@ test('the posting-schedule settings page renders', function () {
         'posting_schedule_id' => $schedule->id,
         'weekday' => 1,
         'hour' => 9,
+        'minute' => 30,
         'position' => 0,
     ]);
 
-    test()->get(route('settings.posting-schedule'))
+    test()->get(route('queue.show'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->component('settings/posting-schedule')
+            ->component('queue/index')
             ->where('timezone', 'America/New_York')
             ->where('canManage', true)
             ->has('slots', 1)
             ->where('slots.0.weekday', 1)
-            ->where('slots.0.hour', 9));
+            ->where('slots.0.hour', 9)
+            ->where('slots.0.minute', 30));
 });
 
-test('the page renders with defaults when no schedule exists yet', function () {
+test('the queue page renders with defaults when no schedule exists yet', function () {
     [$user, $workspace] = scheduleMember(WorkspaceRole::Member);
 
-    test()->get(route('settings.posting-schedule'))
+    test()->get(route('queue.show'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->component('settings/posting-schedule')
+            ->component('queue/index')
             ->where('timezone', 'UTC')
             ->where('canManage', false)
             ->has('slots', 0));
 });
 
-test('an admin replaces the whole slot set atomically', function () {
+test('an admin replaces the whole slot set atomically, preserving timezone', function () {
     [$user, $workspace] = scheduleMember(WorkspaceRole::Admin);
 
     $schedule = PostingSchedule::factory()->create([
         'workspace_id' => $workspace->id,
-        'timezone' => 'UTC',
+        'timezone' => 'America/New_York',
     ]);
     PostingScheduleSlot::factory()->create([
         'posting_schedule_id' => $schedule->id,
-        'weekday' => 5,
-        'hour' => 22,
-        'position' => 0,
+        'weekday' => 5, 'hour' => 22, 'minute' => 0, 'position' => 0,
     ]);
 
-    test()->put(route('settings.posting-schedule.update'), [
-        'timezone' => 'America/New_York',
+    test()->put(route('queue.update'), [
         'slots' => [
-            ['weekday' => 1, 'hour' => 9],
-            ['weekday' => 3, 'hour' => 17],
+            ['weekday' => 1, 'hour' => 9, 'minute' => 30],
+            ['weekday' => 3, 'hour' => 17, 'minute' => 0],
         ],
     ])->assertRedirect();
 
     $schedule->refresh();
+    // timezone is untouched by queue.update (managed in workspace settings)
     expect($schedule->timezone)->toBe('America/New_York');
 
     $slots = $schedule->slots()->get();
     expect($slots)->toHaveCount(2);
     expect($slots->pluck('weekday')->all())->toBe([1, 3]);
-    // old (5,22) slot is gone
+    expect($slots->firstWhere('weekday', 1)->minute)->toBe(30);
     expect($slots->firstWhere('weekday', 5))->toBeNull();
 });
 
-test('updating creates the schedule when none exists', function () {
+test('updating creates the schedule when none exists, defaulting timezone to UTC', function () {
     [$user, $workspace] = scheduleMember(WorkspaceRole::Owner);
 
-    test()->put(route('settings.posting-schedule.update'), [
-        'timezone' => 'Europe/London',
-        'slots' => [['weekday' => 0, 'hour' => 8]],
+    test()->put(route('queue.update'), [
+        'slots' => [['weekday' => 0, 'hour' => 8, 'minute' => 0]],
     ])->assertRedirect();
 
     $schedule = PostingSchedule::query()->where('workspace_id', $workspace->id)->first();
     expect($schedule)->not->toBeNull();
-    expect($schedule->timezone)->toBe('Europe/London');
+    expect($schedule->timezone)->toBe('UTC');
     expect($schedule->slots()->count())->toBe(1);
 });
 
 test('duplicate weekday+hour slots are de-duplicated', function () {
     [$user, $workspace] = scheduleMember(WorkspaceRole::Admin);
 
-    test()->put(route('settings.posting-schedule.update'), [
-        'timezone' => 'UTC',
+    test()->put(route('queue.update'), [
         'slots' => [
-            ['weekday' => 2, 'hour' => 10],
-            ['weekday' => 2, 'hour' => 10],
+            ['weekday' => 2, 'hour' => 10, 'minute' => 0],
+            ['weekday' => 2, 'hour' => 10, 'minute' => 0],
         ],
     ])->assertRedirect();
 
@@ -123,28 +121,25 @@ test('duplicate weekday+hour slots are de-duplicated', function () {
 test('a plain member cannot edit slots', function () {
     [$user, $workspace] = scheduleMember(WorkspaceRole::Member);
 
-    test()->put(route('settings.posting-schedule.update'), [
-        'timezone' => 'UTC',
-        'slots' => [['weekday' => 1, 'hour' => 9]],
+    test()->put(route('queue.update'), [
+        'slots' => [['weekday' => 1, 'hour' => 9, 'minute' => 0]],
     ])->assertForbidden();
-});
-
-test('invalid timezone is rejected', function () {
-    [$user, $workspace] = scheduleMember(WorkspaceRole::Admin);
-
-    test()->from(route('settings.posting-schedule'))
-        ->put(route('settings.posting-schedule.update'), [
-            'timezone' => 'Mars/Olympus',
-            'slots' => [],
-        ])->assertSessionHasErrors('timezone');
 });
 
 test('out-of-range weekday is rejected', function () {
     [$user, $workspace] = scheduleMember(WorkspaceRole::Admin);
 
-    test()->from(route('settings.posting-schedule'))
-        ->put(route('settings.posting-schedule.update'), [
-            'timezone' => 'UTC',
-            'slots' => [['weekday' => 7, 'hour' => 9]],
+    test()->from(route('queue.show'))
+        ->put(route('queue.update'), [
+            'slots' => [['weekday' => 7, 'hour' => 9, 'minute' => 0]],
         ])->assertSessionHasErrors('slots.0.weekday');
+});
+
+test('out-of-range minute is rejected', function () {
+    [$user, $workspace] = scheduleMember(WorkspaceRole::Admin);
+
+    test()->from(route('queue.show'))
+        ->put(route('queue.update'), [
+            'slots' => [['weekday' => 1, 'hour' => 9, 'minute' => 60]],
+        ])->assertSessionHasErrors('slots.0.minute');
 });

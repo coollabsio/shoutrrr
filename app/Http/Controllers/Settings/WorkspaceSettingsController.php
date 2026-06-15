@@ -8,6 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Workspace\InviteMemberRequest;
 use App\Http\Requests\Workspace\UpdateMemberRoleRequest;
 use App\Http\Requests\Workspace\UpdateWorkspaceRequest;
+use App\Http\Requests\Workspace\UpdateWorkspaceTimezoneRequest;
+use App\Models\PostingSchedule;
 use App\Models\User;
 use App\Models\WorkspaceInvitation;
 use App\Models\WorkspaceMembership;
@@ -27,6 +29,9 @@ class WorkspaceSettingsController extends Controller
         $workspace = $user->currentWorkspace;
         abort_if($workspace === null, 404);
 
+        $schedule = PostingSchedule::query()->where('workspace_id', $workspace->id)->first();
+        $timezone = $schedule !== null ? $schedule->timezone : 'UTC';
+
         return Inertia::render('settings/workspace/overview', [
             'workspace' => [
                 'id' => $workspace->id,
@@ -37,6 +42,8 @@ class WorkspaceSettingsController extends Controller
             ],
             'canManage' => $user->hasAllPermissions(['workspace.settings.manage'], $workspace->id),
             'isOwner' => $user->isOwnerOfWorkspace($workspace->id),
+            'timezone' => $timezone,
+            'timezones' => timezone_identifiers_list(),
         ]);
     }
 
@@ -50,6 +57,21 @@ class WorkspaceSettingsController extends Controller
         $workspace->update($request->validated());
 
         return back()->with('success', 'Workspace updated.');
+    }
+
+    public function updateTimezone(UpdateWorkspaceTimezoneRequest $request): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $workspace = $user->currentWorkspace;
+        abort_if($workspace === null, 404);
+
+        PostingSchedule::query()->updateOrCreate(
+            ['workspace_id' => $workspace->id],
+            ['timezone' => $request->validated('timezone')],
+        );
+
+        return back()->with('success', 'Posting timezone saved.');
     }
 
     public function showMembers(Request $request): Response

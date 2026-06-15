@@ -29,6 +29,7 @@ import {
     type PostView,
 } from './types';
 import { useAutosave } from './use-autosave';
+import { useNextSlot } from './use-next-slot';
 import { usePublishStatus } from './use-publish-status';
 
 type ComposerProps = {
@@ -78,6 +79,11 @@ export default function Composer({
                   post: p,
               })
             : initialComposerState(initialScheduleAt),
+    );
+
+    const queueState = useNextSlot(
+        state.scheduleTray.mode === 'queue',
+        schedulingTz,
     );
 
     const destinationAccountIds = accountIdsFor(state, accounts, sets);
@@ -312,11 +318,13 @@ export default function Composer({
                         dispatch({ type: 'setScheduleTray', tray })
                     }
                     tz={schedulingTz}
+                    queueState={queueState}
                 />
                 <SubmitBar
                     tray={state.scheduleTray}
                     postId={state.postId}
                     disabled={accounts.length === 0}
+                    queueDisabled={queueState.status !== 'found'}
                     onSaveDraft={flush}
                     onEnsurePost={ensurePost}
                     onSubmitted={(submitted) => {

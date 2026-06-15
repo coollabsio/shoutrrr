@@ -1,4 +1,6 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, router } from '@inertiajs/react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import WorkspaceController from '@/actions/App/Http/Controllers/WorkspaceController';
@@ -7,6 +9,13 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 type Props = {
     workspace: {
@@ -18,12 +27,16 @@ type Props = {
     };
     canManage: boolean;
     isOwner: boolean;
+    timezone: string;
+    timezones: string[];
 };
 
 export default function WorkspaceOverview({
     workspace,
     canManage,
     isOwner,
+    timezone,
+    timezones,
 }: Props) {
     return (
         <>
@@ -72,6 +85,12 @@ export default function WorkspaceOverview({
                         </>
                     )}
                 </Form>
+
+                <TimezoneSection
+                    timezone={timezone}
+                    timezones={timezones}
+                    canManage={canManage}
+                />
 
                 {!isOwner && (
                     <div className="space-y-4">
@@ -151,6 +170,72 @@ export default function WorkspaceOverview({
                 )}
             </div>
         </>
+    );
+}
+
+function TimezoneSection({
+    timezone,
+    timezones,
+    canManage,
+}: {
+    timezone: string;
+    timezones: string[];
+    canManage: boolean;
+}) {
+    const [value, setValue] = useState(timezone);
+    const [saving, setSaving] = useState(false);
+    const dirty = value !== timezone;
+
+    function onSave() {
+        setSaving(true);
+        router.put(
+            WorkspaceSettingsController.updateTimezone().url,
+            { timezone: value },
+            {
+                preserveScroll: true,
+                onSuccess: () => toast.success('Posting timezone saved.'),
+                onError: () => toast.error('Could not save the timezone.'),
+                onFinish: () => setSaving(false),
+            },
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            <Heading
+                variant="small"
+                title="Posting timezone"
+                description="The timezone your queued posts publish in."
+            />
+            <div className="grid max-w-xs gap-2">
+                <Label htmlFor="posting-timezone">Timezone</Label>
+                <Select
+                    value={value}
+                    onValueChange={setValue}
+                    disabled={!canManage}
+                >
+                    <SelectTrigger id="posting-timezone">
+                        <SelectValue placeholder="Select a timezone" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                        {timezones.map((tz) => (
+                            <SelectItem key={tz} value={tz}>
+                                {tz}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            {canManage && (
+                <Button
+                    type="button"
+                    disabled={!dirty || saving}
+                    onClick={onSave}
+                >
+                    {saving ? 'Saving...' : 'Save'}
+                </Button>
+            )}
+        </div>
     );
 }
 

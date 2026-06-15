@@ -12,8 +12,11 @@ test('get_posting_schedule returns the workspace schedule and slots', function (
     $user->forceFill(['current_workspace_id' => $workspace->id])->save();
     bindTokenToWorkspace($user, $workspace);
 
-    PostingSchedule::factory()->for($workspace)->create(['timezone' => 'America/New_York']);
+    $schedule = PostingSchedule::factory()->for($workspace)->create(['timezone' => 'America/New_York']);
+    $schedule->slots()->create(['weekday' => 1, 'hour' => 9, 'minute' => 30, 'position' => 0]);
 
     $response = ShoutrrrServer::actingAs($user)->tool(GetPostingScheduleTool::class, []);
-    $response->assertOk()->assertSee('America/New_York');
+    $response->assertOk()
+        ->assertSee('America/New_York')
+        ->assertSee('"minute": 30');
 });

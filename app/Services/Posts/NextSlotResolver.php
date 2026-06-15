@@ -20,10 +20,10 @@ final class NextSlotResolver
     /**
      * Resolve the earliest free future posting slot for the workspace, as a UTC instant.
      *
-     * Slots are wall-clock (weekday + hour, minutes always :00) in the schedule's
-     * timezone; this walks candidate hours in that zone (DST-correct) and returns the
-     * first that matches a slot, is strictly after now, and is not already occupied by
-     * a scheduled/publishing post in this workspace.
+     * Slots are wall-clock (weekday + hour + minute) in the schedule's timezone. This
+     * enumerates each slot's datetime across the horizon (DST-correct: built in the
+     * schedule zone, then converted to UTC), and returns the earliest that is strictly
+     * after now and not already occupied by a scheduled/publishing post.
      */
     public function resolve(Workspace $workspace): ?CarbonImmutable
     {
@@ -37,44 +37,40 @@ final class NextSlotResolver
             return null;
         }
 
-        $slotSet = [];
-        foreach ($schedule->slots as $slot) {
-            $slotSet[$slot->weekday * 24 + $slot->hour] = true;
-        }
-
         $occupied = $this->occupiedInstants($workspace);
-
         $now = CarbonImmutable::now();
-        // Start at the next whole hour, expressed as wall-clock in the schedule zone.
-        $cursor = $now->setTimezone($schedule->timezone)
-            ->startOfHour()
-            ->addHour();
+        $today = $now->setTimezone($schedule->timezone);
 
-        $horizonHours = self::HORIZON_DAYS * 24;
+        $best = null;
 
-        for ($i = 0; $i < $horizonHours; $i++) {
-            $candidate = $cursor->addHours($i);
-            // Carbon: dayOfWeek is 0=Sunday..6=Saturday — matches our weekday convention.
-            $key = $candidate->dayOfWeek * 24 + $candidate->hour;
+        for ($dayOffset = 0; $dayOffset < self::HORIZON_DAYS; $dayOffset++) {
+            $date = $today->addDays($dayOffset);
 
-            if (! isset($slotSet[$key])) {
-                continue;
+            foreach ($schedule->slots as $slot) {
+                // Carbon: dayOfWeek is 0=Sunday..6=Saturday — matches our weekday convention.
+                if ($slot->weekday !== $date->dayOfWeek) {
+                    continue;
+                }
+
+                $candidate = $date
+                    ->setTime($slot->hour, $slot->minute)
+                    ->setTimezone('UTC');
+
+                if ($candidate->lessThanOrEqualTo($now)) {
+                    continue;
+                }
+
+                if (isset($occupied[$candidate->toIso8601String()])) {
+                    continue;
+                }
+
+                if ($best === null || $candidate->lessThan($best)) {
+                    $best = $candidate;
+                }
             }
-
-            $utc = $candidate->setTimezone('UTC');
-
-            if ($utc->lessThanOrEqualTo($now)) {
-                continue;
-            }
-
-            if (isset($occupied[$utc->toIso8601String()])) {
-                continue;
-            }
-
-            return $utc;
         }
 
-        return null;
+        return $best;
     }
 
     /**

@@ -1,7 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../../../wayfinder'
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::cancel
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:165
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:187
 * @route '/settings/workspace/invitations/{invitation}'
 */
 export const cancel = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
@@ -16,7 +16,7 @@ cancel.definition = {
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::cancel
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:165
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:187
 * @route '/settings/workspace/invitations/{invitation}'
 */
 cancel.url = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
@@ -49,7 +49,7 @@ cancel.url = (args: { invitation: string | { id: string } } | [invitation: strin
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::cancel
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:165
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:187
 * @route '/settings/workspace/invitations/{invitation}'
 */
 cancel.delete = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
@@ -59,7 +59,7 @@ cancel.delete = (args: { invitation: string | { id: string } } | [invitation: st
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::cancel
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:165
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:187
 * @route '/settings/workspace/invitations/{invitation}'
 */
 const cancelForm = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -74,7 +74,7 @@ const cancelForm = (args: { invitation: string | { id: string } } | [invitation:
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::cancel
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:165
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:187
 * @route '/settings/workspace/invitations/{invitation}'
 */
 cancelForm.delete = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({

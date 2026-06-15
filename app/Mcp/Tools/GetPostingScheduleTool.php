@@ -37,6 +37,7 @@ class GetPostingScheduleTool extends WorkspaceTool
             'slots' => $schedule->slots->map(fn ($slot): array => [
                 'weekday' => $slot->weekday,
                 'hour' => $slot->hour,
+                'minute' => $slot->minute,
             ]),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }

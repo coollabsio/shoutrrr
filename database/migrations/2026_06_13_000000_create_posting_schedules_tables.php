@@ -22,10 +22,11 @@ return new class extends Migration
             $table->foreignUuid('posting_schedule_id')->constrained('posting_schedules')->cascadeOnDelete();
             $table->unsignedTinyInteger('weekday'); // 0=Sunday .. 6=Saturday
             $table->unsignedTinyInteger('hour');    // 0..23
+            $table->unsignedTinyInteger('minute')->default(0); // 0..59
             $table->unsignedInteger('position')->default(0);
             $table->timestamps();
 
-            $table->unique(['posting_schedule_id', 'weekday', 'hour']);
+            $table->unique(['posting_schedule_id', 'weekday', 'hour', 'minute']);
         });
     }
 

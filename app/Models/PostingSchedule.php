@@ -41,6 +41,7 @@ class PostingSchedule extends Model
     {
         return $this->hasMany(PostingScheduleSlot::class)
             ->orderBy('weekday')
-            ->orderBy('hour');
+            ->orderBy('hour')
+            ->orderBy('minute');
     }
 }

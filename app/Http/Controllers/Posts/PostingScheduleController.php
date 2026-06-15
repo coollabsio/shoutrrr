@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Settings;
+namespace App\Http\Controllers\Posts;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PostingSchedule\UpdatePostingScheduleRequest;
@@ -37,14 +37,14 @@ class PostingScheduleController extends Controller
             $slots = $schedule->slots->map(fn (PostingScheduleSlot $slot): array => [
                 'weekday' => $slot->weekday,
                 'hour' => $slot->hour,
+                'minute' => $slot->minute,
                 'position' => $slot->position,
             ])->values()->all();
         }
 
-        return Inertia::render('settings/posting-schedule', [
+        return Inertia::render('queue/index', [
             'timezone' => $timezone,
             'slots' => $slots,
-            'timezones' => timezone_identifiers_list(),
             'canManage' => $user->hasAllPermissions(['workspace.settings.manage'], $workspace->id),
         ]);
     }
@@ -56,14 +56,13 @@ class PostingScheduleController extends Controller
         $workspace = $user->currentWorkspace;
         abort_if($workspace === null, 404);
 
-        /** @var array{timezone: string, slots?: list<array{weekday: int, hour: int}>} $data */
+        /** @var array{slots?: list<array{weekday: int, hour: int, minute?: int}>} $data */
         $data = $request->validated();
         $slots = $data['slots'] ?? [];
 
-        DB::transaction(function () use ($workspace, $data, $slots): void {
-            $schedule = PostingSchedule::query()->updateOrCreate(
+        DB::transaction(function () use ($workspace, $slots): void {
+            $schedule = PostingSchedule::query()->firstOrCreate(
                 ['workspace_id' => $workspace->id],
-                ['timezone' => $data['timezone']],
             );
 
             $schedule->slots()->delete();
@@ -73,7 +72,8 @@ class PostingScheduleController extends Controller
             $rows = [];
 
             foreach ($slots as $slot) {
-                $key = $slot['weekday'].':'.$slot['hour'];
+                $minute = $slot['minute'] ?? 0;
+                $key = $slot['weekday'].':'.$slot['hour'].':'.$minute;
 
                 if (isset($seen[$key])) {
                     continue;
@@ -83,6 +83,7 @@ class PostingScheduleController extends Controller
                 $rows[] = [
                     'weekday' => $slot['weekday'],
                     'hour' => $slot['hour'],
+                    'minute' => $minute,
                     'position' => $position++,
                 ];
             }
@@ -92,6 +93,6 @@ class PostingScheduleController extends Controller
             }
         });
 
-        return back()->with('success', 'Posting schedule saved.');
+        return back()->with('success', 'Queue saved.');
     }
 }

@@ -5,14 +5,17 @@ import { cn } from '@/lib/utils';
 
 import type { ScheduleTray as TrayState } from './composer-state';
 import { defaultPickedAt, PickTimePopover } from './PickTimePopover';
+import { QueuePreview } from './QueuePreview';
+import type { QueueSlotState } from './use-next-slot';
 
 type Props = {
     tray: TrayState;
     onChange: (next: TrayState) => void;
     tz: string;
+    queueState: QueueSlotState;
 };
 
-export function ScheduleTray({ tray, onChange, tz }: Props) {
+export function ScheduleTray({ tray, onChange, tz, queueState }: Props) {
     return (
         <div className="flex items-center gap-2">
             <div
@@ -53,9 +56,13 @@ export function ScheduleTray({ tray, onChange, tz }: Props) {
                     tz={tz}
                 />
             )}
-            <span className="text-[11px] text-muted-foreground">
-                Times in {tz}
-            </span>
+            {tray.mode === 'queue' ? (
+                <QueuePreview state={queueState} />
+            ) : (
+                <span className="text-[11px] text-muted-foreground">
+                    Times in {tz}
+                </span>
+            )}
         </div>
     );
 }

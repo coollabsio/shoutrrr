@@ -1,7 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../../../wayfinder'
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::update
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:118
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:140
 * @route '/settings/workspace/members/{membership}'
 */
 export const update = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
@@ -16,7 +16,7 @@ update.definition = {
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::update
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:118
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:140
 * @route '/settings/workspace/members/{membership}'
 */
 update.url = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
@@ -49,7 +49,7 @@ update.url = (args: { membership: string | { id: string } } | [membership: strin
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::update
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:118
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:140
 * @route '/settings/workspace/members/{membership}'
 */
 update.patch = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
@@ -59,7 +59,7 @@ update.patch = (args: { membership: string | { id: string } } | [membership: str
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::update
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:118
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:140
 * @route '/settings/workspace/members/{membership}'
 */
 const updateForm = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -74,7 +74,7 @@ const updateForm = (args: { membership: string | { id: string } } | [membership:
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::update
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:118
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:140
 * @route '/settings/workspace/members/{membership}'
 */
 updateForm.patch = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -91,7 +91,7 @@ update.form = updateForm
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::remove
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:138
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:160
 * @route '/settings/workspace/members/{membership}'
 */
 export const remove = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
@@ -106,7 +106,7 @@ remove.definition = {
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::remove
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:138
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:160
 * @route '/settings/workspace/members/{membership}'
 */
 remove.url = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
@@ -139,7 +139,7 @@ remove.url = (args: { membership: string | { id: string } } | [membership: strin
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::remove
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:138
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:160
 * @route '/settings/workspace/members/{membership}'
 */
 remove.delete = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
@@ -149,7 +149,7 @@ remove.delete = (args: { membership: string | { id: string } } | [membership: st
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::remove
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:138
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:160
 * @route '/settings/workspace/members/{membership}'
 */
 const removeForm = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -164,7 +164,7 @@ const removeForm = (args: { membership: string | { id: string } } | [membership:
 
 /**
 * @see \App\Http\Controllers\Settings\WorkspaceSettingsController::remove
-* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:138
+* @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:160
 * @route '/settings/workspace/members/{membership}'
 */
 removeForm.delete = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({

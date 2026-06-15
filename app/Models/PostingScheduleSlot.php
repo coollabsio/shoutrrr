@@ -17,12 +17,14 @@ use Override;
  * @property string $posting_schedule_id
  * @property int $weekday
  * @property int $hour
+ * @property int $minute
  * @property int $position
  */
 #[Fillable([
     'posting_schedule_id',
     'weekday',
     'hour',
+    'minute',
     'position',
 ])]
 class PostingScheduleSlot extends Model
@@ -39,6 +41,7 @@ class PostingScheduleSlot extends Model
         return [
             'weekday' => 'integer',
             'hour' => 'integer',
+            'minute' => 'integer',
             'position' => 'integer',
         ];
     }

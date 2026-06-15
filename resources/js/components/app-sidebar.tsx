@@ -5,10 +5,12 @@ import {
     FileText,
     FolderGit2,
     LayoutGrid,
+    ListChecks,
     Settings,
     Share2,
 } from 'lucide-react';
 
+import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
@@ -45,6 +47,11 @@ const mainNavItems: NavItem[] = [
         title: 'Calendar',
         href: calendarRoute(),
         icon: CalendarDays,
+    },
+    {
+        title: 'Queue',
+        href: PostingScheduleController.show(),
+        icon: ListChecks,
     },
     {
         title: 'Accounts',
