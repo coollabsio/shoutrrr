@@ -211,3 +211,30 @@ test('x uploads media to the v2 endpoint and attaches data.id to the first tweet
     Http::assertSent(fn ($request) => $request->url() === 'https://api.twitter.com/2/tweets'
         && ($request['media']['media_ids'] ?? null) === ['99001']);
 });
+
+test('x omits an empty text field for a media-only post', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/cat.jpg', 'image-bytes');
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/cat.jpg',
+        'mime' => 'image/jpeg',
+    ]);
+
+    Http::fake([
+        'https://api.x.com/2/media/upload' => Http::response(['data' => ['id' => '99001']]),
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
+    ]);
+
+    // A photo-only post splits to a single empty segment.
+    $result = app(XConnector::class)->publish(xContext([''], [$media]));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    // The tweet carries the media but NO `text` key — X rejects `text: ""` with
+    // a 400 "Invalid Request" even when media is attached.
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.twitter.com/2/tweets'
+        && ! array_key_exists('text', $request->data())
+        && ($request['media']['media_ids'] ?? null) === ['99001']);
+});

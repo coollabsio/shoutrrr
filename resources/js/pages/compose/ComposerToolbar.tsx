@@ -26,6 +26,8 @@ type Props = {
     onToggleExclude: (mediaId: string) => void;
     /** Guarantee a persisted post id before uploading; returns the post id. */
     onEnsurePost: () => Promise<string>;
+    /** Read-only post: show attached media, hide all editing controls. */
+    readOnly?: boolean;
 };
 
 export function ComposerToolbar({
@@ -42,6 +44,7 @@ export function ComposerToolbar({
     isExcluded,
     onToggleExclude,
     onEnsurePost,
+    readOnly = false,
 }: Props) {
     const upload = useHttp<{ file: File | null }, { media: MediaView }>({
         file: null,
@@ -156,37 +159,41 @@ export function ComposerToolbar({
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
                 e.preventDefault();
-                if (e.dataTransfer.files.length > 0) {
+                if (!readOnly && e.dataTransfer.files.length > 0) {
                     void handleFiles(e.dataTransfer.files);
                 }
             }}
             className="flex flex-wrap items-center gap-1.5 border-t border-border bg-muted/50 px-3 pt-2 pb-2.5 sm:px-[14px]"
         >
-            <input
-                ref={input}
-                type="file"
-                accept="image/*"
-                multiple
-                hidden
-                onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                        void handleFiles(e.target.files);
-                    }
-                }}
-            />
+            {!readOnly && (
+                <>
+                    <input
+                        ref={input}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                        onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                                void handleFiles(e.target.files);
+                            }
+                        }}
+                    />
 
-            <EToolButton
-                title="Add media (⌘⇧M)"
-                onClick={() => input.current?.click()}
-            >
-                <ImageIcon className="size-3.5" aria-hidden="true" />
-                <span>Media</span>
-                {mediaCount > 0 && (
-                    <span className="rounded-full bg-foreground px-1.5 py-0.5 font-mono text-[10px] leading-none font-medium text-background tabular-nums">
-                        {mediaCount}
-                    </span>
-                )}
-            </EToolButton>
+                    <EToolButton
+                        title="Add media (⌘⇧M)"
+                        onClick={() => input.current?.click()}
+                    >
+                        <ImageIcon className="size-3.5" aria-hidden="true" />
+                        <span>Media</span>
+                        {mediaCount > 0 && (
+                            <span className="rounded-full bg-foreground px-1.5 py-0.5 font-mono text-[10px] leading-none font-medium text-background tabular-nums">
+                                {mediaCount}
+                            </span>
+                        )}
+                    </EToolButton>
+                </>
+            )}
 
             <MediaChips
                 media={media}
@@ -197,11 +204,12 @@ export function ComposerToolbar({
                 onReorder={onReorder}
                 onRemove={onRemove}
                 onDismissPending={dismissPending}
+                readOnly={readOnly}
             />
 
             <div className="ml-auto sm:flex-1" />
 
-            {showSplitControls && (
+            {showSplitControls && !readOnly && (
                 <>
                     <EToolButton
                         title={

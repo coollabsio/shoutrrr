@@ -16,6 +16,8 @@ type DestinationSelectorProps = {
     sets: AccountSet[];
     destination: Destination;
     onChange: (destination: Destination) => void;
+    /** Lock the selector (read-only post). */
+    disabled?: boolean;
 };
 
 function toValue(destination: Destination): string {
@@ -31,6 +33,7 @@ export default function DestinationSelector({
     sets,
     destination,
     onChange,
+    disabled = false,
 }: DestinationSelectorProps) {
     function handleChange(value: string) {
         if (value === 'all') {
@@ -45,7 +48,11 @@ export default function DestinationSelector({
     }
 
     return (
-        <Select value={toValue(destination)} onValueChange={handleChange}>
+        <Select
+            value={toValue(destination)}
+            onValueChange={handleChange}
+            disabled={disabled}
+        >
             <SelectTrigger
                 size="sm"
                 aria-label="Post destination"

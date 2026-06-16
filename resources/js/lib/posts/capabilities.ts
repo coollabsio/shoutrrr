@@ -32,9 +32,10 @@ export function postCapabilities(post: PostView): PostCapabilities {
                 canDelete: true,
             };
         case 'scheduled':
+            // Not a draft → content is read-only; only the schedule itself can
+            // still be changed (reschedule/unschedule) or the post discarded.
             return {
                 ...NONE,
-                canEdit: true,
                 canReschedule: true,
                 canUnschedule: true,
                 canDelete: true,

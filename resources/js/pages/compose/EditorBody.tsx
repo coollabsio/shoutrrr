@@ -13,6 +13,8 @@ type EditorBodyProps = {
     onChange: (text: string) => void;
     onBlur: () => void;
     placeholder?: string;
+    /** When false, the post is read-only (e.g. already published/scheduled). */
+    editable?: boolean;
     /** When true, render the ring-tinted override banner above the editor. */
     overrideBanner?: boolean;
     /** Human label of the active platform for the override banner copy. */
@@ -40,14 +42,21 @@ export default function EditorBody({
     activePlatformLabel,
     onResetOverride,
     markerState,
+    editable = true,
 }: EditorBodyProps) {
     const editor = useEditor({
         extensions: composerExtensions({ placeholder }),
         content: baseTextToDoc(value) as object,
+        editable,
         onUpdate: ({ editor }) =>
             onChange(docToBaseText(editor.getJSON() as DocNode)),
         onBlur,
     });
+
+    // Reflect editability changes (tiptap caches it from the initial options).
+    useEffect(() => {
+        editor?.setEditable(editable);
+    }, [editor, editable]);
 
     // Keep the editor in sync when the value is replaced externally (tab switch,
     // conflict resolution) without emitting an update.

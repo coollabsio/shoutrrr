@@ -3,6 +3,7 @@ import { Plug } from 'lucide-react';
 import { useReducer } from 'react';
 
 import { useSchedulingTimezone } from '@/hooks/use-scheduling-timezone';
+import { postCapabilities } from '@/lib/posts/capabilities';
 import { index as accountsRoute } from '@/routes/accounts';
 
 import CharCounter from './CharCounter';
@@ -98,6 +99,10 @@ export default function Composer({
     });
     const publishStatus = usePublishStatus({ pagePost: post });
 
+    // A post that isn't a draft is read-only: show its content/media + live
+    // status, but no editing, media changes, or re-publishing.
+    const readOnly = post !== null && !postCapabilities(post).canEdit;
+
     const activeAccount = pickActiveAccount(tabAccounts, state.activeTab);
     const activeText =
         activeAccount && state.overrideByAccount[activeAccount.id] !== undefined
@@ -184,19 +189,22 @@ export default function Composer({
                         accounts={accounts}
                         sets={sets}
                         destination={state.destination}
+                        disabled={readOnly}
                         onChange={(destination) => {
                             dispatch({ type: 'setDestination', destination });
-                            flush();
+                            void flush();
                         }}
                     />
-                    <SaveIndicator
-                        state={state.saveState}
-                        lastSavedAt={
-                            state.baselineUpdatedAt
-                                ? Date.parse(state.baselineUpdatedAt)
-                                : null
-                        }
-                    />
+                    {!readOnly && (
+                        <SaveIndicator
+                            state={state.saveState}
+                            lastSavedAt={
+                                state.baselineUpdatedAt
+                                    ? Date.parse(state.baselineUpdatedAt)
+                                    : null
+                            }
+                        />
+                    )}
                 </div>
             </div>
 
@@ -205,6 +213,7 @@ export default function Composer({
                 value={activeText}
                 onChange={handleText}
                 onBlur={flush}
+                editable={!readOnly}
                 overrideBanner={overrideActive}
                 activePlatformLabel={activeAccount?.platform ?? null}
                 onResetOverride={() =>
@@ -252,87 +261,95 @@ export default function Composer({
                 </div>
             )}
 
-            {/* Toolbar */}
-            <ComposerToolbar
-                activePlatform={activeAccount?.platform}
-                autoSplit={
-                    activeAccount
-                        ? (state.autoSplitByAccount[activeAccount.id] ?? true)
-                        : false
-                }
-                overrideActive={overrideActive}
-                showSplitControls={activeAccount !== null}
-                media={state.media}
-                onAddMedia={(m) => dispatch({ type: 'addMedia', media: m })}
-                onRemove={(id) =>
-                    dispatch({ type: 'removeMedia', mediaId: id })
-                }
-                onReorder={(ids) => dispatch({ type: 'reorderMedia', ids })}
-                onToggleAutoSplit={() =>
-                    activeAccount &&
-                    dispatch({
-                        type: 'toggleAutoSplit',
-                        accountId: activeAccount.id,
-                    })
-                }
-                onToggleOverride={() => {
-                    if (!activeAccount) {
-                        return;
+            {/* Toolbar — editing controls when editable; just the attached
+                media when read-only (skipped entirely if there's none). */}
+            {(!readOnly || state.media.length > 0) && (
+                <ComposerToolbar
+                    readOnly={readOnly}
+                    activePlatform={activeAccount?.platform}
+                    autoSplit={
+                        activeAccount
+                            ? (state.autoSplitByAccount[activeAccount.id] ??
+                              true)
+                            : false
                     }
-                    if (
-                        state.overrideByAccount[activeAccount.id] !== undefined
-                    ) {
+                    overrideActive={overrideActive}
+                    showSplitControls={activeAccount !== null}
+                    media={state.media}
+                    onAddMedia={(m) => dispatch({ type: 'addMedia', media: m })}
+                    onRemove={(id) =>
+                        dispatch({ type: 'removeMedia', mediaId: id })
+                    }
+                    onReorder={(ids) => dispatch({ type: 'reorderMedia', ids })}
+                    onToggleAutoSplit={() =>
+                        activeAccount &&
                         dispatch({
-                            type: 'discardOverride',
+                            type: 'toggleAutoSplit',
                             accountId: activeAccount.id,
-                        });
-                    } else {
+                        })
+                    }
+                    onToggleOverride={() => {
+                        if (!activeAccount) {
+                            return;
+                        }
+                        if (
+                            state.overrideByAccount[activeAccount.id] !==
+                            undefined
+                        ) {
+                            dispatch({
+                                type: 'discardOverride',
+                                accountId: activeAccount.id,
+                            });
+                        } else {
+                            dispatch({
+                                type: 'setOverrideText',
+                                accountId: activeAccount.id,
+                                text: state.baseText,
+                            });
+                        }
+                    }}
+                    isExcluded={(mediaId) =>
+                        activeAccount
+                            ? state.mediaSubsetExcludes.has(
+                                  `${mediaId}:${activeAccount.id}`,
+                              )
+                            : false
+                    }
+                    onToggleExclude={(mediaId) =>
+                        activeAccount &&
                         dispatch({
-                            type: 'setOverrideText',
+                            type: 'toggleMediaExclude',
+                            mediaId,
                             accountId: activeAccount.id,
-                            text: state.baseText,
-                        });
+                        })
                     }
-                }}
-                isExcluded={(mediaId) =>
-                    activeAccount
-                        ? state.mediaSubsetExcludes.has(
-                              `${mediaId}:${activeAccount.id}`,
-                          )
-                        : false
-                }
-                onToggleExclude={(mediaId) =>
-                    activeAccount &&
-                    dispatch({
-                        type: 'toggleMediaExclude',
-                        mediaId,
-                        accountId: activeAccount.id,
-                    })
-                }
-                onEnsurePost={ensurePost}
-            />
-
-            {/* Schedule + submit row */}
-            <div className="flex items-center justify-between gap-x-3 border-t border-border bg-muted/55 px-3 py-3 sm:px-[14px]">
-                <ScheduleTray
-                    tray={state.scheduleTray}
-                    onChange={(tray) =>
-                        dispatch({ type: 'setScheduleTray', tray })
-                    }
-                    tz={schedulingTz}
-                    queueState={queueState}
-                />
-                <SubmitBar
-                    tray={state.scheduleTray}
-                    postId={state.postId}
-                    disabled={accounts.length === 0}
-                    queueDisabled={queueState.status !== 'found'}
-                    onSaveDraft={flush}
                     onEnsurePost={ensurePost}
-                    onOptimisticSubmit={publishStatus.applyOptimistic}
-                    onServerPost={publishStatus.applyServerPost}
                 />
-            </div>
+            )}
+
+            {/* Schedule + submit row — hidden once the post is read-only. */}
+            {!readOnly && (
+                <div className="flex items-center justify-between gap-x-3 border-t border-border bg-muted/55 px-3 py-3 sm:px-[14px]">
+                    <ScheduleTray
+                        tray={state.scheduleTray}
+                        onChange={(tray) =>
+                            dispatch({ type: 'setScheduleTray', tray })
+                        }
+                        tz={schedulingTz}
+                        queueState={queueState}
+                    />
+                    <SubmitBar
+                        tray={state.scheduleTray}
+                        postId={state.postId}
+                        disabled={accounts.length === 0}
+                        queueDisabled={queueState.status !== 'found'}
+                        onSaveDraft={flush}
+                        onEnsurePost={ensurePost}
+                        onOptimisticSubmit={publishStatus.applyOptimistic}
+                        onServerPost={publishStatus.applyServerPost}
+                    />
+                </div>
+            )}
 
             {/* Live publish status — only once a publish/queue/schedule has run */}
             {publishStatus.snapshot &&

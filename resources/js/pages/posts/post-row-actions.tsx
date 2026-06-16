@@ -6,16 +6,7 @@ import { useState } from 'react';
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import PostController from '@/actions/App/Http/Controllers/Posts/PostController';
 import PostScheduleController from '@/actions/App/Http/Controllers/Posts/PostScheduleController';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { useConfirm } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -41,7 +32,6 @@ type Props = {
 };
 
 type Mode = 'menu' | 'scheduling' | 'rescheduling';
-type ConfirmKind = 'delete' | 'unschedule' | null;
 
 function stopBubble(e: React.MouseEvent | React.KeyboardEvent) {
     e.stopPropagation();
@@ -72,10 +62,10 @@ export function PostRowActions({ post }: Props) {
     // (.status: PostStatus, .targets[].status: TargetStatus).
     const caps = postCapabilities(post as unknown as PostView);
     const tz = useSchedulingTimezone();
+    const confirm = useConfirm();
 
     const [mode, setMode] = useState<Mode>('menu');
     const [pickedAt, setPickedAt] = useState<string>(() => defaultPickedAt(tz));
-    const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
     const [shareOpen, setShareOpen] = useState(false);
 
     function handleEdit() {
@@ -122,11 +112,16 @@ export function PostRowActions({ post }: Props) {
         setMode('menu');
     }
 
-    function handleUnschedule() {
-        setConfirmKind('unschedule');
-    }
-
-    function confirmUnschedule() {
+    async function handleUnschedule() {
+        const ok = await confirm({
+            title: 'Move back to drafts?',
+            description:
+                'The post will be unscheduled and returned to your drafts.',
+            actionLabel: 'Unschedule',
+        });
+        if (!ok) {
+            return;
+        }
         router.put(
             PostScheduleController.update(post.id).url,
             { scheduled_at: null },
@@ -169,22 +164,27 @@ export function PostRowActions({ post }: Props) {
         );
     }
 
-    function handleDelete() {
-        setConfirmKind('delete');
-    }
-
-    function confirmDelete() {
+    async function handleDelete() {
+        const ok = await confirm({
+            title: 'Delete post?',
+            description:
+                post.status === 'draft' || post.status === 'scheduled'
+                    ? 'This removes the post. The content is not kept.'
+                    : 'Published copies will be removed from connected accounts where possible.',
+            actionLabel: 'Delete',
+            destructive: true,
+        });
+        if (!ok) {
+            return;
+        }
+        // The confirm dialog lives at the app root, so this optimistic removal
+        // can safely unmount the row without stranding an open modal.
         router.delete(PostController.destroy(post.id).url, {
             preserveScroll: true,
             optimistic: (props) =>
                 optimisticPosts(props, (list) => removeById(list, post.id)),
         });
     }
-
-    const deleteDescription =
-        post.status === 'draft' || post.status === 'scheduled'
-            ? 'This removes the post. The content is not kept.'
-            : 'Published copies will be removed from connected accounts where possible.';
 
     // Scheduling / rescheduling inline picker replaces the dropdown
     if (mode === 'scheduling' || mode === 'rescheduling') {
@@ -256,7 +256,9 @@ export function PostRowActions({ post }: Props) {
                         </DropdownMenuItem>
                     )}
                     {caps.canUnschedule && (
-                        <DropdownMenuItem onSelect={handleUnschedule}>
+                        <DropdownMenuItem
+                            onSelect={() => void handleUnschedule()}
+                        >
                             Unschedule
                         </DropdownMenuItem>
                     )}
@@ -266,58 +268,13 @@ export function PostRowActions({ post }: Props) {
                     {caps.canDelete && (
                         <DropdownMenuItem
                             variant="destructive"
-                            onSelect={handleDelete}
+                            onSelect={() => void handleDelete()}
                         >
                             Delete
                         </DropdownMenuItem>
                     )}
                 </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* Unschedule confirmation */}
-            <AlertDialog
-                open={confirmKind === 'unschedule'}
-                onOpenChange={(open) => !open && setConfirmKind(null)}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            Move back to drafts?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            The post will be unscheduled and returned to your
-                            drafts.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={confirmUnschedule}>
-                            Unschedule
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            {/* Delete confirmation */}
-            <AlertDialog
-                open={confirmKind === 'delete'}
-                onOpenChange={(open) => !open && setConfirmKind(null)}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete post?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            {deleteDescription}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={confirmDelete}>
-                            Delete
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
 
             {/* Share dialog */}
             <ShareDialog

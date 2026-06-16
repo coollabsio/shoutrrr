@@ -41,7 +41,10 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => rtrim((string) env('APP_URL', 'http://localhost'), '/').'/storage',
+            // Host-relative so uploaded media resolves against whatever origin
+            // the app is served from (localhost, 127.0.0.1:8000, a domain, …),
+            // rather than a fixed APP_URL that may not match the dev server.
+            'url' => '/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,

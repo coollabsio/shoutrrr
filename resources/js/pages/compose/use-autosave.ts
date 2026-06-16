@@ -33,7 +33,22 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
     // via transform), so Record<string, never> is the minimal valid shape.
     const http = useHttp<Record<string, never>, SaveResponse>({});
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const inFlight = useRef(false);
+    // The save currently in flight, tracked as a promise (not a boolean) so a
+    // forced `flush` can await it before starting the next save — this is what
+    // lets publishing wait for the draft (media, targets) to be persisted first.
+    const inFlight = useRef<Promise<void> | null>(null);
+    // Latest known post id, mirrored in a ref so a concurrent `ensurePost` can
+    // read it after awaiting an in-flight create (the reducer `state` closure is
+    // stale inside an async call).
+    const postIdRef = useRef<string | null>(state.postId);
+    postIdRef.current = state.postId;
+    // Latest server-acknowledged updated_at, mirrored in a ref so a save queued
+    // behind an in-flight one sends the freshest `expected_updated_at` rather
+    // than a stale React-closure snapshot — otherwise a single user's own
+    // chained saves trip the optimistic-concurrency check and 409 against
+    // themselves. Updated synchronously on every server response below, and via
+    // the effect for external changes (hydrate / conflict resolution).
+    const baselineRef = useRef<string | null>(state.baselineUpdatedAt);
 
     /**
      * Create the draft post (POST). Shared by the autosave create-branch and by
@@ -48,6 +63,8 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
         const created = await http.post(PostController.store().url, {
             onNetworkError: () => dispatch({ type: 'saveFailedOffline' }),
         });
+        postIdRef.current = created.post.id;
+        baselineRef.current = created.post.updated_at;
         dispatch({
             type: 'setPostId',
             postId: created.post.id,
@@ -59,70 +76,121 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
     }
 
     /**
-     * Guarantee a persisted post id before a dependent action (e.g. media
-     * upload). If a draft already exists, returns its id immediately; otherwise
-     * creates one unconditionally, regardless of saveState.
+     * Persist the current reducer snapshot. No guards — callers coordinate via
+     * `inFlight`. A brand-new post is created (POST); thereafter edits go via
+     * PUT. `transform()` reads `state` at submit time so it captures the freshest
+     * snapshot, including media added moments before a publish.
      */
-    async function ensurePost(): Promise<string> {
-        if (state.postId !== null) {
-            return state.postId;
-        }
-        if (inFlight.current) {
-            return '';
-        }
-        inFlight.current = true;
+    async function persist(): Promise<void> {
         dispatch({ type: 'saveStarted' });
-        try {
-            return await createPost();
-        } finally {
-            inFlight.current = false;
+
+        const postId = postIdRef.current;
+        if (postId === null) {
+            await createPost();
+
+            return;
         }
+
+        // expected_updated_at comes from the ref (latest server version), not the
+        // possibly-stale closure, so a save queued behind another never 409s.
+        http.transform(() => ({
+            ...buildPutBody(state, accountIds),
+            expected_updated_at: baselineRef.current,
+        }));
+        await http.put(PostController.update(postId).url, {
+            // onSuccess's first arg is the parsed response body (TResponse).
+            onSuccess: (data) => {
+                baselineRef.current = data.post.updated_at;
+                dispatch({ type: 'saveSucceeded', post: data.post });
+            },
+            // onHttpException's response.data is typed `string` but may arrive
+            // parsed at runtime — handle both.
+            onHttpException: (response) => {
+                if (response.status !== 409) {
+                    return;
+                }
+                const raw = response.data;
+                const body = (
+                    typeof raw === 'string' ? JSON.parse(raw) : raw
+                ) as SaveResponse;
+                dispatch({ type: 'saveFailedStale', post: body.post });
+            },
+            onNetworkError: () => dispatch({ type: 'saveFailedOffline' }),
+        });
     }
 
+    /**
+     * Run `work` serialized behind any in-flight save, tracking it on `inFlight`
+     * so the debounce, `flush`, and `ensurePost` wait rather than overlap. The
+     * tracked promise never rejects (failures are surfaced via the save
+     * callbacks → reducer), so awaiting it never blocks a subsequent publish.
+     */
+    function enqueueSave(work: () => Promise<unknown>): Promise<void> {
+        const prior = inFlight.current ?? Promise.resolve();
+        const tracked: Promise<void> = prior
+            .then(work, work)
+            .then(
+                () => undefined,
+                () => undefined,
+            )
+            .finally(() => {
+                if (inFlight.current === tracked) {
+                    inFlight.current = null;
+                }
+            });
+        inFlight.current = tracked;
+
+        return tracked;
+    }
+
+    /**
+     * Guarantee a persisted post id before a dependent action (e.g. media
+     * upload). If a draft already exists, returns its id immediately; otherwise
+     * creates one (serialized behind any in-flight save), regardless of
+     * saveState.
+     */
+    async function ensurePost(): Promise<string> {
+        if (postIdRef.current !== null) {
+            return postIdRef.current;
+        }
+        if (inFlight.current) {
+            await inFlight.current;
+
+            return postIdRef.current ?? '';
+        }
+        dispatch({ type: 'saveStarted' });
+        await enqueueSave(createPost);
+
+        return postIdRef.current ?? '';
+    }
+
+    /** Debounced autosave: only when dirty and nothing already in flight. */
     async function save() {
         if (inFlight.current || state.saveState !== 'dirty') {
             return;
         }
-        inFlight.current = true;
-        dispatch({ type: 'saveStarted' });
-
-        try {
-            if (state.postId === null) {
-                await createPost();
-
-                return;
-            }
-
-            http.transform(() => buildPutBody(state, accountIds));
-            await http.put(PostController.update(state.postId).url, {
-                // onSuccess's first arg is the parsed response body (TResponse).
-                onSuccess: (data) =>
-                    dispatch({ type: 'saveSucceeded', post: data.post }),
-                // onHttpException's response.data is typed `string` but may arrive
-                // parsed at runtime — handle both.
-                onHttpException: (response) => {
-                    if (response.status !== 409) {
-                        return;
-                    }
-                    const raw = response.data;
-                    const body = (
-                        typeof raw === 'string' ? JSON.parse(raw) : raw
-                    ) as SaveResponse;
-                    dispatch({ type: 'saveFailedStale', post: body.post });
-                },
-                onNetworkError: () => dispatch({ type: 'saveFailedOffline' }),
-            });
-        } finally {
-            inFlight.current = false;
-        }
+        await enqueueSave(persist);
     }
 
-    function flush() {
+    /**
+     * Force an immediate, awaitable save. Resolves only once the latest edits
+     * are durably persisted, so callers (e.g. publishing) can rely on media and
+     * targets being saved server-side before the publish request fires.
+     */
+    async function flush(): Promise<void> {
         if (timer.current) {
             clearTimeout(timer.current);
             timer.current = null;
         }
-        void save();
+        // Wait out any in-flight save so the forced save reflects the latest
+        // snapshot (e.g. media added just before clicking Publish).
+        if (inFlight.current) {
+            await inFlight.current;
+        }
+        if (state.saveState === 'saved' || state.saveState === 'idle') {
+            return;
+        }
+        await enqueueSave(persist);
     }
 
     // Debounce while dirty. `save` is intentionally re-created each render so the
@@ -154,11 +222,17 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
         state.media,
     ]);
 
+    // Keep the version ref in step with externally-driven baseline changes
+    // (initial hydrate, conflict resolution) that don't flow through a save here.
+    useEffect(() => {
+        baselineRef.current = state.baselineUpdatedAt;
+    }, [state.baselineUpdatedAt]);
+
     // Flush on tab-hide.
     useEffect(() => {
         function onHide() {
             if (document.visibilityState === 'hidden') {
-                flush();
+                void flush();
             }
         }
         document.addEventListener('visibilitychange', onHide);

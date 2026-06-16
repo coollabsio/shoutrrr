@@ -43,7 +43,10 @@ class XConnector implements PublishConnector
                     continue;
                 }
 
-                $body = ['text' => $text];
+                // X rejects an empty `text` field; once media_ids are attached
+                // text is optional, so omit it entirely for a media-only post
+                // (otherwise the API returns a 400 "Invalid Request").
+                $body = $text === '' ? [] : ['text' => $text];
 
                 if ($index === 0 && $mediaIds !== []) {
                     $body['media'] = ['media_ids' => $mediaIds];

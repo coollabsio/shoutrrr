@@ -3,10 +3,11 @@ import { Send } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import PostScheduleController from '@/actions/App/Http/Controllers/Posts/PostScheduleController';
 import { cn } from '@/lib/utils';
-import { index as postsIndex, publish, queue } from '@/routes/posts';
+import { publish, queue } from '@/routes/posts';
 
 import type { ScheduleTray } from './composer-state';
 import {
@@ -20,8 +21,12 @@ type Props = {
     tray: ScheduleTray;
     postId: string | null;
     disabled?: boolean;
-    /** Flush the autosave (called before scheduling and on Save draft). */
-    onSaveDraft: () => void;
+    /**
+     * Flush the autosave and resolve once the draft (incl. media) is persisted.
+     * Awaited before publishing so the publish never races the save that
+     * attaches media to the post.
+     */
+    onSaveDraft: () => Promise<void>;
     /** Ensure a persisted post id before publishing; returns the post id. */
     onEnsurePost: () => Promise<string>;
     /** When in queue mode, true if there is no slot to queue into (no schedule, full, loading, or error). */
@@ -61,8 +66,10 @@ export function SubmitBar({
     async function handleSubmit() {
         setNoSlot(false);
         setPastTime(false);
-        // Flush any pending edits, then issue the publish/queue/schedule call.
-        onSaveDraft();
+        // Flush pending edits AND wait for them to persist before publishing —
+        // otherwise the publish request races the save that attaches media to
+        // the post, and the post publishes without its media.
+        await onSaveDraft();
         const id = postId ?? (await onEnsurePost());
         if (!id) {
             return;
@@ -75,7 +82,7 @@ export function SubmitBar({
             await http.post(publish(id).url, {
                 onSuccess: ({ post }) => {
                     onServerPost(post);
-                    router.visit(postsIndex().url);
+                    router.visit(ComposerController.show(id).url);
                 },
                 onHttpException: revert,
                 onNetworkError: revert,
@@ -91,7 +98,7 @@ export function SubmitBar({
             await http.post(queue(id).url, {
                 onSuccess: ({ post }) => {
                     onServerPost(post);
-                    router.visit(postsIndex().url);
+                    router.visit(ComposerController.show(id).url);
                 },
                 // 422 = no open slot in the workspace posting schedule.
                 onHttpException: (response) => {
@@ -112,7 +119,7 @@ export function SubmitBar({
         await http.put(PostScheduleController.update(id).url, {
             onSuccess: ({ post }) => {
                 onServerPost(post);
-                router.visit(postsIndex().url);
+                router.visit(ComposerController.show(id).url);
             },
             // 422 = the chosen time is in the past (server guard).
             onHttpException: (response) => {
@@ -128,7 +135,10 @@ export function SubmitBar({
     return (
         <div className="flex flex-col items-end gap-1.5 justify-self-end">
             <div className="flex items-center gap-1.5">
-                <TrayButton onClick={onSaveDraft} disabled={disabled}>
+                <TrayButton
+                    onClick={() => void onSaveDraft()}
+                    disabled={disabled}
+                >
                     Save draft
                 </TrayButton>
                 <TrayButton

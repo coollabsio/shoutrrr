@@ -28,6 +28,8 @@ type Props = {
     onReorder: (ids: string[]) => void;
     onRemove: (mediaId: string) => void;
     onDismissPending: (tempId: string) => void;
+    /** Read-only post: show the images, no add/remove/reorder/exclude affordances. */
+    readOnly?: boolean;
 };
 
 /** A square overlay button that protrudes past the chip's top-right corner. */
@@ -73,11 +75,32 @@ export function MediaChips({
     onReorder,
     onRemove,
     onDismissPending,
+    readOnly = false,
 }: Props) {
     const [dragIdx, setDragIdx] = useState<number | null>(null);
 
     if (media.length === 0 && pending.length === 0) {
         return null;
+    }
+
+    // Read-only post: plain, non-interactive thumbnails (no remove/drag/exclude).
+    if (readOnly) {
+        return (
+            <div className="ml-0.5 flex items-center gap-2">
+                {media.map((m) => (
+                    <div
+                        key={m.id}
+                        className="size-7 overflow-hidden rounded-md border border-border"
+                    >
+                        <img
+                            src={m.url}
+                            alt={m.alt_text ?? ''}
+                            className="size-full object-cover"
+                        />
+                    </div>
+                ))}
+            </div>
+        );
     }
 
     function reorder(from: number, to: number) {
