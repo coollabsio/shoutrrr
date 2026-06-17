@@ -16,10 +16,18 @@ return new class extends Migration
             $table->timestamp('read_at')->nullable();
             $table->timestamps();
         });
+
+        Schema::table('users', function (Blueprint $table) {
+            $table->json('notification_preferences')->nullable()->after('current_workspace_id');
+        });
     }
 
     public function down(): void
     {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('notification_preferences');
+        });
+
         Schema::dropIfExists('notifications');
     }
 };
