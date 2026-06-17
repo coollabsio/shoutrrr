@@ -180,13 +180,13 @@ export default function PostsIndex({ posts, filters, sets, counts }: Props) {
 
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-0">
                 {/* Command bar */}
-                <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
                     <h2 className="mr-2 text-[15px] font-semibold tracking-tight">
                         Posts
                     </h2>
 
                     {/* Search */}
-                    <div className="relative max-w-xs flex-1">
+                    <div className="relative order-last w-full sm:order-none sm:max-w-xs sm:flex-1">
                         <Search className="pointer-events-none absolute inset-y-0 left-2.5 my-auto size-3.5 text-muted-foreground" />
                         <Input
                             placeholder="Search posts…"

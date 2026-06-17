@@ -87,7 +87,7 @@ export default function Notifications() {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="space-y-4">
-                        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 gap-y-4">
+                        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-4 sm:gap-x-6">
                             <div />
                             <span className="text-sm font-medium text-muted-foreground">
                                 In-app

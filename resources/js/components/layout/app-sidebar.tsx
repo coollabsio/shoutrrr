@@ -1,4 +1,4 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     FileText,
@@ -8,6 +8,7 @@ import {
     Share2,
     type LucideIcon,
 } from 'lucide-react';
+import { useEffect } from 'react';
 
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
@@ -55,8 +56,23 @@ const postsNavItems: NavItem[] = [
 export function AppSidebar() {
     const { workspaces } = usePage().props;
     const { isCurrentUrl } = useCurrentUrl();
-    const { state } = useSidebar();
+    const { state, setOpenMobile } = useSidebar();
     const collapsed = state === 'collapsed';
+
+    // The mobile sidebar is an off-canvas sheet living in a persistent layout,
+    // so it stays open across Inertia visits. Close it the moment a real
+    // navigation starts (link click, command palette, programmatic visit).
+    // Prefetch visits also fire `start`; ignore those, otherwise the sheet
+    // self-closes the instant its prefetching nav links mount.
+    useEffect(
+        () =>
+            router.on('start', (event) => {
+                if (!event.detail.visit.prefetch) {
+                    setOpenMobile(false);
+                }
+            }),
+        [setOpenMobile],
+    );
 
     const composeHref = dashboard();
     const showWorkspaceSettings = workspaces.enabled && workspaces.current;

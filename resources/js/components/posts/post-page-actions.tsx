@@ -165,50 +165,57 @@ export function PostPageActions({ post }: Props) {
                         <Button
                             size="sm"
                             variant="outline"
+                            aria-label="Reschedule"
                             onClick={openReschedule}
                         >
                             <CalendarClock className="size-3.5" aria-hidden />
-                            Reschedule
+                            <span className="hidden sm:inline">Reschedule</span>
                         </Button>
                     )}
                     {caps.canUnschedule && (
                         <Button
                             size="sm"
                             variant="outline"
+                            aria-label="Unschedule"
                             onClick={() => void handleUnschedule()}
                         >
                             <CalendarX className="size-3.5" aria-hidden />
-                            Unschedule
+                            <span className="hidden sm:inline">Unschedule</span>
                         </Button>
                     )}
                     {caps.canRetry && (
                         <Button
                             size="sm"
                             variant="outline"
+                            aria-label="Retry failed"
                             onClick={() => void handleRetry()}
                         >
                             <RotateCw className="size-3.5" aria-hidden />
-                            Retry failed
+                            <span className="hidden sm:inline">
+                                Retry failed
+                            </span>
                         </Button>
                     )}
                     {post.status !== 'draft' && (
                         <Button
                             size="sm"
                             variant="outline"
+                            aria-label="Share"
                             onClick={() => setShareOpen(true)}
                         >
                             <Share2 className="size-3.5" aria-hidden />
-                            Share
+                            <span className="hidden sm:inline">Share</span>
                         </Button>
                     )}
                     {caps.canDelete && (
                         <Button
                             size="sm"
                             variant="destructive"
+                            aria-label="Delete"
                             onClick={() => void handleDelete()}
                         >
                             <Trash2 className="size-3.5" aria-hidden />
-                            Delete
+                            <span className="hidden sm:inline">Delete</span>
                         </Button>
                     )}
                 </>

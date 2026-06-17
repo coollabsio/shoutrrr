@@ -12,6 +12,7 @@ import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import { Deferred, Head, router, useHttp, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
+import { AgendaList } from '@/components/posts/calendar/agenda-list';
 import { CalendarHeader } from '@/components/posts/calendar/calendar-header';
 import {
     MonthGrid,
@@ -258,20 +259,33 @@ export default function CalendarIndex({ yyyymm, view, posts }: Props) {
                     onDragCancel={onDragCancel}
                 >
                     <Deferred data="posts" fallback={<CalendarSkeleton />}>
-                        {view === 'month' ? (
-                            <MonthGrid
-                                anchor={anchor}
+                        {/* Desktop: the dense month/week grids with drag-to-reschedule. */}
+                        <div className="hidden sm:block">
+                            {view === 'month' ? (
+                                <MonthGrid
+                                    anchor={anchor}
+                                    posts={posts ?? []}
+                                    onEmptyDayClick={onEmptyDay}
+                                />
+                            ) : (
+                                <WeekGrid
+                                    anchor={weekAnchor}
+                                    posts={posts ?? []}
+                                    onEmptyHourClick={onEmptyHour}
+                                    dropHint={dropHint}
+                                />
+                            )}
+                        </div>
+
+                        {/* Mobile: a tappable agenda over the same date window. */}
+                        <div className="sm:hidden">
+                            <AgendaList
+                                anchor={view === 'month' ? anchor : weekAnchor}
+                                view={view}
                                 posts={posts ?? []}
                                 onEmptyDayClick={onEmptyDay}
                             />
-                        ) : (
-                            <WeekGrid
-                                anchor={weekAnchor}
-                                posts={posts ?? []}
-                                onEmptyHourClick={onEmptyHour}
-                                dropHint={dropHint}
-                            />
-                        )}
+                        </div>
                     </Deferred>
                 </DndContext>
             </div>

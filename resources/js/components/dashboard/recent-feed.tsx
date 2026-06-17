@@ -65,18 +65,19 @@ export function RecentFeed({ posts }: { posts: PostRowData[] }) {
 
     return (
         <section className="mt-10">
-            <div className="mb-3 flex items-center gap-3 px-0.5">
-                <h2 className="text-[13px] font-semibold tracking-tight">
+            <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-3 px-0.5">
+                <h2 className="shrink-0 text-[13px] font-semibold tracking-tight">
                     Recent posts
                 </h2>
                 <FilterTabs
                     tabs={tabs}
                     value={tab}
                     onChange={(v) => setTab(v as FilterId)}
+                    className="order-last w-full sm:order-none sm:w-auto"
                 />
                 <Link
                     href={postsRoute().url}
-                    className="ml-auto text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+                    className="ml-auto shrink-0 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                 >
                     View all →
                 </Link>

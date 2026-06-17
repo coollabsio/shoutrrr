@@ -43,12 +43,12 @@ export function CalendarHeader({
     const anchorJs = anchor.toDate();
 
     return (
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-3 py-2 backdrop-blur-md">
-            <div className="flex items-center gap-1">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-background/85 px-3 py-2 backdrop-blur-md">
+            <div className="flex w-full items-center gap-1 sm:w-auto">
                 <Button
                     variant="ghost"
                     size="sm"
-                    className="size-7 p-0"
+                    className="size-8 p-0 sm:size-7"
                     onClick={onPrev}
                     aria-label={
                         view === 'month' ? 'Previous month' : 'Previous week'
@@ -59,7 +59,7 @@ export function CalendarHeader({
                 <Button
                     variant="ghost"
                     size="sm"
-                    className="size-7 p-0"
+                    className="size-8 p-0 sm:size-7"
                     onClick={onNext}
                     aria-label={view === 'month' ? 'Next month' : 'Next week'}
                 >
@@ -68,7 +68,7 @@ export function CalendarHeader({
                 <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-[12px]"
+                    className="order-last h-8 px-2.5 text-[12px] sm:order-none sm:h-7 sm:px-2"
                     onClick={onToday}
                 >
                     Today
@@ -80,7 +80,7 @@ export function CalendarHeader({
                             variant="ghost"
                             size="sm"
                             aria-label="Jump to date"
-                            className="ml-1 h-7 gap-1.5 px-2 text-[15px] font-semibold tracking-tight tabular-nums hover:bg-muted/60"
+                            className="h-8 flex-1 justify-center gap-1.5 px-2 text-[15px] font-semibold tracking-tight tabular-nums hover:bg-muted/60 sm:ml-1 sm:h-7 sm:flex-none sm:justify-start"
                         >
                             <CalendarIcon
                                 className="size-3.5 text-muted-foreground"
@@ -104,8 +104,10 @@ export function CalendarHeader({
                 </Popover>
             </div>
 
-            <div className="flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground">{tz}</span>
+            <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+                <span className="hidden text-[11px] text-muted-foreground sm:inline">
+                    {tz}
+                </span>
                 <ToggleGroup
                     type="single"
                     value={view}
@@ -114,17 +116,17 @@ export function CalendarHeader({
                     onValueChange={(v) => {
                         if (v === 'month' || v === 'week') onSetView(v);
                     }}
-                    className="h-7"
+                    className="h-8 w-full sm:h-7 sm:w-auto"
                 >
                     <ToggleGroupItem
                         value="month"
-                        className="h-7 px-2.5 text-[11.5px] font-medium"
+                        className="h-8 flex-1 px-2.5 text-[12.5px] font-medium sm:h-7 sm:flex-none sm:text-[11.5px]"
                     >
                         Month
                     </ToggleGroupItem>
                     <ToggleGroupItem
                         value="week"
-                        className="h-7 px-2.5 text-[11.5px] font-medium"
+                        className="h-8 flex-1 px-2.5 text-[12.5px] font-medium sm:h-7 sm:flex-none sm:text-[11.5px]"
                     >
                         Week
                     </ToggleGroupItem>

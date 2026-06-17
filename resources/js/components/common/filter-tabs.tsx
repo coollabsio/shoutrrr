@@ -18,7 +18,12 @@ export function FilterTabs({
     className?: string;
 }) {
     return (
-        <div className={cn('flex flex-wrap items-center gap-1', className)}>
+        <div
+            className={cn(
+                'no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto',
+                className,
+            )}
+        >
             {tabs.map((tab) => {
                 const isActive = tab.value === value;
 
@@ -28,7 +33,7 @@ export function FilterTabs({
                         type="button"
                         onClick={() => onChange(tab.value)}
                         className={cn(
-                            'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] transition-colors',
+                            'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[13px] whitespace-nowrap transition-colors',
                             isActive
                                 ? 'bg-muted font-medium text-foreground'
                                 : 'text-muted-foreground hover:text-foreground',

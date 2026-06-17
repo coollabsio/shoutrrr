@@ -132,11 +132,12 @@ export function SubmitBar({
     }
 
     return (
-        <div className="flex flex-col items-end gap-1.5 justify-self-end">
+        <div className="flex flex-col items-stretch gap-1.5 sm:items-end sm:justify-self-end">
             <div className="flex items-center gap-1.5">
                 <TrayButton
                     onClick={() => void onSaveDraft()}
                     disabled={disabled}
+                    className="flex-1 sm:flex-none"
                 >
                     Save draft
                 </TrayButton>
@@ -148,6 +149,7 @@ export function SubmitBar({
                         (tray.mode === 'queue' && Boolean(queueDisabled))
                     }
                     onClick={() => void handleSubmit()}
+                    className="flex-1 sm:flex-none"
                 >
                     <Send className="size-3.5" aria-hidden="true" />
                     <span>{submitLabel}</span>
@@ -181,6 +183,7 @@ type TrayButtonProps = {
     variant?: 'outline' | 'primary';
     disabled?: boolean;
     onClick?: () => void;
+    className?: string;
 };
 
 function TrayButton({
@@ -188,6 +191,7 @@ function TrayButton({
     variant = 'outline',
     disabled = false,
     onClick,
+    className,
 }: TrayButtonProps) {
     return (
         <button
@@ -195,11 +199,12 @@ function TrayButton({
             disabled={disabled}
             onClick={onClick}
             className={cn(
-                'inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-[12.5px] font-medium transition-[background,border-color,transform] duration-[120ms] active:scale-[0.985]',
+                'inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12.5px] font-medium transition-[background,border-color,transform] duration-[120ms] active:scale-[0.985] sm:h-8',
                 variant === 'outline' &&
                     'border-border bg-background text-foreground hover:bg-muted disabled:opacity-50',
                 variant === 'primary' &&
                     'border-primary bg-primary text-primary-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.04)] hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
+                className,
             )}
         >
             {children}

@@ -17,11 +17,11 @@ type Props = {
 
 export function ScheduleTray({ tray, onChange, tz, queueState }: Props) {
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
             <div
                 role="tablist"
                 aria-label="When to publish"
-                className="inline-flex items-center rounded-md border border-border bg-muted p-[3px]"
+                className="flex w-full items-center rounded-md border border-border bg-muted p-[3px] sm:inline-flex sm:w-auto"
             >
                 <Tab
                     icon={Zap}
@@ -82,7 +82,7 @@ function Tab({ icon: Icon, label, active, onClick }: TabProps) {
             data-active={active}
             onClick={onClick}
             className={cn(
-                'inline-flex flex-1 items-center justify-center gap-1.5 rounded-[6px] px-2 py-1 text-[12.5px] font-medium text-muted-foreground transition-all sm:flex-none sm:px-3',
+                'inline-flex flex-1 items-center justify-center gap-1.5 rounded-[6px] px-2 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-all sm:flex-none sm:px-3 sm:py-1',
                 'hover:text-foreground',
                 'data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
             )}

@@ -99,7 +99,7 @@ export default function WorkspaceOverview({
                             title="Leave workspace"
                             description="Remove yourself from this workspace."
                         />
-                        <div className="flex items-center justify-between rounded-md border p-4">
+                        <div className="flex flex-col items-start gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                             <div>
                                 <p className="font-medium">Leave workspace</p>
                                 <p className="text-sm text-muted-foreground">
@@ -137,7 +137,7 @@ export default function WorkspaceOverview({
                             title="Danger zone"
                             description="Deleting a workspace is permanent and removes all members and data."
                         />
-                        <div className="flex items-center justify-between rounded-md border border-destructive/30 p-4">
+                        <div className="flex flex-col items-start gap-3 rounded-md border border-destructive/30 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                             <div>
                                 <p className="font-medium">Delete workspace</p>
                                 <p className="text-sm text-muted-foreground">

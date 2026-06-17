@@ -257,7 +257,7 @@ function EToolButton({
             onClick={onClick}
             data-active={active}
             className={cn(
-                'inline-flex h-7 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors',
+                'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
                 'hover:border-border hover:bg-background hover:text-foreground',
                 'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
             )}

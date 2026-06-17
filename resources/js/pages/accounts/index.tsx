@@ -103,7 +103,10 @@ function BlueskyConnectDialog() {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button
+                    variant="outline"
+                    className="w-full justify-center sm:w-auto"
+                >
                     <AtSign className="size-4" />
                     Connect Bluesky
                 </Button>
@@ -204,7 +207,7 @@ function BlueskyConnectDialog() {
 
 function ConnectButtons({ capabilities }: { capabilities: Capability[] }) {
     return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {capabilities.map((capability) => {
                 if (capability.supportsAppPassword) {
                     return <BlueskyConnectDialog key={capability.platform} />;
@@ -216,6 +219,7 @@ function ConnectButtons({ capabilities }: { capabilities: Capability[] }) {
                             key={capability.platform}
                             variant="outline"
                             disabled
+                            className="w-full justify-center sm:w-auto"
                         >
                             {platformIcon(capability.platform)}
                             Connect {capability.label}
@@ -224,7 +228,12 @@ function ConnectButtons({ capabilities }: { capabilities: Capability[] }) {
                 }
 
                 return (
-                    <Button key={capability.platform} variant="outline" asChild>
+                    <Button
+                        key={capability.platform}
+                        variant="outline"
+                        asChild
+                        className="w-full justify-center sm:w-auto"
+                    >
                         <a
                             href={OAuthConnectionController.redirect.url({
                                 platform: capability.platform,

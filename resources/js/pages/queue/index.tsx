@@ -1,5 +1,5 @@
 import { Deferred, Head, Link, router } from '@inertiajs/react';
-import { CalendarClock, Plus } from 'lucide-react';
+import { CalendarClock, Copy, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -126,23 +126,17 @@ function nextLabel(next: Dayjs | null, now: Dayjs): string {
     return next.format('ddd · h:mm A');
 }
 
-/** Bar height bucket for the cadence equalizer (count relative to the busiest day). */
-function barClass(count: number, max: number): string {
-    if (count === 0) {
-        return 'h-1 bg-border';
-    }
-    const ratio = max > 0 ? count / max : 0;
-    if (ratio <= 0.25) {
-        return 'h-3 bg-primary/50';
-    }
-    if (ratio <= 0.5) {
-        return 'h-5 bg-primary/65';
-    }
-    if (ratio <= 0.75) {
-        return 'h-7 bg-primary/80';
+/**
+ * Fill height (as a %) for a day's track in the cadence rhythm strip, scaled to
+ * the busiest day. A day with any slots keeps a visible floor so single-slot
+ * days still read as filled.
+ */
+function barHeightPct(count: number, max: number): number {
+    if (count === 0 || max <= 0) {
+        return 0;
     }
 
-    return 'h-10 bg-primary';
+    return Math.round(Math.max(0.18, count / max) * 100);
 }
 
 function ScheduleEditor({
@@ -185,103 +179,122 @@ function ScheduleEditor({
     return (
         <div className="space-y-5">
             {/* Cadence overview — the week's rhythm at a glance + next post */}
-            <section className="flex flex-col gap-5 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:p-5">
-                <div className="flex items-end gap-2">
-                    {DISPLAY_DAYS.map(({ weekday, label }) => {
-                        const count = timesForDay(slots, weekday).length;
-                        const isToday = weekday === todayWeekday;
+            <section className="rounded-xl border border-border bg-card p-5 sm:p-6">
+                <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between sm:gap-10">
+                    {/* Headline — the cadence stated plainly. */}
+                    {slots.length === 0 ? (
+                        <div className="min-w-0">
+                            <p className="text-[20px] leading-tight font-semibold tracking-tight sm:text-[22px]">
+                                No posting times yet
+                            </p>
+                            <p className="mt-1 text-[13px] text-muted-foreground">
+                                Add times below to build your weekly queue.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="min-w-0">
+                            <p className="text-[20px] leading-tight font-semibold tracking-tight sm:text-[22px]">
+                                <span className="tabular-nums">
+                                    {slots.length}
+                                </span>{' '}
+                                {slots.length === 1 ? 'post' : 'posts'} a week
+                            </p>
+                            <p className="mt-1 text-[13px] text-muted-foreground">
+                                across{' '}
+                                <span className="font-medium text-foreground tabular-nums">
+                                    {activeDays}
+                                </span>{' '}
+                                active {activeDays === 1 ? 'day' : 'days'}
+                            </p>
+                        </div>
+                    )}
 
-                        return (
-                            <div
-                                key={weekday}
-                                className="flex flex-1 flex-col items-center gap-1.5"
-                            >
-                                <span className="text-[11px] text-muted-foreground tabular-nums">
-                                    {count > 0 ? count : ''}
-                                </span>
-                                <div className="flex h-10 w-full items-end justify-center">
-                                    <div
-                                        className={cn(
-                                            'w-2.5 rounded-full transition-all',
-                                            barClass(count, busiest),
-                                        )}
-                                    />
-                                </div>
-                                <span
-                                    className={cn(
-                                        'text-[11px] tabular-nums',
-                                        isToday
-                                            ? 'font-semibold text-primary'
-                                            : 'text-muted-foreground',
-                                    )}
+                    {/* Rhythm — fills rising in day tracks, today accented. */}
+                    <div className="flex w-full shrink-0 items-end gap-2 sm:w-72">
+                        {DISPLAY_DAYS.map(({ weekday, label }) => {
+                            const count = timesForDay(slots, weekday).length;
+                            const isToday = weekday === todayWeekday;
+                            const pct = barHeightPct(count, busiest);
+
+                            return (
+                                <div
+                                    key={weekday}
+                                    className="flex flex-1 flex-col items-center gap-2"
                                 >
-                                    {label[0]}
-                                </span>
-                            </div>
-                        );
-                    })}
+                                    <div className="flex h-14 w-2.5 items-end overflow-hidden rounded-full bg-muted">
+                                        <div
+                                            className={cn(
+                                                'w-full rounded-full transition-all',
+                                                isToday
+                                                    ? 'bg-primary'
+                                                    : 'bg-primary/70',
+                                            )}
+                                            style={{ height: `${pct}%` }}
+                                        />
+                                    </div>
+                                    <span
+                                        className={cn(
+                                            'text-[11px] tabular-nums',
+                                            isToday
+                                                ? 'font-semibold text-primary'
+                                                : 'text-muted-foreground',
+                                        )}
+                                    >
+                                        {label[0]}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-6 sm:gap-8">
-                    <div className="flex flex-col">
-                        <span className="text-[22px] leading-none font-semibold tabular-nums">
-                            {slots.length}
-                        </span>
-                        <span className="mt-1 text-[11.5px] text-muted-foreground">
-                            posts / week
-                        </span>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-[22px] leading-none font-semibold tabular-nums">
-                            {activeDays}
-                        </span>
-                        <span className="mt-1 text-[11.5px] text-muted-foreground">
-                            {activeDays === 1 ? 'active day' : 'active days'}
+                {/* Next post — a quiet footer line. */}
+                {slots.length > 0 && (
+                    <div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-[13px]">
+                        <CalendarClock
+                            className="size-4 shrink-0 text-primary"
+                            aria-hidden
+                        />
+                        <span className="text-muted-foreground">Next post</span>
+                        <span className="ml-auto truncate font-medium tabular-nums">
+                            {nextLabel(next, now)}
                         </span>
                     </div>
-                    <div className="flex min-w-0 flex-col">
-                        <span className="flex items-center gap-1.5 text-[15px] leading-none font-semibold">
-                            <CalendarClock className="size-4 shrink-0 text-primary" />
-                            <span className="truncate tabular-nums">
-                                {nextLabel(next, now)}
-                            </span>
-                        </span>
-                        <span className="mt-1 text-[11.5px] text-muted-foreground">
-                            next post
-                        </span>
-                    </div>
-                </div>
+                )}
             </section>
 
             {canManage && (
-                <div className="flex flex-wrap items-center gap-2">
-                    <span className="mr-1 text-[12px] font-medium text-muted-foreground">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                    <span className="text-[12px] font-medium text-muted-foreground sm:mr-1">
                         Quick add
                     </span>
-                    {PRESETS.map((preset) => (
-                        <Button
-                            key={preset.label}
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 rounded-full text-[12px]"
-                            onClick={() =>
-                                setSlots((s) => mergeSlots(s, preset.slots))
-                            }
-                        >
-                            {preset.label}
-                        </Button>
-                    ))}
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                        {PRESETS.map((preset) => (
+                            <Button
+                                key={preset.label}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-9 w-full justify-center rounded-lg text-[12px] sm:h-7 sm:w-auto sm:rounded-full"
+                                onClick={() =>
+                                    setSlots((s) => mergeSlots(s, preset.slots))
+                                }
+                            >
+                                {preset.label}
+                            </Button>
+                        ))}
+                    </div>
                     {timesForDay(slots, 1).length > 0 && (
                         <Button
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="h-7 text-[12px] text-muted-foreground"
+                            className="h-9 w-full justify-center gap-1.5 text-[12px] text-muted-foreground sm:h-7 sm:w-auto"
                             onClick={() =>
                                 setSlots((s) => copyMondayToWeekdays(s))
                             }
                         >
+                            <Copy className="size-3.5" aria-hidden />
                             Copy Monday → weekdays
                         </Button>
                     )}
@@ -378,16 +391,16 @@ function ScheduleEditor({
 
             {/* Sticky save bar — only when there are unsaved edits */}
             {canManage && dirty && (
-                <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-card/95 px-4 py-2.5 shadow-lg backdrop-blur">
-                    <span className="text-[12.5px] text-muted-foreground">
+                <div className="sticky bottom-4 z-10 flex items-center justify-between gap-2 rounded-xl border border-border bg-card/95 px-3 py-2.5 shadow-lg backdrop-blur sm:gap-3 sm:px-4">
+                    <span className="min-w-0 truncate text-[12.5px] text-muted-foreground">
                         Unsaved changes
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2">
                         <Button
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="h-8 text-[12.5px]"
+                            className="h-9 text-[12.5px] sm:h-8"
                             disabled={saving}
                             onClick={() => setSlots(initialSlots)}
                         >
@@ -395,7 +408,7 @@ function ScheduleEditor({
                         </Button>
                         <Button
                             size="sm"
-                            className="h-8 px-4 text-[12.5px]"
+                            className="h-9 px-4 text-[12.5px] sm:h-8"
                             disabled={saving}
                             onClick={onSave}
                         >

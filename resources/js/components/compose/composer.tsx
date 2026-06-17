@@ -329,7 +329,7 @@ export default function Composer({
 
             {/* Schedule + submit row — hidden once the post is read-only. */}
             {!readOnly && (
-                <div className="flex items-center justify-between gap-x-3 border-t border-border bg-muted/55 px-3 py-3 sm:px-[14px]">
+                <div className="flex flex-col items-stretch gap-3 border-t border-border bg-muted/55 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-x-3 sm:px-[14px]">
                     <ScheduleTray
                         tray={state.scheduleTray}
                         onChange={(tray) =>
