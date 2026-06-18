@@ -220,7 +220,9 @@ describe('composerReducer', () => {
                 id: 'm1',
                 url: 'http://x/m1.png',
                 mime: 'image/png',
+                kind: 'image',
                 alt_text: null,
+                duration_seconds: null,
                 position: 0,
             },
         });
@@ -233,7 +235,9 @@ describe('composerReducer', () => {
                 id: 'm2',
                 url: 'http://x/m2.png',
                 mime: 'image/png',
+                kind: 'image',
                 alt_text: null,
+                duration_seconds: null,
                 position: 1,
             },
         });
@@ -254,7 +258,9 @@ describe('composerReducer', () => {
                 id: 'm1',
                 url: 'http://x/m1.png',
                 mime: 'image/png',
+                kind: 'image',
                 alt_text: null,
+                duration_seconds: null,
                 position: 0,
             },
         });
@@ -264,7 +270,9 @@ describe('composerReducer', () => {
                 id: 'm2',
                 url: 'http://x/m2.png',
                 mime: 'image/png',
+                kind: 'image',
                 alt_text: null,
+                duration_seconds: null,
                 position: 1,
             },
         });
@@ -283,7 +291,9 @@ describe('composerReducer', () => {
                 id: 'm1',
                 url: 'http://x/m1.png',
                 mime: 'image/png',
+                kind: 'image',
                 alt_text: null,
+                duration_seconds: null,
                 position: 0,
             },
         });
@@ -293,7 +303,9 @@ describe('composerReducer', () => {
                 id: 'm2',
                 url: 'http://x/m2.png',
                 mime: 'image/png',
+                kind: 'image',
                 alt_text: null,
+                duration_seconds: null,
                 position: 1,
             },
         });
@@ -579,7 +591,9 @@ describe('buildPutBody', () => {
                 id: 'm1',
                 url: 'http://x/m1.png',
                 mime: 'image/png',
+                kind: 'image',
                 alt_text: null,
+                duration_seconds: null,
                 position: 0,
             },
         });
@@ -589,7 +603,9 @@ describe('buildPutBody', () => {
                 id: 'm2',
                 url: 'http://x/m2.png',
                 mime: 'image/png',
+                kind: 'image',
                 alt_text: null,
+                duration_seconds: null,
                 position: 1,
             },
         });
@@ -630,7 +646,9 @@ describe('composerHasContent', () => {
                 id: 'm1',
                 url: 'http://x/m1.png',
                 mime: 'image/png',
+                kind: 'image',
                 alt_text: null,
+                duration_seconds: null,
                 position: 0,
             },
         });

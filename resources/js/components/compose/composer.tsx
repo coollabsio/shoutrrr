@@ -113,6 +113,9 @@ export default function Composer({
     const tabAccounts = accounts.filter((a) =>
         destinationAccountIds.includes(a.id),
     );
+    const selectedVideoLimits = limits.filter((l) =>
+        tabAccounts.some((a) => a.platform === l.platform),
+    );
     const { flush, ensurePost } = useAutosave({
         state,
         accountIds: destinationAccountIds,
@@ -345,6 +348,7 @@ export default function Composer({
                         })
                     }
                     onEnsurePost={ensurePost}
+                    videoLimits={selectedVideoLimits}
                 />
             )}
 

@@ -2,10 +2,17 @@ import { useHttp } from '@inertiajs/react';
 import { Image as ImageIcon, Shuffle, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
+import PostMediaChunkController from '@/actions/App/Http/Controllers/Posts/PostMediaChunkController';
 import PostMediaController from '@/actions/App/Http/Controllers/Posts/PostMediaController';
+import {
+    readVideoMetadata,
+    sliceFile,
+    validateVideo,
+} from '@/lib/compose/video';
 import { cn } from '@/lib/utils';
-import type { MediaView, PlatformName } from '@/types/compose';
+import type { MediaView, PlatformLimits, PlatformName } from '@/types/compose';
 
 import { MediaChips, type PendingUpload } from './media-chips';
 
@@ -28,6 +35,7 @@ type Props = {
     onEnsurePost: () => Promise<string>;
     /** Read-only post: show attached media, hide all editing controls. */
     readOnly?: boolean;
+    videoLimits: PlatformLimits[];
 };
 
 export function ComposerToolbar({
@@ -45,10 +53,22 @@ export function ComposerToolbar({
     onToggleExclude,
     onEnsurePost,
     readOnly = false,
+    videoLimits,
 }: Props) {
-    const upload = useHttp<{ file: File | null }, { media: MediaView }>({
-        file: null,
-    });
+    const upload = useHttp<
+        {
+            file?: File | null;
+            upload_id?: string;
+            index?: number;
+            total?: number;
+            mime?: string;
+            chunk?: File;
+            duration_seconds?: number;
+            width?: number;
+            height?: number;
+        },
+        { media: MediaView } | { received: number; total: number }
+    >({});
     const input = useRef<HTMLInputElement | null>(null);
     const [pending, setPending] = useState<PendingUpload[]>([]);
     const tempSeq = useRef(0);
@@ -108,12 +128,12 @@ export function ComposerToolbar({
         // transform injects the file at submit time (multipart upload).
         upload.transform(() => ({ file }));
         try {
-            const result = await upload.post(
+            const result = (await upload.post(
                 PostMediaController.store(id).url,
                 {
                     onNetworkError: () => undefined,
                 },
-            );
+            )) as { media: MediaView };
             // Prefer the local preview over the server image to avoid a blank
             // flash, by handing addMedia a media view that points at the blob.
             onAddMedia(
@@ -131,12 +151,121 @@ export function ComposerToolbar({
         }
     }
 
+    const hasVideo = media.some((m) => m.kind === 'video');
+    const hasImages = media.some((m) => m.kind === 'image');
+
     async function handleFiles(files: FileList) {
         for (const file of Array.from(files)) {
+            const isVideo = file.type.startsWith('video/');
+
+            if (isVideo) {
+                if (hasImages || hasVideo || media.length > 0) {
+                    toast.error(
+                        'A post can contain one video or images, not both.',
+                    );
+                    continue;
+                }
+                await uploadVideo(file);
+                continue;
+            }
+
+            if (hasVideo) {
+                toast.error('Remove the video before adding images.');
+                continue;
+            }
             await uploadFile(file);
         }
         if (input.current) {
             input.current.value = '';
+        }
+    }
+
+    async function uploadVideo(file: File) {
+        let meta;
+        try {
+            meta = await readVideoMetadata(file);
+        } catch {
+            toast.error('Could not read that video.');
+
+            return;
+        }
+
+        const verdict = validateVideo(
+            {
+                sizeBytes: file.size,
+                mime: file.type,
+                durationSeconds: meta.durationSeconds,
+                width: meta.width,
+                height: meta.height,
+            },
+            videoLimits,
+        );
+        if (!verdict.ok) {
+            toast.error(verdict.reason);
+
+            return;
+        }
+
+        tempSeq.current += 1;
+        const tempId = `up_${tempSeq.current}`;
+        const previewUrl = mintPreview(file);
+        setPending((cur) => [
+            ...cur,
+            { tempId, previewUrl, status: 'uploading' },
+        ]);
+
+        const id = await onEnsurePost();
+        if (!id) {
+            setPending((cur) =>
+                cur.map((p) =>
+                    p.tempId === tempId ? { ...p, status: 'error' } : p,
+                ),
+            );
+
+            return;
+        }
+
+        const parts = sliceFile(file);
+        const uploadId = crypto.randomUUID();
+        const url = PostMediaChunkController.store(id).url;
+
+        try {
+            let last: { media: MediaView } | undefined;
+            for (let index = 0; index < parts.length; index++) {
+                const isFinal = index === parts.length - 1;
+                upload.transform(() => ({
+                    upload_id: uploadId,
+                    index,
+                    total: parts.length,
+                    mime: 'video/mp4',
+                    chunk: new File([parts[index]!], 'chunk'),
+                    ...(isFinal
+                        ? {
+                              duration_seconds: meta.durationSeconds,
+                              width: meta.width,
+                              height: meta.height,
+                          }
+                        : {}),
+                }));
+                last = (await upload.post(url, {
+                    onNetworkError: () => undefined,
+                })) as { media: MediaView };
+            }
+
+            if (last?.media) {
+                onAddMedia(
+                    previewUrl
+                        ? { ...last.media, url: previewUrl }
+                        : last.media,
+                );
+            }
+            setPending((cur) => cur.filter((p) => p.tempId !== tempId));
+        } catch {
+            setPending((cur) =>
+                cur.map((p) =>
+                    p.tempId === tempId ? { ...p, status: 'error' } : p,
+                ),
+            );
         }
     }
 
@@ -170,7 +299,7 @@ export function ComposerToolbar({
                     <input
                         ref={input}
                         type="file"
-                        accept="image/*"
+                        accept={hasVideo ? 'image/*' : 'image/*,video/*'}
                         multiple
                         hidden
                         onChange={(e) => {
