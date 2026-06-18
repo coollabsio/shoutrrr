@@ -25,6 +25,8 @@ use Illuminate\Support\Facades\Storage;
  * @property int|null $height
  * @property string|null $alt_text
  * @property int $position
+ * @property string $kind
+ * @property int|null $duration_seconds
  */
 #[Fillable([
     'workspace_id',
@@ -37,6 +39,8 @@ use Illuminate\Support\Facades\Storage;
     'height',
     'alt_text',
     'position',
+    'kind',
+    'duration_seconds',
 ])]
 class PostMedia extends Model
 {
@@ -64,5 +68,10 @@ class PostMedia extends Model
     public function url(): string
     {
         return Storage::disk($this->disk)->url($this->path);
+    }
+
+    public function isVideo(): bool
+    {
+        return $this->kind === 'video';
     }
 }

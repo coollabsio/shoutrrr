@@ -27,6 +27,19 @@ class PostMediaFactory extends Factory
             'height' => 800,
             'alt_text' => null,
             'position' => 0,
+            'kind' => 'image',
+            'duration_seconds' => null,
         ];
+    }
+
+    public function video(): static
+    {
+        return $this->state(fn (): array => [
+            'kind' => 'video',
+            'mime' => 'video/mp4',
+            'duration_seconds' => $this->faker->numberBetween(3, 120),
+            'width' => 1280,
+            'height' => 720,
+        ]);
     }
 }
