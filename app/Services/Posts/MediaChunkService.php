@@ -48,8 +48,16 @@ class MediaChunkService
         $relative = $this->partPath($workspaceId, $uploadId);
         $full = $local->path($relative);
 
+        $detected = mime_content_type($full);
+        if ($detected !== 'video/mp4') {
+            $local->delete($relative);
+            throw new RuntimeException('Assembled file is not a valid MP4 (detected: '.$detected.').');
+        }
+
         $path = 'media/'.$workspaceId.'/'.Str::uuid()->toString().'.mp4';
-        Storage::disk('public')->writeStream($path, fopen($full, 'rb'));
+        $handle = fopen($full, 'rb');
+        Storage::disk('public')->writeStream($path, $handle);
+        fclose($handle);
         $size = (int) Storage::disk('public')->size($path);
         $local->delete($relative);
 

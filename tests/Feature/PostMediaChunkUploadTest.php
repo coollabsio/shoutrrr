@@ -32,14 +32,26 @@ beforeEach(function (): void {
     Storage::fake('local');
 });
 
+/**
+ * Minimal ISO-BMFF ftyp box (24 bytes) that fileinfo/mime_content_type detects as video/mp4.
+ * Structure: box-size (4) + "ftyp" (4) + major-brand "isom" (4) + version (4) + compat "isomiso2" (8)
+ */
+function mp4Header(): string
+{
+    return "\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2";
+}
+
 function chunkPayload(array $overrides = []): array
 {
+    // First chunk starts with a real MP4 ftyp box so the assembled file passes mime_content_type.
+    $firstChunk = mp4Header().str_repeat("\x00", 1024 - strlen(mp4Header()));
+
     return array_merge([
         'upload_id' => '11111111-1111-4111-8111-111111111111',
         'index' => 0,
         'total' => 2,
         'mime' => 'video/mp4',
-        'chunk' => UploadedFile::fake()->createWithContent('part', str_repeat('a', 1024)),
+        'chunk' => UploadedFile::fake()->createWithContent('part', $firstChunk),
     ], $overrides);
 }
 
