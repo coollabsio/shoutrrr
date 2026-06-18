@@ -155,24 +155,39 @@ export function ComposerToolbar({
     const hasImages = media.some((m) => m.kind === 'image');
 
     async function handleFiles(files: FileList) {
+        // Track what has been queued in this batch to catch mixing within a
+        // single multi-select, where hasVideo/hasImages from the render closure
+        // are stale and would not reflect files already dispatched this loop.
+        let videoQueued = false;
+        let imageQueued = false;
         for (const file of Array.from(files)) {
             const isVideo = file.type.startsWith('video/');
 
             if (isVideo) {
-                if (hasImages || hasVideo || media.length > 0) {
+                if (
+                    hasImages ||
+                    hasVideo ||
+                    media.length > 0 ||
+                    videoQueued ||
+                    imageQueued
+                ) {
                     toast.error(
                         'A post can contain one video or images, not both.',
                     );
                     continue;
                 }
+                videoQueued = true;
                 await uploadVideo(file);
                 continue;
             }
 
-            if (hasVideo) {
+            if (hasVideo || videoQueued) {
                 toast.error('Remove the video before adding images.');
                 continue;
             }
+            // imageQueued does NOT block additional images — multi-image
+            // batches must all upload successfully.
+            imageQueued = true;
             await uploadFile(file);
         }
         if (input.current) {
@@ -230,13 +245,20 @@ export function ComposerToolbar({
         const url = PostMediaChunkController.store(id).url;
 
         try {
-            let last: { media: MediaView } | undefined;
+            // Non-final chunks return { received, total }; only the final
+            // chunk returns { media }.  Type the accumulator honestly.
+            let last:
+                | { media: MediaView }
+                | { received: number; total: number }
+                | undefined;
             for (let index = 0; index < parts.length; index++) {
                 const isFinal = index === parts.length - 1;
                 upload.transform(() => ({
                     upload_id: uploadId,
                     index,
                     total: parts.length,
+                    // Safe to hard-code: client validation (validateVideo) only
+                    // admits video/mp4 files before we reach this point.
                     mime: 'video/mp4',
                     chunk: new File([parts[index]!], 'chunk'),
                     ...(isFinal
@@ -247,12 +269,12 @@ export function ComposerToolbar({
                           }
                         : {}),
                 }));
-                last = (await upload.post(url, {
+                last = await upload.post(url, {
                     onNetworkError: () => undefined,
-                })) as { media: MediaView };
+                });
             }
 
-            if (last?.media) {
+            if (last && 'media' in last) {
                 onAddMedia(
                     previewUrl
                         ? { ...last.media, url: previewUrl }

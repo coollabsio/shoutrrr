@@ -11,7 +11,6 @@ function limits(
     over: Partial<PlatformLimits> & Pick<PlatformLimits, 'platform'>,
 ): PlatformLimits {
     return {
-        platform: over.platform,
         maxLength: 0,
         maxBytes: null,
         maxMedia: 1,
