@@ -3,6 +3,7 @@
 use App\Console\Commands\CaptureMetrics;
 use App\Console\Commands\DispatchDuePosts;
 use App\Console\Commands\PruneMcpBindings;
+use App\Console\Commands\PruneMediaChunks;
 use App\Console\Commands\RefreshExpiringTokens;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -15,6 +16,7 @@ Artisan::command('inspire', function () {
 Schedule::command(DispatchDuePosts::class)->everyMinute()->withoutOverlapping();
 Schedule::command(RefreshExpiringTokens::class)->hourly()->withoutOverlapping();
 Schedule::command(PruneMcpBindings::class)->hourly();
+Schedule::command(PruneMediaChunks::class)->hourly();
 
 if (config('metrics.enabled')) {
     Schedule::command(CaptureMetrics::class)->everyFifteenMinutes()->withoutOverlapping();
