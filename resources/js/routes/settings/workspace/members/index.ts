@@ -4,7 +4,7 @@ import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFo
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-export const update = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
+export const update = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
     url: update.url(args, options),
     method: 'patch',
 })
@@ -19,7 +19,7 @@ update.definition = {
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-update.url = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
+update.url = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
     if (typeof args === 'string' || typeof args === 'number') {
         args = { membership: args }
     }
@@ -52,7 +52,7 @@ update.url = (args: { membership: string | { id: string } } | [membership: strin
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-update.patch = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
+update.patch = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
     url: update.url(args, options),
     method: 'patch',
 })
@@ -62,7 +62,7 @@ update.patch = (args: { membership: string | { id: string } } | [membership: str
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-const updateForm = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+const updateForm = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: update.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'PATCH',
@@ -77,7 +77,7 @@ const updateForm = (args: { membership: string | { id: string } } | [membership:
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-updateForm.patch = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+updateForm.patch = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: update.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'PATCH',
@@ -94,7 +94,7 @@ update.form = updateForm
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-export const remove = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+export const remove = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: remove.url(args, options),
     method: 'delete',
 })
@@ -109,7 +109,7 @@ remove.definition = {
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-remove.url = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
+remove.url = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
     if (typeof args === 'string' || typeof args === 'number') {
         args = { membership: args }
     }
@@ -142,7 +142,7 @@ remove.url = (args: { membership: string | { id: string } } | [membership: strin
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-remove.delete = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+remove.delete = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: remove.url(args, options),
     method: 'delete',
 })
@@ -152,7 +152,7 @@ remove.delete = (args: { membership: string | { id: string } } | [membership: st
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-const removeForm = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+const removeForm = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: remove.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',
@@ -167,7 +167,7 @@ const removeForm = (args: { membership: string | { id: string } } | [membership:
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-removeForm.delete = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+removeForm.delete = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: remove.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',

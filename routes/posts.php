@@ -9,13 +9,13 @@ use App\Http\Controllers\Posts\ComposerController;
 use App\Http\Controllers\Posts\NextSlotController;
 use App\Http\Controllers\Posts\PostController;
 use App\Http\Controllers\Posts\PostingScheduleController;
-use App\Http\Controllers\Posts\PostMediaChunkController;
 use App\Http\Controllers\Posts\PostMediaController;
 use App\Http\Controllers\Posts\PostMetricsRefreshController;
 use App\Http\Controllers\Posts\PostQueueController;
 use App\Http\Controllers\Posts\PostScheduleController;
 use App\Http\Controllers\Posts\PostShareController;
 use App\Http\Controllers\Posts\PostTargetRetryController;
+use App\Http\Controllers\Posts\PostVideoUploadController;
 use App\Http\Controllers\Posts\PublishController;
 use App\Models\AccountSet;
 use App\Models\Post;
@@ -74,7 +74,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('posts/{post}/metrics/refresh', [PostMetricsRefreshController::class, 'store'])->middleware('metrics.enabled')->name('posts.metrics.refresh');
 
     Route::post('posts/{post}/media', [PostMediaController::class, 'store'])->name('posts.media.store');
-    Route::post('posts/{post}/media/chunk', [PostMediaChunkController::class, 'store'])->name('posts.media.chunk');
+    Route::post('posts/{post}/media/video-url', [PostVideoUploadController::class, 'url'])->name('posts.media.video-url');
+    Route::post('posts/{post}/media/video', [PostVideoUploadController::class, 'store'])->name('posts.media.video');
     Route::delete('posts/{post}/media/{media}', [PostMediaController::class, 'destroy'])->name('posts.media.destroy');
 
     Route::get('posts/{post}/shares', [PostShareController::class, 'index'])->name('posts.shares.index');

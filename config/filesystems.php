@@ -33,6 +33,7 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
+            'url' => '/private',
             'serve' => true,
             'throw' => false,
             'report' => false,
@@ -46,6 +47,7 @@ return [
             // rather than a fixed APP_URL that may not match the dev server.
             'url' => '/storage',
             'visibility' => 'public',
+            'serve' => true,
             'throw' => false,
             'report' => false,
         ],
