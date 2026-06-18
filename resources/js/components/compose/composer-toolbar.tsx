@@ -32,6 +32,8 @@ type Props = {
     /** Read-only post: show attached media, hide all editing controls. */
     readOnly?: boolean;
     videoLimits: PlatformLimits[];
+    /** Reports whether any media upload is currently in flight. */
+    onUploadingChange?: (uploading: boolean) => void;
 };
 
 export function ComposerToolbar({
@@ -50,6 +52,7 @@ export function ComposerToolbar({
     onEnsurePost,
     readOnly = false,
     videoLimits,
+    onUploadingChange,
 }: Props) {
     // Image upload (unchanged).
     const upload = useHttp<{ file?: File | null }, { media: MediaView }>({});
@@ -90,6 +93,14 @@ export function ComposerToolbar({
         },
         [],
     );
+
+    // Surface in-flight uploads so the parent can block publish/schedule until
+    // every attachment has finished (a still-uploading file isn't yet in `media`,
+    // so publishing mid-upload would omit it).
+    const isUploading = pending.some((p) => p.status === 'uploading');
+    useEffect(() => {
+        onUploadingChange?.(isUploading);
+    }, [isUploading, onUploadingChange]);
 
     function mintPreview(file: File): string | undefined {
         try {

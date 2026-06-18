@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { Plug } from 'lucide-react';
-import { useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 
 import { useAutosave } from '@/hooks/compose/use-autosave';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
@@ -74,6 +74,8 @@ export default function Composer({
     initialScheduleAt = null,
 }: ComposerProps) {
     const schedulingTz = useSchedulingTimezone();
+    // True while any attachment is still uploading — blocks publish/schedule.
+    const [mediaUploading, setMediaUploading] = useState(false);
     const [state, dispatch] = useReducer(composerReducer, post, (p) =>
         p
             ? composerReducer(initialComposerState(), {
@@ -349,6 +351,7 @@ export default function Composer({
                     }
                     onEnsurePost={ensurePost}
                     videoLimits={selectedVideoLimits}
+                    onUploadingChange={setMediaUploading}
                 />
             )}
 
@@ -368,6 +371,7 @@ export default function Composer({
                         postId={state.postId}
                         disabled={accounts.length === 0}
                         queueDisabled={queueState.status !== 'found'}
+                        uploading={mediaUploading}
                         onSaveDraft={flush}
                         onEnsurePost={ensurePost}
                         onOptimisticSubmit={publishStatus.applyOptimistic}

@@ -6,6 +6,11 @@ import type { ReactNode } from 'react';
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import PostScheduleController from '@/actions/App/Http/Controllers/Posts/PostScheduleController';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { celebrate } from '@/lib/compose/celebrate';
 import type { ScheduleTray } from '@/lib/compose/composer-state';
 import {
@@ -21,6 +26,8 @@ type Props = {
     tray: ScheduleTray;
     postId: string | null;
     disabled?: boolean;
+    /** True while a media attachment is still uploading — blocks publishing. */
+    uploading?: boolean;
     /**
      * Flush the autosave and resolve once the draft (incl. media) is persisted.
      * Awaited before publishing so the publish never races the save that
@@ -44,6 +51,7 @@ export function SubmitBar({
     tray,
     postId,
     disabled,
+    uploading = false,
     onSaveDraft,
     onEnsurePost,
     queueDisabled,
@@ -131,6 +139,26 @@ export function SubmitBar({
         });
     }
 
+    const submitButton = (
+        <TrayButton
+            variant="primary"
+            disabled={
+                disabled ||
+                uploading ||
+                http.processing ||
+                (tray.mode === 'queue' && Boolean(queueDisabled))
+            }
+            onClick={() => void handleSubmit()}
+            className="flex-1 sm:flex-none"
+        >
+            <Send className="size-3.5" aria-hidden="true" />
+            <span>{submitLabel}</span>
+            <kbd className="ml-0.5 hidden h-4 items-center rounded border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex">
+                ⌘↵
+            </kbd>
+        </TrayButton>
+    );
+
     return (
         <div className="flex flex-col items-stretch gap-1.5 sm:items-end sm:justify-self-end">
             <div className="flex items-center gap-1.5">
@@ -141,22 +169,22 @@ export function SubmitBar({
                 >
                     Save draft
                 </TrayButton>
-                <TrayButton
-                    variant="primary"
-                    disabled={
-                        disabled ||
-                        http.processing ||
-                        (tray.mode === 'queue' && Boolean(queueDisabled))
-                    }
-                    onClick={() => void handleSubmit()}
-                    className="flex-1 sm:flex-none"
-                >
-                    <Send className="size-3.5" aria-hidden="true" />
-                    <span>{submitLabel}</span>
-                    <kbd className="ml-0.5 hidden h-4 items-center rounded border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex">
-                        ⌘↵
-                    </kbd>
-                </TrayButton>
+                {/* A disabled button emits no hover events, so wrap it in a
+                    focusable span that carries the tooltip explaining the block. */}
+                {uploading ? (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span tabIndex={0} className="flex-1 sm:flex-none">
+                                {submitButton}
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                            Wait for media to finish uploading.
+                        </TooltipContent>
+                    </Tooltip>
+                ) : (
+                    submitButton
+                )}
             </div>
             {noSlot && (
                 <p className="text-[12px] text-muted-foreground">
