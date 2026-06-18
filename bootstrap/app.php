@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CaptureMcpWorkspaceSelection;
+use App\Http\Middleware\EnsureMetricsEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\WorkspaceMiddleware;
@@ -18,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+
+        $middleware->alias(['metrics.enabled' => EnsureMetricsEnabled::class]);
 
         $middleware->web(append: [
             HandleAppearance::class,

@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Concerns\HasWorkspaceScope;
 use App\Enums\ConnectedAccountStatus;
+use App\Enums\MetricsStatus;
 use App\Enums\Platform;
 use Carbon\CarbonImmutable;
 use Database\Factories\ConnectedAccountFactory;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Override;
 
@@ -30,6 +32,8 @@ use Override;
  * @property ConnectedAccountStatus $status
  * @property CarbonImmutable|null $token_expires_at
  * @property CarbonImmutable|null $last_refreshed_at
+ * @property CarbonImmutable|null $metrics_captured_at
+ * @property MetricsStatus|null $metrics_status
  */
 #[Fillable([
     'workspace_id',
@@ -43,6 +47,8 @@ use Override;
     'status',
     'token_expires_at',
     'last_refreshed_at',
+    'metrics_captured_at',
+    'metrics_status',
 ])]
 class ConnectedAccount extends Model
 {
@@ -60,6 +66,8 @@ class ConnectedAccount extends Model
             'status' => ConnectedAccountStatus::class,
             'token_expires_at' => 'immutable_datetime',
             'last_refreshed_at' => 'immutable_datetime',
+            'metrics_captured_at' => 'immutable_datetime',
+            'metrics_status' => MetricsStatus::class,
         ];
     }
 
@@ -85,5 +93,11 @@ class ConnectedAccount extends Model
     public function secret(): HasOne
     {
         return $this->hasOne(ConnectedAccountSecret::class, 'connected_account_id');
+    }
+
+    /** @return HasMany<AccountMetric, $this> */
+    public function metrics(): HasMany
+    {
+        return $this->hasMany(AccountMetric::class, 'connected_account_id');
     }
 }

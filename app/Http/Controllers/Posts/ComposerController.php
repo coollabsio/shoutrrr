@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Posts;
 
 use App\Enums\Platform;
+use App\Enums\PostTargetStatus;
 use App\Http\Controllers\Controller;
 use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
+use App\Support\MetricsPresenter;
 use App\Support\PostView;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -44,6 +46,13 @@ class ComposerController extends Controller
             'accounts' => $accounts,
             'sets' => $sets,
             'limits' => Platform::allLimits(),
+            'stats' => config('metrics.enabled')
+                ? Inertia::defer(fn (): ?array => $post->targets()
+                    ->where('status', PostTargetStatus::Published->value)
+                    ->exists()
+                    ? MetricsPresenter::forPost($post)
+                    : null)
+                : null,
         ]);
     }
 }

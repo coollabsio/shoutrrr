@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\AccountSets\AccountSetController;
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\Posts\CalendarController;
 use App\Http\Controllers\Posts\ComposerController;
 use App\Http\Controllers\Posts\NextSlotController;
 use App\Http\Controllers\Posts\PostController;
 use App\Http\Controllers\Posts\PostingScheduleController;
 use App\Http\Controllers\Posts\PostMediaController;
+use App\Http\Controllers\Posts\PostMetricsRefreshController;
 use App\Http\Controllers\Posts\PostQueueController;
 use App\Http\Controllers\Posts\PostScheduleController;
 use App\Http\Controllers\Posts\PostShareController;
@@ -48,6 +50,8 @@ Route::bind('target', fn (string $value): PostTarget => PostTarget::query()
 Route::bind('share', fn (string $value): PostShare => PostShare::query()->whereKey($value)->firstOrFail());
 
 Route::middleware(['auth', 'verified'])->group(function (): void {
+    Route::get('analytics', [AnalyticsController::class, 'index'])->middleware('metrics.enabled')->name('analytics.index');
+
     Route::get('calendar', [CalendarController::class, 'redirectToCurrent'])->name('calendar.index');
     Route::get('calendar/{yyyymm}', [CalendarController::class, 'show'])
         ->where('yyyymm', '\d{4}-\d{2}')->name('calendar.month');
@@ -66,6 +70,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('posts/{post}/queue', [PostQueueController::class, 'store'])->name('posts.queue');
     Route::post('posts/{post}/publish', [PublishController::class, 'store'])->name('posts.publish');
     Route::post('posts/{post}/targets/{target}/retry', [PostTargetRetryController::class, 'store'])->name('posts.targets.retry');
+    Route::post('posts/{post}/metrics/refresh', [PostMetricsRefreshController::class, 'store'])->middleware('metrics.enabled')->name('posts.metrics.refresh');
 
     Route::post('posts/{post}/media', [PostMediaController::class, 'store'])->name('posts.media.store');
     Route::delete('posts/{post}/media/{media}', [PostMediaController::class, 'destroy'])->name('posts.media.destroy');

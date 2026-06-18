@@ -1,6 +1,7 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
+    ChartColumn,
     FileText,
     ListChecks,
     Pencil,
@@ -33,6 +34,7 @@ import { useCurrentUrl } from '@/hooks/use-current-url';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
+import { index as analyticsRoute } from '@/routes/analytics';
 import { index as calendarRoute } from '@/routes/calendar';
 import { index as postsRoute } from '@/routes/posts';
 
@@ -54,7 +56,7 @@ const postsNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-    const { workspaces } = usePage().props;
+    const { workspaces, features } = usePage().props;
     const { isCurrentUrl } = useCurrentUrl();
     const { state, setOpenMobile } = useSidebar();
     const collapsed = state === 'collapsed';
@@ -165,6 +167,26 @@ export function AppSidebar() {
                                     </SidebarMenuItem>
                                 );
                             })}
+                            {features?.analytics && (
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton
+                                        asChild
+                                        tooltip="Analytics"
+                                        isActive={isCurrentUrl(
+                                            analyticsRoute(),
+                                        )}
+                                    >
+                                        <Link
+                                            href={analyticsRoute()}
+                                            prefetch={['mount', 'hover']}
+                                            cacheFor={['30s', '1m']}
+                                        >
+                                            <ChartColumn aria-hidden="true" />
+                                            <span>Analytics</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            )}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>

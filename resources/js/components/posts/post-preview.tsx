@@ -152,8 +152,8 @@ function PlatformCard({
 }) {
     const displayLabel =
         target.display_name ??
-        (target.handle ? `@${target.handle}` : target.platform);
-    const handleLine = target.handle ? `@${target.handle}` : null;
+        (target.handle ? target.handle : target.platform);
+    const handleLine = target.handle ? target.handle : null;
     const showHandle = handleLine && handleLine !== displayLabel;
     return (
         <article

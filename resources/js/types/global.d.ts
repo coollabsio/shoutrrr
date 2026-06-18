@@ -25,6 +25,7 @@ declare module '@inertiajs/core' {
                 limits: PlatformLimits[];
             };
             notifications: NotificationsData;
+            features?: { analytics: boolean };
             [key: string]: unknown;
         };
     }

@@ -1,8 +1,9 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { ArrowLeft, PenLine } from 'lucide-react';
 
 import Composer from '@/components/compose/composer';
 import { PostPageActions } from '@/components/posts/post-page-actions';
+import { PostStatsCard } from '@/components/posts/post-stats-card';
 import { Button } from '@/components/ui/button';
 import { firstLineTitle } from '@/lib/compose/composer-state';
 import { dashboard } from '@/routes';
@@ -15,6 +16,7 @@ export default function ComposePage({
     sets,
     limits,
 }: ComposePageProps) {
+    const { features } = usePage().props;
     const title = firstLineTitle(post?.base_text ?? '');
 
     return (
@@ -52,6 +54,12 @@ export default function ComposePage({
                     sets={sets}
                     limits={limits}
                 />
+
+                {features?.analytics &&
+                    post &&
+                    post.targets.some((t) => t.status === 'published') && (
+                        <PostStatsCard post={post} />
+                    )}
             </div>
         </>
     );

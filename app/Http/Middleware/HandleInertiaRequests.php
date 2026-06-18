@@ -63,6 +63,9 @@ class HandleInertiaRequests extends Middleware
                 'error' => $request->session()->get('error'),
             ],
             'notifications' => $this->notificationsData($request->user()),
+            'features' => [
+                'analytics' => (bool) config('metrics.enabled'),
+            ],
         ];
     }
 

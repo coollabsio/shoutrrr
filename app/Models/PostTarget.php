@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\ErrorKind;
+use App\Enums\MetricsStatus;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
 use Carbon\CarbonImmutable;
@@ -34,6 +35,12 @@ use Override;
  * @property CarbonImmutable|null $next_attempt_at
  * @property string|null $idempotency_key
  * @property CarbonImmutable|null $posted_at
+ * @property int $likes
+ * @property int $comments
+ * @property int $reposts
+ * @property int|null $impressions
+ * @property CarbonImmutable|null $metrics_captured_at
+ * @property MetricsStatus|null $metrics_status
  */
 #[Fillable([
     'post_id',
@@ -51,6 +58,12 @@ use Override;
     'next_attempt_at',
     'idempotency_key',
     'posted_at',
+    'likes',
+    'comments',
+    'reposts',
+    'impressions',
+    'metrics_captured_at',
+    'metrics_status',
 ])]
 class PostTarget extends Model
 {
@@ -74,6 +87,12 @@ class PostTarget extends Model
             'attempts' => 'integer',
             'next_attempt_at' => 'immutable_datetime',
             'posted_at' => 'immutable_datetime',
+            'likes' => 'integer',
+            'comments' => 'integer',
+            'reposts' => 'integer',
+            'impressions' => 'integer',
+            'metrics_captured_at' => 'immutable_datetime',
+            'metrics_status' => MetricsStatus::class,
         ];
     }
 
@@ -99,5 +118,11 @@ class PostTarget extends Model
     public function attemptLogs(): HasMany
     {
         return $this->hasMany(PostTargetAttempt::class, 'post_target_id');
+    }
+
+    /** @return HasMany<PostTargetMetric, $this> */
+    public function metrics(): HasMany
+    {
+        return $this->hasMany(PostTargetMetric::class, 'post_target_id')->orderBy('captured_at');
     }
 }
