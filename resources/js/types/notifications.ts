@@ -12,4 +12,5 @@ export type NotificationItem = {
 export type NotificationsData = {
     items: NotificationItem[];
     unreadCount: number;
+    nextCursor: string | null;
 };

@@ -1,6 +1,6 @@
-import { Link, router, usePage } from '@inertiajs/react';
-import { Bell } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Link, router, useHttp, usePage } from '@inertiajs/react';
+import { Bell, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -10,22 +10,85 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import {
+    index as notificationsIndex,
     read as markRead,
     readAll as markAllRead,
 } from '@/routes/notifications';
-import type { NotificationItem } from '@/types/notifications';
+import type {
+    NotificationItem,
+    NotificationsData,
+} from '@/types/notifications';
+
+/** Load the next page once the user scrolls within this many px of the bottom. */
+const SCROLL_THRESHOLD = 64;
 
 export function NotificationBell() {
     const { notifications } = usePage().props;
     const [items, setItems] = useState<NotificationItem[]>(notifications.items);
+    const [cursor, setCursor] = useState<string | null>(
+        notifications.nextCursor,
+    );
+    // Authoritative total from the server — `items` only holds loaded pages, so
+    // deriving the count from it would undercount once more pages exist.
+    const [unread, setUnread] = useState(notifications.unreadCount);
+    const { get, processing } = useHttp<
+        Record<string, never>,
+        NotificationsData
+    >({});
+    // Synchronous guard: `processing` state lags behind rapid scroll events, so
+    // a ref prevents firing duplicate requests for the same cursor.
+    const loadingRef = useRef(false);
 
+    // The shared prop refreshes on navigation and polling; re-seed the list,
+    // cursor, and count from the freshest first page when it changes.
     useEffect(() => {
         setItems(notifications.items);
-    }, [notifications.items]);
+        setCursor(notifications.nextCursor);
+        setUnread(notifications.unreadCount);
+    }, [
+        notifications.items,
+        notifications.nextCursor,
+        notifications.unreadCount,
+    ]);
 
-    const unread = items.filter((n) => !n.read).length;
+    function loadMore() {
+        if (cursor === null || loadingRef.current) {
+            return;
+        }
+
+        loadingRef.current = true;
+        void get(notificationsIndex({ query: { cursor } }).url, {
+            onSuccess: (data) => {
+                setItems((prev) => {
+                    const seen = new Set(prev.map((n) => n.id));
+                    return [
+                        ...prev,
+                        ...data.items.filter((n) => !seen.has(n.id)),
+                    ];
+                });
+                setCursor(data.nextCursor);
+            },
+            onFinish: () => {
+                loadingRef.current = false;
+            },
+        });
+    }
+
+    function handleScroll(event: React.UIEvent<HTMLDivElement>) {
+        const el = event.currentTarget;
+        if (
+            el.scrollHeight - el.scrollTop - el.clientHeight <=
+            SCROLL_THRESHOLD
+        ) {
+            loadMore();
+        }
+    }
 
     function markOneRead(id: string) {
+        const wasUnread = items.some((n) => n.id === id && !n.read);
+        if (wasUnread) {
+            setUnread((count) => Math.max(0, count - 1));
+        }
         setItems((prev) =>
             prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
         );
@@ -38,6 +101,7 @@ export function NotificationBell() {
 
     function markEverythingRead() {
         setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+        setUnread(0);
         router.post(
             markAllRead().url,
             {},
@@ -82,7 +146,10 @@ export function NotificationBell() {
                     </Button>
                 </div>
 
-                <div className="max-h-96 overflow-y-auto">
+                <div
+                    className="max-h-96 overflow-y-auto"
+                    onScroll={handleScroll}
+                >
                     {items.length === 0 ? (
                         <div className="flex flex-col items-center gap-2 px-3 py-10 text-center">
                             <span className="grid size-9 place-items-center rounded-full bg-muted text-muted-foreground">
@@ -93,13 +160,20 @@ export function NotificationBell() {
                             </p>
                         </div>
                     ) : (
-                        items.map((notification) => (
-                            <NotificationRow
-                                key={notification.id}
-                                notification={notification}
-                                onRead={markOneRead}
-                            />
-                        ))
+                        <>
+                            {items.map((notification) => (
+                                <NotificationRow
+                                    key={notification.id}
+                                    notification={notification}
+                                    onRead={markOneRead}
+                                />
+                            ))}
+                            {processing && (
+                                <div className="flex justify-center py-3">
+                                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </PopoverContent>

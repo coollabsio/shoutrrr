@@ -4,11 +4,30 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Support\Notifications\NotificationPresenter;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    /**
+     * Return a cursor-paginated page of notifications for infinite scroll.
+     *
+     * The bell dropdown seeds its first page from the shared Inertia prop and
+     * calls this endpoint to load older notifications as the user scrolls.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $cursor = $request->query('cursor');
+
+        return response()->json(NotificationPresenter::collection(
+            $request->user(),
+            $request->user()->current_workspace_id,
+            is_string($cursor) ? $cursor : null,
+        ));
+    }
+
     /**
      * Mark a single notification as read.
      *

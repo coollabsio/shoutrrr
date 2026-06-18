@@ -6,31 +6,51 @@ namespace App\Support\Notifications;
 
 use App\Models\User;
 use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Pagination\Cursor;
 
 class NotificationPresenter
 {
     /**
-     * @return array{items: array<int, array<string, mixed>>, unreadCount: int}
+     * Number of notifications returned per page. The bell dropdown seeds the
+     * first page and lazily loads subsequent pages as the user scrolls.
      */
-    public static function collection(User $user, ?string $workspaceId, int $limit = 15): array
+    public const int PER_PAGE = 10;
+
+    /**
+     * Build a cursor-paginated page of notifications for the bell dropdown.
+     *
+     * The first page (`$cursor === null`) also carries `unreadCount` so the
+     * badge can render without a second request; load-more pages omit the count
+     * since the badge does not change while scrolling.
+     *
+     * @return array{items: array<int, array<string, mixed>>, unreadCount: int, nextCursor: string|null}
+     */
+    public static function collection(User $user, ?string $workspaceId, ?string $cursor = null): array
     {
         if ($workspaceId === null) {
-            return ['items' => [], 'unreadCount' => 0];
+            return ['items' => [], 'unreadCount' => 0, 'nextCursor' => null];
         }
 
         $base = $user->notifications()->where('data->workspace_id', $workspaceId);
 
-        $items = (clone $base)
-            ->latest()
+        $paginator = (clone $base)
+            ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->limit($limit)
-            ->get()
+            ->cursorPaginate(
+                self::PER_PAGE,
+                ['*'],
+                'cursor',
+                $cursor !== null ? Cursor::fromEncoded($cursor) : null,
+            );
+
+        $items = collect($paginator->items())
             ->map(static fn (DatabaseNotification $n): array => self::item($n))
             ->all();
 
         return [
             'items' => $items,
-            'unreadCount' => (clone $base)->whereNull('read_at')->count(),
+            'unreadCount' => $cursor === null ? (clone $base)->whereNull('read_at')->count() : 0,
+            'nextCursor' => $paginator->nextCursor()?->encode(),
         ];
     }
 
