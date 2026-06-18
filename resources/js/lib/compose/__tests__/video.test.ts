@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-    sliceFile,
-    validateVideo,
-    VIDEO_CHUNK_SIZE,
-} from '@/lib/compose/video';
+import { validateVideo } from '@/lib/compose/video';
 import type { PlatformLimits } from '@/types/compose';
 
 function limits(
@@ -24,20 +20,6 @@ function limits(
         ...over,
     };
 }
-
-describe('sliceFile', () => {
-    it('splits a blob into ceil(size / chunk) parts', () => {
-        const blob = new Blob([new Uint8Array(VIDEO_CHUNK_SIZE + 10)]);
-        const parts = sliceFile(blob);
-        expect(parts).toHaveLength(2);
-        expect(parts[0]!.size).toBe(VIDEO_CHUNK_SIZE);
-        expect(parts[1]!.size).toBe(10);
-    });
-
-    it('returns a single part for a small blob', () => {
-        expect(sliceFile(new Blob([new Uint8Array(5)]))).toHaveLength(1);
-    });
-});
 
 describe('validateVideo', () => {
     const meta = {

@@ -4,13 +4,9 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import PostMediaChunkController from '@/actions/App/Http/Controllers/Posts/PostMediaChunkController';
 import PostMediaController from '@/actions/App/Http/Controllers/Posts/PostMediaController';
-import {
-    readVideoMetadata,
-    sliceFile,
-    validateVideo,
-} from '@/lib/compose/video';
+import PostVideoUploadController from '@/actions/App/Http/Controllers/Posts/PostVideoUploadController';
+import { readVideoMetadata, validateVideo } from '@/lib/compose/video';
 import { cn } from '@/lib/utils';
 import type { MediaView, PlatformLimits, PlatformName } from '@/types/compose';
 
@@ -55,20 +51,30 @@ export function ComposerToolbar({
     readOnly = false,
     videoLimits,
 }: Props) {
-    const upload = useHttp<
+    // Image upload (unchanged).
+    const upload = useHttp<{ file?: File | null }, { media: MediaView }>({});
+    // Sign: POST → { key, url, headers }
+    const signHttp = useHttp<
+        { content_type: string },
+        { key: string; url: string; headers: Record<string, string> }
+    >({ content_type: 'video/mp4' });
+    // Confirm: POST → { media }
+    const confirmHttp = useHttp<
         {
-            file?: File | null;
-            upload_id?: string;
-            index?: number;
-            total?: number;
-            mime?: string;
-            chunk?: File;
-            duration_seconds?: number;
-            width?: number;
-            height?: number;
+            key: string;
+            duration_seconds: number;
+            width: number;
+            height: number;
+            alt_text: null;
         },
-        { media: MediaView } | { received: number; total: number }
-    >({});
+        { media: MediaView }
+    >({
+        key: '',
+        duration_seconds: 0,
+        width: 0,
+        height: 0,
+        alt_text: null,
+    });
     const input = useRef<HTMLInputElement | null>(null);
     const [pending, setPending] = useState<PendingUpload[]>([]);
     const tempSeq = useRef(0);
@@ -128,12 +134,12 @@ export function ComposerToolbar({
         // transform injects the file at submit time (multipart upload).
         upload.transform(() => ({ file }));
         try {
-            const result = (await upload.post(
+            const result = await upload.post(
                 PostMediaController.store(id).url,
                 {
                     onNetworkError: () => undefined,
                 },
-            )) as { media: MediaView };
+            );
             // Prefer the local preview over the server image to avoid a blank
             // flash, by handing addMedia a media view that points at the blob.
             onAddMedia(
@@ -240,47 +246,63 @@ export function ComposerToolbar({
             return;
         }
 
-        const parts = sliceFile(file);
-        const uploadId = crypto.randomUUID();
-        const url = PostMediaChunkController.store(id).url;
-
         try {
-            // Non-final chunks return { received, total }; only the final
-            // chunk returns { media }.  Type the accumulator honestly.
-            let last:
-                | { media: MediaView }
-                | { received: number; total: number }
-                | undefined;
-            for (let index = 0; index < parts.length; index++) {
-                const isFinal = index === parts.length - 1;
-                upload.transform(() => ({
-                    upload_id: uploadId,
-                    index,
-                    total: parts.length,
-                    // Safe to hard-code: client validation (validateVideo) only
-                    // admits video/mp4 files before we reach this point.
-                    mime: 'video/mp4',
-                    chunk: new File([parts[index]!], 'chunk'),
-                    ...(isFinal
-                        ? {
-                              duration_seconds: meta.durationSeconds,
-                              width: meta.width,
-                              height: meta.height,
-                          }
-                        : {}),
-                }));
-                last = await upload.post(url, {
-                    onNetworkError: () => undefined,
-                });
-            }
+            // 1. Sign: get a presigned PUT URL from the app (CSRF handled by useHttp).
+            signHttp.setData({ content_type: 'video/mp4' });
+            const signed = await signHttp.post(
+                PostVideoUploadController.url(id).url,
+                { onNetworkError: () => undefined },
+            );
 
-            if (last && 'media' in last) {
-                onAddMedia(
-                    previewUrl
-                        ? { ...last.media, url: previewUrl }
-                        : last.media,
-                );
-            }
+            // 2. PUT directly to storage — raw XHR, signed headers only, no CSRF.
+            await new Promise<void>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', signed.url);
+                for (const [h, v] of Object.entries(signed.headers ?? {})) {
+                    xhr.setRequestHeader(h, v);
+                }
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        setPending((cur) =>
+                            cur.map((p) =>
+                                p.tempId === tempId
+                                    ? {
+                                          ...p,
+                                          progress: Math.round(
+                                              (e.loaded / e.total) * 100,
+                                          ),
+                                      }
+                                    : p,
+                            ),
+                        );
+                    }
+                };
+                xhr.onload = () =>
+                    xhr.status >= 200 && xhr.status < 300
+                        ? resolve()
+                        : reject(new Error(`upload failed: ${xhr.status}`));
+                xhr.onerror = () => reject(new Error('network error'));
+                xhr.send(file);
+            });
+
+            // 3. Confirm: tell the app the upload is done.
+            confirmHttp.setData({
+                key: signed.key,
+                duration_seconds: meta.durationSeconds,
+                width: meta.width,
+                height: meta.height,
+                alt_text: null,
+            });
+            const confirmed = await confirmHttp.post(
+                PostVideoUploadController.store(id).url,
+                { onNetworkError: () => undefined },
+            );
+
+            onAddMedia(
+                previewUrl
+                    ? { ...confirmed.media, url: previewUrl }
+                    : confirmed.media,
+            );
             setPending((cur) => cur.filter((p) => p.tempId !== tempId));
         } catch {
             setPending((cur) =>

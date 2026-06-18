@@ -1,7 +1,5 @@
 import type { PlatformLimits } from '@/types/compose';
 
-export const VIDEO_CHUNK_SIZE = 5 * 1024 * 1024;
-
 export type VideoMeta = {
     sizeBytes: number;
     mime: string;
@@ -9,15 +7,6 @@ export type VideoMeta = {
     width: number;
     height: number;
 };
-
-export function sliceFile(file: Blob, size: number = VIDEO_CHUNK_SIZE): Blob[] {
-    const parts: Blob[] = [];
-    for (let start = 0; start < file.size; start += size) {
-        parts.push(file.slice(start, Math.min(start + size, file.size)));
-    }
-
-    return parts.length > 0 ? parts : [file.slice(0, 0)];
-}
 
 export function validateVideo(
     meta: VideoMeta,

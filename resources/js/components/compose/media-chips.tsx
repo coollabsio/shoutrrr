@@ -15,6 +15,8 @@ export type PendingUpload = {
     /** Local object-URL preview shown immediately; absent where unsupported. */
     previewUrl?: string;
     status: 'uploading' | 'error';
+    /** Upload progress 0–100; only set during direct-to-storage PUT. */
+    progress?: number;
 };
 
 function formatDuration(seconds: number | null): string | null {
@@ -245,7 +247,13 @@ export function MediaChips({
                                 )}
                                 {p.status === 'uploading' && (
                                     <div className="absolute inset-0 grid place-items-center bg-background/30">
-                                        <span className="size-3 animate-spin rounded-full border-2 border-foreground/70 border-t-transparent" />
+                                        {p.progress !== undefined ? (
+                                            <span className="font-mono text-[7px] leading-none font-semibold text-foreground">
+                                                {p.progress}%
+                                            </span>
+                                        ) : (
+                                            <span className="size-3 animate-spin rounded-full border-2 border-foreground/70 border-t-transparent" />
+                                        )}
                                     </div>
                                 )}
                             </div>
