@@ -31,7 +31,14 @@ class MediaChunkService
 
         $full = $local->path($relative);
         $in = fopen($chunk->getRealPath(), 'rb');
+        if ($in === false) {
+            throw new RuntimeException('Unable to open uploaded chunk for reading.');
+        }
         $out = fopen($full, 'ab');
+        if ($out === false) {
+            fclose($in);
+            throw new RuntimeException('Unable to open chunk assembly file for writing.');
+        }
         stream_copy_to_stream($in, $out);
         fclose($in);
         fclose($out);
@@ -56,6 +63,10 @@ class MediaChunkService
 
         $path = 'media/'.$workspaceId.'/'.Str::uuid()->toString().'.mp4';
         $handle = fopen($full, 'rb');
+        if ($handle === false) {
+            $local->delete($relative);
+            throw new RuntimeException('Unable to open assembled file for streaming.');
+        }
         Storage::disk('public')->writeStream($path, $handle);
         fclose($handle);
         $size = (int) Storage::disk('public')->size($path);
