@@ -16,7 +16,7 @@ class PruneAbandonedUploads extends Command
 
     public function handle(): int
     {
-        $disk = Storage::disk(config('media.disk'));
+        $disk = Storage::disk(config('filesystems.default'));
         $cutoff = Carbon::now()->subHours(24)->getTimestamp();
         $deleted = 0;
 

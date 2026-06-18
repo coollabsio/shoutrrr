@@ -27,6 +27,10 @@ function memberWithVideoPost(): array
     return [$user, $workspace, $post];
 }
 
+// Media must live on a publicly-servable disk; pin the default to `public` for these
+// tests (a real deployment sets FILESYSTEM_DISK to `public` or `s3`).
+beforeEach(fn () => config(['filesystems.default' => 'public']));
+
 // ---------------------------------------------------------------------------
 // url endpoint (presigned upload URL)
 // ---------------------------------------------------------------------------
@@ -36,7 +40,7 @@ test('url endpoint returns a key under the workspace tmp prefix', function (): v
     // (it throws "This driver does not support creating temporary upload URLs").
     // The test uses Mockery to stub the disk method, asserting the controller
     // wiring without invoking the real presigned-URL implementation.
-    $disk = config('media.disk');
+    $disk = config('filesystems.default');
     $fakeDisk = Storage::fake($disk);
 
     [, $workspace, $post] = memberWithVideoPost();
@@ -66,7 +70,7 @@ test('url endpoint returns a key under the workspace tmp prefix', function (): v
 });
 
 test('url endpoint rejects non-mp4 content_type', function (): void {
-    Storage::fake(config('media.disk'));
+    Storage::fake(config('filesystems.default'));
     [, , $post] = memberWithVideoPost();
 
     test()->postJson(route('posts.media.video-url', $post), [
@@ -88,7 +92,7 @@ test('url endpoint requires authentication', function (): void {
 // ---------------------------------------------------------------------------
 
 test('store endpoint moves the tmp object, creates a PostMedia row, and returns the media descriptor', function (): void {
-    $disk = config('media.disk');
+    $disk = config('filesystems.default');
     Storage::fake($disk);
     [, $workspace, $post] = memberWithVideoPost();
 
@@ -122,7 +126,7 @@ test('store endpoint moves the tmp object, creates a PostMedia row, and returns 
 });
 
 test('store endpoint rejects a key outside the post workspace tmp prefix', function (): void {
-    $disk = config('media.disk');
+    $disk = config('filesystems.default');
     Storage::fake($disk);
     [, , $post] = memberWithVideoPost();
 
@@ -141,7 +145,7 @@ test('store endpoint rejects a key outside the post workspace tmp prefix', funct
 });
 
 test('store endpoint rejects a key that bypasses the tmp prefix entirely', function (): void {
-    $disk = config('media.disk');
+    $disk = config('filesystems.default');
     Storage::fake($disk);
     [, $workspace, $post] = memberWithVideoPost();
 
@@ -160,7 +164,7 @@ test('store endpoint rejects a key that bypasses the tmp prefix entirely', funct
 });
 
 test('store endpoint rejects a key with path traversal', function (): void {
-    $disk = config('media.disk');
+    $disk = config('filesystems.default');
     Storage::fake($disk);
     [, $workspace, $post] = memberWithVideoPost();
 
@@ -177,7 +181,7 @@ test('store endpoint rejects a key with path traversal', function (): void {
 });
 
 test('store endpoint returns 422 when the upload object is missing', function (): void {
-    $disk = config('media.disk');
+    $disk = config('filesystems.default');
     Storage::fake($disk);
     [, $workspace, $post] = memberWithVideoPost();
 
@@ -198,7 +202,7 @@ test('store endpoint returns 422 and deletes the tmp object when the file exceed
     // Storage::fake() cannot cheaply produce a >512 MB file, so we use Mockery to stub
     // the disk object returned by Storage::disk(). The mock reports exists() = true and
     // size() = ceiling + 1, and we assert that delete() is called before the 422 is returned.
-    $disk = config('media.disk');
+    $disk = config('filesystems.default');
     [, $workspace, $post] = memberWithVideoPost();
 
     $key = 'tmp/media/'.$workspace->id.'/'.Str::uuid().'.mp4';

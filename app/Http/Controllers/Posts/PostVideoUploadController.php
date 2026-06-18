@@ -22,7 +22,7 @@ class PostVideoUploadController extends Controller
      */
     public function url(SignVideoUploadRequest $request, Post $post): JsonResponse
     {
-        $disk = config('media.disk');
+        $disk = config('filesystems.default');
         $key = 'tmp/media/'.$post->workspace_id.'/'.Str::uuid().'.mp4';
 
         ['url' => $uploadUrl, 'headers' => $headers] = Storage::disk($disk)->temporaryUploadUrl(
@@ -45,7 +45,7 @@ class PostVideoUploadController extends Controller
     {
         $validated = $request->validated();
         $key = $validated['key'];
-        $disk = config('media.disk');
+        $disk = config('filesystems.default');
 
         // Security: reject any key that is not within tmp/media/{workspace_id}/<uuid>.mp4
         // This prevents clients from finalizing objects in other workspaces or bypassing the
