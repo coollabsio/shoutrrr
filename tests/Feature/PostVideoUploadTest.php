@@ -193,3 +193,32 @@ test('store endpoint returns 422 when the upload object is missing', function ()
 
     expect(PostMedia::count())->toBe(0);
 });
+
+test('store endpoint returns 422 and deletes the tmp object when the file exceeds the size ceiling', function (): void {
+    // Storage::fake() cannot cheaply produce a >512 MB file, so we use Mockery to stub
+    // the disk object returned by Storage::disk(). The mock reports exists() = true and
+    // size() = ceiling + 1, and we assert that delete() is called before the 422 is returned.
+    $disk = config('media.disk');
+    [, $workspace, $post] = memberWithVideoPost();
+
+    $key = 'tmp/media/'.$workspace->id.'/'.Str::uuid().'.mp4';
+
+    $mockDisk = Mockery::mock();
+    $mockDisk->shouldReceive('exists')->with($key)->andReturn(true);
+    $mockDisk->shouldReceive('size')->with($key)->andReturn(Platform::maxVideoBytesCeiling() + 1);
+    $mockDisk->shouldReceive('delete')->with($key)->once();
+
+    Storage::shouldReceive('disk')
+        ->with($disk)
+        ->andReturn($mockDisk);
+
+    $response = test()->postJson(route('posts.media.video', $post), [
+        'key' => $key,
+        'duration_seconds' => 30,
+        'width' => 1920,
+        'height' => 1080,
+    ]);
+
+    $response->assertStatus(422);
+    expect(PostMedia::count())->toBe(0);
+});

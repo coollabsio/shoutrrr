@@ -354,7 +354,7 @@ inviteUser.form = inviteUserForm
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-export const updateMemberRole = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
+export const updateMemberRole = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
     url: updateMemberRole.url(args, options),
     method: 'patch',
 })
@@ -369,7 +369,7 @@ updateMemberRole.definition = {
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-updateMemberRole.url = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
+updateMemberRole.url = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
     if (typeof args === 'string' || typeof args === 'number') {
         args = { membership: args }
     }
@@ -402,7 +402,7 @@ updateMemberRole.url = (args: { membership: string | number | { id: string | num
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-updateMemberRole.patch = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
+updateMemberRole.patch = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'patch'> => ({
     url: updateMemberRole.url(args, options),
     method: 'patch',
 })
@@ -412,7 +412,7 @@ updateMemberRole.patch = (args: { membership: string | number | { id: string | n
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-const updateMemberRoleForm = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+const updateMemberRoleForm = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: updateMemberRole.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'PATCH',
@@ -427,7 +427,7 @@ const updateMemberRoleForm = (args: { membership: string | number | { id: string
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:144
 * @route '/settings/workspace/members/{membership}'
 */
-updateMemberRoleForm.patch = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+updateMemberRoleForm.patch = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: updateMemberRole.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'PATCH',
@@ -444,7 +444,7 @@ updateMemberRole.form = updateMemberRoleForm
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-export const removeMember = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+export const removeMember = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: removeMember.url(args, options),
     method: 'delete',
 })
@@ -459,7 +459,7 @@ removeMember.definition = {
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-removeMember.url = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
+removeMember.url = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
     if (typeof args === 'string' || typeof args === 'number') {
         args = { membership: args }
     }
@@ -492,7 +492,7 @@ removeMember.url = (args: { membership: string | number | { id: string | number 
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-removeMember.delete = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+removeMember.delete = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: removeMember.url(args, options),
     method: 'delete',
 })
@@ -502,7 +502,7 @@ removeMember.delete = (args: { membership: string | number | { id: string | numb
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-const removeMemberForm = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+const removeMemberForm = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: removeMember.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',
@@ -517,7 +517,7 @@ const removeMemberForm = (args: { membership: string | number | { id: string | n
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:164
 * @route '/settings/workspace/members/{membership}'
 */
-removeMemberForm.delete = (args: { membership: string | number | { id: string | number } } | [membership: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+removeMemberForm.delete = (args: { membership: string | { id: string } } | [membership: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: removeMember.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',
@@ -534,7 +534,7 @@ removeMember.form = removeMemberForm
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-export const cancelInvitation = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+export const cancelInvitation = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: cancelInvitation.url(args, options),
     method: 'delete',
 })
@@ -549,7 +549,7 @@ cancelInvitation.definition = {
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-cancelInvitation.url = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
+cancelInvitation.url = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
     if (typeof args === 'string' || typeof args === 'number') {
         args = { invitation: args }
     }
@@ -582,7 +582,7 @@ cancelInvitation.url = (args: { invitation: string | number | { id: string | num
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-cancelInvitation.delete = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+cancelInvitation.delete = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: cancelInvitation.url(args, options),
     method: 'delete',
 })
@@ -592,7 +592,7 @@ cancelInvitation.delete = (args: { invitation: string | number | { id: string | 
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-const cancelInvitationForm = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+const cancelInvitationForm = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: cancelInvitation.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',
@@ -607,7 +607,7 @@ const cancelInvitationForm = (args: { invitation: string | number | { id: string
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-cancelInvitationForm.delete = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+cancelInvitationForm.delete = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: cancelInvitation.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',

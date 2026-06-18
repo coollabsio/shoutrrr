@@ -4,7 +4,7 @@ import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFo
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-export const cancel = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+export const cancel = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: cancel.url(args, options),
     method: 'delete',
 })
@@ -19,7 +19,7 @@ cancel.definition = {
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-cancel.url = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
+cancel.url = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
     if (typeof args === 'string' || typeof args === 'number') {
         args = { invitation: args }
     }
@@ -52,7 +52,7 @@ cancel.url = (args: { invitation: string | number | { id: string | number } } | 
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-cancel.delete = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+cancel.delete = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: cancel.url(args, options),
     method: 'delete',
 })
@@ -62,7 +62,7 @@ cancel.delete = (args: { invitation: string | number | { id: string | number } }
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-const cancelForm = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+const cancelForm = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: cancel.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',
@@ -77,7 +77,7 @@ const cancelForm = (args: { invitation: string | number | { id: string | number 
 * @see app/Http/Controllers/Settings/WorkspaceSettingsController.php:191
 * @route '/settings/workspace/invitations/{invitation}'
 */
-cancelForm.delete = (args: { invitation: string | number | { id: string | number } } | [invitation: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+cancelForm.delete = (args: { invitation: string | { id: string } } | [invitation: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: cancel.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',

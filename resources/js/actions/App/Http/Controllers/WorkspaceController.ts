@@ -215,7 +215,7 @@ switchMethod.form = switchMethodForm
 * @see app/Http/Controllers/WorkspaceController.php:64
 * @route '/workspaces/{workspace}/leave'
 */
-export const leave = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+export const leave = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: leave.url(args, options),
     method: 'delete',
 })
@@ -230,7 +230,7 @@ leave.definition = {
 * @see app/Http/Controllers/WorkspaceController.php:64
 * @route '/workspaces/{workspace}/leave'
 */
-leave.url = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
+leave.url = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
     if (typeof args === 'string' || typeof args === 'number') {
         args = { workspace: args }
     }
@@ -263,7 +263,7 @@ leave.url = (args: { workspace: string | number | { id: string | number } } | [w
 * @see app/Http/Controllers/WorkspaceController.php:64
 * @route '/workspaces/{workspace}/leave'
 */
-leave.delete = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+leave.delete = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: leave.url(args, options),
     method: 'delete',
 })
@@ -273,7 +273,7 @@ leave.delete = (args: { workspace: string | number | { id: string | number } } |
 * @see app/Http/Controllers/WorkspaceController.php:64
 * @route '/workspaces/{workspace}/leave'
 */
-const leaveForm = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+const leaveForm = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: leave.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',
@@ -288,7 +288,7 @@ const leaveForm = (args: { workspace: string | number | { id: string | number } 
 * @see app/Http/Controllers/WorkspaceController.php:64
 * @route '/workspaces/{workspace}/leave'
 */
-leaveForm.delete = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+leaveForm.delete = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: leave.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',
@@ -305,7 +305,7 @@ leave.form = leaveForm
 * @see app/Http/Controllers/WorkspaceController.php:90
 * @route '/workspaces/{workspace}'
 */
-export const destroy = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+export const destroy = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: destroy.url(args, options),
     method: 'delete',
 })
@@ -320,7 +320,7 @@ destroy.definition = {
 * @see app/Http/Controllers/WorkspaceController.php:90
 * @route '/workspaces/{workspace}'
 */
-destroy.url = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
+destroy.url = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
     if (typeof args === 'string' || typeof args === 'number') {
         args = { workspace: args }
     }
@@ -353,7 +353,7 @@ destroy.url = (args: { workspace: string | number | { id: string | number } } | 
 * @see app/Http/Controllers/WorkspaceController.php:90
 * @route '/workspaces/{workspace}'
 */
-destroy.delete = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
+destroy.delete = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
     url: destroy.url(args, options),
     method: 'delete',
 })
@@ -363,7 +363,7 @@ destroy.delete = (args: { workspace: string | number | { id: string | number } }
 * @see app/Http/Controllers/WorkspaceController.php:90
 * @route '/workspaces/{workspace}'
 */
-const destroyForm = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+const destroyForm = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: destroy.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',
@@ -378,7 +378,7 @@ const destroyForm = (args: { workspace: string | number | { id: string | number 
 * @see app/Http/Controllers/WorkspaceController.php:90
 * @route '/workspaces/{workspace}'
 */
-destroyForm.delete = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+destroyForm.delete = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: destroy.url(args, {
         [options?.mergeQuery ? 'mergeQuery' : 'query']: {
             _method: 'DELETE',
@@ -395,7 +395,7 @@ destroy.form = destroyForm
 * @see app/Http/Controllers/WorkspaceController.php:119
 * @route '/workspaces/{workspace}/transfer'
 */
-export const transferOwnership = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'post'> => ({
+export const transferOwnership = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'post'> => ({
     url: transferOwnership.url(args, options),
     method: 'post',
 })
@@ -410,7 +410,7 @@ transferOwnership.definition = {
 * @see app/Http/Controllers/WorkspaceController.php:119
 * @route '/workspaces/{workspace}/transfer'
 */
-transferOwnership.url = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
+transferOwnership.url = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions) => {
     if (typeof args === 'string' || typeof args === 'number') {
         args = { workspace: args }
     }
@@ -443,7 +443,7 @@ transferOwnership.url = (args: { workspace: string | number | { id: string | num
 * @see app/Http/Controllers/WorkspaceController.php:119
 * @route '/workspaces/{workspace}/transfer'
 */
-transferOwnership.post = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'post'> => ({
+transferOwnership.post = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteDefinition<'post'> => ({
     url: transferOwnership.url(args, options),
     method: 'post',
 })
@@ -453,7 +453,7 @@ transferOwnership.post = (args: { workspace: string | number | { id: string | nu
 * @see app/Http/Controllers/WorkspaceController.php:119
 * @route '/workspaces/{workspace}/transfer'
 */
-const transferOwnershipForm = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+const transferOwnershipForm = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: transferOwnership.url(args, options),
     method: 'post',
 })
@@ -463,7 +463,7 @@ const transferOwnershipForm = (args: { workspace: string | number | { id: string
 * @see app/Http/Controllers/WorkspaceController.php:119
 * @route '/workspaces/{workspace}/transfer'
 */
-transferOwnershipForm.post = (args: { workspace: string | number | { id: string | number } } | [workspace: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
+transferOwnershipForm.post = (args: { workspace: string | { id: string } } | [workspace: string | { id: string } ] | string | { id: string }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
     action: transferOwnership.url(args, options),
     method: 'post',
 })
