@@ -30,13 +30,18 @@ export type PlatformLimits = {
     allowedMime: string[];
     threadMax: number | null;
     maxImageDimensions: { width: number; height: number };
+    allowedVideoMime: string[];
+    maxVideoBytes: number;
+    maxVideoDurationSeconds: number;
 };
 
 export type MediaView = {
     id: string;
     url: string;
     mime: string;
+    kind: 'image' | 'video';
     alt_text: string | null;
+    duration_seconds: number | null;
     position: number;
 };
 
