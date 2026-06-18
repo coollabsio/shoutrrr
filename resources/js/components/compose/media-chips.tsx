@@ -17,6 +17,48 @@ export type PendingUpload = {
     status: 'uploading' | 'error';
 };
 
+function formatDuration(seconds: number | null): string | null {
+    if (seconds === null || seconds <= 0) {
+        return null;
+    }
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function MediaThumb({ media }: { media: MediaView }) {
+    if (media.kind === 'video') {
+        const label = formatDuration(media.duration_seconds);
+
+        return (
+            <div className="relative size-full">
+                <video
+                    src={media.url}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="size-full object-cover"
+                />
+                {label && (
+                    <span className="absolute right-0.5 bottom-0.5 rounded bg-black/70 px-1 font-mono text-[8px] leading-tight text-white tabular-nums">
+                        {label}
+                    </span>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <img
+            src={media.url}
+            alt={media.alt_text ?? ''}
+            draggable={false}
+            className="size-full object-cover"
+        />
+    );
+}
+
 type Props = {
     media: MediaView[];
     pending: PendingUpload[];
@@ -91,11 +133,7 @@ export function MediaChips({
                         key={m.id}
                         className="size-7 overflow-hidden rounded-md border border-border"
                     >
-                        <img
-                            src={m.url}
-                            alt={m.alt_text ?? ''}
-                            className="size-full object-cover"
-                        />
+                        <MediaThumb media={m} />
                     </div>
                 ))}
             </div>
@@ -152,12 +190,7 @@ export function MediaChips({
                                             'scale-95 opacity-50',
                                     )}
                                 >
-                                    <img
-                                        src={m.url}
-                                        alt={m.alt_text ?? ''}
-                                        draggable={false}
-                                        className="size-full object-cover"
-                                    />
+                                    <MediaThumb media={m} />
                                 </button>
                                 <CornerButton
                                     label="Remove"
