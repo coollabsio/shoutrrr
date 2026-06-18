@@ -12,6 +12,7 @@ use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -23,6 +24,8 @@ class BlueskyPublishConnector implements PublishConnector
     use MapsHttpErrors;
 
     private const string DEFAULT_PDS = 'https://bsky.social';
+
+    private const string VIDEO_SERVICE = 'https://video.bsky.app';
 
     public function __construct(private readonly HttpFactory $http) {}
 
@@ -40,8 +43,19 @@ class BlueskyPublishConnector implements PublishConnector
         $parentCid = null;
 
         try {
-            // Media rides on the root post only; uploaded once, then embedded below.
-            $embed = $rootUri === null ? $this->uploadImages($context->media, $pds, $jwt) : null;
+            // Video takes precedence over images on the root post only.
+            $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
+
+            if ($rootUri === null && $videoMedia !== []) {
+                $ready = $this->ensureVideoReady($context, $videoMedia[0], $pds, $jwt, $did);
+                if (! $ready->isSuccessful()) {
+                    return $ready;
+                }
+                $embed = $this->videoEmbed($context, $videoMedia[0]);
+            } else {
+                // Media rides on the root post only; uploaded once, then embedded below.
+                $embed = $rootUri === null ? $this->uploadImages($context->media, $pds, $jwt) : null;
+            }
 
             // Resume: remote_ids stores only AT-URIs, so recover the root and parent CIDs
             // (needed for threading) from the already-posted records before continuing.
@@ -155,6 +169,104 @@ class BlueskyPublishConnector implements PublishConnector
         }
 
         return (string) $response->json('cid');
+    }
+
+    /**
+     * Ensure the video job is running or completed. On first call, mints a service-auth token
+     * and uploads the video, persisting the jobId. On subsequent calls, polls getJobStatus.
+     * Returns a successful PublishResult only when the job has completed.
+     */
+    private function ensureVideoReady(PublishContext $context, PostMedia $media, string $pds, string $jwt, string $did): PublishResult
+    {
+        $state = $context->target->media_upload_state ?? [];
+        $jobId = $state[$media->id]['remote_ref'] ?? null;
+
+        try {
+            if ($jobId === null) {
+                $jobId = $this->uploadVideo($media, $pds, $jwt, $did);
+                $state[$media->id] = ['remote_ref' => $jobId, 'state' => 'processing'];
+                $context->target->forceFill(['media_upload_state' => $state])->save();
+            }
+
+            $status = $this->http->acceptJson()
+                ->get(self::VIDEO_SERVICE.'/xrpc/app.bsky.video.getJobStatus', ['jobId' => $jobId]);
+
+            if ($status->failed()) {
+                throw new BlueskyRequestFailed($status);
+            }
+
+            $jobState = (string) $status->json('jobStatus.state', '');
+
+            if ($jobState === 'JOB_STATE_FAILED') {
+                return PublishResult::failure(ErrorKind::ServerError, (string) $status->json('jobStatus.error', 'Bluesky failed to process the video.'));
+            }
+
+            if ($jobState !== 'JOB_STATE_COMPLETED') {
+                return PublishResult::failure(ErrorKind::MediaProcessing, 'Video is still processing on Bluesky.', retryAfter: 6);
+            }
+
+            // Stash the completed blob in media_upload_state so videoEmbed() can read it.
+            $state[$media->id]['blob'] = (array) $status->json('jobStatus.blob');
+            $context->target->forceFill(['media_upload_state' => $state])->save();
+
+            return PublishResult::success([$jobId]);
+        } catch (BlueskyRequestFailed $e) {
+            return $this->mapFailure($e->response);
+        }
+    }
+
+    /**
+     * Mint a service-auth token scoped to the user's PDS for blob upload, then push raw
+     * bytes to the video service (which cannot be PDS-proxied).
+     */
+    private function uploadVideo(PostMedia $media, string $pds, string $jwt, string $did): string
+    {
+        $pdsHost = (string) parse_url($pds, PHP_URL_HOST);
+
+        $auth = $this->http->withToken($jwt)->acceptJson()
+            ->get($pds.'/xrpc/com.atproto.server.getServiceAuth', [
+                'aud' => 'did:web:'.$pdsHost,
+                'lxm' => 'com.atproto.repo.uploadBlob',
+                'exp' => time() + 1800,
+            ]);
+
+        if ($auth->failed()) {
+            throw new BlueskyRequestFailed($auth);
+        }
+
+        $serviceToken = (string) $auth->json('token');
+
+        // Stream the file as the request body (wrap the disk resource as a PSR-7 stream)
+        // so the whole video is never resident in memory.
+        $body = Utils::streamFor(Storage::disk($media->disk)->readStream($media->path));
+
+        $upload = $this->http->withToken($serviceToken)->withBody($body, 'video/mp4')
+            ->post(self::VIDEO_SERVICE.'/xrpc/app.bsky.video.uploadVideo?did='.rawurlencode($did).'&name=video.mp4');
+
+        // Re-uploading identical bytes returns 409 already_exists but still carries the jobId.
+        if ($upload->failed() && $upload->json('error') !== 'already_exists') {
+            throw new BlueskyRequestFailed($upload);
+        }
+
+        return (string) $upload->json('jobId');
+    }
+
+    /**
+     * Build an `app.bsky.embed.video` embed using the blob stashed in media_upload_state.
+     *
+     * @return array{'$type': string, video: array<string, mixed>, alt?: string}
+     */
+    private function videoEmbed(PublishContext $context, PostMedia $media): array
+    {
+        $blob = (array) ($context->target->media_upload_state[$media->id]['blob'] ?? []);
+
+        $embed = ['$type' => 'app.bsky.embed.video', 'video' => $blob];
+
+        if (($media->alt_text ?? '') !== '') {
+            $embed['alt'] = (string) $media->alt_text;
+        }
+
+        return $embed;
     }
 
     /**
