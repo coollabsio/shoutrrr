@@ -167,6 +167,41 @@ enum Platform: string
     }
 
     /**
+     * @return list<string>
+     */
+    public function allowedVideoMime(): array
+    {
+        // mp4 (H.264/AAC) is the common denominator all three accept directly.
+        return ['video/mp4'];
+    }
+
+    public function maxVideoBytes(): int
+    {
+        return match ($this) {
+            self::X => 536_870_912,        // 512 MB
+            self::LinkedIn => 524_288_000, // 500 MB (organic feed)
+            self::Bluesky => 104_857_600,  // 100 MB
+        };
+    }
+
+    public function maxVideoDurationSeconds(): int
+    {
+        return match ($this) {
+            self::X => 140,
+            self::LinkedIn => 1800,
+            self::Bluesky => 180,
+        };
+    }
+
+    /**
+     * Largest video byte cap across all platforms — the server-side upload ceiling.
+     */
+    public static function maxVideoBytesCeiling(): int
+    {
+        return max(array_map(fn (self $p): int => $p->maxVideoBytes(), self::cases()));
+    }
+
+    /**
      * Measure a string in this platform's native counting unit.
      */
     public function measure(string $text): int
@@ -180,7 +215,7 @@ enum Platform: string
     }
 
     /**
-     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}}
+     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
      */
     public function limits(): array
     {
@@ -193,11 +228,14 @@ enum Platform: string
             'allowedMime' => $this->allowedMime(),
             'threadMax' => $this->threadMax(),
             'maxImageDimensions' => $this->maxImageDimensions(),
+            'allowedVideoMime' => $this->allowedVideoMime(),
+            'maxVideoBytes' => $this->maxVideoBytes(),
+            'maxVideoDurationSeconds' => $this->maxVideoDurationSeconds(),
         ];
     }
 
     /**
-     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}}>
+     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
      */
     public static function allLimits(): array
     {
