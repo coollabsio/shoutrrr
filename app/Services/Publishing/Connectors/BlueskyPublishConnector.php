@@ -192,7 +192,20 @@ class BlueskyPublishConnector implements PublishConnector
                 ->get(self::VIDEO_SERVICE.'/xrpc/app.bsky.video.getJobStatus', ['jobId' => $jobId]);
 
             if ($status->failed()) {
-                throw new BlueskyRequestFailed($status);
+                $kind = $this->classifyStatus($status->status());
+                if (in_array($kind, [ErrorKind::ServerError, ErrorKind::RateLimited], true)) {
+                    // A transient failure to CHECK status is not a publish failure — treat it as
+                    // "still processing, try again" so it uses the media-poll budget, not the
+                    // 5-attempt publish-failure budget.
+                    return PublishResult::failure(
+                        ErrorKind::MediaProcessing,
+                        'Could not check video processing status; will retry.',
+                        retryAfter: $this->retryAfter($status) ?? 6,
+                    );
+                }
+
+                // Non-transient (auth/validation/etc.) — surface as a real failure.
+                return $this->mapFailure($status);
             }
 
             $jobState = (string) $status->json('jobStatus.state', '');

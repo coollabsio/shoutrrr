@@ -60,6 +60,25 @@ test('completed job embeds the blob and posts on resume', function (): void {
         && data_get($req->data(), 'record.embed.$type') === 'app.bsky.embed.video');
 });
 
+test('transient 503 on job-status poll returns MediaProcessing (not ServerError)', function (): void {
+    $account = ConnectedAccount::factory()->state(['platform' => 'bluesky', 'remote_account_id' => 'did:plc:abc'])->create();
+    $media = PostMedia::factory()->video()->create(['disk' => 'public', 'path' => 'media/ws/v.mp4']);
+    Storage::disk('public')->put('media/ws/v.mp4', str_repeat('x', 2048));
+    $target = PostTarget::factory()->for($account, 'account')->create([
+        'media_upload_state' => [$media->id => ['remote_ref' => 'job-1', 'state' => 'processing']],
+    ]);
+
+    Http::fake([
+        'video.bsky.app/xrpc/app.bsky.video.getJobStatus*' => Http::response(['error' => 'Service Unavailable'], 503),
+    ]);
+
+    $ctx = new PublishContext($target, ['hi'], [$media], $account, blueskyVideoCredentials());
+    $result = app(BlueskyPublishConnector::class)->publish($ctx);
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::MediaProcessing);
+});
+
 test('failed job returns terminal ServerError', function (): void {
     $account = ConnectedAccount::factory()->state(['platform' => 'bluesky', 'remote_account_id' => 'did:plc:abc'])->create();
     $media = PostMedia::factory()->video()->create(['disk' => 'public', 'path' => 'media/ws/v.mp4']);

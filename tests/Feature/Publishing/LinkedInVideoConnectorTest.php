@@ -60,6 +60,26 @@ test('AVAILABLE video is referenced in the post on resume', function (): void {
     Http::assertNotSent(fn ($req) => str_contains($req->url(), 'action=initializeUpload'));
 });
 
+test('transient 503 on status poll returns MediaProcessing (not ServerError)', function (): void {
+    $account = ConnectedAccount::factory()->state(['platform' => 'linkedin'])->create();
+    $media = PostMedia::factory()->video()->create(['disk' => 'public', 'path' => 'media/ws/v.mp4']);
+    Storage::disk('public')->put('media/ws/v.mp4', str_repeat('x', 2048));
+    $target = PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'media_upload_state' => [$media->id => ['remote_ref' => 'urn:li:video:abc', 'state' => 'processing']],
+    ]);
+
+    Http::fake([
+        'api.linkedin.com/rest/videos/*' => Http::response(['message' => 'Service Unavailable'], 503),
+    ]);
+
+    $ctx = new PublishContext($target, ['hi'], [$media], $account, ['access_token' => 'tok']);
+    $result = app(LinkedInConnector::class)->publish($ctx);
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::MediaProcessing);
+});
+
 test('PROCESSING_FAILED video returns ServerError', function (): void {
     $account = ConnectedAccount::factory()->state(['platform' => 'linkedin'])->create();
     $media = PostMedia::factory()->video()->create(['disk' => 'public', 'path' => 'media/ws/v.mp4']);

@@ -128,7 +128,20 @@ class XConnector implements PublishConnector
                 ->get(self::MEDIA_BASE, ['command' => 'STATUS', 'media_id' => $mediaId]);
 
             if ($status->failed()) {
-                throw new XRequestFailed($status);
+                $kind = $this->classifyStatus($status->status());
+                if (in_array($kind, [ErrorKind::ServerError, ErrorKind::RateLimited], true)) {
+                    // A transient failure to CHECK status is not a publish failure — treat it as
+                    // "still processing, try again" so it uses the media-poll budget, not the
+                    // 5-attempt publish-failure budget.
+                    return PublishResult::failure(
+                        ErrorKind::MediaProcessing,
+                        'Could not check video processing status; will retry.',
+                        retryAfter: $this->retryAfter($status) ?? 6,
+                    );
+                }
+
+                // Non-transient (auth/validation/etc.) — surface as a real failure.
+                return $this->mapFailure($status);
             }
 
             $info = (array) $status->json('data.processing_info', []);

@@ -75,6 +75,26 @@ test('resume skips upload and attaches once succeeded', function (): void {
     Http::assertNotSent(fn ($req) => str_contains($req->url(), '/media/upload/initialize'));
 });
 
+test('transient 503 on status poll returns MediaProcessing (not ServerError)', function (): void {
+    $account = ConnectedAccount::factory()->state(['platform' => 'x'])->create();
+    $media = PostMedia::factory()->video()->create(['disk' => 'public', 'path' => 'media/ws/v.mp4']);
+    Storage::disk('public')->put('media/ws/v.mp4', str_repeat('x', 2048));
+
+    $target = PostTarget::factory()->for($account, 'account')->create([
+        'media_upload_state' => [$media->id => ['remote_ref' => '99', 'state' => 'processing']],
+    ]);
+
+    Http::fake([
+        'api.x.com/2/media/upload*' => Http::response(['error' => 'Service Unavailable'], 503),
+    ]);
+
+    $ctx = new PublishContext($target, ['hello'], [$media], $account, ['access_token' => 'tok']);
+    $result = app(XConnector::class)->publish($ctx);
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::MediaProcessing);
+});
+
 test('STATUS=failed returns a terminal ServerError', function (): void {
     $account = ConnectedAccount::factory()->state(['platform' => 'x'])->create();
     $media = PostMedia::factory()->video()->create(['disk' => 'public', 'path' => 'media/ws/v.mp4']);
