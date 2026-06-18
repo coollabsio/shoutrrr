@@ -31,6 +31,8 @@ class PublishPostTarget implements ShouldQueue
 
     private const int MAX_ATTEMPTS = 5;
 
+    private const int MAX_MEDIA_POLLS = 40;
+
     /**
      * Each publish is its own retry loop (self-dispatched delayed jobs), so the queue
      * worker must not also retry — `tries=1` keeps a transient throw from amplifying
@@ -197,6 +199,12 @@ class PublishPostTarget implements ShouldQueue
 
     private function onFailure(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result, BackoffSchedule $backoff): void
     {
+        if (($result->errorKind ?? null) === ErrorKind::MediaProcessing) {
+            $this->onMediaProcessing($target, $attempt, $result, $backoff);
+
+            return;
+        }
+
         $kind = $result->errorKind ?? ErrorKind::Unknown;
         $canRetry = $kind->isRetryable() && $target->attempts < self::MAX_ATTEMPTS;
 
@@ -232,5 +240,53 @@ class PublishPostTarget implements ShouldQueue
         ])->save();
 
         $this->notifyFailed($target, $kind);
+    }
+
+    private function onMediaProcessing(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result, BackoffSchedule $backoff): void
+    {
+        $state = $target->media_upload_state ?? [];
+        $polls = (int) ($state['_polls'] ?? 0) + 1;
+        $state['_polls'] = $polls;
+
+        if ($polls > self::MAX_MEDIA_POLLS) {
+            $attempt->forceFill([
+                'status' => 'failed',
+                'error_kind' => ErrorKind::ServerError->value,
+                'error_message' => 'Video processing did not complete in time.',
+                'finished_at' => Date::now(),
+            ])->save();
+
+            $target->forceFill([
+                'status' => PostTargetStatus::Failed->value,
+                'error_kind' => ErrorKind::ServerError->value,
+                'error_message' => 'Video processing did not complete in time.',
+                'media_upload_state' => $state,
+                'next_attempt_at' => null,
+            ])->save();
+
+            $this->notifyFailed($target, ErrorKind::ServerError);
+
+            return;
+        }
+
+        $delay = $result->retryAfter ?? $backoff->nextDelaySeconds(1);
+
+        $attempt->forceFill([
+            'status' => 'retrying',
+            'error_kind' => ErrorKind::MediaProcessing->value,
+            'error_message' => $result->errorMessage,
+            'finished_at' => Date::now(),
+        ])->save();
+
+        $target->forceFill([
+            'status' => PostTargetStatus::Publishing->value,
+            // Transcode polls must not exhaust the publish-failure budget, so neutralize
+            // the attempts++ that handle() applied at the start of this run.
+            'attempts' => max(0, $target->attempts - 1),
+            'media_upload_state' => $state,
+            'next_attempt_at' => Date::now()->addSeconds($delay),
+        ])->save();
+
+        self::dispatch($target->fresh())->delay($delay);
     }
 }

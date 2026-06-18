@@ -12,12 +12,13 @@ enum ErrorKind: string
     case DuplicateContent = 'duplicate_content';
     case Network = 'network';
     case ServerError = 'server_error';
+    case MediaProcessing = 'media_processing';
     case Unknown = 'unknown';
 
     public function isRetryable(): bool
     {
         return match ($this) {
-            self::RateLimited, self::AuthExpired, self::Network, self::ServerError => true,
+            self::RateLimited, self::AuthExpired, self::Network, self::ServerError, self::MediaProcessing => true,
             self::Validation, self::DuplicateContent, self::Unknown => false,
         };
     }

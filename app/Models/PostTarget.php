@@ -35,6 +35,7 @@ use Override;
  * @property CarbonImmutable|null $next_attempt_at
  * @property string|null $idempotency_key
  * @property CarbonImmutable|null $posted_at
+ * @property array<string, mixed>|null $media_upload_state
  * @property int $likes
  * @property int $comments
  * @property int $reposts
@@ -58,6 +59,7 @@ use Override;
     'next_attempt_at',
     'idempotency_key',
     'posted_at',
+    'media_upload_state',
     'likes',
     'comments',
     'reposts',
@@ -83,6 +85,7 @@ class PostTarget extends Model
             'content_override' => 'array',
             'auto_split' => 'boolean',
             'remote_ids' => 'array',
+            'media_upload_state' => 'array',
             'error_kind' => ErrorKind::class,
             'attempts' => 'integer',
             'next_attempt_at' => 'immutable_datetime',
