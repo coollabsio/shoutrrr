@@ -272,21 +272,23 @@ export function ComposerToolbar({
                 for (const [h, v] of Object.entries(signed.headers ?? {})) {
                     xhr.setRequestHeader(h, v);
                 }
+                // Only re-render when the whole-number percent changes — a 512 MB upload
+                // fires onprogress hundreds of times, but we never need sub-percent updates.
+                let lastPct = -1;
                 xhr.upload.onprogress = (e) => {
-                    if (e.lengthComputable) {
-                        setPending((cur) =>
-                            cur.map((p) =>
-                                p.tempId === tempId
-                                    ? {
-                                          ...p,
-                                          progress: Math.round(
-                                              (e.loaded / e.total) * 100,
-                                          ),
-                                      }
-                                    : p,
-                            ),
-                        );
+                    if (!e.lengthComputable) {
+                        return;
                     }
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    if (pct === lastPct) {
+                        return;
+                    }
+                    lastPct = pct;
+                    setPending((cur) =>
+                        cur.map((p) =>
+                            p.tempId === tempId ? { ...p, progress: pct } : p,
+                        ),
+                    );
                 };
                 xhr.onload = () =>
                     xhr.status >= 200 && xhr.status < 300

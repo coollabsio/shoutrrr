@@ -73,9 +73,12 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('posts/{post}/targets/{target}/retry', [PostTargetRetryController::class, 'store'])->name('posts.targets.retry');
     Route::post('posts/{post}/metrics/refresh', [PostMetricsRefreshController::class, 'store'])->middleware('metrics.enabled')->name('posts.metrics.refresh');
 
-    Route::post('posts/{post}/media', [PostMediaController::class, 'store'])->name('posts.media.store');
-    Route::post('posts/{post}/media/video-url', [PostVideoUploadController::class, 'url'])->name('posts.media.video-url');
-    Route::post('posts/{post}/media/video', [PostVideoUploadController::class, 'store'])->name('posts.media.video');
+    // Media uploads are throttled to bound abuse (presigned-URL minting / storage flooding).
+    Route::middleware('throttle:60,1')->group(function (): void {
+        Route::post('posts/{post}/media', [PostMediaController::class, 'store'])->name('posts.media.store');
+        Route::post('posts/{post}/media/video-url', [PostVideoUploadController::class, 'url'])->name('posts.media.video-url');
+        Route::post('posts/{post}/media/video', [PostVideoUploadController::class, 'store'])->name('posts.media.video');
+    });
     Route::delete('posts/{post}/media/{media}', [PostMediaController::class, 'destroy'])->name('posts.media.destroy');
 
     Route::get('posts/{post}/shares', [PostShareController::class, 'index'])->name('posts.shares.index');

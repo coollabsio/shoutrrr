@@ -42,3 +42,13 @@ test('it rejects a non-image upload', function () {
         'file' => UploadedFile::fake()->create('notes.pdf', 100, 'application/pdf'),
     ], ['Accept' => 'application/json'])->assertStatus(422);
 });
+
+test('it rejects an upload to a post that is no longer editable', function () {
+    Storage::fake('public');
+    [$user, $workspace, $post] = memberWithDraft();
+    App\Models\Post::findOrFail($post['id'])->forceFill(['status' => 'published'])->save();
+
+    test()->post("/posts/{$post['id']}/media", [
+        'file' => UploadedFile::fake()->image('p.jpg', 800, 600)->size(300),
+    ], ['Accept' => 'application/json'])->assertStatus(422);
+});

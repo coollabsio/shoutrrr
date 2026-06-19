@@ -17,6 +17,8 @@ class PostMediaController extends Controller
 
     public function store(StorePostMediaRequest $request, Post $post): JsonResponse
     {
+        abort_unless($post->status->isEditable(), 422, 'This post can no longer be edited.');
+
         $media = $this->media->store(
             $post->workspace_id,
             $request->file('file'),

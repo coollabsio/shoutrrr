@@ -10,6 +10,7 @@ use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -30,6 +31,13 @@ function memberWithVideoPost(): array
 // Media must live on a publicly-servable disk; pin the default to `public` for these
 // tests (a real deployment sets FILESYSTEM_DISK to `public` or `s3`).
 beforeEach(fn () => config(['filesystems.default' => 'public']));
+
+// Minimal ISO-BMFF header (a `ftyp` box at offset 4) so the server-side MP4 magic-byte
+// check accepts the fixture; pad to a plausible body size.
+function mp4Bytes(int $pad = 1024): string
+{
+    return "\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2".str_repeat('x', $pad);
+}
 
 // ---------------------------------------------------------------------------
 // url endpoint (presigned upload URL)
@@ -87,6 +95,22 @@ test('url endpoint requires authentication', function (): void {
     ])->assertStatus(401);
 });
 
+test('url endpoint rejects a post that is no longer editable', function (): void {
+    Storage::fake(config('filesystems.default'));
+    [, , $post] = memberWithVideoPost();
+    $post->forceFill(['status' => 'published'])->save();
+
+    test()->postJson(route('posts.media.video-url', $post), [
+        'content_type' => 'video/mp4',
+    ])->assertStatus(422);
+});
+
+test('video upload routes are rate limited', function (): void {
+    $middleware = Route::getRoutes()->getByName('posts.media.video-url')->gatherMiddleware();
+
+    expect(collect($middleware)->contains(fn (string $m): bool => str_contains($m, 'throttle')))->toBeTrue();
+});
+
 // ---------------------------------------------------------------------------
 // store endpoint (confirm upload)
 // ---------------------------------------------------------------------------
@@ -98,7 +122,7 @@ test('store endpoint moves the tmp object, creates a PostMedia row, and returns 
 
     $uuid = (string) Str::uuid();
     $key = 'tmp/media/'.$workspace->id.'/'.$uuid.'.mp4';
-    Storage::disk($disk)->put($key, str_repeat('x', 1024));
+    Storage::disk($disk)->put($key, mp4Bytes());
 
     $response = test()->postJson(route('posts.media.video', $post), [
         'key' => $key,
@@ -123,6 +147,46 @@ test('store endpoint moves the tmp object, creates a PostMedia row, and returns 
     expect(Storage::disk($disk)->exists($key))->toBeFalse();
     // Permanent object must exist.
     expect(Storage::disk($disk)->exists($media->path))->toBeTrue();
+});
+
+test('store endpoint rejects a post that is no longer editable', function (): void {
+    $disk = config('filesystems.default');
+    Storage::fake($disk);
+    [, $workspace, $post] = memberWithVideoPost();
+    $post->forceFill(['status' => 'published'])->save();
+
+    $key = 'tmp/media/'.$workspace->id.'/'.Str::uuid().'.mp4';
+    Storage::disk($disk)->put($key, str_repeat('x', 1024));
+
+    test()->postJson(route('posts.media.video', $post), [
+        'key' => $key,
+        'duration_seconds' => 30,
+        'width' => 1920,
+        'height' => 1080,
+    ])->assertStatus(422);
+
+    expect(PostMedia::count())->toBe(0);
+});
+
+test('store endpoint rejects content that is not a valid MP4', function (): void {
+    $disk = config('filesystems.default');
+    Storage::fake($disk);
+    [, $workspace, $post] = memberWithVideoPost();
+
+    $key = 'tmp/media/'.$workspace->id.'/'.Str::uuid().'.mp4';
+    // Valid key + exists + within size, but the bytes are not an MP4 container.
+    Storage::disk($disk)->put($key, str_repeat('x', 1024));
+
+    test()->postJson(route('posts.media.video', $post), [
+        'key' => $key,
+        'duration_seconds' => 30,
+        'width' => 1920,
+        'height' => 1080,
+    ])->assertStatus(422);
+
+    expect(PostMedia::count())->toBe(0);
+    // The rejected upload is cleaned up, not left in tmp.
+    expect(Storage::disk($disk)->exists($key))->toBeFalse();
 });
 
 test('store endpoint rejects a key outside the post workspace tmp prefix', function (): void {
