@@ -1,16 +1,12 @@
-import { useHttp } from '@inertiajs/react';
 import { Image as ImageIcon, Shuffle, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { useEffect, useRef } from 'react';
 
-import PostMediaController from '@/actions/App/Http/Controllers/Posts/PostMediaController';
-import PostVideoUploadController from '@/actions/App/Http/Controllers/Posts/PostVideoUploadController';
-import { readVideoMetadata, validateVideo } from '@/lib/compose/video';
+import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { cn } from '@/lib/utils';
 import type { MediaView, PlatformLimits, PlatformName } from '@/types/compose';
 
-import { MediaChips, type PendingUpload } from './media-chips';
+import { MediaChips } from './media-chips';
 
 type Props = {
     /** Active account's platform; undefined on the generic "Post" tab. */
@@ -54,287 +50,28 @@ export function ComposerToolbar({
     videoLimits,
     onUploadingChange,
 }: Props) {
-    // Image upload (unchanged).
-    const upload = useHttp<{ file?: File | null }, { media: MediaView }>({});
-    // Sign: POST → { key, url, headers }
-    const signHttp = useHttp<
-        { content_type: string },
-        { key: string; url: string; headers: Record<string, string> }
-    >({ content_type: 'video/mp4' });
-    // Confirm: POST → { media }
-    const confirmHttp = useHttp<
-        {
-            key: string;
-            duration_seconds: number;
-            width: number;
-            height: number;
-            alt_text: null;
-        },
-        { media: MediaView }
-    >({
-        key: '',
-        duration_seconds: 0,
-        width: 0,
-        height: 0,
-        alt_text: null,
-    });
     const input = useRef<HTMLInputElement | null>(null);
-    const [pending, setPending] = useState<PendingUpload[]>([]);
-    const tempSeq = useRef(0);
-    // Track every object URL we mint so they can be revoked and not leak.
-    const urls = useRef<Set<string>>(new Set());
-
-    useEffect(
-        () => () => {
-            for (const url of urls.current) {
-                URL.revokeObjectURL(url);
-            }
-            urls.current.clear();
-        },
-        [],
-    );
+    const { pending, isUploading, handleFiles, dismissPending } =
+        useMediaUploads({ media, videoLimits, onEnsurePost, onAddMedia });
 
     // Surface in-flight uploads so the parent can block publish/schedule until
     // every attachment has finished (a still-uploading file isn't yet in `media`,
     // so publishing mid-upload would omit it).
-    const isUploading = pending.some((p) => p.status === 'uploading');
     useEffect(() => {
         onUploadingChange?.(isUploading);
     }, [isUploading, onUploadingChange]);
 
-    function mintPreview(file: File): string | undefined {
-        try {
-            if (typeof URL?.createObjectURL !== 'function') {
-                return undefined;
+    // Process a picked/dropped batch, then reset the input so re-picking the same
+    // file fires onChange again.
+    function acceptFiles(files: FileList) {
+        void handleFiles(files).finally(() => {
+            if (input.current) {
+                input.current.value = '';
             }
-            const url = URL.createObjectURL(file);
-            urls.current.add(url);
-
-            return url;
-        } catch {
-            return undefined;
-        }
-    }
-
-    function revoke(url: string | undefined) {
-        if (url && urls.current.delete(url)) {
-            URL.revokeObjectURL(url);
-        }
-    }
-
-    async function uploadFile(file: File) {
-        tempSeq.current += 1;
-        const tempId = `up_${tempSeq.current}`;
-        const previewUrl = mintPreview(file);
-        setPending((cur) => [
-            ...cur,
-            { tempId, previewUrl, status: 'uploading' },
-        ]);
-
-        const id = await onEnsurePost();
-        if (!id) {
-            setPending((cur) =>
-                cur.map((p) =>
-                    p.tempId === tempId ? { ...p, status: 'error' } : p,
-                ),
-            );
-
-            return;
-        }
-
-        // transform injects the file at submit time (multipart upload).
-        upload.transform(() => ({ file }));
-        try {
-            const result = await upload.post(
-                PostMediaController.store(id).url,
-                {
-                    onNetworkError: () => undefined,
-                },
-            );
-            // Prefer the local preview over the server image to avoid a blank
-            // flash, by handing addMedia a media view that points at the blob.
-            onAddMedia(
-                previewUrl
-                    ? { ...result.media, url: previewUrl }
-                    : result.media,
-            );
-            setPending((cur) => cur.filter((p) => p.tempId !== tempId));
-        } catch {
-            setPending((cur) =>
-                cur.map((p) =>
-                    p.tempId === tempId ? { ...p, status: 'error' } : p,
-                ),
-            );
-        }
-    }
-
-    const hasVideo = media.some((m) => m.kind === 'video');
-    const hasImages = media.some((m) => m.kind === 'image');
-
-    async function handleFiles(files: FileList) {
-        // Track what has been queued in this batch to catch mixing within a
-        // single multi-select, where hasVideo/hasImages from the render closure
-        // are stale and would not reflect files already dispatched this loop.
-        let videoQueued = false;
-        let imageQueued = false;
-        for (const file of Array.from(files)) {
-            const isVideo = file.type.startsWith('video/');
-
-            if (isVideo) {
-                if (
-                    hasImages ||
-                    hasVideo ||
-                    media.length > 0 ||
-                    videoQueued ||
-                    imageQueued
-                ) {
-                    toast.error(
-                        'A post can contain one video or images, not both.',
-                    );
-                    continue;
-                }
-                videoQueued = true;
-                await uploadVideo(file);
-                continue;
-            }
-
-            if (hasVideo || videoQueued) {
-                toast.error('Remove the video before adding images.');
-                continue;
-            }
-            // imageQueued does NOT block additional images — multi-image
-            // batches must all upload successfully.
-            imageQueued = true;
-            await uploadFile(file);
-        }
-        if (input.current) {
-            input.current.value = '';
-        }
-    }
-
-    async function uploadVideo(file: File) {
-        let meta;
-        try {
-            meta = await readVideoMetadata(file);
-        } catch {
-            toast.error('Could not read that video.');
-
-            return;
-        }
-
-        const verdict = validateVideo(
-            {
-                sizeBytes: file.size,
-                mime: file.type,
-                durationSeconds: meta.durationSeconds,
-                width: meta.width,
-                height: meta.height,
-            },
-            videoLimits,
-        );
-        if (!verdict.ok) {
-            toast.error(verdict.reason);
-
-            return;
-        }
-
-        tempSeq.current += 1;
-        const tempId = `up_${tempSeq.current}`;
-        const previewUrl = mintPreview(file);
-        setPending((cur) => [
-            ...cur,
-            { tempId, previewUrl, status: 'uploading' },
-        ]);
-
-        const id = await onEnsurePost();
-        if (!id) {
-            setPending((cur) =>
-                cur.map((p) =>
-                    p.tempId === tempId ? { ...p, status: 'error' } : p,
-                ),
-            );
-
-            return;
-        }
-
-        try {
-            // 1. Sign: get a presigned PUT URL from the app (CSRF handled by useHttp).
-            signHttp.setData({ content_type: 'video/mp4' });
-            const signed = await signHttp.post(
-                PostVideoUploadController.url(id).url,
-                { onNetworkError: () => undefined },
-            );
-
-            // 2. PUT directly to storage — raw XHR, signed headers only, no CSRF.
-            await new Promise<void>((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('PUT', signed.url);
-                for (const [h, v] of Object.entries(signed.headers ?? {})) {
-                    xhr.setRequestHeader(h, v);
-                }
-                // Only re-render when the whole-number percent changes — a 512 MB upload
-                // fires onprogress hundreds of times, but we never need sub-percent updates.
-                let lastPct = -1;
-                xhr.upload.onprogress = (e) => {
-                    if (!e.lengthComputable) {
-                        return;
-                    }
-                    const pct = Math.round((e.loaded / e.total) * 100);
-                    if (pct === lastPct) {
-                        return;
-                    }
-                    lastPct = pct;
-                    setPending((cur) =>
-                        cur.map((p) =>
-                            p.tempId === tempId ? { ...p, progress: pct } : p,
-                        ),
-                    );
-                };
-                xhr.onload = () =>
-                    xhr.status >= 200 && xhr.status < 300
-                        ? resolve()
-                        : reject(new Error(`upload failed: ${xhr.status}`));
-                xhr.onerror = () => reject(new Error('network error'));
-                xhr.send(file);
-            });
-
-            // 3. Confirm: tell the app the upload is done.
-            confirmHttp.setData({
-                key: signed.key,
-                duration_seconds: meta.durationSeconds,
-                width: meta.width,
-                height: meta.height,
-                alt_text: null,
-            });
-            const confirmed = await confirmHttp.post(
-                PostVideoUploadController.store(id).url,
-                { onNetworkError: () => undefined },
-            );
-
-            onAddMedia(
-                previewUrl
-                    ? { ...confirmed.media, url: previewUrl }
-                    : confirmed.media,
-            );
-            setPending((cur) => cur.filter((p) => p.tempId !== tempId));
-        } catch {
-            setPending((cur) =>
-                cur.map((p) =>
-                    p.tempId === tempId ? { ...p, status: 'error' } : p,
-                ),
-            );
-        }
-    }
-
-    function dismissPending(tempId: string) {
-        setPending((cur) => {
-            const target = cur.find((p) => p.tempId === tempId);
-            revoke(target?.previewUrl);
-
-            return cur.filter((p) => p.tempId !== tempId);
         });
     }
 
+    const hasVideo = media.some((m) => m.kind === 'video');
     // Count confirmed media plus uploads still in flight so the badge bumps the
     // instant a file is picked, and settles back if an upload fails.
     const mediaCount =
@@ -346,7 +83,7 @@ export function ComposerToolbar({
             onDrop={(e) => {
                 e.preventDefault();
                 if (!readOnly && e.dataTransfer.files.length > 0) {
-                    void handleFiles(e.dataTransfer.files);
+                    acceptFiles(e.dataTransfer.files);
                 }
             }}
             className="flex flex-wrap items-center gap-1.5 border-t border-border bg-muted/50 px-3 pt-2 pb-2.5 sm:px-[14px]"
@@ -361,7 +98,7 @@ export function ComposerToolbar({
                         hidden
                         onChange={(e) => {
                             if (e.target.files && e.target.files.length > 0) {
-                                void handleFiles(e.target.files);
+                                acceptFiles(e.target.files);
                             }
                         }}
                     />

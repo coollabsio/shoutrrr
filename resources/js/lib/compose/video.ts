@@ -70,7 +70,8 @@ export function readVideoMetadata(file: File): Promise<VideoMeta> {
             resolve({
                 sizeBytes: file.size,
                 mime: file.type,
-                durationSeconds: Math.round(video.duration),
+                // Floor, not round: a 140.4s clip must not be rejected against a 140s cap.
+                durationSeconds: Math.floor(video.duration),
                 width: video.videoWidth,
                 height: video.videoHeight,
             });
@@ -80,5 +81,43 @@ export function readVideoMetadata(file: File): Promise<VideoMeta> {
             reject(new Error('Could not read video metadata.'));
         };
         video.src = url;
+    });
+}
+
+/**
+ * PUT a file directly to a presigned storage URL with the signed headers (no app CSRF).
+ * Resolves on a 2xx, rejects otherwise. `onProgress` fires only when the whole-number
+ * percent changes — a large upload emits hundreds of events but the UI needs at most 100.
+ */
+export function putWithProgress(
+    url: string,
+    headers: Record<string, string>,
+    body: Blob,
+    onProgress: (percent: number) => void,
+): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url);
+        for (const [header, value] of Object.entries(headers)) {
+            xhr.setRequestHeader(header, value);
+        }
+
+        let lastPct = -1;
+        xhr.upload.onprogress = (e) => {
+            if (!e.lengthComputable) {
+                return;
+            }
+            const pct = Math.round((e.loaded / e.total) * 100);
+            if (pct !== lastPct) {
+                lastPct = pct;
+                onProgress(pct);
+            }
+        };
+        xhr.onload = () =>
+            xhr.status >= 200 && xhr.status < 300
+                ? resolve()
+                : reject(new Error(`upload failed: ${xhr.status}`));
+        xhr.onerror = () => reject(new Error('network error'));
+        xhr.send(body);
     });
 }
