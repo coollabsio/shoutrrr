@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Dto\Publishing\MediaUploadState;
 use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
@@ -253,9 +254,8 @@ class PublishPostTarget implements ShouldQueue
 
     private function onMediaProcessing(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result): void
     {
-        $state = $target->media_upload_state ?? [];
-        $polls = (int) ($state['_polls'] ?? 0) + 1;
-        $state['_polls'] = $polls;
+        $state = new MediaUploadState($target->media_upload_state);
+        $polls = $state->incrementPolls();
 
         if ($polls > self::MAX_MEDIA_POLLS) {
             Log::warning('Video transcode poll timed out', [
@@ -275,7 +275,7 @@ class PublishPostTarget implements ShouldQueue
                 'status' => PostTargetStatus::Failed->value,
                 'error_kind' => ErrorKind::ServerError->value,
                 'error_message' => 'Video processing did not complete in time.',
-                'media_upload_state' => $state,
+                'media_upload_state' => $state->toArray(),
                 'next_attempt_at' => null,
             ])->save();
 
@@ -300,7 +300,7 @@ class PublishPostTarget implements ShouldQueue
             // Transcode polls must not exhaust the publish-failure budget, so neutralize
             // the attempts++ that handle() applied at the start of this run.
             'attempts' => max(0, $target->attempts - 1),
-            'media_upload_state' => $state,
+            'media_upload_state' => $state->toArray(),
             'next_attempt_at' => Date::now()->addSeconds($delay),
         ])->save();
 

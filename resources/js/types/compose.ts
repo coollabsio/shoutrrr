@@ -45,6 +45,16 @@ export type MediaView = {
     position: number;
 };
 
+/** An upload still in flight (or just failed) — rendered as a ghost chip. */
+export type PendingUpload = {
+    tempId: string;
+    /** Local object-URL preview shown immediately; absent where unsupported. */
+    previewUrl?: string;
+    status: 'uploading' | 'error';
+    /** Upload progress 0–100; only set during direct-to-storage PUT. */
+    progress?: number;
+};
+
 export type TargetStatus =
     | 'pending'
     | 'publishing'

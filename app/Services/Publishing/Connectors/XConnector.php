@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Publishing\Connectors;
 
+use App\Dto\Publishing\MediaUploadState;
 use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
@@ -114,14 +115,14 @@ class XConnector implements PublishConnector
      */
     private function ensureVideoReady(PublishContext $context, PostMedia $media, string $token): PublishResult
     {
-        $state = $context->target->media_upload_state ?? [];
-        $mediaId = $state[$media->id]['remote_ref'] ?? null;
+        $state = new MediaUploadState($context->target->media_upload_state);
+        $mediaId = $state->remoteRef($media->id);
 
         try {
             if ($mediaId === null) {
                 $mediaId = $this->uploadVideoChunks($media, $token);
-                $state[$media->id] = ['remote_ref' => $mediaId, 'state' => 'processing'];
-                $context->target->forceFill(['media_upload_state' => $state])->save();
+                $state->markUploaded($media->id, $mediaId);
+                $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
             }
 
             $status = $this->http->withToken($token)->acceptJson()

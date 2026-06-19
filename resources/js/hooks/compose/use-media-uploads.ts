@@ -4,13 +4,12 @@ import { toast } from 'sonner';
 
 import PostMediaController from '@/actions/App/Http/Controllers/Posts/PostMediaController';
 import PostVideoUploadController from '@/actions/App/Http/Controllers/Posts/PostVideoUploadController';
-import type { PendingUpload } from '@/components/compose/media-chips';
 import {
     putWithProgress,
     readVideoMetadata,
     validateVideo,
 } from '@/lib/compose/video';
-import type { MediaView, PlatformLimits } from '@/types/compose';
+import type { MediaView, PendingUpload, PlatformLimits } from '@/types/compose';
 
 type Options = {
     /** Currently-attached media (drives the one-video / no-mixing rule). */

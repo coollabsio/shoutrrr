@@ -7,17 +7,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { MediaView, PlatformName } from '@/types/compose';
-
-/** An upload still in flight (or just failed) — rendered as a ghost chip. */
-export type PendingUpload = {
-    tempId: string;
-    /** Local object-URL preview shown immediately; absent where unsupported. */
-    previewUrl?: string;
-    status: 'uploading' | 'error';
-    /** Upload progress 0–100; only set during direct-to-storage PUT. */
-    progress?: number;
-};
+import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
 
 function formatDuration(seconds: number | null): string | null {
     if (seconds === null || seconds <= 0) {

@@ -3,6 +3,7 @@
 use App\Enums\Platform;
 use App\Enums\WorkspaceRole;
 use App\Models\ConnectedAccount;
+use App\Models\Post;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
@@ -46,7 +47,7 @@ test('it rejects a non-image upload', function () {
 test('it rejects an upload to a post that is no longer editable', function () {
     Storage::fake('public');
     [$user, $workspace, $post] = memberWithDraft();
-    App\Models\Post::findOrFail($post['id'])->forceFill(['status' => 'published'])->save();
+    Post::findOrFail($post['id'])->forceFill(['status' => 'published'])->save();
 
     test()->post("/posts/{$post['id']}/media", [
         'file' => UploadedFile::fake()->image('p.jpg', 800, 600)->size(300),

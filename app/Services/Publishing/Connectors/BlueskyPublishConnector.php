@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Publishing\Connectors;
 
+use App\Dto\Publishing\MediaUploadState;
 use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
@@ -178,14 +179,14 @@ class BlueskyPublishConnector implements PublishConnector
      */
     private function ensureVideoReady(PublishContext $context, PostMedia $media, string $pds, string $jwt, string $did): PublishResult
     {
-        $state = $context->target->media_upload_state ?? [];
-        $jobId = $state[$media->id]['remote_ref'] ?? null;
+        $state = new MediaUploadState($context->target->media_upload_state);
+        $jobId = $state->remoteRef($media->id);
 
         try {
             if ($jobId === null) {
                 $jobId = $this->uploadVideo($media, $pds, $jwt, $did);
-                $state[$media->id] = ['remote_ref' => $jobId, 'state' => 'processing'];
-                $context->target->forceFill(['media_upload_state' => $state])->save();
+                $state->markUploaded($media->id, $jobId);
+                $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
             }
 
             $status = $this->http->acceptJson()
@@ -219,8 +220,8 @@ class BlueskyPublishConnector implements PublishConnector
             }
 
             // Stash the completed blob in media_upload_state so videoEmbed() can read it.
-            $state[$media->id]['blob'] = (array) $status->json('jobStatus.blob');
-            $context->target->forceFill(['media_upload_state' => $state])->save();
+            $state->setBlob($media->id, (array) $status->json('jobStatus.blob'));
+            $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
 
             return PublishResult::success([$jobId]);
         } catch (BlueskyRequestFailed $e) {
@@ -271,7 +272,7 @@ class BlueskyPublishConnector implements PublishConnector
      */
     private function videoEmbed(PublishContext $context, PostMedia $media): array
     {
-        $blob = (array) ($context->target->media_upload_state[$media->id]['blob'] ?? []);
+        $blob = (new MediaUploadState($context->target->media_upload_state))->blob($media->id);
 
         $embed = ['$type' => 'app.bsky.embed.video', 'video' => $blob];
 
