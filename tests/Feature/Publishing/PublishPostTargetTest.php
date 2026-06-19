@@ -200,12 +200,16 @@ test('an uncaught exception closes the attempt and marks the target failed (neve
     expect($target->post->refresh()->status)->toBe(PostStatus::Failed);
 });
 
-test('job has tries=1 and a timeout', function () {
+test('job has tries=1 and a timeout below the queue retry_after', function () {
     $target = publishTarget();
     $job = new PublishPostTarget($target);
 
     expect($job->tries)->toBe(1)
-        ->and($job->timeout)->toBe(120);
+        ->and($job->timeout)->toBe(900);
+
+    // Invariant: the job timeout MUST stay below the queue connection's retry_after,
+    // or a slow large-video run is released to a second worker mid-upload and double-posts.
+    expect($job->timeout)->toBeLessThan((int) config('queue.connections.database.retry_after'));
 });
 
 test('handle is a no-op on a terminal published target (stale retry / double dispatch)', function () {

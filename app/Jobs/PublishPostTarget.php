@@ -22,6 +22,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -33,6 +34,9 @@ class PublishPostTarget implements ShouldQueue
 
     private const int MAX_MEDIA_POLLS = 40;
 
+    /** Fallback delay (seconds) between transcode-status polls when the platform gives no hint. */
+    private const int MEDIA_POLL_DELAY = 10;
+
     /**
      * Each publish is its own retry loop (self-dispatched delayed jobs), so the queue
      * worker must not also retry — `tries=1` keeps a transient throw from amplifying
@@ -40,7 +44,12 @@ class PublishPostTarget implements ShouldQueue
      */
     public int $tries = 1;
 
-    public int $timeout = 120;
+    /**
+     * Generous so a large video upload to a platform (streamed inside the first run)
+     * can finish. MUST stay below the queue connection's `retry_after` (see config/queue.php,
+     * default 1200) or a slow run would be released to a second worker and double-post.
+     */
+    public int $timeout = 900;
 
     private const array TERMINAL = [
         PostTargetStatus::Published,
@@ -200,7 +209,7 @@ class PublishPostTarget implements ShouldQueue
     private function onFailure(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result, BackoffSchedule $backoff): void
     {
         if (($result->errorKind ?? null) === ErrorKind::MediaProcessing) {
-            $this->onMediaProcessing($target, $attempt, $result, $backoff);
+            $this->onMediaProcessing($target, $attempt, $result);
 
             return;
         }
@@ -242,13 +251,19 @@ class PublishPostTarget implements ShouldQueue
         $this->notifyFailed($target, $kind);
     }
 
-    private function onMediaProcessing(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result, BackoffSchedule $backoff): void
+    private function onMediaProcessing(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result): void
     {
         $state = $target->media_upload_state ?? [];
         $polls = (int) ($state['_polls'] ?? 0) + 1;
         $state['_polls'] = $polls;
 
         if ($polls > self::MAX_MEDIA_POLLS) {
+            Log::warning('Video transcode poll timed out', [
+                'post_target_id' => $target->id,
+                'platform' => $target->platform->value,
+                'polls' => $polls,
+            ]);
+
             $attempt->forceFill([
                 'status' => 'failed',
                 'error_kind' => ErrorKind::ServerError->value,
@@ -269,7 +284,9 @@ class PublishPostTarget implements ShouldQueue
             return;
         }
 
-        $delay = $result->retryAfter ?? $backoff->nextDelaySeconds(1);
+        // Honor the platform's suggested delay; otherwise poll on a tight fixed cadence
+        // (not the publish backoff, whose 60s base is far too slow for transcode checks).
+        $delay = $result->retryAfter ?? self::MEDIA_POLL_DELAY;
 
         $attempt->forceFill([
             'status' => 'retrying',
