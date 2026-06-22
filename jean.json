@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "setup": "composer install",
+    "setup": "composer setup",
     "teardown": null,
     "run": "composer dev"
   },
