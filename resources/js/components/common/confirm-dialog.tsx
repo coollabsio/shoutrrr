@@ -3,9 +3,11 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useRef,
     useState,
 } from 'react';
+import { flushSync } from 'react-dom';
 
 import {
     AlertDialog,
@@ -36,9 +38,7 @@ const ConfirmContext = createContext<ConfirmFn | null>(null);
  * user confirms, false otherwise.
  *
  * The single dialog lives at the app root (see ConfirmProvider in app.tsx), so a
- * caller that mutates/unmounts itself on confirm (e.g. an optimistic row
- * removal) never tears down an open modal — which would otherwise strand Radix's
- * `pointer-events: none` on <body> and freeze the page.
+ * caller that mutates/unmounts itself on confirm never tears down its own modal.
  */
 export function useConfirm(): ConfirmFn {
     const confirm = useContext(ConfirmContext);
@@ -52,60 +52,98 @@ export function useConfirm(): ConfirmFn {
 export function ConfirmProvider({ children }: { children: ReactNode }) {
     const [options, setOptions] = useState<ConfirmOptions | null>(null);
     const resolverRef = useRef<((value: boolean) => void) | null>(null);
+    const openFrameRef = useRef<number | null>(null);
 
     const settle = useCallback((result: boolean) => {
-        // Idempotent: the confirm button both resolves here and triggers Radix's
-        // close → onOpenChange, which would otherwise resolve a second time.
-        resolverRef.current?.(result);
+        // Idempotent: double-clicks or repeated Escape presses should only
+        // resolve the current confirmation once.
+        const resolver = resolverRef.current;
+        if (!resolver) {
+            return;
+        }
+
         resolverRef.current = null;
-        setOptions(null);
+
+        // Force Radix's portal/overlay tree to unmount before the caller runs
+        // any Inertia mutation that may remove rows or navigate.
+        flushSync(() => setOptions(null));
+        resolver(result);
     }, []);
 
     const confirm = useCallback<ConfirmFn>((opts) => {
         // Abandon any prior pending confirmation before opening a new one.
         resolverRef.current?.(false);
+        if (openFrameRef.current !== null) {
+            window.cancelAnimationFrame(openFrameRef.current);
+            openFrameRef.current = null;
+        }
 
         return new Promise<boolean>((resolve) => {
+            if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+            }
+
             resolverRef.current = resolve;
-            setOptions(opts);
+
+            // Post action confirmations are often opened from a Radix
+            // DropdownMenu item. During that item callback, the dropdown still
+            // owns `body.style.pointerEvents = 'none'`. If AlertDialog mounts in
+            // the same tick, Radix captures `'none'` as the original body value
+            // and restores it on close, leaving the whole UI unclickable.
+            openFrameRef.current = window.requestAnimationFrame(() => {
+                openFrameRef.current = null;
+                setOptions(opts);
+            });
         });
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (openFrameRef.current !== null) {
+                window.cancelAnimationFrame(openFrameRef.current);
+            }
+        };
     }, []);
 
     return (
         <ConfirmContext.Provider value={confirm}>
             {children}
-            <AlertDialog
-                open={options !== null}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        settle(false);
-                    }
-                }}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>{options?.title}</AlertDialogTitle>
-                        {options?.description !== undefined && (
-                            <AlertDialogDescription>
-                                {options.description}
-                            </AlertDialogDescription>
-                        )}
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => settle(false)}>
-                            {options?.cancelLabel ?? 'Cancel'}
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            variant={
-                                options?.destructive ? 'destructive' : 'default'
-                            }
-                            onClick={() => settle(true)}
-                        >
-                            {options?.actionLabel ?? 'Confirm'}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            {options !== null && (
+                <AlertDialog
+                    open
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            settle(false);
+                        }
+                    }}
+                >
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>{options.title}</AlertDialogTitle>
+                            {options.description !== undefined && (
+                                <AlertDialogDescription>
+                                    {options.description}
+                                </AlertDialogDescription>
+                            )}
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => settle(false)}>
+                                {options.cancelLabel ?? 'Cancel'}
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                                variant={
+                                    options.destructive
+                                        ? 'destructive'
+                                        : 'default'
+                                }
+                                onClick={() => settle(true)}
+                            >
+                                {options.actionLabel ?? 'Confirm'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
         </ConfirmContext.Provider>
     );
 }
