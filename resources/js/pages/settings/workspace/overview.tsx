@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import WorkspaceController from '@/actions/App/Http/Controllers/WorkspaceController';
+import { useConfirm } from '@/components/common/confirm-dialog';
 import Heading from '@/components/common/heading';
 import InputError from '@/components/common/input-error';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ type Props = {
     };
     canManage: boolean;
     isOwner: boolean;
+    canDelete: boolean;
     timezone: string;
     timezones: string[];
 };
@@ -35,9 +37,39 @@ export default function WorkspaceOverview({
     workspace,
     canManage,
     isOwner,
+    canDelete,
     timezone,
     timezones,
 }: Props) {
+    const confirmAction = useConfirm();
+    const [deleting, setDeleting] = useState(false);
+
+    async function deleteWorkspace() {
+        if (!canDelete || deleting) {
+            return;
+        }
+
+        const confirmed = await confirmAction({
+            title: 'Delete workspace?',
+            description:
+                'This permanently deletes the workspace, its members, and its data. This cannot be undone.',
+            actionLabel: 'Delete workspace',
+            destructive: true,
+        });
+
+        if (!confirmed) {
+            return;
+        }
+
+        setDeleting(true);
+        router.flushAll();
+        router.delete(WorkspaceController.destroy(workspace.id).url, {
+            preserveScroll: true,
+            onSuccess: () => router.flushAll(),
+            onFinish: () => setDeleting(false),
+        });
+    }
+
     return (
         <>
             <Head title="Workspace settings" />
@@ -52,6 +84,7 @@ export default function WorkspaceOverview({
                 <Form
                     {...WorkspaceSettingsController.update.form()}
                     options={{ preserveScroll: true }}
+                    onSuccess={() => router.flushAll()}
                     className="space-y-6"
                 >
                     {({ processing, errors, recentlySuccessful }) => (
@@ -112,9 +145,14 @@ export default function WorkspaceOverview({
                                     workspace.id,
                                 )}
                                 options={{ preserveScroll: true }}
-                                onBefore={() =>
-                                    confirm('Leave this workspace?')
-                                }
+                                onBefore={() => {
+                                    if (!confirm('Leave this workspace?')) {
+                                        return false;
+                                    }
+
+                                    router.flushAll();
+                                }}
+                                onSuccess={() => router.flushAll()}
                             >
                                 {({ processing }) => (
                                     <Button
@@ -144,27 +182,23 @@ export default function WorkspaceOverview({
                                     This action cannot be undone.
                                 </p>
                             </div>
-                            <Form
-                                {...WorkspaceController.destroy.form(
-                                    workspace.id,
+                            <div className="flex flex-col items-start gap-2 sm:items-end">
+                                <Button
+                                    type="button"
+                                    variant="destructive"
+                                    disabled={deleting || !canDelete}
+                                    onClick={deleteWorkspace}
+                                >
+                                    {deleting
+                                        ? 'Deleting...'
+                                        : 'Delete workspace'}
+                                </Button>
+                                {!canDelete && (
+                                    <p className="max-w-48 text-xs text-muted-foreground sm:text-right">
+                                        You can’t delete your only workspace.
+                                    </p>
                                 )}
-                                options={{ preserveScroll: true }}
-                                onBefore={() =>
-                                    confirm(
-                                        'Delete this workspace permanently? This cannot be undone.',
-                                    )
-                                }
-                            >
-                                {({ processing }) => (
-                                    <Button
-                                        type="submit"
-                                        variant="destructive"
-                                        disabled={processing}
-                                    >
-                                        Delete workspace
-                                    </Button>
-                                )}
-                            </Form>
+                            </div>
                         </div>
                     </div>
                 )}

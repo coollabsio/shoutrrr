@@ -1,4 +1,4 @@
-import { router, usePage } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, Loader2, Plus, Users } from 'lucide-react';
 import { useState } from 'react';
 
@@ -17,7 +17,7 @@ import {
 import { CreateWorkspaceDialog } from '@/components/workspace/create-workspace-dialog';
 import { useInitials } from '@/hooks/use-initials';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { switchMethod } from '@/routes/workspaces';
+import { switchWorkspace } from '@/lib/workspaces/switch-workspace';
 
 export function WorkspaceSelector() {
     const { workspaces } = usePage().props;
@@ -39,11 +39,7 @@ export function WorkspaceSelector() {
         }
 
         setLoading(true);
-        router.post(
-            switchMethod.url(),
-            { workspace_id: id },
-            { preserveState: false, onFinish: () => setLoading(false) },
-        );
+        switchWorkspace(id, { onFinish: () => setLoading(false) });
     };
 
     return (

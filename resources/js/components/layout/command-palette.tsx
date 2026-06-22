@@ -33,6 +33,7 @@ import {
     type RecentItem,
 } from '@/lib/command/recents';
 import { usePostSearch } from '@/lib/command/use-post-search';
+import { switchWorkspace } from '@/lib/workspaces/switch-workspace';
 import { dashboard, logout } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
 import {
@@ -40,7 +41,6 @@ import {
     month as calendarMonth,
 } from '@/routes/calendar';
 import { index as postsRoute } from '@/routes/posts';
-import { switchMethod } from '@/routes/workspaces';
 
 import { ComposeDestinationPage } from './command-palette/compose-destination-page';
 import { ConnectPlatformPage } from './command-palette/connect-platform-page';
@@ -363,15 +363,8 @@ export function CommandPalette() {
                                                 key={workspace.id}
                                                 value={`switch workspace ${workspace.name}`}
                                                 onSelect={run(() =>
-                                                    router.post(
-                                                        switchMethod.url(),
-                                                        {
-                                                            workspace_id:
-                                                                workspace.id,
-                                                        },
-                                                        {
-                                                            preserveState: false,
-                                                        },
+                                                    switchWorkspace(
+                                                        workspace.id,
                                                     ),
                                                 )}
                                             >

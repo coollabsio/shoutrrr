@@ -42,6 +42,9 @@ class WorkspaceSettingsController extends Controller
             ],
             'canManage' => $user->hasAllPermissions(['workspace.settings.manage'], $workspace->id),
             'isOwner' => $user->isOwnerOfWorkspace($workspace->id),
+            'canDelete' => $user->workspaceMemberships()
+                ->where('workspace_id', '!=', $workspace->id)
+                ->exists(),
             'timezone' => $timezone,
             'timezones' => timezone_identifiers_list(),
         ]);

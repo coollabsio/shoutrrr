@@ -96,6 +96,10 @@ class WorkspaceController extends Controller
             abort(403);
         }
 
+        if (! $user->workspaceMemberships()->where('workspace_id', '!=', $workspace->id)->exists()) {
+            return back()->withErrors(['workspace' => 'Create or join another workspace before deleting this one.']);
+        }
+
         DB::transaction(function () use ($workspace): void {
             // Reassign current workspace for any member who had this as their current,
             // BEFORE the nullOnDelete FK cascade fires, so they land on another of their
