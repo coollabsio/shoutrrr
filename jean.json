@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "setup": "cp $JEAN_ROOT_PATH/.env . && composer setup",
+    "setup": "cp $JEAN_ROOT_PATH/.env .",
     "teardown": null,
-    "run": "composer dev"
+    "run": "composer setup && composer dev"
   },
   "ports": [
     {
