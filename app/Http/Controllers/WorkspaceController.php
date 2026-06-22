@@ -58,7 +58,7 @@ class WorkspaceController extends Controller
 
         $user->forceFill(['current_workspace_id' => $request->input('workspace_id')])->save();
 
-        return back()->with('success', 'Workspace switched.');
+        return redirect()->route('dashboard')->with('success', 'Workspace switched.');
     }
 
     public function leave(Request $request, Workspace $workspace): RedirectResponse

@@ -122,7 +122,7 @@ class PostController extends Controller
         if (! $hadBeenPublished) {
             $post->delete();
 
-            return back()->with('success', 'Post deleted.');
+            return redirect()->route('posts.index')->with('success', 'Post deleted.');
         }
 
         $post->targets
@@ -134,6 +134,6 @@ class PostController extends Controller
             'deleted_at' => now(),
         ])->save();
 
-        return back()->with('success', 'Post deleted from connected accounts where possible.');
+        return redirect()->route('posts.index')->with('success', 'Post deleted from connected accounts where possible.');
     }
 }

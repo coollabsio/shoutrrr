@@ -61,6 +61,21 @@ it('hard-deletes a scheduled post and dispatches no remote-delete job', function
     Queue::assertNothingPushed();
 });
 
+it('redirects to the posts index after deleting the post currently being viewed', function (): void {
+    Queue::fake();
+    [$user, $workspace] = deleteTestMember();
+    $post = Post::factory()->for($workspace)->create([
+        'author_id' => $user->id, 'status' => PostStatus::Draft->value,
+    ]);
+
+    $this->actingAs($user)
+        ->from(route('posts.show', $post))
+        ->delete(route('posts.destroy', $post))
+        ->assertRedirect(route('posts.index'));
+
+    expect(Post::query()->whereKey($post->id)->exists())->toBeFalse();
+});
+
 it('soft-deletes a published post and dispatches remote delete per target with a remote id', function (): void {
     Queue::fake();
     [$user, $workspace] = deleteTestMember();
