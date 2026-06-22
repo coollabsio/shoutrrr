@@ -60,14 +60,18 @@ export function AddTimePopover({
                     >
                         <SelectTrigger
                             size="sm"
-                            className="h-7 w-14 font-mono text-[12px] tabular-nums"
+                            className="h-7 w-16 px-2 font-mono text-[12px] tabular-nums"
                         >
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             {Array.from({ length: 12 }, (_, i) => i + 1).map(
                                 (h) => (
-                                    <SelectItem key={h} value={String(h)}>
+                                    <SelectItem
+                                        key={h}
+                                        value={String(h)}
+                                        className="font-mono tabular-nums"
+                                    >
                                         {String(h).padStart(2, '0')}
                                     </SelectItem>
                                 ),
@@ -81,13 +85,17 @@ export function AddTimePopover({
                     >
                         <SelectTrigger
                             size="sm"
-                            className="h-7 w-14 font-mono text-[12px] tabular-nums"
+                            className="h-7 w-16 px-2 font-mono text-[12px] tabular-nums"
                         >
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="max-h-60">
                             {MINUTES.map((m) => (
-                                <SelectItem key={m} value={String(m)}>
+                                <SelectItem
+                                    key={m}
+                                    value={String(m)}
+                                    className="font-mono tabular-nums"
+                                >
                                     {String(m).padStart(2, '0')}
                                 </SelectItem>
                             ))}
