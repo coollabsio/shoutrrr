@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "setup": "composer setup",
+    "setup": "cp $JEAN_ROOT_PATH/.env . && composer setup",
     "teardown": null,
     "run": "composer dev"
   },
