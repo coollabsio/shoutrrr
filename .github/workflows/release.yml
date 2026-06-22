@@ -1,0 +1,82 @@
+name: release
+
+# Build the production image and push it to GHCR when a GitHub Release is
+# published. workflow_dispatch is kept for manually testing the pipeline (it
+# pushes a sha-tagged image instead of a versioned/latest one).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# coollabsio/shoutrrr -> ghcr.io/coollabsio/shoutrrr
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # sign the build provenance attestation
+      attestations: write # write the attestation to GHCR
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up QEMU # emulation for the arm64 leg of the multi-arch build
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          # Tag releases with their semver; only move :latest for stable releases.
+          # A manual dispatch gets a sha tag so the push doesn't fail without a tag.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.release.prerelease == false }}
+            type=sha,enable=${{ github.event_name == 'workflow_dispatch' }}
+          flavor: |
+            latest=false
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Disable buildx's inline provenance so the pushed index holds just the
+          # two platform manifests; provenance is attached to the index digest by
+          # actions/attest-build-provenance below.
+          provenance: false
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

@@ -13,7 +13,10 @@ ARG GROUP_ID=9999
 # ============================================================
 # Stage: vendor — composer deps + Wayfinder generation
 # ============================================================
-FROM serversideup/php:${SERVERSIDEUP_PHP_VERSION} AS vendor
+# Pinned to the native build platform: its output (PHP vendor/ + generated
+# Wayfinder TS) is arch-independent, so we build it once instead of emulating it
+# per target arch. The arch-specific runtime image is the final `app` stage.
+FROM --platform=$BUILDPLATFORM serversideup/php:${SERVERSIDEUP_PHP_VERSION} AS vendor
 
 USER root
 ARG USER_ID
@@ -45,7 +48,11 @@ USER www-data
 # ============================================================
 # Stage: assets — frontend build (client + SSR bundles)
 # ============================================================
-FROM oven/bun:latest AS assets
+# Pinned to the native build platform: the built JS/CSS (public/build) and the
+# SSR bundle are arch-independent, and this avoids running Bun/Vite under QEMU
+# emulation. node_modules native deps here (oxide/lightningcss/rolldown) are
+# build-time only; the SSR runtime bundle loads pure-JS deps.
+FROM --platform=$BUILDPLATFORM oven/bun:latest AS assets
 
 WORKDIR /app
 COPY package.json bun.lock vite.config.ts ./
@@ -65,9 +72,17 @@ ENV SKIP_WAYFINDER_GENERATE=true
 RUN bun run build:ssr
 
 # ============================================================
-# Stage: standalone — production image, single entry point
+# Stage: app — production image (single container, supervised)
 # ============================================================
-FROM serversideup/php:${SERVERSIDEUP_PHP_VERSION} AS standalone
+# serversideup's frankenphp image ships NO s6-overlay (s6 only exists in the
+# fpm-nginx/fpm-apache variants), so in-container supervision uses supervisord.
+# supervisord runs the Octane web server plus the queue worker, scheduler, and
+# (when toggled) the Inertia SSR process — each toggleable via env vars so a
+# cloud deployment can disable the in-container worker/scheduler and run them as
+# separate services with their own entry point (override the image CMD).
+# The serversideup ENTRYPOINT still runs the /etc/entrypoint.d/* init scripts
+# before exec'ing this CMD.
+FROM serversideup/php:${SERVERSIDEUP_PHP_VERSION} AS app
 
 ARG USER_ID
 ARG GROUP_ID
@@ -90,11 +105,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         jq \
     && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://github.com/oven-sh/bun/releases/latest/download/bun-linux-x64.zip -o /tmp/bun.zip \
-    && unzip /tmp/bun.zip -d /tmp \
-    && mv /tmp/bun-linux-x64/bun /usr/local/bin/bun \
-    && chmod 755 /usr/local/bin/bun \
-    && rm -rf /tmp/bun.zip /tmp/bun-linux-x64
+# Install the Bun binary for the target architecture (amd64 -> x64, arm64 -> aarch64).
+# TARGETARCH is provided automatically by buildx.
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+        amd64) bun_arch=x64 ;; \
+        arm64) bun_arch=aarch64 ;; \
+        *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-${bun_arch}.zip" -o /tmp/bun.zip; \
+    unzip /tmp/bun.zip -d /tmp; \
+    mv "/tmp/bun-linux-${bun_arch}/bun" /usr/local/bin/bun; \
+    chmod 755 /usr/local/bin/bun; \
+    rm -rf /tmp/bun.zip "/tmp/bun-linux-${bun_arch}"
 
 # serversideup runtime configuration knobs
 ARG AUTORUN_ENABLED=true
@@ -117,9 +141,13 @@ ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
     SSL_MODE=${SSL_MODE} \
     OCTANE_SERVER=frankenphp
 
-# Entrypoint scripts (shared init runs first, then target-specific)
-COPY --chmod=755 docker/shared/entrypoint.d/ /etc/entrypoint.d/
-COPY --chmod=755 docker/standalone/entrypoint.d/ /etc/entrypoint.d/
+# Supervisor supervises the web/worker/scheduler/ssr processes
+RUN apt-get update && apt-get install -y --no-install-recommends supervisor \
+    && rm -rf /var/lib/apt/lists/*
+COPY docker/supervisord.conf /etc/supervisor/laravel.conf
+
+# Entrypoint init scripts (run by the serversideup ENTRYPOINT before the CMD)
+COPY --chmod=755 docker/entrypoint.d/ /etc/entrypoint.d/
 
 # Application source
 COPY --chown=www-data:www-data . .
@@ -138,22 +166,7 @@ RUN composer dump-autoload --no-plugins --no-scripts \
 
 USER www-data
 
-# Default entry point: Octane (FrankenPHP worker mode) on serversideup's 8080
-CMD ["php", "artisan", "octane:start", "--server=frankenphp", "--host=0.0.0.0", "--port=8080"]
-
-# ============================================================
-# Stage: all-in-one — supervisord runs web + worker + schedule + ssr
-# ============================================================
-# NOTE: serversideup's frankenphp image ships NO s6-overlay (s6 only exists in
-# the fpm-nginx/fpm-apache variations). So single-container supervision uses
-# supervisord, installed here. The serversideup ENTRYPOINT still runs the
-# /etc/entrypoint.d/* init scripts before exec'ing this CMD.
-FROM standalone AS all-in-one
-
-USER root
-RUN apt-get update && apt-get install -y --no-install-recommends supervisor \
-    && rm -rf /var/lib/apt/lists/*
-COPY docker/all-in-one/supervisord.conf /etc/supervisor/laravel.conf
-USER www-data
-
+# Default entry point: supervisord runs Octane + worker + scheduler (+ SSR when
+# toggled). Override the CMD to run a single process, e.g. for a cloud worker:
+#   php artisan queue:work --tries=3 --max-time=3600
 CMD ["supervisord", "-c", "/etc/supervisor/laravel.conf"]

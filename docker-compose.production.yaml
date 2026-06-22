@@ -1,0 +1,101 @@
+# Production deployment: pulls the prebuilt image from GHCR (no local build).
+# `pull_policy: always` makes `up` re-pull the latest published image. One
+# container whose supervisord runs the Octane web server plus the queue worker,
+# scheduler, and (when toggled) SSR.
+#
+#   docker compose -f docker-compose.production.yaml up -d
+#
+#   INERTIA_SSR_ENABLED=true ... up   -> also runs the in-container SSR process.
+#   QUEUE_WORKER_ENABLED=false /      -> disable the in-container worker/scheduler
+#   SCHEDULER_ENABLED=false           (e.g. when running them elsewhere in the cloud).
+#   Uncomment the postgres/redis services below to use them instead of SQLite.
+#
+# For Postgres set in your .env: DB_CONNECTION=pgsql, DB_HOST=postgres,
+# DB_DATABASE=laravel, DB_USERNAME=laravel, DB_PASSWORD=<your-password>.
+# For Redis set: CACHE_STORE=redis, QUEUE_CONNECTION=redis, REDIS_HOST=redis.
+name: shoutrrr
+
+x-environment: &app-env
+    APP_ENV: "${APP_ENV:-production}"
+    APP_KEY: "${APP_KEY}"
+    APP_DEBUG: "${APP_DEBUG:-false}"
+    APP_URL: "${APP_URL:-http://localhost:8080}"
+    OCTANE_SERVER: "frankenphp"
+    DB_CONNECTION: "${DB_CONNECTION:-sqlite}"
+    # NOTE: for Postgres set DB_CONNECTION=pgsql AND override DB_DATABASE=laravel (the
+    # sqlite-path default below is invalid for pgsql).
+    DB_DATABASE: "${DB_DATABASE:-/var/www/html/database/sqlite/database.sqlite}"
+    DB_HOST: "${DB_HOST:-postgres}"
+    DB_PORT: "${DB_PORT:-5432}"
+    DB_USERNAME: "${DB_USERNAME:-laravel}"
+    DB_PASSWORD: "${DB_PASSWORD}"
+    CACHE_STORE: "${CACHE_STORE:-database}"
+    QUEUE_CONNECTION: "${QUEUE_CONNECTION:-database}"
+    SESSION_DRIVER: "${SESSION_DRIVER:-database}"
+    REDIS_HOST: "${REDIS_HOST:-redis}"
+    REDIS_PORT: "${REDIS_PORT:-6379}"
+    # In-container supervised processes — set to false to run them separately.
+    QUEUE_WORKER_ENABLED: "${QUEUE_WORKER_ENABLED:-true}"
+    SCHEDULER_ENABLED: "${SCHEDULER_ENABLED:-true}"
+    # In-container SSR uses localhost; off by default.
+    INERTIA_SSR_ENABLED: "${INERTIA_SSR_ENABLED:-false}"
+    INERTIA_SSR_URL: "${INERTIA_SSR_URL:-http://127.0.0.1:13714}"
+
+services:
+    app:
+        image: "ghcr.io/coollabsio/shoutrrr:latest"
+        pull_policy: always
+        restart: unless-stopped
+        environment:
+            <<: *app-env
+        ports:
+            - "${APP_PORT:-8080}:8080"
+        volumes:
+            - storage:/var/www/html/storage
+            - sqlite:/var/www/html/database/sqlite
+        stop_grace_period: 60s
+        healthcheck:
+            test: ["CMD", "healthcheck-octane"]
+            start_period: 15s
+            interval: 30s
+            timeout: 10s
+            retries: 3
+
+    # Optional Postgres + Redis. The stack defaults to SQLite + the `database`
+    # cache/queue/session driver, so these stay commented out. To use them,
+    # uncomment the services (and their volumes) below and set in your .env:
+    #   DB_CONNECTION=pgsql, DB_HOST=postgres, DB_DATABASE=laravel,
+    #   DB_USERNAME=laravel, DB_PASSWORD=<your-password>,
+    #   CACHE_STORE=redis, QUEUE_CONNECTION=redis, REDIS_HOST=redis
+    #
+    # postgres:
+    #     image: "postgres:18-alpine"
+    #     restart: unless-stopped
+    #     environment:
+    #         POSTGRES_DB: "${POSTGRES_DB:-laravel}"
+    #         POSTGRES_USER: "${DB_USERNAME:-laravel}"
+    #         POSTGRES_PASSWORD: "${DB_PASSWORD}"
+    #     volumes:
+    #         - pgdata:/var/lib/postgresql/data
+    #     healthcheck:
+    #         test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-laravel} -d ${POSTGRES_DB:-laravel}"]
+    #         interval: 10s
+    #         timeout: 5s
+    #         retries: 5
+    #
+    # redis:
+    #     image: "redis:alpine"
+    #     restart: unless-stopped
+    #     volumes:
+    #         - redisdata:/data
+    #     healthcheck:
+    #         test: ["CMD", "redis-cli", "ping"]
+    #         interval: 10s
+    #         timeout: 5s
+    #         retries: 5
+
+volumes:
+    storage:
+    sqlite:
+    # pgdata:    # uncomment with the postgres service above
+    # redisdata: # uncomment with the redis service above

@@ -58,15 +58,17 @@ cd shoutrrr
 cp .env.example .env
 
 # Set an app key and your public URL in .env
-docker compose -f compose.all-in-one.yaml run --rm app php artisan key:generate --show   # copy into APP_KEY=
+docker compose -f docker-compose.production.yaml run --rm app php artisan key:generate --show   # copy into APP_KEY=
 #   APP_URL=https://social.example.com   (the address you'll visit)
 
-docker compose -f compose.all-in-one.yaml up -d --build
+docker compose -f docker-compose.production.yaml up -d
 ```
+
+The production Compose file pulls the prebuilt image from GHCR (`ghcr.io/coollabsio/shoutrrr:latest`); `docker-compose.development.yaml` builds the image locally from source instead.
 
 Open your `APP_URL`, register the first account, and you're in.
 
-The **all-in-one** image runs the web app, queue worker, and scheduler in one container — ideal for a single box. For larger setups, `compose.standalone.yaml` runs those as separate containers. Both default to SQLite; add `--profile postgres` and/or `--profile redis` (with the matching `.env` values) to scale out, or `INERTIA_SSR_ENABLED=true` for server-side rendering.
+The image runs the web app, queue worker, and scheduler in one container — ideal for a single box. It defaults to SQLite; uncomment the `postgres`/`redis` services in the Compose file (with the matching `.env` values) to scale out, or set `INERTIA_SSR_ENABLED=true` for server-side rendering. To run the worker/scheduler as separate services in the cloud, set `QUEUE_WORKER_ENABLED=false` / `SCHEDULER_ENABLED=false` and override the container command (e.g. `php artisan queue:work`).
 
 ### Deploy with Coolify
 
@@ -75,7 +77,7 @@ The **all-in-one** image runs the web app, queue worker, and scheduler in one co
 > An official Shoutrrr app is coming to the Coolify app directory soon for one-click deploys. Until then, use the manual from-source method below.
 
 1. In Coolify, click **+ New → Resource** and pick **Public Repository** (or Private, via the GitHub App). Enter `https://github.com/coollabsio/shoutrrr`.
-2. Set the **Build Pack** to **Docker Compose** and the **Docker Compose file** to `compose.all-in-one.yaml`.
+2. Set the **Build Pack** to **Docker Compose** and the **Docker Compose file** to `docker-compose.production.yaml`.
 3. Under the `app` service, add a **Domain** pointing at port **8080**. Coolify provisions the TLS certificate automatically.
 4. Add these **Environment Variables**:
 
