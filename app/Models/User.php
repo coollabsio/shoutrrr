@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Casts\NotificationPreferencesCast;
 use App\Enums\SocialProvider;
 use App\Support\Notifications\NotificationPreferences;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -39,7 +39,7 @@ use Override;
  */
 #[Fillable(['name', 'email', 'password', 'current_workspace_id', 'notification_preferences'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
-class User extends Authenticatable implements OAuthenticatable, PasskeyUser
+class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasUuids, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
@@ -82,6 +82,16 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
     public function socialAccounts(): HasMany
     {
         return $this->hasMany(SocialAccount::class);
+    }
+
+    #[Override]
+    public function hasVerifiedEmail(): bool
+    {
+        if (! config('auth.email_verification.enabled', false)) {
+            return true;
+        }
+
+        return ! is_null($this->email_verified_at);
     }
 
     public function hasPassword(): bool

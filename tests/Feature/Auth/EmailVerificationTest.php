@@ -8,6 +8,8 @@ use Laravel\Fortify\Features;
 
 beforeEach(function () {
     $this->skipUnlessFortifyHas(Features::emailVerification());
+
+    config(['auth.email_verification.enabled' => true]);
 });
 
 test('email verification screen can be rendered', function () {
@@ -98,4 +100,16 @@ test('already verified user visiting verification link is redirected without fir
 
     Event::assertNotDispatched(Verified::class);
     $this->assertTrue($user->fresh()->hasVerifiedEmail());
+});
+
+test('unverified users are treated as verified when mail delivery verification is disabled', function () {
+    config(['auth.email_verification.enabled' => false]);
+
+    $user = User::factory()->unverified()->create();
+
+    expect($user->hasVerifiedEmail())->toBeTrue();
+
+    $response = $this->actingAs($user)->get(route('dashboard'));
+
+    $response->assertOk();
 });

@@ -13,6 +13,8 @@ test('profile page is displayed', function () {
 });
 
 test('profile information can be updated', function () {
+    config(['auth.email_verification.enabled' => true]);
+
     $user = User::factory()->create();
 
     $response = $this
@@ -34,6 +36,8 @@ test('profile information can be updated', function () {
 });
 
 test('email verification status is unchanged when the email address is unchanged', function () {
+    config(['auth.email_verification.enabled' => true]);
+
     $user = User::factory()->create();
 
     $response = $this
@@ -44,6 +48,23 @@ test('email verification status is unchanged when the email address is unchanged
         ]);
 
     $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('profile.edit'));
+
+    $this->assertNotNull($user->refresh()->email_verified_at);
+});
+
+test('email verification status is unchanged when mail delivery verification is disabled', function () {
+    config(['auth.email_verification.enabled' => false]);
+
+    $user = User::factory()->create();
+
+    $this
+        ->actingAs($user)
+        ->patch(route('profile.update'), [
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+        ])
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('profile.edit'));
 

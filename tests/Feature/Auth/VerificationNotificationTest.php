@@ -7,6 +7,8 @@ use Laravel\Fortify\Features;
 
 beforeEach(function () {
     $this->skipUnlessFortifyHas(Features::emailVerification());
+
+    config(['auth.email_verification.enabled' => true]);
 });
 
 test('sends verification notification', function () {
@@ -25,6 +27,19 @@ test('does not send verification notification if email is verified', function ()
     Notification::fake();
 
     $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('verification.send'))
+        ->assertRedirect(route('dashboard', absolute: false));
+
+    Notification::assertNothingSent();
+});
+
+test('does not send verification notification when mail delivery verification is disabled', function () {
+    Notification::fake();
+    config(['auth.email_verification.enabled' => false]);
+
+    $user = User::factory()->unverified()->create();
 
     $this->actingAs($user)
         ->post(route('verification.send'))
