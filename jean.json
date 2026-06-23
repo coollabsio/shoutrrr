@@ -2,7 +2,7 @@
   "scripts": {
     "setup": "cp $JEAN_ROOT_PATH/.env .",
     "teardown": null,
-    "run": "spin up"
+    "run": "docker rm -f shoutrrr shoutrrr-vite shoutrrr-mail; spin up; spin down"
   },
   "ports": [
     {
