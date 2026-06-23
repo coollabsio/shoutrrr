@@ -64,22 +64,8 @@ Create a production env file:
 
 ```bash
 cat > .env.prod <<'EOF'
-APP_ENV=production
-APP_DEBUG=false
 APP_URL=http://localhost:8080
-APP_PORT=8080
 APP_KEY=base64:PASTE_GENERATED_KEY_HERE
-
-DB_CONNECTION=sqlite
-
-CACHE_STORE=database
-QUEUE_CONNECTION=database
-SESSION_DRIVER=database
-SESSION_SECURE_COOKIE=false
-
-QUEUE_WORKER_ENABLED=true
-SCHEDULER_ENABLED=true
-INERTIA_SSR_ENABLED=false
 EOF
 ```
 
@@ -104,7 +90,7 @@ docker run -d \
   ghcr.io/coollabsio/shoutrrr:latest
 ```
 
-Shoutrrr runs its startup tasks automatically, including database migrations. Open `http://localhost:8080`, register the first account, and you're in.
+Shoutrrr runs its startup tasks automatically, including database migrations. Open `http://localhost:8080`, register the first account, and you're in. The image defaults to production mode, SQLite, database-backed cache/queue/session storage, one in-container queue worker, one scheduler, and SSR disabled.
 
 For a real public deployment, set `APP_URL` to your HTTPS domain and set `SESSION_SECURE_COOKIE=true`. To test a specific release candidate, replace `latest` with a version tag such as `1.0.0-rc.2` in the commands above.
 

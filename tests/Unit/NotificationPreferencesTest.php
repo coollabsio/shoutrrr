@@ -3,7 +3,7 @@
 use App\Enums\NotificationType;
 use App\Support\Notifications\NotificationPreferences;
 
-test('defaults enable in-app notifications and only critical email notifications', function () {
+test('defaults enable in-app notifications and important email notifications', function () {
     $prefs = NotificationPreferences::defaults();
 
     foreach (NotificationType::cases() as $type) {
@@ -11,7 +11,7 @@ test('defaults enable in-app notifications and only critical email notifications
     }
 
     expect($prefs->allows(NotificationType::PostPublished, 'mail'))->toBeFalse();
-    expect($prefs->allows(NotificationType::WorkspaceInvite, 'mail'))->toBeFalse();
+    expect($prefs->allows(NotificationType::WorkspaceInvite, 'mail'))->toBeTrue();
     expect($prefs->allows(NotificationType::PublishFailed, 'mail'))->toBeTrue();
     expect($prefs->allows(NotificationType::AccountNeedsAttention, 'mail'))->toBeTrue();
 });

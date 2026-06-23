@@ -12,6 +12,8 @@ use Laravel\Passport\Client;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
 
+ini_set('memory_limit', '512M');
+
 /*
 |--------------------------------------------------------------------------
 | Test Case
