@@ -12,12 +12,12 @@
  * and an SVG grain overlay for texture. All motion honors
  * `prefers-reduced-motion` (see app.css), leaving a static textured wash.
  */
-export const dashboardAuraBackdropClassName =
-    'pointer-events-none absolute -top-16 left-1/2 -z-10 h-[624px] w-screen -translate-x-1/2 overflow-hidden [mask-image:radial-gradient(125%_82%_at_50%_0%,black_42%,transparent)]';
-
 export function DashboardAura() {
     return (
-        <div aria-hidden="true" className={dashboardAuraBackdropClassName}>
+        <div
+            aria-hidden="true"
+            className="pointer-events-none absolute top-0 left-1/2 -z-10 h-[560px] w-screen -translate-x-1/2 overflow-hidden [mask-image:radial-gradient(125%_82%_at_50%_0%,black_42%,transparent)]"
+        >
             {/* Rotating conic sheen. Centered with a negative margin (not
                 translate) so the spin transform doesn't fight the positioning. */}
             <div className="absolute -top-[42%] left-1/2 -ml-[380px] size-[760px] animate-aura-spin rounded-full opacity-70 blur-2xl [background:conic-gradient(from_0deg,transparent,color-mix(in_oklch,var(--primary)_28%,transparent),transparent_45%,color-mix(in_oklch,var(--primary)_16%,transparent),transparent_75%)]" />

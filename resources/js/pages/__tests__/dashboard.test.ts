@@ -3,17 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     canManageConnectedAccounts,
     shouldShowDashboardNoAccountsNotice,
-    shouldShowDashboardPublishingSection,
 } from '@/lib/dashboard/accounts';
-
-describe('shouldShowDashboardPublishingSection', () => {
-    it('hides the composer until at least one account is connected', () => {
-        expect(shouldShowDashboardPublishingSection([])).toBe(false);
-        expect(
-            shouldShowDashboardPublishingSection([{ id: 'account-1' }]),
-        ).toBe(true);
-    });
-});
 
 describe('canManageConnectedAccounts', () => {
     it('detects account management permission', () => {

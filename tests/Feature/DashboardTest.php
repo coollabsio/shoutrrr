@@ -2,6 +2,7 @@
 
 use App\Enums\WorkspaceRole;
 use App\Models\Post;
+use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
@@ -20,7 +21,7 @@ test('authenticated users can visit the dashboard', function () {
     $response->assertOk();
 });
 
-test('the dashboard does not include the posts feed', function () {
+test('the recent feed exposes full row data including targets', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
     WorkspaceMembership::factory()->create([
@@ -31,11 +32,15 @@ test('the dashboard does not include the posts feed', function () {
     $user->forceFill(['current_workspace_id' => $workspace->id])->save();
     Context::add('workspace_id', $workspace->id);
 
-    Post::factory()->for($workspace)->create(['author_id' => $user->id]);
+    $post = Post::factory()->for($workspace)->create(['author_id' => $user->id]);
+    PostTarget::factory()->for($post)->create();
 
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertInertia(fn ($page) => $page
             ->component('dashboard')
-            ->missing('posts'));
+            ->missing('posts')
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->has('posts.0.targets')
+                ->has('posts.0.published_at')));
 });

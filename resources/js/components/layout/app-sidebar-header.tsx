@@ -1,4 +1,3 @@
-import { usePage } from '@inertiajs/react';
 import { Search } from 'lucide-react';
 
 import { ThemeToggle } from '@/components/common/theme-toggle';
@@ -8,10 +7,7 @@ import { NotificationBell } from '@/components/notifications/notification-bell';
 import { Kbd } from '@/components/ui/kbd';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useNotificationsPoll } from '@/hooks/notifications/use-notifications-poll';
-import { cn } from '@/lib/utils';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
-
-import { appSidebarHeaderBackground } from './app-sidebar-header-background';
 
 export function AppSidebarHeader({
     breadcrumbs = [],
@@ -19,15 +15,9 @@ export function AppSidebarHeader({
     breadcrumbs?: BreadcrumbItemType[];
 }) {
     useNotificationsPoll();
-    const { component } = usePage();
 
     return (
-        <header
-            className={cn(
-                'sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b border-sidebar-border/50 px-6 backdrop-blur-md transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-4',
-                appSidebarHeaderBackground(component),
-            )}
-        >
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b border-sidebar-border/50 bg-background/85 px-6 backdrop-blur-md transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-4">
             <div className="flex items-center gap-2">
                 <SidebarTrigger className="-ml-1" />
                 <Breadcrumbs breadcrumbs={breadcrumbs} />
