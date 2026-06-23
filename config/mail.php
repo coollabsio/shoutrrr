@@ -115,4 +115,26 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Shoutrrr')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Markdown Mail Settings
+    |--------------------------------------------------------------------------
+    |
+    | These options control the theme and component paths used by Laravel's
+    | Markdown email renderer for mailables and notifications.
+    |
+    */
+
+    'markdown' => [
+        'theme' => env('MAIL_MARKDOWN_THEME', 'default'),
+
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+
+        'extensions' => [
+            // \League\CommonMark\Extension\Strikethrough\StrikethroughExtension::class,
+        ],
+    ],
+
 ];

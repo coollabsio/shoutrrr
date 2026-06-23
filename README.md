@@ -211,6 +211,25 @@ composer dev     # serve + queue + scheduler + logs + Vite, all at once
 
 > Uses [Bun](https://bun.sh) for the frontend (`bun install`, `bun run …`) — not npm/pnpm.
 
+To test SMTP locally during development, run [Mailpit](https://github.com/axllent/mailpit):
+
+```bash
+docker run --rm --name mail --pull always -p 1025:1025 -p 8025:8025 axllent/mailpit:latest
+```
+
+Then set these mail values in your `.env` file:
+
+```dotenv
+MAIL_MAILER=smtp
+MAIL_HOST=127.0.0.1
+MAIL_PORT=1025
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_SCHEME=null
+MAIL_FROM_ADDRESS="hello@shoutrrr.local"
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
 ### How publishing works
 
 A post is composed once, then split into one **target** per connected account. The scheduler dispatches due posts every minute; a queued `PublishPostTarget` job then publishes each target independently, with retries, idempotency, and a per-attempt audit trail. Hourly jobs refresh OAuth tokens before they expire, and (when enabled) metrics are captured every 15 minutes.

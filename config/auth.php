@@ -20,6 +20,10 @@ return [
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
 
+    'email_verification' => [
+        'enabled' => ! in_array(env('MAIL_MAILER', 'log'), ['array', 'log'], true),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Guards
