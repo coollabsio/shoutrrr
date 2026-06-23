@@ -1,18 +1,14 @@
-import { Deferred, Head, usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 
 import Composer from '@/components/compose/composer';
 import { DashboardAura } from '@/components/dashboard/dashboard-aura';
-import { RecentFeed } from '@/components/dashboard/recent-feed';
 import { GettingStartedCard } from '@/components/onboarding/getting-started-card';
 import { WelcomeModal } from '@/components/onboarding/welcome-modal';
-import type { PostRowData } from '@/components/posts/post-row';
-import { RecentFeedSkeleton } from '@/components/skeletons/recent-feed-skeleton';
 import { parseDestinationParam } from '@/lib/compose/composer-state';
 import { dashboard } from '@/routes';
 import type { OnboardingData } from '@/types';
 
 type Props = {
-    posts?: PostRowData[];
     onboarding: OnboardingData | null;
 };
 
@@ -37,7 +33,7 @@ function timeGreeting(): string {
     return 'Good evening';
 }
 
-export default function Dashboard({ posts, onboarding }: Props) {
+export default function Dashboard({ onboarding }: Props) {
     const page = usePage();
     const { auth, shell } = page.props;
     const firstName = (auth.user?.name ?? '').split(/\s+/)[0] || 'there';
@@ -80,23 +76,14 @@ export default function Dashboard({ posts, onboarding }: Props) {
                 {onboarding && <GettingStartedCard onboarding={onboarding} />}
 
                 {showPublishingSection && (
-                    <>
-                        <Composer
-                            post={null}
-                            accounts={shell.accounts}
-                            sets={shell.sets}
-                            limits={shell.limits}
-                            initialScheduleAt={initialScheduleAt}
-                            initialDestination={initialDestination}
-                        />
-
-                        <Deferred
-                            data="posts"
-                            fallback={<RecentFeedSkeleton />}
-                        >
-                            <RecentFeed posts={posts ?? []} />
-                        </Deferred>
-                    </>
+                    <Composer
+                        post={null}
+                        accounts={shell.accounts}
+                        sets={shell.sets}
+                        limits={shell.limits}
+                        initialScheduleAt={initialScheduleAt}
+                        initialDestination={initialDestination}
+                    />
                 )}
             </div>
         </>

@@ -7,8 +7,8 @@ type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>['variant']>;
 
 /**
  * Single source of truth for how a post status renders: its display label and
- * the semantic Badge variant. Consumed by the posts list, recent feed, post
- * preview, and calendar chips so status styling stays consistent everywhere.
+ * the semantic Badge variant. Consumed by the posts list, post preview, and
+ * calendar chips so status styling stays consistent everywhere.
  */
 export const postStatusMeta: Record<
     PostStatus,

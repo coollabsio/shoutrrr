@@ -3,8 +3,7 @@ import { cn } from '@/lib/utils';
 export type FilterTab = { value: string; label: string; count?: number };
 
 /**
- * Pill-style segmented tabs with optional counts. Shared by the posts list and
- * the dashboard recent feed so the two stay visually identical.
+ * Pill-style segmented tabs with optional counts.
  */
 export function FilterTabs({
     tabs,

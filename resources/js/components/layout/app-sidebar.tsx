@@ -2,7 +2,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     ChartColumn,
-    FileText,
+    Inbox,
     ListChecks,
     Pencil,
     Settings,
@@ -44,8 +44,10 @@ type NavItem = {
     icon: LucideIcon;
 };
 
+export const workspaceSettingsLabel = 'Workspace settings';
+
 const postsNavItems: NavItem[] = [
-    { title: 'Posts', href: postsRoute(), icon: FileText },
+    { title: 'Posts', href: postsRoute(), icon: Inbox },
     { title: 'Calendar', href: calendarRoute(), icon: CalendarDays },
     {
         title: 'Queue',
@@ -199,7 +201,7 @@ export function AppSidebar() {
                                 <SidebarMenuItem>
                                     <SidebarMenuButton
                                         asChild
-                                        tooltip="Settings"
+                                        tooltip={workspaceSettingsLabel}
                                         isActive={isCurrentUrl(
                                             WorkspaceSettingsController.showOverview(),
                                         )}
@@ -210,7 +212,9 @@ export function AppSidebar() {
                                             cacheFor={['30s', '1m']}
                                         >
                                             <Settings aria-hidden="true" />
-                                            <span>Settings</span>
+                                            <span>
+                                                {workspaceSettingsLabel}
+                                            </span>
                                         </Link>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>

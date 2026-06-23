@@ -8,7 +8,7 @@ use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use Illuminate\Support\Facades\Context;
 
-test('dashboard defers the posts feed', function () {
+test('dashboard omits the posts feed', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
     WorkspaceMembership::factory()->create([
@@ -22,8 +22,8 @@ test('dashboard defers the posts feed', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertInertia(fn ($page) => $page
-            ->missing('posts')               // deferred — absent on initial render
-            ->loadDeferredProps(fn ($reload) => $reload->has('posts'))
+            ->component('dashboard')
+            ->missing('posts')
         );
 });
 
