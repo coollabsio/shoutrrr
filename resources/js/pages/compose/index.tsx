@@ -15,6 +15,7 @@ export default function ComposePage({
     accounts,
     sets,
     limits,
+    savedMentions,
 }: ComposePageProps) {
     const { features } = usePage().props;
     const title = firstLineTitle(post?.base_text ?? '');
@@ -53,6 +54,7 @@ export default function ComposePage({
                     accounts={accounts}
                     sets={sets}
                     limits={limits}
+                    initialSavedMentions={savedMentions}
                 />
 
                 {features?.analytics &&

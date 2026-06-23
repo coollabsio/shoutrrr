@@ -5,6 +5,7 @@ use App\Models\Post;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Models\WorkspaceMention;
 use Illuminate\Support\Facades\Context;
 
 test('guests are redirected to the login page', function () {
@@ -38,4 +39,30 @@ test('the dashboard does not include the posts feed', function () {
         ->assertInertia(fn ($page) => $page
             ->component('dashboard')
             ->missing('posts'));
+});
+
+test('the dashboard includes saved workspace mentions for the composer', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Member,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    WorkspaceMention::factory()->create([
+        'workspace_id' => $workspace->id,
+        'name' => '@saved',
+        'handles' => ['x' => '@saved_x'],
+    ]);
+    WorkspaceMention::factory()->create(['name' => '@foreign']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn ($page) => $page
+            ->component('dashboard')
+            ->has('savedMentions', 1)
+            ->where('savedMentions.0.name', '@saved'));
 });

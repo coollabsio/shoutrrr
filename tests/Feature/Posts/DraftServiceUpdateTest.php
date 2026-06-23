@@ -143,3 +143,93 @@ test('a stale expected_updated_at throws', function () {
     expect(fn () => app(DraftService::class)->updateDraft($post, $stale))
         ->toThrow(PostStaleWriteException::class);
 });
+
+test('updateDraft resolves mention placeholders per target platform before splitting', function () {
+    [$user, $workspace, $accounts] = draftSetup(0);
+    $x = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::X->value,
+    ]);
+    $bluesky = ConnectedAccount::factory()->bluesky()->create([
+        'workspace_id' => $workspace->id,
+    ]);
+
+    $post = app(DraftService::class)->createDraft(
+        $workspace->id,
+        $user,
+        ['kind' => 'all'],
+        'Hello {{mention:guest}}',
+    );
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'Hello {{mention:guest}}',
+        'mentions' => [[
+            'id' => 'guest',
+            'label' => 'Guest',
+            'handles' => [
+                'x' => '@guest_x',
+                'bluesky' => '@guest.bsky.social',
+            ],
+        ]],
+        'destination' => ['kind' => 'accounts', 'ids' => [$x->id, $bluesky->id]],
+        'targets' => [
+            ['connected_account_id' => $x->id, 'auto_split' => true],
+            ['connected_account_id' => $bluesky->id, 'auto_split' => true],
+        ],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->base_text)->toBe('Hello {{mention:guest}}')
+        ->and($updated->mentions)->toBe([
+            [
+                'id' => 'guest',
+                'label' => 'Guest',
+                'handles' => [
+                    'x' => '@guest_x',
+                    'bluesky' => '@guest.bsky.social',
+                ],
+            ],
+        ])
+        ->and($updated->targets->firstWhere('connected_account_id', $x->id)->sections)->toBe(['Hello @guest_x'])
+        ->and($updated->targets->firstWhere('connected_account_id', $bluesky->id)->sections)->toBe(['Hello @guest.bsky.social']);
+});
+
+test('updateDraft resolves typed at-mention placeholders per target platform before splitting', function () {
+    [$user, $workspace, $accounts] = draftSetup(0);
+    $x = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::X->value,
+    ]);
+    $linkedin = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+    ]);
+
+    $post = app(DraftService::class)->createDraft(
+        $workspace->id,
+        $user,
+        ['kind' => 'all'],
+        'Hello @guest',
+    );
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'Hello @guest',
+        'mentions' => [[
+            'id' => 'guest',
+            'label' => '@guest',
+            'handles' => [
+                'x' => '@guest_x',
+                'linkedin' => 'Guest LinkedIn',
+            ],
+        ]],
+        'destination' => ['kind' => 'accounts', 'ids' => [$x->id, $linkedin->id]],
+        'targets' => [
+            ['connected_account_id' => $x->id, 'auto_split' => true],
+            ['connected_account_id' => $linkedin->id, 'auto_split' => true],
+        ],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->targets->firstWhere('connected_account_id', $x->id)->sections)->toBe(['Hello @guest_x'])
+        ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)->toBe(['Hello Guest LinkedIn']);
+});

@@ -7,6 +7,7 @@ use App\Models\Post;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Models\WorkspaceMention;
 use Inertia\Testing\AssertableInertia;
 
 function actingMember(int $accounts = 2): array
@@ -102,6 +103,28 @@ test('GET /posts/{post} renders the composer page for an existing post', functio
             ->component('compose/index')
             ->where('post.id', $post->id)
             ->where('post.base_text', 'hello'));
+});
+
+test('GET /posts/{post} includes saved workspace mentions', function () {
+    [$user, $workspace, $accounts] = actingMember(1);
+    $post = Post::factory()->create(['workspace_id' => $workspace->id]);
+    WorkspaceMention::factory()->create([
+        'workspace_id' => $workspace->id,
+        'name' => '@saved',
+        'handles' => ['x' => '@saved_x'],
+    ]);
+    WorkspaceMention::factory()->create([
+        'name' => '@foreign',
+        'handles' => ['x' => '@foreign_x'],
+    ]);
+
+    test()->get("/posts/{$post->id}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('compose/index')
+            ->has('savedMentions', 1)
+            ->where('savedMentions.0.name', '@saved')
+            ->where('savedMentions.0.handles.x', '@saved_x'));
 });
 
 test('the old /compose/{post} URL no longer exists', function () {

@@ -1,7 +1,23 @@
 import { EditorContent, useEditor } from '@tiptap/react';
 import { Split } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { PlatformGlyph } from '@/components/common/platform-glyph';
+import {
+    InputGroup,
+    InputGroupAddon,
+    InputGroupInput,
+} from '@/components/ui/input-group';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    mentionInputValue,
+    updateMentionHandle,
+    updateMentionName,
+} from '@/lib/compose/mentions';
 import {
     baseTextToDoc,
     docToBaseText,
@@ -9,7 +25,11 @@ import {
 } from '@/lib/compose/tiptap-doc';
 import { composerExtensions } from '@/lib/compose/tiptap/setup';
 import { cn } from '@/lib/utils';
-import type { PlatformName } from '@/types/compose';
+import type {
+    MentionPlaceholder,
+    PlatformName,
+    WorkspaceMention,
+} from '@/types/compose';
 
 type EditorBodyProps = {
     value: string;
@@ -30,6 +50,20 @@ type EditorBodyProps = {
      * Active platform + splitting config pushed into the section-markers plugin
      * whenever the active tab changes. Omit to leave markers at their defaults.
      */
+    mentions?: MentionPlaceholder[];
+    mentionPlatforms?: PlatformName[];
+    savedMentions?: WorkspaceMention[];
+    onMentionsChange?: (mentions: MentionPlaceholder[]) => void;
+    onMentionNameChange?: (
+        mention: MentionPlaceholder,
+        next: MentionPlaceholder,
+    ) => void;
+    onApplySavedMention?: (
+        mention: MentionPlaceholder,
+        saved: WorkspaceMention,
+    ) => void;
+    onSaveMention?: (mention: MentionPlaceholder) => Promise<void>;
+    saveMentionProcessing?: boolean;
     markerState?: {
         platform: PlatformName;
         autoSplit: boolean;
@@ -55,8 +89,19 @@ export default function EditorBody({
     activePlatformLabel,
     onResetOverride,
     markerState,
+    mentions = [],
+    mentionPlatforms = [],
+    savedMentions = [],
+    onMentionsChange,
+    onMentionNameChange,
+    onApplySavedMention,
+    onSaveMention,
+    saveMentionProcessing = false,
     editable = true,
 }: EditorBodyProps) {
+    const [activeMentionId, setActiveMentionId] = useState<string | null>(null);
+    const previousMentionCount = useRef(mentions.length);
+    const mentionNameInput = useRef<HTMLInputElement>(null);
     const editor = useEditor({
         extensions: composerExtensions({ placeholder }),
         content: baseTextToDoc(value) as object,
@@ -123,6 +168,80 @@ export default function EditorBody({
         });
     }, [editor, markerPlatform, markerAutoSplit, markerLimit, markerThreadMax]);
 
+    useEffect(() => {
+        const element = editor?.view.dom;
+        if (!element) {
+            return;
+        }
+
+        function onMentionClick(event: Event) {
+            const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+            if (id) {
+                setActiveMentionId(id);
+            }
+        }
+
+        element.addEventListener('composer:mention-click', onMentionClick);
+
+        return () =>
+            element.removeEventListener(
+                'composer:mention-click',
+                onMentionClick,
+            );
+    }, [editor]);
+
+    useEffect(() => {
+        if (mentions.length > previousMentionCount.current) {
+            setActiveMentionId(mentions[mentions.length - 1]?.id ?? null);
+        }
+        if (
+            activeMentionId &&
+            mentions.length > 0 &&
+            !mentions.some((mention) => mention.id === activeMentionId)
+        ) {
+            setActiveMentionId(mentions[mentions.length - 1]?.id ?? null);
+        }
+        previousMentionCount.current = mentions.length;
+    }, [activeMentionId, mentions]);
+
+    const activeMention =
+        mentions.find((mention) => mention.id === activeMentionId) ?? null;
+    const activePlatforms =
+        mentionPlatforms.length > 0
+            ? mentionPlatforms
+            : ([markerPlatform ?? 'x'] as PlatformName[]);
+
+    useEffect(() => {
+        if (!activeMentionId) {
+            return;
+        }
+
+        const frame = window.requestAnimationFrame(() => {
+            mentionNameInput.current?.focus();
+            mentionNameInput.current?.select();
+        });
+
+        return () => window.cancelAnimationFrame(frame);
+    }, [activeMentionId]);
+
+    function updateMention(
+        previous: MentionPlaceholder,
+        next: MentionPlaceholder,
+    ) {
+        if (previous.id !== next.id || previous.label !== next.label) {
+            onMentionNameChange?.(previous, next);
+            setActiveMentionId(next.id);
+
+            return;
+        }
+
+        onMentionsChange?.(
+            mentions.map((mention) =>
+                mention.id === next.id ? next : mention,
+            ),
+        );
+    }
+
     return (
         <div className="relative">
             {overrideBanner && (
@@ -161,6 +280,174 @@ export default function EditorBody({
                         </button>
                     )}
                 </output>
+            )}
+            {editable && onMentionsChange && activeMention && (
+                <div className="flex items-center border-b border-border/70 px-4 py-2 sm:px-[26px]">
+                    <Popover
+                        open
+                        onOpenChange={(open) => {
+                            if (!open) {
+                                setActiveMentionId(null);
+                            }
+                        }}
+                    >
+                        <PopoverTrigger asChild>
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary shadow-sm"
+                            >
+                                <PlatformGlyph
+                                    platform={activePlatforms[0] ?? 'x'}
+                                    size={12}
+                                    className="shrink-0"
+                                />
+                                {activeMention.label}
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                            align="start"
+                            className="w-80 gap-3 rounded-2xl p-3"
+                        >
+                            <div>
+                                <div className="text-xs font-medium text-muted-foreground">
+                                    Mention Name
+                                </div>
+                                <InputGroup className="mt-1.5 h-9 rounded-lg border-border bg-background">
+                                    <InputGroupAddon>@</InputGroupAddon>
+                                    <InputGroupInput
+                                        ref={mentionNameInput}
+                                        value={mentionInputValue(
+                                            activeMention.label,
+                                        )}
+                                        placeholder="name"
+                                        aria-label="Mention name shown in the post"
+                                        onChange={(event) =>
+                                            updateMention(
+                                                activeMention,
+                                                updateMentionName(
+                                                    activeMention,
+                                                    event.target.value,
+                                                ),
+                                            )
+                                        }
+                                    />
+                                </InputGroup>
+                            </div>
+                            <div className="text-xs font-medium text-muted-foreground">
+                                Platform handles
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                {activePlatforms.map((platform, index) => (
+                                    <label
+                                        key={platform}
+                                        className="flex flex-col gap-1.5 text-xs"
+                                    >
+                                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                            <PlatformGlyph
+                                                platform={platform}
+                                                size={14}
+                                                className="text-foreground"
+                                            />
+                                            <span className="capitalize">
+                                                {platform}
+                                            </span>
+                                        </span>
+                                        <InputGroup className="h-9 rounded-lg border-border bg-background">
+                                            <InputGroupAddon>@</InputGroupAddon>
+                                            <InputGroupInput
+                                                value={mentionInputValue(
+                                                    activeMention.handles[
+                                                        platform
+                                                    ] ?? '',
+                                                )}
+                                                placeholder="handle"
+                                                aria-label={`${platform} handle for ${activeMention.label}`}
+                                                onChange={(event) =>
+                                                    updateMention(
+                                                        activeMention,
+                                                        updateMentionHandle(
+                                                            activeMention,
+                                                            platform,
+                                                            event.target.value,
+                                                        ),
+                                                    )
+                                                }
+                                                autoFocus={index === 0}
+                                            />
+                                        </InputGroup>
+                                    </label>
+                                ))}
+                            </div>
+                            {onSaveMention && (
+                                <button
+                                    type="button"
+                                    disabled={saveMentionProcessing}
+                                    onClick={() =>
+                                        void onSaveMention(activeMention)
+                                    }
+                                    className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {saveMentionProcessing
+                                        ? 'Saving…'
+                                        : 'Save to workspace'}
+                                </button>
+                            )}
+                            {savedMentions.length > 0 && (
+                                <div className="flex flex-col gap-2 border-t border-border/70 pt-3">
+                                    <div className="text-xs font-medium text-muted-foreground">
+                                        Saved mentions
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        {savedMentions.map((saved) => (
+                                            <button
+                                                key={saved.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    onApplySavedMention?.(
+                                                        activeMention,
+                                                        saved,
+                                                    );
+                                                    setActiveMentionId(
+                                                        saved.name
+                                                            .replace(/^@/, '')
+                                                            .toLowerCase()
+                                                            .replace(
+                                                                /[^a-z0-9_-]+/g,
+                                                                '-',
+                                                            ),
+                                                    );
+                                                }}
+                                                className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted"
+                                            >
+                                                <span className="font-medium text-foreground">
+                                                    {saved.name}
+                                                </span>
+                                                <span className="flex items-center gap-1 text-muted-foreground">
+                                                    {activePlatforms
+                                                        .filter(
+                                                            (platform) =>
+                                                                saved.handles[
+                                                                    platform
+                                                                ],
+                                                        )
+                                                        .map((platform) => (
+                                                            <PlatformGlyph
+                                                                key={platform}
+                                                                platform={
+                                                                    platform
+                                                                }
+                                                                size={13}
+                                                            />
+                                                        ))}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </PopoverContent>
+                    </Popover>
+                </div>
             )}
             <div className="px-4 pt-[22px] pb-[18px] sm:px-[26px]">
                 <EditorContent

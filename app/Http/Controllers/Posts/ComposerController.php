@@ -7,9 +7,11 @@ namespace App\Http\Controllers\Posts;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\WorkspaceMentionController;
 use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
+use App\Models\WorkspaceMention;
 use App\Support\MetricsPresenter;
 use App\Support\PostView;
 use Illuminate\Http\Request;
@@ -50,6 +52,12 @@ class ComposerController extends Controller
             'accounts' => $accounts,
             'sets' => $sets,
             'limits' => Platform::allLimits(),
+            'savedMentions' => WorkspaceMention::withoutGlobalScopes()
+                ->where('workspace_id', $request->user()->current_workspace_id)
+                ->orderBy('name')
+                ->get()
+                ->map(fn (WorkspaceMention $mention): array => WorkspaceMentionController::view($mention))
+                ->all(),
             'stats' => config('metrics.enabled')
                 ? Inertia::defer(fn (): ?array => $post->targets()
                     ->where('status', PostTargetStatus::Published->value)

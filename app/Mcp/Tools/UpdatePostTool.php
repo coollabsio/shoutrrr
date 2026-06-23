@@ -29,6 +29,13 @@ class UpdatePostTool extends WorkspaceTool
         $validated = $request->validate([
             'post_id' => ['required', 'string'],
             'base_text' => ['present', 'nullable', 'string'],
+            'mentions' => ['array'],
+            'mentions.*.id' => ['required', 'string'],
+            'mentions.*.label' => ['required', 'string'],
+            'mentions.*.handles' => ['array'],
+            'mentions.*.handles.x' => ['nullable', 'string'],
+            'mentions.*.handles.bluesky' => ['nullable', 'string'],
+            'mentions.*.handles.linkedin' => ['nullable', 'string'],
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
@@ -65,7 +72,8 @@ class UpdatePostTool extends WorkspaceTool
     {
         return [
             'post_id' => $schema->string()->description('Id of the draft to update.')->required(),
-            'base_text' => $schema->string()->description('New post body text.'),
+            'base_text' => $schema->string()->description('New post body text. Use {{mention:id}} tokens for platform-specific mentions.'),
+            'mentions' => $schema->array()->description('Mention placeholders with per-platform handles.'),
             'destination' => $schema->object([
                 'kind' => $schema->string()->enum(['all', 'set', 'account'])->required(),
                 'id' => $schema->string(),

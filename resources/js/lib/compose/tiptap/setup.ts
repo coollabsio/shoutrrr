@@ -5,6 +5,7 @@ import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { Placeholder, UndoRedo } from '@tiptap/extensions';
 
+import { MentionPlaceholders } from './mention-placeholders';
 import { SectionBreak } from './section-break';
 import { SectionMarkers } from './section-markers';
 
@@ -31,6 +32,7 @@ export function composerExtensions(
             linkOnPaste: true,
         }),
         SectionBreak,
+        MentionPlaceholders,
         SectionMarkers,
     ];
 }

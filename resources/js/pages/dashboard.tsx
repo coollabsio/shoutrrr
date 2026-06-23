@@ -20,9 +20,11 @@ import {
 import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
 import type { OnboardingData } from '@/types';
+import type { WorkspaceMention } from '@/types/compose';
 
 type Props = {
     onboarding: OnboardingData | null;
+    savedMentions: WorkspaceMention[];
 };
 
 function timeGreeting(): string {
@@ -63,7 +65,7 @@ function NoAccountsNotice() {
     );
 }
 
-export default function Dashboard({ onboarding }: Props) {
+export default function Dashboard({ onboarding, savedMentions }: Props) {
     const page = usePage();
     const { auth, shell, workspaces } = page.props;
     const firstName = (auth.user?.name ?? '').split(/\s+/)[0] || 'there';
@@ -119,6 +121,7 @@ export default function Dashboard({ onboarding }: Props) {
                         limits={shell.limits}
                         initialScheduleAt={initialScheduleAt}
                         initialDestination={initialDestination}
+                        initialSavedMentions={savedMentions}
                         autoFocusEditor
                     />
                 )}

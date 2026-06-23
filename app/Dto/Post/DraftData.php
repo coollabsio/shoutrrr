@@ -14,6 +14,7 @@ final class DraftData
      *
      * @param  list<string>  $destinationIds
      * @param  list<string>  $mediaIds
+     * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
      * @param  array<string, array{auto_split?: bool, content_override?: array{text?: string|null, media_ids?: list<string>}|null}>  $targetsByAccount
      */
     public function __construct(
@@ -22,6 +23,7 @@ final class DraftData
         public readonly ?string $destinationId,
         public readonly array $destinationIds,
         public readonly array $mediaIds,
+        public readonly array $mentions,
         public readonly array $targetsByAccount,
         public readonly ?string $expectedUpdatedAt,
     ) {}
@@ -51,6 +53,7 @@ final class DraftData
             destinationId: $destination['id'] ?? null,
             destinationIds: array_values($destination['ids'] ?? []),
             mediaIds: array_values($payload['media_ids'] ?? []),
+            mentions: array_values($payload['mentions'] ?? []),
             targetsByAccount: $targetsByAccount,
             expectedUpdatedAt: $payload['expected_updated_at'] ?? null,
         );
