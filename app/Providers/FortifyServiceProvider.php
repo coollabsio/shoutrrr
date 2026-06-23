@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Enums\SocialProvider;
+use App\Models\WorkspaceInvitation;
 use App\Settings\InstanceSettings;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -82,14 +83,22 @@ class FortifyServiceProvider extends ServiceProvider
         ]));
 
         Fortify::registerView(function (Request $request) {
-            if (! app(InstanceSettings::class)->registrationsAllowed($request->query('invitation'))) {
+            $invitationToken = $request->query('invitation');
+            $invitationToken = is_string($invitationToken) ? $invitationToken : null;
+
+            if (! app(InstanceSettings::class)->registrationsAllowed($invitationToken)) {
                 return redirect()->route('login');
             }
+
+            $invitation = $invitationToken !== null
+                ? WorkspaceInvitation::findByToken($invitationToken)
+                : null;
 
             return Inertia::render('auth/register', [
                 'passwordRules' => Password::defaults()->toPasswordRulesString(),
                 'providers' => SocialProvider::enabledProvidersWithLabels(),
-                'invitation' => $request->query('invitation'),
+                'invitation' => $invitationToken,
+                'invitationEmail' => $invitation?->isValid() ? $invitation->email : null,
             ]);
         });
 

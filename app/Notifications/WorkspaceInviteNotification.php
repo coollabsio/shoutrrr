@@ -25,6 +25,17 @@ class WorkspaceInviteNotification extends Notification implements ShouldQueue
     }
 
     /**
+     * @return array<string, string>
+     */
+    public function viaConnections(): array
+    {
+        return [
+            'database' => 'sync',
+            'mail' => 'sync',
+        ];
+    }
+
+    /**
      * @return array<int, string>
      */
     public function via(object $notifiable): array
@@ -37,12 +48,14 @@ class WorkspaceInviteNotification extends Notification implements ShouldQueue
      */
     public function toArray(object $notifiable): array
     {
-        return $this->databasePayload($this->invitation->workspace_id, [
+        return $this->databasePayload(null, [
             'event' => NotificationType::WorkspaceInvite->value,
             'title' => 'Workspace invitation',
             'body' => $this->invitation->workspace->name.' invited you to collaborate.',
             'href' => route('workspace.invitation', $this->plainToken),
             'icon' => 'users',
+            'invited_workspace_id' => $this->invitation->workspace_id,
+            'invitation_id' => $this->invitation->id,
         ]);
     }
 

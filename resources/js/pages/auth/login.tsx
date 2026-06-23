@@ -131,7 +131,14 @@ export default function Login({
                         {canRegister ? (
                             <div className="text-center text-sm text-muted-foreground">
                                 Don't have an account?{' '}
-                                <TextLink href={register()} tabIndex={5}>
+                                <TextLink
+                                    href={register(
+                                        invitation
+                                            ? { query: { invitation } }
+                                            : undefined,
+                                    )}
+                                    tabIndex={5}
+                                >
                                     Sign up
                                 </TextLink>
                             </div>

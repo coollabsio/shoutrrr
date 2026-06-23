@@ -10,6 +10,7 @@ use App\Notifications\PostPublishedNotification;
 use App\Notifications\PublishFailedNotification;
 use App\Notifications\WorkspaceInviteNotification;
 use App\Support\Notifications\NotificationPreferences;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\Notification;
 
@@ -54,6 +55,19 @@ test('post published respects disabled preferences', function () {
     Notification::assertSentTo($user, PostPublishedNotification::class, function ($notification) use ($user) {
         return $notification->via($user) === ['database'];
     });
+});
+
+test('workspace invite to an existing user resolves to in-app and mail channels by default', function () {
+    $user = User::factory()->create();
+    $invitation = WorkspaceInvitation::factory()->create();
+    $notification = new WorkspaceInviteNotification($invitation, 'plain-token');
+
+    expect($notification)->toBeInstanceOf(ShouldQueue::class)
+        ->and($notification->via($user))->toBe(['database', 'mail'])
+        ->and($notification->viaConnections())->toBe([
+            'database' => 'sync',
+            'mail' => 'sync',
+        ]);
 });
 
 test('workspace invite to an unregistered email resolves to the mail channel', function () {

@@ -36,6 +36,26 @@ test('shared notifications prop only includes current-workspace notifications', 
         );
 });
 
+test('shared notifications prop includes global notifications in the current workspace feed', function () {
+    $user = User::factory()->create();
+    $ws = Workspace::factory()->create();
+    $user->forceFill(['current_workspace_id' => $ws->id])->save();
+
+    $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => PostPublishedNotification::class,
+        'data' => ['event' => 'workspace_invite', 'title' => 'Workspace invitation', 'body' => '', 'href' => null, 'icon' => 'users', 'workspace_id' => null],
+        'read_at' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn ($page) => $page
+            ->where('notifications.unreadCount', 1)
+            ->where('notifications.items.0.title', 'Workspace invitation')
+        );
+});
+
 test('notifications are ordered by id desc when created_at is identical', function () {
     $user = User::factory()->create();
     $ws = Workspace::factory()->create();

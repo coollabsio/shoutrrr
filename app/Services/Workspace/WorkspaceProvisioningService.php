@@ -15,20 +15,16 @@ class WorkspaceProvisioningService
     public function __construct(private readonly WorkspaceInvitationService $invitations) {}
 
     /**
-     * Provision workspace access for a freshly created user: accept a pending
-     * invitation when a token is present, then guarantee the user lands with at
-     * least one workspace. If the invitation was invalid or expired (acceptByToken
-     * fails silently by design), they still get a default workspace rather than
-     * being stranded with none.
+     * Provision workspace access for a freshly created user: always create their
+     * personal workspace, then accept a pending invitation when a token is present.
+     * Accepting last keeps the invited workspace as the current workspace.
      */
     public function provisionForNewUser(User $user, ?string $invitationToken): void
     {
+        $this->createDefaultWorkspace($user);
+
         if ($invitationToken) {
             $this->invitations->acceptByToken($invitationToken, $user);
-        }
-
-        if (! $user->workspaceMemberships()->exists()) {
-            $this->createDefaultWorkspace($user);
         }
     }
 

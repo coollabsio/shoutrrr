@@ -17,12 +17,14 @@ type Props = {
     passwordRules: string;
     providers?: SocialProviderOption[];
     invitation?: string;
+    invitationEmail?: string | null;
 };
 
 export default function Register({
     passwordRules,
     providers = [],
     invitation,
+    invitationEmail,
 }: Props) {
     return (
         <>
@@ -39,7 +41,9 @@ export default function Register({
             )}
 
             <Form
-                {...store.form()}
+                {...store.form(
+                    invitation ? { query: { invitation } } : undefined,
+                )}
                 resetOnSuccess={['password', 'password_confirmation']}
                 disableWhileProcessing
                 className="flex flex-col gap-6"
@@ -75,6 +79,8 @@ export default function Register({
                                     autoComplete="email"
                                     name="email"
                                     placeholder="email@example.com"
+                                    defaultValue={invitationEmail ?? undefined}
+                                    readOnly={Boolean(invitationEmail)}
                                 />
                                 <InputError message={errors.email} />
                             </div>
@@ -124,7 +130,14 @@ export default function Register({
 
                         <div className="text-center text-sm text-muted-foreground">
                             Already have an account?{' '}
-                            <TextLink href={login()} tabIndex={6}>
+                            <TextLink
+                                href={login(
+                                    invitation
+                                        ? { query: { invitation } }
+                                        : undefined,
+                                )}
+                                tabIndex={6}
+                            >
                                 Log in
                             </TextLink>
                         </div>

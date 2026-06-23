@@ -6,7 +6,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Str;
 
-function makeNotification(User $user, string $workspaceId, ?string $readAt = null): string
+function makeNotification(User $user, ?string $workspaceId, ?string $readAt = null): string
 {
     $id = (string) Str::uuid();
     $user->notifications()->create([
@@ -41,12 +41,13 @@ test('a user cannot mark another users notification read', function () {
     expect($owner->notifications()->find($id)->read_at)->toBeNull();
 });
 
-test('mark-all-read clears unread for the current workspace only', function () {
+test('mark-all-read clears unread for the current workspace and global notifications only', function () {
     $user = User::factory()->create();
     $wsA = Workspace::factory()->create();
     $wsB = Workspace::factory()->create();
     $user->forceFill(['current_workspace_id' => $wsA->id])->save();
     makeNotification($user, $wsA->id);
+    makeNotification($user, null);
     $bId = makeNotification($user, $wsB->id);
 
     $this->actingAs($user)->post(route('notifications.read-all'))->assertRedirect();

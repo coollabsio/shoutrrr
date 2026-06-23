@@ -49,9 +49,7 @@ class WorkspaceInvitationService
                 'role' => $invitation->role,
             ]);
 
-            if (! $user->current_workspace_id) {
-                $user->forceFill(['current_workspace_id' => $invitation->workspace_id]);
-            }
+            $user->forceFill(['current_workspace_id' => $invitation->workspace_id]);
 
             if (! $user->email_verified_at) {
                 $user->forceFill(['email_verified_at' => now()]);

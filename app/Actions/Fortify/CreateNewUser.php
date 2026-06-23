@@ -5,6 +5,7 @@ namespace App\Actions\Fortify;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
 use App\Models\User;
+use App\Models\WorkspaceInvitation;
 use App\Services\Workspace\WorkspaceProvisioningService;
 use App\Settings\InstanceSettings;
 use Illuminate\Support\Facades\DB;
@@ -26,10 +27,21 @@ class CreateNewUser implements CreatesNewUsers
      */
     public function create(array $input): User
     {
-        if (! $this->settings->registrationsAllowed(request()->input('invitation'))) {
+        $invitationToken = request()->input('invitation');
+        $invitationToken = is_string($invitationToken) ? $invitationToken : null;
+
+        if (! $this->settings->registrationsAllowed($invitationToken)) {
             throw ValidationException::withMessages([
                 'email' => 'Registration is disabled for this instance.',
             ]);
+        }
+
+        if ($invitationToken !== null) {
+            $invitation = WorkspaceInvitation::findByToken($invitationToken);
+
+            if ($invitation?->isValid()) {
+                $input['email'] = $invitation->email;
+            }
         }
 
         Validator::make($input, [

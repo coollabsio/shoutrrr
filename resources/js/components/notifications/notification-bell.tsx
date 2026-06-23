@@ -15,6 +15,7 @@ import {
     readAll as markAllRead,
 } from '@/routes/notifications';
 import type {
+    NotificationAction,
     NotificationItem,
     NotificationsData,
 } from '@/types/notifications';
@@ -109,6 +110,23 @@ export function NotificationBell() {
         );
     }
 
+    function handleAction(
+        notification: NotificationItem,
+        action: NotificationAction,
+    ) {
+        if (!notification.read) {
+            setUnread((count) => Math.max(0, count - 1));
+        }
+
+        setItems((prev) => prev.filter((n) => n.id !== notification.id));
+
+        router.visit(action.href, {
+            method: action.method,
+            preserveScroll: true,
+            preserveState: action.method === 'delete',
+        });
+    }
+
     return (
         <Popover>
             <PopoverTrigger asChild>
@@ -166,6 +184,7 @@ export function NotificationBell() {
                                     key={notification.id}
                                     notification={notification}
                                     onRead={markOneRead}
+                                    onAction={handleAction}
                                 />
                             ))}
                             {processing && (
@@ -184,10 +203,17 @@ export function NotificationBell() {
 function NotificationRow({
     notification,
     onRead,
+    onAction,
 }: {
     notification: NotificationItem;
     onRead: (id: string) => void;
+    onAction: (
+        notification: NotificationItem,
+        action: NotificationAction,
+    ) => void;
 }) {
+    const hasActions =
+        notification.actions !== undefined && notification.actions.length > 0;
     const body = (
         <div className="flex gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/50">
             <span
@@ -209,11 +235,29 @@ function NotificationRow({
                 <p className="mt-1 text-[11px] text-muted-foreground/70">
                     {notification.timeLabel}
                 </p>
+                {hasActions && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        {notification.actions?.map((action) => (
+                            <Button
+                                key={action.key}
+                                type="button"
+                                size="xs"
+                                variant={buttonVariant(action.variant)}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onAction(notification, action);
+                                }}
+                            >
+                                {action.label}
+                            </Button>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
 
-    if (notification.href) {
+    if (notification.href && !hasActions) {
         return (
             <Link
                 href={notification.href}
@@ -243,4 +287,14 @@ function NotificationRow({
             {body}
         </div>
     );
+}
+
+function buttonVariant(
+    variant: NotificationAction['variant'],
+): React.ComponentProps<typeof Button>['variant'] {
+    if (variant === 'primary') {
+        return 'default';
+    }
+
+    return variant;
 }

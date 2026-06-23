@@ -47,9 +47,14 @@ class NotificationController extends Controller
      */
     public function markAllRead(Request $request): RedirectResponse
     {
+        $workspaceId = $request->user()->current_workspace_id;
+
         $request->user()
             ->unreadNotifications()
-            ->where('data->workspace_id', $request->user()->current_workspace_id)
+            ->where(function ($query) use ($workspaceId): void {
+                $query->where('data->workspace_id', $workspaceId)
+                    ->orWhereNull('data->workspace_id');
+            })
             ->update(['read_at' => now()]);
 
         return back();

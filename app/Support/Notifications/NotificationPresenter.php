@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Notifications;
 
+use App\Enums\NotificationType;
 use App\Models\User;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Pagination\Cursor;
@@ -31,7 +32,10 @@ class NotificationPresenter
             return ['items' => [], 'unreadCount' => 0, 'nextCursor' => null];
         }
 
-        $base = $user->notifications()->where('data->workspace_id', $workspaceId);
+        $base = $user->notifications()->where(function ($query) use ($workspaceId): void {
+            $query->where('data->workspace_id', $workspaceId)
+                ->orWhereNull('data->workspace_id');
+        });
 
         $paginator = (clone $base)
             ->orderByDesc('created_at')
@@ -62,7 +66,7 @@ class NotificationPresenter
         /** @var array<string, mixed> $data */
         $data = $notification->data;
 
-        return [
+        $item = [
             'id' => $notification->id,
             'event' => $data['event'] ?? '',
             'title' => $data['title'] ?? '',
@@ -71,6 +75,44 @@ class NotificationPresenter
             'icon' => $data['icon'] ?? 'bell',
             'read' => $notification->read_at !== null,
             'timeLabel' => $notification->created_at?->diffForHumans() ?? '',
+        ];
+
+        $actions = self::actions($data);
+
+        return $actions === [] ? $item : [...$item, 'actions' => $actions];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, array{key: string, label: string, variant: string, method: string, href: string}>
+     */
+    private static function actions(array $data): array
+    {
+        if (($data['event'] ?? null) !== NotificationType::WorkspaceInvite->value) {
+            return [];
+        }
+
+        if (! is_string($data['invitation_id'] ?? null)) {
+            return [];
+        }
+
+        $invitationId = $data['invitation_id'];
+
+        return [
+            [
+                'key' => 'accept',
+                'label' => 'Accept',
+                'variant' => 'primary',
+                'method' => 'post',
+                'href' => route('workspace.invitations.accept', $invitationId, absolute: false),
+            ],
+            [
+                'key' => 'deny',
+                'label' => 'Deny',
+                'variant' => 'secondary',
+                'method' => 'delete',
+                'href' => route('workspace.invitations.deny', $invitationId, absolute: false),
+            ],
         ];
     }
 }

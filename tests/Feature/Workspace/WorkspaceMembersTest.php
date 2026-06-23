@@ -84,6 +84,26 @@ test('inviting an existing user sends an in-app notification to that user', func
     Notification::assertSentTo($existingUser, WorkspaceInviteNotification::class);
 });
 
+test('inviting an existing user stores the in-app notification immediately with the database queue default', function () {
+    config(['queue.default' => 'database', 'mail.default' => 'array']);
+    [$workspace, $owner] = ownerInWorkspace();
+    $existingUser = User::factory()->create(['email' => 'stored@example.com']);
+
+    $this->actingAs($owner)->post(route('settings.workspace.invite'), [
+        'email' => 'stored@example.com',
+        'role' => 'member',
+    ])->assertRedirect();
+
+    $notification = $existingUser->notifications()->first();
+
+    expect($existingUser->notifications()->count())->toBe(1)
+        ->and($notification?->data['title'])->toBe('Workspace invitation')
+        ->and($notification?->data['workspace_id'])->toBeNull()
+        ->and($notification?->data['invited_workspace_id'])->toBe($workspace->id);
+
+    $this->assertDatabaseCount('jobs', 0);
+});
+
 test('inviting an unknown email sends an on-demand mail notification without a model notification', function () {
     Notification::fake();
     [$workspace, $owner] = ownerInWorkspace();

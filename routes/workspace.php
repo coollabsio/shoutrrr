@@ -4,11 +4,19 @@ declare(strict_types=1);
 
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\WorkspaceController;
+use App\Http\Controllers\WorkspaceInvitationResponseController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('invitation/{token}', [WorkspaceController::class, 'showInvitation'])
     ->middleware('throttle:5,1')
     ->name('workspace.invitation');
+
+Route::middleware('auth')->group(function (): void {
+    Route::post('workspace-invitations/{invitation}/accept', [WorkspaceInvitationResponseController::class, 'accept'])
+        ->name('workspace.invitations.accept');
+    Route::delete('workspace-invitations/{invitation}', [WorkspaceInvitationResponseController::class, 'deny'])
+        ->name('workspace.invitations.deny');
+});
 
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('workspaces', [WorkspaceController::class, 'store'])->name('workspaces.store');

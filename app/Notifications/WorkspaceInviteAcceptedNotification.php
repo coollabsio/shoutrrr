@@ -25,6 +25,17 @@ class WorkspaceInviteAcceptedNotification extends Notification implements Should
     }
 
     /**
+     * @return array<string, string>
+     */
+    public function viaConnections(): array
+    {
+        return [
+            'database' => 'sync',
+            'mail' => 'sync',
+        ];
+    }
+
+    /**
      * In-app only — no mail for accepted events.
      *
      * @return array<int, string>

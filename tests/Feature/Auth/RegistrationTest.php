@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Models\WorkspaceInvitation;
 use App\Settings\InstanceSettings;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Fortify\Features;
@@ -13,6 +14,20 @@ test('registration screen can be rendered', function () {
     $response = $this->get(route('register'));
 
     $response->assertOk();
+});
+
+test('registration screen preloads the email for a valid invitation', function () {
+    [$plain, $hash] = WorkspaceInvitation::generateToken();
+    WorkspaceInvitation::factory()->create([
+        'email' => 'invited@example.com',
+        'token' => $hash,
+    ]);
+
+    $this->get(route('register', ['invitation' => $plain]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('auth/register')
+            ->where('invitation', $plain)
+            ->where('invitationEmail', 'invited@example.com'));
 });
 
 test('new users can register', function () {

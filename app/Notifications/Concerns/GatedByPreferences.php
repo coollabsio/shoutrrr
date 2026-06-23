@@ -22,10 +22,10 @@ trait GatedByPreferences
     }
 
     /**
-     * @param  array{event: string, title: string, body: string, href: ?string, icon: string}  $extra
+     * @param  array<string, mixed>  $extra
      * @return array<string, mixed>
      */
-    protected function databasePayload(string $workspaceId, array $extra): array
+    protected function databasePayload(?string $workspaceId, array $extra): array
     {
         return [...$extra, 'workspace_id' => $workspaceId];
     }

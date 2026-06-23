@@ -18,7 +18,7 @@ enum NotificationType: string
     public function inAppAlwaysOn(): bool
     {
         return match ($this) {
-            self::PublishFailed, self::AccountNeedsAttention => true,
+            self::PublishFailed, self::WorkspaceInvite, self::AccountNeedsAttention => true,
             default => false,
         };
     }
@@ -26,7 +26,7 @@ enum NotificationType: string
     public function emailOnByDefault(): bool
     {
         return match ($this) {
-            self::PublishFailed, self::AccountNeedsAttention => true,
+            self::PublishFailed, self::WorkspaceInvite, self::AccountNeedsAttention => true,
             default => false,
         };
     }
