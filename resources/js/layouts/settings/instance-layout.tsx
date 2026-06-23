@@ -12,12 +12,17 @@ import type { NavItem } from '@/types';
 export default function InstanceSettingsLayout({
     children,
 }: PropsWithChildren) {
-    const { isCurrentOrParentUrl } = useCurrentUrl();
+    const { isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
 
     const sidebarNavItems: NavItem[] = [
         {
             title: 'General',
             href: InstanceSettingsController.edit(),
+            icon: null,
+        },
+        {
+            title: 'Admins',
+            href: InstanceSettingsController.admins(),
             icon: null,
         },
     ];
@@ -42,7 +47,10 @@ export default function InstanceSettingsLayout({
                                 variant="ghost"
                                 asChild
                                 className={cn('w-full justify-start', {
-                                    'bg-muted': isCurrentOrParentUrl(item.href),
+                                    'bg-muted':
+                                        item.title === 'General'
+                                            ? isCurrentUrl(item.href)
+                                            : isCurrentOrParentUrl(item.href),
                                 })}
                             >
                                 <Link href={item.href}>

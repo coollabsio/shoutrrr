@@ -229,7 +229,7 @@ export function AppSidebar() {
                                         <SidebarMenuButton
                                             asChild
                                             tooltip={instanceSettingsLabel}
-                                            isActive={isCurrentUrl(
+                                            isActive={isCurrentOrParentUrl(
                                                 InstanceSettingsController.edit(),
                                             )}
                                         >

@@ -21,7 +21,8 @@ void createInertiaApp({
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;
-            case name === 'settings/instance':
+            case name === 'settings/instance' ||
+                name === 'settings/instance-admins':
                 return [AppLayout, InstanceSettingsLayout];
             case name.startsWith('settings/workspace'):
                 return [AppLayout, WorkspaceSettingsLayout];

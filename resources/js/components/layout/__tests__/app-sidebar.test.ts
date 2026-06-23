@@ -15,6 +15,22 @@ describe('workspaceSettingsLabel', () => {
     });
 });
 
+describe('settings sidebar active states', () => {
+    it('keeps instance settings active on child pages', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/layout/app-sidebar.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain(
+            'isActive={isCurrentOrParentUrl(\n                                                InstanceSettingsController.edit(),\n                                            )}',
+        );
+    });
+});
+
 describe('sidebar nav click targets', () => {
     it('lets sidebar links receive clicks from their SVG icons', () => {
         const source = readFileSync(

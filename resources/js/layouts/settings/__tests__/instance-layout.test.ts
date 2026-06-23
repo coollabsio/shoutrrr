@@ -13,9 +13,9 @@ describe('instance settings layout', () => {
         expect(app).toContain(
             "import InstanceSettingsLayout from '@/layouts/settings/instance-layout';",
         );
-        expect(app).toContain(
-            "case name === 'settings/instance':\n                return [AppLayout, InstanceSettingsLayout];",
-        );
+        expect(app).toContain("case name === 'settings/instance' ||");
+        expect(app).toContain("name === 'settings/instance-admins':");
+        expect(app).toContain('return [AppLayout, InstanceSettingsLayout];');
     });
 
     it('does not appear in the workspace settings sub navigation', () => {
@@ -25,6 +25,15 @@ describe('instance settings layout', () => {
 
         expect(workspaceLayout).not.toContain('InstanceSettingsController');
         expect(workspaceLayout).not.toContain("title: 'Instance'");
+    });
+
+    it('includes an admins sub navigation item', () => {
+        const layout = readSource(
+            'resources/js/layouts/settings/instance-layout.tsx',
+        );
+
+        expect(layout).toContain("title: 'Admins'");
+        expect(layout).toContain('InstanceSettingsController.admins()');
     });
 
     it('breadcrumbs instance settings as a top-level settings area', () => {
