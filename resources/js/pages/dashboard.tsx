@@ -1,22 +1,29 @@
-import { Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { Plug } from 'lucide-react';
 
 import Composer from '@/components/compose/composer';
 import { DashboardAura } from '@/components/dashboard/dashboard-aura';
 import { GettingStartedCard } from '@/components/onboarding/getting-started-card';
 import { WelcomeModal } from '@/components/onboarding/welcome-modal';
+import {
+    Empty,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from '@/components/ui/empty';
 import { parseDestinationParam } from '@/lib/compose/composer-state';
+import {
+    shouldShowDashboardNoAccountsNotice,
+    shouldShowDashboardPublishingSection,
+} from '@/lib/dashboard/accounts';
 import { dashboard } from '@/routes';
+import { index as accountsRoute } from '@/routes/accounts';
 import type { OnboardingData } from '@/types';
 
 type Props = {
     onboarding: OnboardingData | null;
 };
-
-export function shouldShowDashboardPublishingSection(
-    accounts: unknown[],
-): boolean {
-    return accounts.length > 0;
-}
 
 function timeGreeting(): string {
     const hour = new Date().getHours();
@@ -33,12 +40,39 @@ function timeGreeting(): string {
     return 'Good evening';
 }
 
+function NoAccountsNotice() {
+    return (
+        <Empty className="min-h-72 bg-card/80 backdrop-blur-sm">
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <Plug />
+                </EmptyMedia>
+                <EmptyTitle>No accounts connected yet</EmptyTitle>
+                <EmptyDescription>
+                    An admin needs to connect a workspace account before you can
+                    compose and publish posts here.
+                </EmptyDescription>
+            </EmptyHeader>
+            <Link
+                href={accountsRoute().url}
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+                View connected accounts
+            </Link>
+        </Empty>
+    );
+}
+
 export default function Dashboard({ onboarding }: Props) {
     const page = usePage();
-    const { auth, shell } = page.props;
+    const { auth, shell, workspaces } = page.props;
     const firstName = (auth.user?.name ?? '').split(/\s+/)[0] || 'there';
     const showPublishingSection = shouldShowDashboardPublishingSection(
         shell.accounts,
+    );
+    const showNoAccountsNotice = shouldShowDashboardNoAccountsNotice(
+        shell.accounts,
+        workspaces.current?.permissions ?? [],
     );
 
     // A calendar slot click opens the composer here with a pre-set schedule time.
@@ -74,6 +108,8 @@ export default function Dashboard({ onboarding }: Props) {
                 </p>
 
                 {onboarding && <GettingStartedCard onboarding={onboarding} />}
+
+                {showNoAccountsNotice && <NoAccountsNotice />}
 
                 {showPublishingSection && (
                     <Composer
