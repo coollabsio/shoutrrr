@@ -30,7 +30,7 @@ type Props = {
 const MINUTE_STEPS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
 /**
- * Tomorrow 09:00 in `tz`, as a UTC ISO string.
+ * The next clock hour in `tz`, as a UTC ISO string.
  *
  * Exported so callers can seed their state to the same value the picker
  * displays — otherwise the UI shows a time the request never sends (the
@@ -39,8 +39,7 @@ const MINUTE_STEPS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 export function defaultPickedAt(tz: string): string {
     return dayjs()
         .tz(tz)
-        .add(1, 'day')
-        .hour(9)
+        .add(1, 'hour')
         .minute(0)
         .second(0)
         .millisecond(0)
