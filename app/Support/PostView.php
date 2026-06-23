@@ -81,15 +81,16 @@ final class PostView
             ->pluck('connected_account_id')
             ->map(static fn (mixed $id): string => (string) $id)
             ->sort()
-            ->values()
             ->all();
         $allAccountIds = ConnectedAccount::withoutGlobalScopes()
             ->where('workspace_id', $post->workspace_id)
             ->pluck('id')
             ->map(static fn (mixed $id): string => (string) $id)
             ->sort()
-            ->values()
             ->all();
+
+        $targetIds = array_values($targetIds);
+        $allAccountIds = array_values($allAccountIds);
 
         return $targetIds === $allAccountIds
             ? ['kind' => 'all', 'id' => null]
