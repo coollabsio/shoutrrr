@@ -40,7 +40,7 @@ return [
 
     'auth' => [
         'socialite' => [
-            'enabled' => env('SOCIALITE_ENABLED', true),
+            'enabled' => env('SOCIALITE_ENABLED', false),
             /** @var list<string> */
             'providers' => array_values(array_unique(array_filter(
                 array_map(
