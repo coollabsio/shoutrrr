@@ -45,6 +45,18 @@ test('POST /posts lazily creates a draft and returns its view as JSON', function
     expect(Post::withoutGlobalScopes()->count())->toBe(1);
 });
 
+test('POST /posts accepts a custom accounts destination', function () {
+    [$user, $workspace, $accounts] = actingMember(3);
+
+    test()->postJson('/posts', [
+        'base_text' => 'custom draft',
+        'destination' => ['kind' => 'accounts', 'ids' => [$accounts[0]->id, $accounts[2]->id]],
+    ])->assertCreated()
+        ->assertJsonPath('post.destination.kind', 'accounts')
+        ->assertJsonPath('post.destination.ids', collect([$accounts[0]->id, $accounts[2]->id])->sort()->values()->all())
+        ->assertJsonCount(2, 'post.targets');
+});
+
 test('PUT /posts/{post} autosaves edits and returns the new baseline', function () {
     [$user, $workspace, $accounts] = actingMember(1);
     $created = test()->postJson('/posts', ['base_text' => 'a', 'destination' => ['kind' => 'all']])->json('post');

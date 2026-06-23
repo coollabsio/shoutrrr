@@ -130,6 +130,11 @@ export function parseDestinationParam(raw: string | null): Destination | null {
     if ((kind === 'account' || kind === 'set') && id) {
         return { kind, id };
     }
+    if (kind === 'accounts' && id) {
+        const ids = id.split(',').filter(Boolean);
+
+        return ids.length > 0 ? { kind: 'accounts', ids } : null;
+    }
 
     return null;
 }
@@ -158,7 +163,11 @@ function hydrate(post: PostView): ComposerState {
                 ? { kind: 'set', id: post.destination.id }
                 : post.destination.kind === 'account' && post.destination.id
                   ? { kind: 'account', id: post.destination.id }
-                  : { kind: 'all' },
+                  : post.destination.kind === 'accounts' &&
+                      post.destination.ids &&
+                      post.destination.ids.length > 0
+                    ? { kind: 'accounts', ids: post.destination.ids }
+                    : { kind: 'all' },
         autoSplitByAccount,
         overrideByAccount,
         mediaSubsetExcludes,

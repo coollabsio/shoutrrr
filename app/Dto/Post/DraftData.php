@@ -12,6 +12,7 @@ final class DraftData
      * "set this override to null" from "leave the existing override untouched"
      * (the smart-merge that preserves edits across a destination switch).
      *
+     * @param  list<string>  $destinationIds
      * @param  list<string>  $mediaIds
      * @param  array<string, array{auto_split?: bool, content_override?: array{text?: string|null, media_ids?: list<string>}|null}>  $targetsByAccount
      */
@@ -19,6 +20,7 @@ final class DraftData
         public readonly string $baseText,
         public readonly string $destinationKind,
         public readonly ?string $destinationId,
+        public readonly array $destinationIds,
         public readonly array $mediaIds,
         public readonly array $targetsByAccount,
         public readonly ?string $expectedUpdatedAt,
@@ -47,6 +49,7 @@ final class DraftData
             baseText: (string) ($payload['base_text'] ?? ''),
             destinationKind: (string) $destination['kind'],
             destinationId: $destination['id'] ?? null,
+            destinationIds: array_values($destination['ids'] ?? []),
             mediaIds: array_values($payload['media_ids'] ?? []),
             targetsByAccount: $targetsByAccount,
             expectedUpdatedAt: $payload['expected_updated_at'] ?? null,

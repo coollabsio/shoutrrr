@@ -600,6 +600,19 @@ describe('buildPutBody', () => {
         expect(body.expected_updated_at).toBe('2026-06-12T10:00:00+00:00');
     });
 
+    it('carries a custom multi-account destination', () => {
+        const state = composerReducer(hydrated(), {
+            type: 'setDestination',
+            destination: { kind: 'accounts', ids: ['a1', 'a2'] },
+        });
+        const body = buildPutBody(state, ['a1', 'a2']);
+
+        expect(body.destination).toEqual({
+            kind: 'accounts',
+            ids: ['a1', 'a2'],
+        });
+    });
+
     it('emits media_ids from state.media', () => {
         let state = composerReducer(hydrated(), {
             type: 'addMedia',
@@ -701,12 +714,17 @@ describe('parseDestinationParam', () => {
             kind: 'set',
             id: 'xyz',
         });
+        expect(parseDestinationParam('accounts:a,b')).toEqual({
+            kind: 'accounts',
+            ids: ['a', 'b'],
+        });
     });
 
     it('returns null for junk or missing input', () => {
         expect(parseDestinationParam(null)).toBeNull();
         expect(parseDestinationParam('nope')).toBeNull();
         expect(parseDestinationParam('account:')).toBeNull();
+        expect(parseDestinationParam('accounts:')).toBeNull();
     });
 });
 

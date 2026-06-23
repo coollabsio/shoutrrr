@@ -23,7 +23,7 @@ class DraftService
     /**
      * Create a draft and snapshot the destination's accounts into targets.
      *
-     * @param  array{kind: string, id?: string|null}  $destination
+     * @param  array{kind: string, id?: string|null, ids?: list<string>}  $destination
      */
     public function createDraft(string $workspaceId, User $author, array $destination, string $baseText): Post
     {
@@ -46,7 +46,7 @@ class DraftService
     /**
      * Resolve a destination descriptor to the concrete account ids it targets.
      *
-     * @param  array{kind: string, id?: string|null}  $destination
+     * @param  array{kind: string, id?: string|null, ids?: list<string>}  $destination
      * @return list<string>
      */
     public function resolveDestinationAccountIds(string $workspaceId, array $destination): array
@@ -64,6 +64,10 @@ class DraftService
                     ->whereKey($destination['id'])
                     ->first()?->accounts()->pluck('connected_accounts.id') ?? collect()
                 : collect(),
+            'accounts' => ConnectedAccount::withoutGlobalScopes()
+                ->where('workspace_id', $workspaceId)
+                ->whereIn('id', $destination['ids'] ?? [])
+                ->pluck('id'),
             default => ConnectedAccount::withoutGlobalScopes()
                 ->where('workspace_id', $workspaceId)
                 ->pluck('id'),
@@ -168,7 +172,11 @@ class DraftService
                 throw new PostStaleWriteException;
             }
 
-            $destination = ['kind' => $data->destinationKind, 'id' => $data->destinationId];
+            $destination = [
+                'kind' => $data->destinationKind,
+                'id' => $data->destinationId,
+                'ids' => $data->destinationIds,
+            ];
             $accountIds = $this->resolveDestinationAccountIds($post->workspace_id, $destination);
 
             // Only carry an explicitly-sent override/auto-split into the merge;
@@ -203,7 +211,7 @@ class DraftService
      * that actually belongs to the workspace. A foreign or unknown set id resolves to
      * null (it would yield zero targets anyway), preventing a dangling reference.
      *
-     * @param  array{kind: string, id?: string|null}  $destination
+     * @param  array{kind: string, id?: string|null, ids?: list<string>}  $destination
      */
     private function scopedAccountSetId(string $workspaceId, array $destination): ?string
     {

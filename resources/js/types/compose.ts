@@ -5,7 +5,8 @@ export type PlatformName = 'x' | 'bluesky' | 'linkedin';
 export type Destination =
     | { kind: 'all' }
     | { kind: 'set'; id: string }
-    | { kind: 'account'; id: string };
+    | { kind: 'account'; id: string }
+    | { kind: 'accounts'; ids: string[] };
 
 export type Account = {
     id: string;
@@ -99,7 +100,7 @@ export type PostView = {
     published_at: string | null;
     updated_at: string;
     scheduled_at: string | null;
-    destination: { kind: string; id: string | null };
+    destination: { kind: string; id: string | null; ids?: string[] };
     targets: TargetView[];
     media: MediaView[];
 };

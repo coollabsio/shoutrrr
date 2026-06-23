@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
@@ -64,7 +65,7 @@ final class PostView
     }
 
     /**
-     * @return array{kind: string, id: string|null}
+     * @return array{kind: string, id: string|null, ids?: list<string>}
      */
     private static function destination(Post $post): array
     {
@@ -72,8 +73,26 @@ final class PostView
             return ['kind' => 'set', 'id' => $post->account_set_id];
         }
 
-        return $post->targets->count() === 1
-            ? ['kind' => 'account', 'id' => $post->targets->first()->connected_account_id]
-            : ['kind' => 'all', 'id' => null];
+        if ($post->targets->count() === 1) {
+            return ['kind' => 'account', 'id' => $post->targets->first()->connected_account_id];
+        }
+
+        $targetIds = $post->targets
+            ->pluck('connected_account_id')
+            ->map(static fn (mixed $id): string => (string) $id)
+            ->sort()
+            ->values()
+            ->all();
+        $allAccountIds = ConnectedAccount::withoutGlobalScopes()
+            ->where('workspace_id', $post->workspace_id)
+            ->pluck('id')
+            ->map(static fn (mixed $id): string => (string) $id)
+            ->sort()
+            ->values()
+            ->all();
+
+        return $targetIds === $allAccountIds
+            ? ['kind' => 'all', 'id' => null]
+            : ['kind' => 'accounts', 'id' => null, 'ids' => $targetIds];
     }
 }

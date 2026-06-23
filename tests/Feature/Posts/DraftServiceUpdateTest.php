@@ -88,6 +88,31 @@ test('switching destination preserves surviving accounts edits (smart merge)', f
         ->and($narrowed->targets->first()->content_override)->toBe(['text' => 'kept text']);
 });
 
+test('switching to a custom accounts destination preserves selected account edits', function () {
+    [$user, $workspace, $accounts] = draftSetup(3);
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], 'base');
+    $keep = $accounts[0];
+    $add = $accounts[2];
+
+    app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'base',
+        'destination' => ['kind' => 'all'],
+        'targets' => [['connected_account_id' => $keep->id, 'content_override' => ['text' => 'kept text']]],
+        'expected_updated_at' => $post->fresh()->updated_at->toIso8601String(),
+    ]));
+
+    $updated = app(DraftService::class)->updateDraft($post->fresh(), DraftData::fromArray([
+        'base_text' => 'base',
+        'destination' => ['kind' => 'accounts', 'ids' => [$keep->id, $add->id]],
+        'targets' => [['connected_account_id' => $keep->id]],
+        'expected_updated_at' => $post->fresh()->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->account_set_id)->toBeNull()
+        ->and($updated->targets)->toHaveCount(2)
+        ->and($updated->targets->firstWhere('connected_account_id', $keep->id)->content_override)->toBe(['text' => 'kept text']);
+});
+
 test('updateDraft attaches and orders media', function () {
     [$user, $workspace, $accounts] = draftSetup(1);
     $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], '');

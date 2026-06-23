@@ -63,6 +63,11 @@ function accountIdsFor(
 
         return set ? set.connected_account_ids : [];
     }
+    if (destination.kind === 'accounts') {
+        const selected = new Set(destination.ids);
+
+        return accounts.filter((a) => selected.has(a.id)).map((a) => a.id);
+    }
 
     return accounts.map((a) => a.id);
 }

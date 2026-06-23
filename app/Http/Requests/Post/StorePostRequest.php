@@ -23,8 +23,10 @@ class StorePostRequest extends FormRequest
         return [
             'base_text' => ['present', 'nullable', 'string'],
             'destination' => ['required', 'array'],
-            'destination.kind' => ['required', Rule::in(['all', 'set', 'account'])],
+            'destination.kind' => ['required', Rule::in(['all', 'set', 'account', 'accounts'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
+            'destination.ids' => ['array', 'required_if:destination.kind,accounts'],
+            'destination.ids.*' => ['string'],
         ];
     }
 }

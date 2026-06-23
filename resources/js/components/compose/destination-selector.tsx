@@ -1,16 +1,13 @@
-import { Layers } from 'lucide-react';
+import { Check, ChevronDown, Layers } from 'lucide-react';
+import type React from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectLabel,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { Account, AccountSet, Destination } from '@/types/compose';
 
@@ -49,7 +46,7 @@ function AccountVisual({ account }: { account: Account }) {
                     brand.glyph,
                 )}
             >
-                {/* size-* class is required: the Select CSS force-sizes any
+                {/* size-* class is required: shared item CSS force-sizes any
                     class-less svg to size-4 (16px). */}
                 <PlatformGlyph
                     platform={account.platform}
@@ -78,12 +75,77 @@ type DestinationSelectorProps = {
     disabled?: boolean;
 };
 
-function toValue(destination: Destination): string {
-    if (destination.kind === 'all') {
-        return 'all';
+function selectedAccountIds(
+    destination: Destination,
+    accounts: Account[],
+    sets: AccountSet[],
+): string[] {
+    if (destination.kind === 'account') {
+        return accounts.some((a) => a.id === destination.id)
+            ? [destination.id]
+            : [];
+    }
+    if (destination.kind === 'accounts') {
+        const available = new Set(accounts.map((a) => a.id));
+
+        return destination.ids.filter((id) => available.has(id));
+    }
+    if (destination.kind === 'set') {
+        return (
+            sets.find((s) => s.id === destination.id)?.connected_account_ids ??
+            []
+        );
     }
 
-    return `${destination.kind}:${destination.id}`;
+    return accounts.map((a) => a.id);
+}
+
+function sameIds(left: string[], right: string[]): boolean {
+    if (left.length !== right.length) {
+        return false;
+    }
+    const selected = new Set(left);
+
+    return right.every((id) => selected.has(id));
+}
+
+function destinationFromIds(
+    ids: string[],
+    accounts: Account[],
+    preferredSet: AccountSet | null = null,
+): Destination {
+    if (ids.length === accounts.length) {
+        return { kind: 'all' };
+    }
+    if (preferredSet && sameIds(ids, preferredSet.connected_account_ids)) {
+        return { kind: 'set', id: preferredSet.id };
+    }
+    if (ids.length === 1) {
+        return { kind: 'account', id: ids[0] };
+    }
+
+    return { kind: 'accounts', ids };
+}
+
+function triggerLabel(
+    destination: Destination,
+    selectedIds: string[],
+    accounts: Account[],
+    sets: AccountSet[],
+): string {
+    if (selectedIds.length === accounts.length) {
+        return 'All accounts';
+    }
+    if (destination.kind === 'set') {
+        return sets.find((s) => s.id === destination.id)?.name ?? 'Set';
+    }
+    if (selectedIds.length === 1) {
+        return (
+            accounts.find((a) => a.id === selectedIds[0])?.handle ?? '1 account'
+        );
+    }
+
+    return `${selectedIds.length} accounts`;
 }
 
 export default function DestinationSelector({
@@ -93,60 +155,128 @@ export default function DestinationSelector({
     onChange,
     disabled = false,
 }: DestinationSelectorProps) {
-    function handleChange(value: string) {
-        if (value === 'all') {
-            onChange({ kind: 'all' });
+    const selectedIds = selectedAccountIds(destination, accounts, sets);
+    const selected = new Set(selectedIds);
+    const label = triggerLabel(destination, selectedIds, accounts, sets);
 
+    function chooseAll() {
+        onChange({ kind: 'all' });
+    }
+
+    function toggleAccount(accountId: string) {
+        const next = selected.has(accountId)
+            ? selectedIds.filter((id) => id !== accountId)
+            : [...selectedIds, accountId];
+
+        if (next.length === 0) {
             return;
         }
-        const [kind, id] = value.split(':');
-        onChange(
-            kind === 'set' ? { kind: 'set', id } : { kind: 'account', id },
+
+        onChange(destinationFromIds(next, accounts));
+    }
+
+    function toggleSet(set: AccountSet) {
+        const allSetAccountsSelected = set.connected_account_ids.every((id) =>
+            selected.has(id),
         );
+        const setIds = new Set(set.connected_account_ids);
+        const next = allSetAccountsSelected
+            ? selectedIds.filter((id) => !setIds.has(id))
+            : [...new Set([...selectedIds, ...set.connected_account_ids])];
+
+        if (next.length === 0) {
+            return;
+        }
+
+        onChange(destinationFromIds(next, accounts, set));
     }
 
     return (
-        <Select
-            value={toValue(destination)}
-            onValueChange={handleChange}
-            disabled={disabled}
-        >
-            <SelectTrigger
-                size="sm"
-                aria-label="Post destination"
-                className="max-w-[150px] gap-1 rounded-md border-transparent bg-transparent px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground data-[size=sm]:h-7"
+        <Popover>
+            <PopoverTrigger asChild disabled={disabled}>
+                <button
+                    type="button"
+                    aria-label="Post destination"
+                    className="inline-flex h-7 max-w-[150px] items-center gap-1 rounded-md border border-transparent bg-transparent px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                >
+                    <span className="truncate">{label}</span>
+                    <ChevronDown className="size-3 shrink-0 opacity-70" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                align="end"
+                className="w-[216px] gap-1 rounded-3xl p-2 text-sm"
             >
-                <SelectValue placeholder="Choose where to post" />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectGroup>
-                    <SelectLabel>Sets</SelectLabel>
-                    <SelectItem value="all">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                    Sets
+                </div>
+                <OptionButton
+                    selected={selectedIds.length === accounts.length}
+                    onClick={chooseAll}
+                >
+                    <SetVisual />
+                    All accounts
+                </OptionButton>
+                {sets.map((set) => (
+                    <OptionButton
+                        key={set.id}
+                        selected={sameIds(
+                            selectedIds,
+                            set.connected_account_ids,
+                        )}
+                        onClick={() => toggleSet(set)}
+                    >
                         <SetVisual />
-                        All accounts
-                    </SelectItem>
-                    {sets.map((set) => (
-                        <SelectItem key={set.id} value={`set:${set.id}`}>
-                            <SetVisual />
-                            {set.name}
-                        </SelectItem>
-                    ))}
-                </SelectGroup>
+                        {set.name}
+                    </OptionButton>
+                ))}
                 {accounts.length > 0 && (
-                    <SelectGroup>
-                        <SelectLabel>Accounts</SelectLabel>
+                    <>
+                        <div className="px-2 pt-3 pb-1.5 text-xs font-medium text-muted-foreground">
+                            Accounts
+                        </div>
                         {accounts.map((account) => (
-                            <SelectItem
+                            <OptionButton
                                 key={account.id}
-                                value={`account:${account.id}`}
+                                selected={selected.has(account.id)}
+                                onClick={() => toggleAccount(account.id)}
                             >
                                 <AccountVisual account={account} />
                                 {account.handle}
-                            </SelectItem>
+                            </OptionButton>
                         ))}
-                    </SelectGroup>
+                    </>
                 )}
-            </SelectContent>
-        </Select>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function OptionButton({
+    selected,
+    children,
+    onClick,
+}: {
+    selected: boolean;
+    children: React.ReactNode;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            aria-pressed={selected}
+            onClick={onClick}
+            className="flex min-h-8 w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-muted focus-visible:bg-muted"
+        >
+            <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
+                {children}
+            </span>
+            <Check
+                className={cn(
+                    'ml-auto size-4 shrink-0 text-foreground',
+                    selected ? 'opacity-100' : 'opacity-0',
+                )}
+            />
+        </button>
     );
 }

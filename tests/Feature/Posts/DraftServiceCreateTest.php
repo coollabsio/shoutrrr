@@ -101,3 +101,17 @@ test('createDraft with a set destination snapshots that set membership', functio
     expect($post->account_set_id)->toBe($set->id)
         ->and($post->targets()->count())->toBe(2);
 });
+
+test('createDraft with a custom accounts destination seeds the selected targets', function () {
+    [$user, $workspace, $accounts] = workspaceWithAccounts(3);
+
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, [
+        'kind' => 'accounts',
+        'ids' => [$accounts[0]->id, $accounts[2]->id],
+    ], '');
+
+    expect($post->account_set_id)->toBeNull()
+        ->and($post->targets()->count())->toBe(2)
+        ->and($post->targets->pluck('connected_account_id')->sort()->values()->all())
+        ->toEqual(collect([$accounts[0]->id, $accounts[2]->id])->sort()->values()->all());
+});
