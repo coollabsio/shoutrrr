@@ -16,10 +16,7 @@ import {
     EmptyTitle,
 } from '@/components/ui/empty';
 import { parseDestinationParam } from '@/lib/compose/composer-state';
-import {
-    shouldShowDashboardNoAccountsNotice,
-    shouldShowDashboardPublishingSection,
-} from '@/lib/dashboard/accounts';
+import { shouldShowDashboardNoAccountsNotice } from '@/lib/dashboard/accounts';
 import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
 import type { OnboardingData } from '@/types';
@@ -73,9 +70,6 @@ export default function Dashboard({ posts, onboarding, savedMentions }: Props) {
     const page = usePage();
     const { auth, shell, workspaces } = page.props;
     const firstName = (auth.user?.name ?? '').split(/\s+/)[0] || 'there';
-    const showPublishingSection = shouldShowDashboardPublishingSection(
-        shell.accounts,
-    );
     const showNoAccountsNotice = shouldShowDashboardNoAccountsNotice(
         shell.accounts,
         workspaces.current?.permissions ?? [],
@@ -117,18 +111,16 @@ export default function Dashboard({ posts, onboarding, savedMentions }: Props) {
 
                 {showNoAccountsNotice && <NoAccountsNotice />}
 
-                {showPublishingSection && (
-                    <Composer
-                        post={null}
-                        accounts={shell.accounts}
-                        sets={shell.sets}
-                        limits={shell.limits}
-                        initialScheduleAt={initialScheduleAt}
-                        initialDestination={initialDestination}
-                        initialSavedMentions={savedMentions}
-                        autoFocusEditor
-                    />
-                )}
+                <Composer
+                    post={null}
+                    accounts={shell.accounts}
+                    sets={shell.sets}
+                    limits={shell.limits}
+                    initialScheduleAt={initialScheduleAt}
+                    initialDestination={initialDestination}
+                    initialSavedMentions={savedMentions}
+                    autoFocusEditor
+                />
 
                 <Deferred data="posts" fallback={<RecentFeedSkeleton />}>
                     <RecentFeed posts={posts ?? []} />
