@@ -58,6 +58,7 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
     async function createPost(): Promise<string> {
         http.transform(() => ({
             base_text: state.baseText,
+            mentions: state.mentions,
             destination: state.destination,
         }));
         const created = await http.post(PostController.store().url, {
@@ -231,6 +232,7 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
     }, [
         state.saveState,
         state.baseText,
+        state.mentions,
         state.destination,
         state.overrideByAccount,
         state.autoSplitByAccount,

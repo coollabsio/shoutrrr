@@ -93,6 +93,14 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<WorkspaceMention, $this>
+     */
+    public function mentions(): HasMany
+    {
+        return $this->hasMany(WorkspaceMention::class);
+    }
+
+    /**
      * @return HasMany<ConnectedAccount, $this>
      */
     public function connectedAccounts(): HasMany

@@ -1,3 +1,9 @@
+export function shouldShowDashboardPublishingSection(
+    accounts: unknown[],
+): boolean {
+    return accounts.length > 0;
+}
+
 export function canManageConnectedAccounts(permissions: string[]): boolean {
     return permissions.includes('workspace.accounts.manage');
 }

@@ -32,6 +32,13 @@ class CreatePostTool extends WorkspaceTool
 
         $validated = $request->validate([
             'base_text' => ['present', 'nullable', 'string'],
+            'mentions' => ['array'],
+            'mentions.*.id' => ['required', 'string'],
+            'mentions.*.label' => ['required', 'string'],
+            'mentions.*.handles' => ['array'],
+            'mentions.*.handles.x' => ['nullable', 'string'],
+            'mentions.*.handles.bluesky' => ['nullable', 'string'],
+            'mentions.*.handles.linkedin' => ['nullable', 'string'],
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
@@ -45,6 +52,7 @@ class CreatePostTool extends WorkspaceTool
             $user,
             $validated['destination'],
             (string) ($validated['base_text'] ?? ''),
+            $validated['mentions'] ?? [],
         );
 
         return Response::text(json_encode(PostView::make($post->fresh(['targets.account', 'media'])), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
@@ -56,7 +64,8 @@ class CreatePostTool extends WorkspaceTool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'base_text' => $schema->string()->description('The post body text.'),
+            'base_text' => $schema->string()->description('The post body text. Use {{mention:id}} tokens for platform-specific mentions.'),
+            'mentions' => $schema->array()->description('Mention placeholders with per-platform handles.'),
             'destination' => $schema->object([
                 'kind' => $schema->string()->enum(['all', 'set', 'account'])->required(),
                 'id' => $schema->string()->description('Account set id (kind=set) or connected account id (kind=account).'),

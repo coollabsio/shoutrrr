@@ -90,6 +90,7 @@ class PostController extends Controller
             $request->user(),
             $request->validated('destination'),
             (string) $request->validated('base_text'),
+            array_values($request->validated('mentions', [])),
         );
 
         return response()->json(['post' => PostView::make($post->fresh(['targets.account', 'media']))], 201);

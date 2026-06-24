@@ -4,6 +4,7 @@ use App\Http\Controllers\CommandSearchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PublicShareController;
+use App\Http\Controllers\WorkspaceMentionController;
 use App\Http\Middleware\NoIndex;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,7 @@ Route::get('/share/{token}', [PublicShareController::class, 'show'])
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('workspace-mentions', [WorkspaceMentionController::class, 'store'])->name('workspace-mentions.store');
 });
 
 Route::middleware('auth')->group(function () {

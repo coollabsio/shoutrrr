@@ -1,7 +1,8 @@
-import { Link } from '@inertiajs/react';
+import { Link, useHttp } from '@inertiajs/react';
 import { Plug } from 'lucide-react';
 import { useEffect, useReducer, useRef, useState } from 'react';
 
+import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import { useAutosave } from '@/hooks/compose/use-autosave';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
 import { usePublishStatus } from '@/hooks/compose/use-publish-status';
@@ -13,6 +14,10 @@ import {
     shouldShowConnectAccountPrompt,
     type ComposerState,
 } from '@/lib/compose/composer-state';
+import {
+    replaceMentionTokens,
+    syncMentionsFromText,
+} from '@/lib/compose/mentions';
 import { postCapabilities } from '@/lib/posts/capabilities';
 import { index as accountsRoute } from '@/routes/accounts';
 import {
@@ -20,9 +25,11 @@ import {
     type Account,
     type AccountSet,
     type Destination,
+    type MentionPlaceholder,
     type PlatformLimits,
     type PlatformName,
     type PostView,
+    type WorkspaceMention,
 } from '@/types/compose';
 
 import CharCounter from './char-counter';
@@ -47,7 +54,10 @@ type ComposerProps = {
     initialDestination?: Destination | null;
     /** Focus the editor as soon as it mounts. */
     autoFocusEditor?: boolean;
+    initialSavedMentions?: WorkspaceMention[];
 };
+
+const EMPTY_SAVED_MENTIONS: WorkspaceMention[] = [];
 
 function accountIdsFor(
     state: ComposerState,
@@ -85,8 +95,17 @@ export default function Composer({
     initialScheduleAt = null,
     initialDestination = null,
     autoFocusEditor = false,
+    initialSavedMentions = EMPTY_SAVED_MENTIONS,
 }: ComposerProps) {
     const schedulingTz = useSchedulingTimezone();
+    const saveMentionHttp = useHttp<
+        Record<string, never>,
+        { mention: WorkspaceMention }
+    >({});
+    const [savedMentions, setSavedMentions] = useState(initialSavedMentions);
+    useEffect(() => {
+        setSavedMentions(initialSavedMentions);
+    }, [initialSavedMentions]);
     // True while any attachment is still uploading — blocks publish/schedule.
     const [mediaUploading, setMediaUploading] = useState(false);
     const [state, dispatch] = useReducer(composerReducer, post, (p) =>
@@ -187,8 +206,13 @@ export default function Composer({
             state.overrideByAccount[accountId] !== undefined
                 ? (state.overrideByAccount[accountId] as string)
                 : state.baseText;
+        const resolvedText = replaceMentionTokens(
+            text,
+            state.mentions,
+            account.platform,
+        );
         const limit = limitForAccount(account);
-        const count = measure(text, account.platform);
+        const count = measure(resolvedText, account.platform);
         if (limit > 0 && count > limit) {
             return 'over';
         }
@@ -207,20 +231,106 @@ export default function Composer({
         return String(target?.sections.length ?? 1);
     }
 
+    function syncMentions(
+        nextBaseText: string,
+        nextOverrides = state.overrideByAccount,
+    ) {
+        const mentionSource = [nextBaseText, ...Object.values(nextOverrides)]
+            .filter((value): value is string => value !== undefined)
+            .join('\n');
+        const mentions = syncMentionsFromText(
+            mentionSource,
+            state.mentions,
+            savedMentions,
+        );
+        if (JSON.stringify(mentions) !== JSON.stringify(state.mentions)) {
+            dispatch({ type: 'setMentions', mentions });
+        }
+    }
+
+    function renameMention(
+        mention: MentionPlaceholder,
+        next: MentionPlaceholder,
+    ) {
+        const replace = (text: string): string =>
+            text.split(mention.label).join(next.label);
+        const overrideByAccount = Object.fromEntries(
+            Object.entries(state.overrideByAccount).map(([accountId, text]) => [
+                accountId,
+                text === undefined ? undefined : replace(text),
+            ]),
+        ) as Record<string, string | undefined>;
+
+        dispatch({ type: 'updateBaseText', text: replace(state.baseText) });
+        for (const [accountId, text] of Object.entries(overrideByAccount)) {
+            if (text !== undefined) {
+                dispatch({ type: 'setOverrideText', accountId, text });
+            }
+        }
+        dispatch({
+            type: 'setMentions',
+            mentions: state.mentions.map((item) =>
+                item.id === mention.id ? next : item,
+            ),
+        });
+    }
+
+    function applySavedMention(
+        mention: MentionPlaceholder,
+        saved: WorkspaceMention,
+    ) {
+        renameMention(mention, {
+            id: saved.name
+                .replace(/^@/, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9_-]+/g, '-'),
+            label: saved.name,
+            handles: saved.handles,
+        });
+    }
+
+    async function saveMention(mention: MentionPlaceholder): Promise<void> {
+        saveMentionHttp.transform(() => ({
+            name: mention.label,
+            handles: mention.handles,
+        }));
+        const response = await saveMentionHttp.post(
+            WorkspaceMentionController.store().url,
+        );
+
+        setSavedMentions((current) => {
+            const others = current.filter(
+                (item) =>
+                    item.id !== response.mention.id &&
+                    item.name !== response.mention.name,
+            );
+
+            return [...others, response.mention].sort((left, right) =>
+                left.name.localeCompare(right.name),
+            );
+        });
+    }
+
     function handleText(text: string) {
         if (
             activeAccount &&
             state.overrideByAccount[activeAccount.id] !== undefined
         ) {
+            const overrideByAccount = {
+                ...state.overrideByAccount,
+                [activeAccount.id]: text,
+            };
             dispatch({
                 type: 'setOverrideText',
                 accountId: activeAccount.id,
                 text,
             });
+            syncMentions(state.baseText, overrideByAccount);
 
             return;
         }
         dispatch({ type: 'updateBaseText', text });
+        syncMentions(text);
     }
 
     const activeTarget = activeAccount
@@ -230,6 +340,9 @@ export default function Composer({
     const overrideActive =
         activeAccount !== null &&
         state.overrideByAccount[activeAccount.id] !== undefined;
+    const mentionPlatforms = Array.from(
+        new Set(tabAccounts.map((account) => account.platform)),
+    );
 
     return (
         <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color] duration-300 focus-within:border-primary/25 focus-within:shadow-[0_0_16px_-6px_color-mix(in_oklch,var(--primary)_28%,transparent)]">
@@ -284,6 +397,16 @@ export default function Composer({
                         accountId: activeAccount.id,
                     })
                 }
+                mentions={state.mentions}
+                mentionPlatforms={mentionPlatforms}
+                savedMentions={savedMentions}
+                onMentionNameChange={renameMention}
+                onApplySavedMention={applySavedMention}
+                onSaveMention={saveMention}
+                saveMentionProcessing={saveMentionHttp.processing}
+                onMentionsChange={(mentions) =>
+                    dispatch({ type: 'setMentions', mentions })
+                }
                 markerState={
                     activeAccount
                         ? {
@@ -305,7 +428,14 @@ export default function Composer({
             {/* Counter row — or the connect prompt when there are no accounts. */}
             {activeAccount ? (
                 <CharCounter
-                    count={measure(activeText, activeAccount.platform)}
+                    count={measure(
+                        replaceMentionTokens(
+                            activeText,
+                            state.mentions,
+                            activeAccount.platform,
+                        ),
+                        activeAccount.platform,
+                    )}
                     limit={limitForAccount(activeAccount)}
                     sectionTotal={activeSectionTotal}
                     state={severityFor(activeAccount.id)}

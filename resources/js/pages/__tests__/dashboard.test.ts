@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     canManageConnectedAccounts,
     shouldShowDashboardNoAccountsNotice,
+    shouldShowDashboardPublishingSection,
 } from '@/lib/dashboard/accounts';
 
 describe('canManageConnectedAccounts', () => {
@@ -13,6 +14,15 @@ describe('canManageConnectedAccounts', () => {
                 'workspace.read',
                 'workspace.accounts.manage',
             ]),
+        ).toBe(true);
+    });
+});
+
+describe('shouldShowDashboardPublishingSection', () => {
+    it('shows the composer only when the workspace has accounts', () => {
+        expect(shouldShowDashboardPublishingSection([])).toBe(false);
+        expect(
+            shouldShowDashboardPublishingSection([{ id: 'account-1' }]),
         ).toBe(true);
     });
 });

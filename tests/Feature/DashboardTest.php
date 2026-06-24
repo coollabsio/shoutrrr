@@ -6,6 +6,7 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Models\WorkspaceMention;
 use Illuminate\Support\Facades\Context;
 
 test('guests are redirected to the login page', function () {
@@ -43,4 +44,30 @@ test('the recent feed exposes full row data including targets', function () {
             ->loadDeferredProps(fn ($reload) => $reload
                 ->has('posts.0.targets')
                 ->has('posts.0.published_at')));
+});
+
+test('the dashboard includes saved workspace mentions for the composer', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Member,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    WorkspaceMention::factory()->create([
+        'workspace_id' => $workspace->id,
+        'name' => '@saved',
+        'handles' => ['x' => '@saved_x'],
+    ]);
+    WorkspaceMention::factory()->create(['name' => '@foreign']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn ($page) => $page
+            ->component('dashboard')
+            ->has('savedMentions', 1)
+            ->where('savedMentions.0.name', '@saved'));
 });

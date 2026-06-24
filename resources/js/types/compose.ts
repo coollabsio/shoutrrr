@@ -2,6 +2,18 @@ export const BASE_TAB = '__base__';
 
 export type PlatformName = 'x' | 'bluesky' | 'linkedin';
 
+export type WorkspaceMention = {
+    id: string;
+    name: string;
+    handles: Partial<Record<PlatformName, string>>;
+};
+
+export type MentionPlaceholder = {
+    id: string;
+    label: string;
+    handles: Partial<Record<PlatformName, string>>;
+};
+
 export type Destination =
     | { kind: 'all' }
     | { kind: 'set'; id: string }
@@ -96,6 +108,7 @@ export type TargetView = {
 export type PostView = {
     id: string;
     base_text: string;
+    mentions?: MentionPlaceholder[];
     status: PostStatus;
     published_at: string | null;
     updated_at: string;
@@ -110,4 +123,5 @@ export type ComposePageProps = {
     accounts: Account[];
     sets: AccountSet[];
     limits: PlatformLimits[];
+    savedMentions: WorkspaceMention[];
 };

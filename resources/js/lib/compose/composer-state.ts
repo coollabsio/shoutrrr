@@ -3,6 +3,7 @@ import {
     BASE_TAB,
     type Destination,
     type MediaView,
+    type MentionPlaceholder,
     type PostView,
 } from '@/types/compose';
 
@@ -27,6 +28,7 @@ export type ComposerState = {
     saveState: SaveState;
     baselineUpdatedAt: string | null;
     baseText: string;
+    mentions: MentionPlaceholder[];
     destination: Destination;
     autoSplitByAccount: Record<string, boolean>;
     overrideByAccount: Record<string, string | undefined>;
@@ -41,6 +43,7 @@ export type ComposerAction =
     | { type: 'syncServerPost'; post: PostView }
     | { type: 'setPostId'; postId: string; updatedAt: string }
     | { type: 'updateBaseText'; text: string }
+    | { type: 'setMentions'; mentions: MentionPlaceholder[] }
     | { type: 'setActiveTab'; tab: string }
     | { type: 'setDestination'; destination: Destination }
     | { type: 'toggleAutoSplit'; accountId: string }
@@ -102,6 +105,7 @@ export function initialComposerState(
         saveState: 'idle',
         baselineUpdatedAt: null,
         baseText: '',
+        mentions: [],
         destination: initialDestination ?? { kind: 'all' },
         autoSplitByAccount: {},
         overrideByAccount: {},
@@ -158,6 +162,7 @@ function hydrate(post: PostView): ComposerState {
         saveState: 'saved',
         baselineUpdatedAt: post.updated_at,
         baseText: post.base_text,
+        mentions: post.mentions ?? [],
         destination:
             post.destination.kind === 'set' && post.destination.id
                 ? { kind: 'set', id: post.destination.id }
@@ -228,6 +233,13 @@ export function composerReducer(
             }
 
             return { ...state, baseText: action.text, saveState: 'dirty' };
+
+        case 'setMentions':
+            if (state.saveState === 'conflict') {
+                return state;
+            }
+
+            return { ...state, mentions: action.mentions, saveState: 'dirty' };
 
         case 'setActiveTab':
             return { ...state, activeTab: action.tab };
@@ -392,6 +404,7 @@ export type PutBody = {
     destination: Destination;
     targets: PutTarget[];
     media_ids: string[];
+    mentions: MentionPlaceholder[];
     expected_updated_at: string | null;
 };
 
@@ -434,6 +447,7 @@ export function buildPutBody(
         destination: state.destination,
         targets,
         media_ids: state.media.map((m) => m.id),
+        mentions: state.mentions,
         expected_updated_at: state.baselineUpdatedAt,
     };
 }
@@ -449,6 +463,12 @@ export function contentMatchesServer(
     post: PostView,
 ): boolean {
     if (state.baseText !== post.base_text) {
+        return false;
+    }
+
+    if (
+        JSON.stringify(state.mentions) !== JSON.stringify(post.mentions ?? [])
+    ) {
         return false;
     }
 
@@ -502,7 +522,11 @@ function normalizeOverrides(
  * changes are deliberately NOT content — they must not spawn a blank draft.
  */
 export function composerHasContent(state: ComposerState): boolean {
-    if (state.baseText.trim().length > 0 || state.media.length > 0) {
+    if (
+        state.baseText.trim().length > 0 ||
+        state.media.length > 0 ||
+        state.mentions.length > 0
+    ) {
         return true;
     }
 

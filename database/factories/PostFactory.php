@@ -23,6 +23,7 @@ class PostFactory extends Factory
             'account_set_id' => null,
             'author_id' => User::factory(),
             'base_text' => fake()->sentence(),
+            'mentions' => null,
             'status' => PostStatus::Draft->value,
             'scheduled_at' => null,
             'published_at' => null,

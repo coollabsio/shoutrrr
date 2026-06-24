@@ -1,0 +1,156 @@
+import type { PlatformName, WorkspaceMention } from '@/types/compose';
+
+export type MentionPlaceholder = {
+    id: string;
+    label: string;
+    handles: Partial<Record<PlatformName, string>>;
+};
+
+const PLATFORMS: PlatformName[] = ['x', 'bluesky', 'linkedin'];
+const HANDLE_PATTERN = /(^|\s)@([a-zA-Z0-9_.-]{0,50})(?=\s|$|[.,!?;:])/g;
+
+export function createMention(label: string): MentionPlaceholder {
+    const normalizedLabel = normalizeMentionName(label);
+
+    return {
+        id: mentionIdFromLabel(normalizedLabel),
+        label: normalizedLabel,
+        handles: Object.fromEntries(
+            PLATFORMS.map((platform) => [platform, normalizedLabel]),
+        ) as Record<PlatformName, string>,
+    };
+}
+
+export function mentionToken(id: string): string {
+    return `{{mention:${id}}}`;
+}
+
+export function updateMentionName(
+    mention: MentionPlaceholder,
+    name: string,
+): MentionPlaceholder {
+    const label = normalizeMentionName(name);
+    const handles = Object.fromEntries(
+        Object.entries(mention.handles).map(([platform, handle]) => [
+            platform,
+            handle === mention.label ? label : handle,
+        ]),
+    ) as Partial<Record<PlatformName, string>>;
+
+    return {
+        ...mention,
+        id: mentionIdFromLabel(label),
+        label,
+        handles,
+    };
+}
+
+export function updateMentionHandle(
+    mention: MentionPlaceholder,
+    platform: PlatformName,
+    handle: string,
+): MentionPlaceholder {
+    const handles = { ...mention.handles };
+    const trimmed = handle.trim();
+    if (trimmed === '') {
+        delete handles[platform];
+    } else {
+        handles[platform] = normalizeMentionName(trimmed);
+    }
+
+    return { ...mention, handles };
+}
+
+export function syncMentionsFromText(
+    text: string,
+    current: MentionPlaceholder[],
+    savedMentions: WorkspaceMention[] = [],
+): MentionPlaceholder[] {
+    const existing = new Map(
+        current.map((mention) => [mention.label, mention]),
+    );
+    const saved = new Map(
+        savedMentions.map((mention) => [mention.name, mention]),
+    );
+    const labels = [...new Set(extractMentionLabels(text))];
+
+    return labels.map((label, index) => {
+        const currentMention = existing.get(label);
+        if (currentMention) {
+            return currentMention;
+        }
+
+        const incompleteMention = current[index];
+        if (incompleteMention?.label === '@' && label !== '@') {
+            return updateMentionName(incompleteMention, label);
+        }
+
+        const savedMention = saved.get(label);
+        if (savedMention) {
+            return {
+                id: mentionIdFromLabel(savedMention.name),
+                label: savedMention.name,
+                handles: savedMention.handles,
+            };
+        }
+
+        return createMention(label);
+    });
+}
+
+export function replaceMentionTokens(
+    text: string,
+    mentions: MentionPlaceholder[],
+    platform: PlatformName,
+): string {
+    let replaced = text;
+
+    for (const mention of [...mentions].sort(
+        (left, right) => right.label.length - left.label.length,
+    )) {
+        replaced = replaced.replaceAll(
+            mention.label,
+            mention.handles[platform] ?? mention.label,
+        );
+    }
+
+    const byId = new Map(mentions.map((mention) => [mention.id, mention]));
+
+    return replaced.replaceAll(
+        /\{\{mention:([a-zA-Z0-9_-]+)\}\}/g,
+        (token, id) => {
+            const mention = byId.get(id);
+
+            return mention?.handles[platform] ?? mention?.label ?? token;
+        },
+    );
+}
+
+function extractMentionLabels(text: string): string[] {
+    const labels: string[] = [];
+
+    for (const match of text.matchAll(HANDLE_PATTERN)) {
+        labels.push(`@${match[2]}`);
+    }
+
+    return labels;
+}
+
+export function normalizeMentionName(name: string): string {
+    const trimmed = name.trim().replace(/\s+/g, '-');
+
+    return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
+export function mentionInputValue(name: string): string {
+    return name.replace(/^@/, '');
+}
+
+function mentionIdFromLabel(label: string): string {
+    const id = label
+        .replace(/^@/, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-');
+
+    return id || crypto.randomUUID();
+}

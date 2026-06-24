@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Post;
 use App\Models\Workspace;
+use App\Models\WorkspaceMention;
 use App\Support\Onboarding\OnboardingPresenter;
 use App\Support\PostListItem;
 use Illuminate\Http\Request;
@@ -26,6 +27,14 @@ class DashboardController extends Controller
             'onboarding' => $workspace instanceof Workspace
                 ? OnboardingPresenter::make($workspace, $user)
                 : null,
+            'savedMentions' => $user?->current_workspace_id
+                ? WorkspaceMention::withoutGlobalScopes()
+                    ->where('workspace_id', $user->current_workspace_id)
+                    ->orderBy('name')
+                    ->get()
+                    ->map(fn (WorkspaceMention $mention): array => WorkspaceMentionController::view($mention))
+                    ->all()
+                : [],
             'posts' => Inertia::defer(fn (): array => Post::query()
                 ->with(['author:id,name', 'targets'])
                 ->latest('updated_at')

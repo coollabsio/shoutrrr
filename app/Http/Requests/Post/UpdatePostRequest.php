@@ -21,6 +21,13 @@ class UpdatePostRequest extends FormRequest
     {
         return [
             'base_text' => ['present', 'nullable', 'string'],
+            'mentions' => ['array'],
+            'mentions.*.id' => ['required', 'string'],
+            'mentions.*.label' => ['required', 'string'],
+            'mentions.*.handles' => ['array'],
+            'mentions.*.handles.x' => ['nullable', 'string'],
+            'mentions.*.handles.bluesky' => ['nullable', 'string'],
+            'mentions.*.handles.linkedin' => ['nullable', 'string'],
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account', 'accounts'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],

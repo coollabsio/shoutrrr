@@ -24,20 +24,22 @@ class DraftService
      * Create a draft and snapshot the destination's accounts into targets.
      *
      * @param  array{kind: string, id?: string|null, ids?: list<string>}  $destination
+     * @param  list<array{id?: mixed, label?: mixed, handles?: array<string, mixed>}>  $mentions
      */
-    public function createDraft(string $workspaceId, User $author, array $destination, string $baseText): Post
+    public function createDraft(string $workspaceId, User $author, array $destination, string $baseText, array $mentions = []): Post
     {
-        return DB::transaction(function () use ($workspaceId, $author, $destination, $baseText): Post {
+        return DB::transaction(function () use ($workspaceId, $author, $destination, $baseText, $mentions): Post {
             $post = Post::create([
                 'workspace_id' => $workspaceId,
                 'account_set_id' => $this->scopedAccountSetId($workspaceId, $destination),
                 'author_id' => $author->id,
                 'base_text' => $baseText,
+                'mentions' => $this->normalizeMentions($mentions),
                 'status' => PostStatus::Draft->value,
             ]);
 
             $accountIds = $this->resolveDestinationAccountIds($workspaceId, $destination);
-            $this->syncTargets($post, $accountIds, $baseText, [], []);
+            $this->syncTargets($post, $accountIds, $baseText, [], [], $post->mentions ?? []);
 
             return $post->load('targets');
         });
@@ -106,8 +108,9 @@ class DraftService
      * @param  list<string>  $accountIds
      * @param  array<string, bool>  $autoSplitByAccount
      * @param  array<string, array{text?: string|null, media_ids?: list<string>}|null>  $overrideByAccount
+     * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
      */
-    public function syncTargets(Post $post, array $accountIds, string $baseText, array $autoSplitByAccount, array $overrideByAccount): void
+    public function syncTargets(Post $post, array $accountIds, string $baseText, array $autoSplitByAccount, array $overrideByAccount, array $mentions = []): void
     {
         $accounts = ConnectedAccount::withoutGlobalScopes()
             ->whereIn('id', $accountIds)
@@ -136,7 +139,7 @@ class DraftService
                 ? $overrideByAccount[$accountId]
                 : $currentOverride;
 
-            $effectiveText = $override['text'] ?? $baseText;
+            $effectiveText = $this->resolveMentionTokens($override['text'] ?? $baseText, $mentions, $account->platform->value);
             $sections = $this->splitter->split(
                 $effectiveText,
                 $account->platform,
@@ -194,16 +197,76 @@ class DraftService
 
             $post->forceFill([
                 'base_text' => $data->baseText,
+                'mentions' => $this->normalizeMentions($data->mentions),
                 'account_set_id' => $this->scopedAccountSetId($post->workspace_id, $destination),
             ])->save();
 
-            $this->syncTargets($post, $accountIds, $data->baseText, $autoSplitByAccount, $overrideByAccount);
+            $this->syncTargets($post, $accountIds, $data->baseText, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? []);
             $this->attachMedia($post, $data->mediaIds);
 
             $post->touch();
 
             return $post->fresh(['targets', 'media']);
         });
+    }
+
+    /**
+     * @param  list<array{id?: mixed, label?: mixed, handles?: array<string, mixed>}>  $mentions
+     * @return list<array{id: string, label: string, handles: array<string, string>}>
+     */
+    private function normalizeMentions(array $mentions): array
+    {
+        $normalized = [];
+
+        foreach ($mentions as $mention) {
+            $id = trim((string) ($mention['id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+
+            $handles = [];
+            foreach (($mention['handles'] ?? []) as $platform => $handle) {
+                $handle = trim((string) $handle);
+                if ($handle !== '') {
+                    $handles[(string) $platform] = $handle;
+                }
+            }
+
+            $normalized[] = [
+                'id' => $id,
+                'label' => trim((string) ($mention['label'] ?? 'Mention')) ?: 'Mention',
+                'handles' => $handles,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
+     */
+    private function resolveMentionTokens(string $text, array $mentions, string $platform): string
+    {
+        usort($mentions, static fn (array $left, array $right): int => strlen($right['label']) <=> strlen($left['label']));
+
+        $resolved = $text;
+        foreach ($mentions as $mention) {
+            $resolved = str_replace($mention['label'], $mention['handles'][$platform] ?? $mention['label'], $resolved);
+        }
+
+        $byId = [];
+        foreach ($mentions as $mention) {
+            $byId[$mention['id']] = $mention;
+        }
+
+        return (string) preg_replace_callback('/\{\{mention:([a-zA-Z0-9_-]+)\}\}/', function (array $matches) use ($byId, $platform): string {
+            $mention = $byId[$matches[1]] ?? null;
+            if ($mention === null) {
+                return $matches[0];
+            }
+
+            return $mention['handles'][$platform] ?? $mention['label'];
+        }, $resolved);
     }
 
     /**
