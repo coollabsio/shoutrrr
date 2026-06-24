@@ -13,7 +13,7 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
 
 /** Crop a region of the source image to a PNG blob via an offscreen canvas. */
 export function cropToBlob(
-    source: CanvasImageSource,
+    source: CanvasImageSource & { width: number; height: number },
     rect: CropRect,
 ): Promise<Blob> {
     const canvas = document.createElement('canvas');
