@@ -128,7 +128,7 @@ export function MediaChips({
                 {media.map((m) => (
                     <div
                         key={m.id}
-                        className="size-7 overflow-hidden rounded-md border border-border"
+                        className="size-9 overflow-hidden rounded-md border border-border"
                     >
                         <MediaThumb media={m} />
                     </div>
@@ -191,7 +191,7 @@ export function MediaChips({
                                             : onToggleExclude(m.id)
                                     }
                                     className={cn(
-                                        'block size-7 cursor-grab overflow-hidden rounded-md border border-border active:cursor-grabbing',
+                                        'block size-9 cursor-grab overflow-hidden rounded-md border border-border active:cursor-grabbing',
                                         'transition-[opacity,transform]',
                                         excluded &&
                                             'opacity-40 ring-1 ring-destructive/50',
@@ -201,9 +201,9 @@ export function MediaChips({
                                 >
                                     <MediaThumb media={m} />
                                 </button>
-                                {/* Edit button, mirroring the remove (X) on the
-                                    opposite corner. Tapping the thumbnail also opens
-                                    the editor; this is the explicit affordance. */}
+                                {/* Edit — always visible at the bottom-right (the
+                                    conventional edit spot). Tapping the thumbnail also
+                                    opens the editor; this is the explicit signpost. */}
                                 {m.kind === 'image' && onImageClick && (
                                     <button
                                         type="button"
@@ -213,14 +213,13 @@ export function MediaChips({
                                             onImageClick(m.id);
                                         }}
                                         className={cn(
-                                            'absolute -top-1.5 -left-1.5 z-10 grid size-4 place-items-center rounded-full',
+                                            'absolute -right-1.5 -bottom-1.5 z-10 grid size-[18px] place-items-center rounded-full',
                                             'border border-background bg-foreground text-background shadow-sm',
-                                            // Always visible — it's the primary edit affordance.
-                                            'transition-opacity',
+                                            'transition-colors hover:bg-foreground/90',
                                         )}
                                     >
                                         <Pencil
-                                            className="size-2.5"
+                                            className="size-3"
                                             aria-hidden="true"
                                         />
                                     </button>
@@ -234,8 +233,8 @@ export function MediaChips({
                                         aria-hidden="true"
                                     />
                                 </CornerButton>
-                                {/* Per-account include/exclude lives on a hover toggle so
-                                    the chip body is free to (re)open the editor. */}
+                                {/* Per-account include/exclude — top-left, so it
+                                    doesn't collide with edit (bottom-right) or remove. */}
                                 {m.kind === 'image' && activePlatform && (
                                     <button
                                         type="button"
@@ -250,7 +249,7 @@ export function MediaChips({
                                             onToggleExclude(m.id);
                                         }}
                                         className={cn(
-                                            'absolute -right-1.5 -bottom-1.5 z-10 grid size-4 place-items-center rounded-full',
+                                            'absolute -top-1.5 -left-1.5 z-10 grid size-4 place-items-center rounded-full',
                                             'border border-background bg-foreground text-background shadow-sm',
                                             'transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100',
                                             excluded
@@ -299,7 +298,7 @@ export function MediaChips({
                         >
                             <div
                                 className={cn(
-                                    'relative size-7 overflow-hidden rounded-md border border-border',
+                                    'relative size-9 overflow-hidden rounded-md border border-border',
                                     p.status === 'error' &&
                                         'ring-1 ring-destructive/60',
                                 )}
