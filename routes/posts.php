@@ -13,6 +13,7 @@ use App\Http\Controllers\Posts\PostMediaController;
 use App\Http\Controllers\Posts\PostMetricsRefreshController;
 use App\Http\Controllers\Posts\PostQueueController;
 use App\Http\Controllers\Posts\PostScheduleController;
+use App\Http\Controllers\Posts\PostScreenshotController;
 use App\Http\Controllers\Posts\PostShareController;
 use App\Http\Controllers\Posts\PostTargetRetryController;
 use App\Http\Controllers\Posts\PostVideoUploadController;
@@ -78,6 +79,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::post('posts/{post}/media', [PostMediaController::class, 'store'])->name('posts.media.store');
         Route::post('posts/{post}/media/video-url', [PostVideoUploadController::class, 'url'])->name('posts.media.video-url');
         Route::post('posts/{post}/media/video', [PostVideoUploadController::class, 'store'])->name('posts.media.video');
+        Route::post('posts/{post}/screenshot', [PostScreenshotController::class, 'store'])->name('posts.screenshot.store');
+        Route::put('posts/{post}/screenshot/{media}', [PostScreenshotController::class, 'update'])->name('posts.screenshot.update');
     });
     Route::delete('posts/{post}/media/{media}', [PostMediaController::class, 'destroy'])->name('posts.media.destroy');
 
