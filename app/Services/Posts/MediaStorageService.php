@@ -75,4 +75,59 @@ class MediaStorageService
             'position' => 0,
         ]);
     }
+
+    /**
+     * Store a beautified screenshot: the composed image becomes the post's media,
+     * the original source is retained for non-destructive re-editing.
+     *
+     * @param  array<string, mixed>  $settings
+     */
+    public function storeBeautified(string $workspaceId, UploadedFile $composed, UploadedFile $source, array $settings): PostMedia
+    {
+        $disk = 'public';
+        $path = $composed->store('media/'.$workspaceId, $disk);
+        $sourcePath = $source->store('media/'.$workspaceId, $disk);
+
+        $dimensions = @getimagesize($composed->getRealPath()) ?: [null, null];
+
+        return PostMedia::create([
+            'workspace_id' => $workspaceId,
+            'post_id' => null,
+            'disk' => $disk,
+            'path' => $path,
+            'source_disk' => $disk,
+            'source_path' => $sourcePath,
+            'edit_settings' => $settings,
+            'mime' => (string) $composed->getMimeType(),
+            'size_bytes' => $composed->getSize(),
+            'width' => $dimensions[0] ?? null,
+            'height' => $dimensions[1] ?? null,
+            'alt_text' => null,
+            'position' => 0,
+        ]);
+    }
+
+    /**
+     * Replace the composed file + settings of an existing beautified media, keeping its source.
+     *
+     * @param  array<string, mixed>  $settings
+     */
+    public function replaceBeautified(PostMedia $media, UploadedFile $composed, array $settings): PostMedia
+    {
+        Storage::disk($media->disk)->delete($media->path);
+
+        $path = $composed->store('media/'.$media->workspace_id, $media->disk);
+        $dimensions = @getimagesize($composed->getRealPath()) ?: [null, null];
+
+        $media->update([
+            'path' => $path,
+            'edit_settings' => $settings,
+            'mime' => (string) $composed->getMimeType(),
+            'size_bytes' => $composed->getSize(),
+            'width' => $dimensions[0] ?? null,
+            'height' => $dimensions[1] ?? null,
+        ]);
+
+        return $media->refresh();
+    }
 }
