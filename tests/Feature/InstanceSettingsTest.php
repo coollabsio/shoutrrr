@@ -2,7 +2,7 @@
 
 use App\Enums\InstanceRole;
 use App\Models\User;
-use App\Settings\InstanceSettings;
+use App\Support\InstanceSettings;
 use Inertia\Testing\AssertableInertia;
 
 test('instance owner can view instance settings', function () {

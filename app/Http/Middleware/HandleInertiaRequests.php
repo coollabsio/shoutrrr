@@ -8,7 +8,7 @@ use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
-use App\Settings\InstanceSettings;
+use App\Support\InstanceSettings;
 use App\Support\Notifications\NotificationPresenter;
 use Illuminate\Http\Request;
 use Inertia\Middleware;

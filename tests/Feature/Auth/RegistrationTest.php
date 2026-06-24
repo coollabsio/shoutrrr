@@ -2,7 +2,7 @@
 
 use App\Models\User;
 use App\Models\WorkspaceInvitation;
-use App\Settings\InstanceSettings;
+use App\Support\InstanceSettings;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Fortify\Features;
 

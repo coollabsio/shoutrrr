@@ -7,7 +7,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Models\User;
 use App\Models\WorkspaceInvitation;
 use App\Services\Workspace\WorkspaceProvisioningService;
-use App\Settings\InstanceSettings;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;

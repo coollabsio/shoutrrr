@@ -5,7 +5,6 @@ declare(strict_types=1);
 return [
     'workspaces' => [
         'enabled' => env('WORKSPACES_ENABLED', true),
-        'can_create_workspaces' => env('WORKSPACES_CAN_CREATE_WORKSPACE', true),
         'invitation_ttl_days' => (int) env('WORKSPACE_INVITATION_TTL_DAYS', 7),
 
         'roles' => [

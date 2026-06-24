@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Settings;
+namespace App\Support;
 
 use App\Enums\InstanceRole;
 use App\Models\InstanceSetting;

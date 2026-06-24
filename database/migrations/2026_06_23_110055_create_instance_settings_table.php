@@ -16,6 +16,10 @@ return new class extends Migration
             $table->json('value');
             $table->timestamps();
         });
+
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('instance_role')->nullable()->index()->after('current_workspace_id');
+        });
     }
 
     /**
@@ -23,6 +27,11 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropIndex(['instance_role']);
+            $table->dropColumn('instance_role');
+        });
+
         Schema::dropIfExists('instance_settings');
     }
 };

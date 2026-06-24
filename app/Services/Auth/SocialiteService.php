@@ -9,7 +9,7 @@ use App\Exceptions\SocialAuthException;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Services\Workspace\WorkspaceProvisioningService;
-use App\Settings\InstanceSettings;
+use App\Support\InstanceSettings;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;

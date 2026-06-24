@@ -7,7 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\StoreInstanceOwnerRequest;
 use App\Http\Requests\Settings\UpdateInstanceSettingsRequest;
 use App\Models\User;
-use App\Settings\InstanceSettings;
+use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;

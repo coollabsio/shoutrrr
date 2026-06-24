@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Workspace;
 
-use App\Settings\InstanceSettings;
+use App\Support\InstanceSettings;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreWorkspaceRequest extends FormRequest
