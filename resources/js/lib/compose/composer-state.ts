@@ -51,6 +51,7 @@ export type ComposerAction =
     | { type: 'discardOverride'; accountId: string }
     | { type: 'toggleMediaExclude'; mediaId: string; accountId: string }
     | { type: 'addMedia'; media: MediaView }
+    | { type: 'replaceMedia'; media: MediaView }
     | { type: 'removeMedia'; mediaId: string }
     | { type: 'reorderMedia'; ids: string[] }
     | { type: 'setScheduleTray'; tray: ScheduleTray }
@@ -296,6 +297,15 @@ export function composerReducer(
             return {
                 ...state,
                 media: [...state.media, action.media],
+                saveState: 'dirty',
+            };
+
+        case 'replaceMedia':
+            return {
+                ...state,
+                media: state.media.map((m) =>
+                    m.id === action.media.id ? action.media : m,
+                ),
                 saveState: 'dirty',
             };
 
