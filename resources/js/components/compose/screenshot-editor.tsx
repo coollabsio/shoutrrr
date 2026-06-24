@@ -151,7 +151,6 @@ export function ScreenshotEditor({
                 node,
                 Math.max(stage.width, stage.height),
             );
-            const sourceBlob = await fetch(sourceUrl!).then((r) => r.blob());
             if (editTarget) {
                 await screenshot.applyEdit(
                     editTarget.mediaId,
@@ -159,6 +158,9 @@ export function ScreenshotEditor({
                     settings,
                 );
             } else {
+                const sourceBlob = await fetch(sourceUrl!).then((r) =>
+                    r.blob(),
+                );
                 await screenshot.applyNew(composed, sourceBlob, settings);
             }
             onOpenChange(false);
