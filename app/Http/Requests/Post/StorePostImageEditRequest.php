@@ -6,7 +6,7 @@ namespace App\Http\Requests\Post;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StorePostScreenshotRequest extends FormRequest
+class StorePostImageEditRequest extends FormRequest
 {
     public function authorize(): bool
     {

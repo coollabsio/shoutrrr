@@ -1,4 +1,4 @@
-import type { EditSettings } from '@/lib/screenshot/settings';
+import type { EditSettings } from '@/lib/image-editor/settings';
 
 export const BASE_TAB = '__base__';
 

@@ -5,10 +5,10 @@ import { toast } from 'sonner';
 
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import { useAutosave } from '@/hooks/compose/use-autosave';
+import { useImageEditor } from '@/hooks/compose/use-image-editor';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
 import { usePublishStatus } from '@/hooks/compose/use-publish-status';
-import { useScreenshot } from '@/hooks/compose/use-screenshot';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import {
     composerReducer,
@@ -21,12 +21,12 @@ import {
     replaceMentionTokens,
     syncMentionsFromText,
 } from '@/lib/compose/mentions';
-import { postCapabilities } from '@/lib/posts/capabilities';
 import {
     defaultSettings,
     normalizeSettings,
     type EditSettings,
-} from '@/lib/screenshot/settings';
+} from '@/lib/image-editor/settings';
+import { postCapabilities } from '@/lib/posts/capabilities';
 import { index as accountsRoute } from '@/routes/accounts';
 import {
     BASE_TAB,
@@ -45,14 +45,14 @@ import { ComposerToolbar } from './composer-toolbar';
 import { ConflictDialog } from './conflict-dialog';
 import DestinationSelector from './destination-selector';
 import EditorBody from './editor-body';
+import { ImageEditor } from './image-editor';
 import PlatformTabs from './platform-tabs';
 import SaveIndicator from './save-indicator';
 import { ScheduleTray } from './schedule-tray';
-import { ScreenshotEditor } from './screenshot-editor';
 import { SubmitBar } from './submit-bar';
 import { TargetStatusChips } from './target-status-chips';
 
-/** What the screenshot editor is currently working on. */
+/** What the image editor is currently working on. */
 type Editing =
     | {
           kind: 'batch';
@@ -187,7 +187,7 @@ export default function Composer({
         onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
     });
 
-    const screenshot = useScreenshot({
+    const imageEditor = useImageEditor({
         onEnsurePost: ensurePost,
         onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
         onReplaceMedia: (m) => dispatch({ type: 'replaceMedia', media: m }),
@@ -284,18 +284,18 @@ export default function Composer({
             return;
         }
         if (editing.kind === 'batch') {
-            await screenshot.applyNew(
+            await imageEditor.applyNew(
                 composed,
                 editing.items[editing.index].file,
                 settings,
             );
         } else if (editing.kind === 'reedit') {
-            await screenshot.applyEdit(editing.mediaId, composed, settings);
+            await imageEditor.applyEdit(editing.mediaId, composed, settings);
         } else {
             // A plain image beautified for the first time: keep the raw image as
             // the source, attach the composed result, drop the raw attachment.
             const rawBlob = await fetch(editing.url).then((r) => r.blob());
-            await screenshot.applyNew(composed, rawBlob, settings);
+            await imageEditor.applyNew(composed, rawBlob, settings);
             dispatch({ type: 'removeMedia', mediaId: editing.mediaId });
         }
         endEditingStep();
@@ -689,13 +689,13 @@ export default function Composer({
             )}
 
             {!readOnly && (
-                <ScreenshotEditor
+                <ImageEditor
                     open={editing !== null}
                     sourceUrl={editorSourceUrl}
                     initialSettings={editorSettings}
                     onApply={applyEditing}
                     onCancel={cancelEditing}
-                    isSaving={screenshot.isSaving}
+                    isSaving={imageEditor.isSaving}
                     queue={editorQueue}
                 />
             )}

@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 
-import type { Corner } from '@/lib/screenshot/layout';
-import { moveCropRect, resizeCorner } from '@/lib/screenshot/layout';
-import type { CropRect } from '@/lib/screenshot/settings';
+import type { Corner } from '@/lib/image-editor/layout';
+import { moveCropRect, resizeCorner } from '@/lib/image-editor/layout';
+import type { CropRect } from '@/lib/image-editor/settings';
 import { cn } from '@/lib/utils';
 
 type Props = {

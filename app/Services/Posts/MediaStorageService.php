@@ -77,7 +77,7 @@ class MediaStorageService
     }
 
     /**
-     * Store a beautified screenshot: the composed image becomes the post's media,
+     * Store a beautified image: the composed image becomes the post's media,
      * the original source is retained for non-destructive re-editing.
      *
      * @param  array<string, mixed>  $settings

@@ -11,7 +11,7 @@ use App\Models\WorkspaceMembership;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-function screenshotMember(): array
+function imageEditMember(): array
 {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
@@ -38,11 +38,11 @@ function settingsPayload(): string
     ]);
 }
 
-test('POST /posts/{post}/screenshot stores composed + source and returns edit settings', function () {
+test('POST /posts/{post}/image-edit stores composed + source and returns edit settings', function () {
     Storage::fake('public');
-    [$user, $workspace, $post] = screenshotMember();
+    [$user, $workspace, $post] = imageEditMember();
 
-    $response = test()->post("/posts/{$post['id']}/screenshot", [
+    $response = test()->post("/posts/{$post['id']}/image-edit", [
         'composed' => UploadedFile::fake()->image('out.png', 800, 600),
         'source' => UploadedFile::fake()->image('src.png', 1200, 900),
         'settings' => settingsPayload(),
@@ -54,11 +54,11 @@ test('POST /posts/{post}/screenshot stores composed + source and returns edit se
     expect($response->json('media.source_url'))->not->toBeNull();
 });
 
-test('PUT /posts/{post}/screenshot/{media} replaces composed + settings', function () {
+test('PUT /posts/{post}/image-edit/{media} replaces composed + settings', function () {
     Storage::fake('public');
-    [$user, $workspace, $post] = screenshotMember();
+    [$user, $workspace, $post] = imageEditMember();
 
-    $mediaId = test()->post("/posts/{$post['id']}/screenshot", [
+    $mediaId = test()->post("/posts/{$post['id']}/image-edit", [
         'composed' => UploadedFile::fake()->image('out.png', 800, 600),
         'source' => UploadedFile::fake()->image('src.png', 1200, 900),
         'settings' => settingsPayload(),
@@ -67,7 +67,7 @@ test('PUT /posts/{post}/screenshot/{media} replaces composed + settings', functi
     $newSettings = json_decode(settingsPayload(), true);
     $newSettings['padding'] = 120;
 
-    test()->put("/posts/{$post['id']}/screenshot/{$mediaId}", [
+    test()->put("/posts/{$post['id']}/image-edit/{$mediaId}", [
         'composed' => UploadedFile::fake()->image('out2.png', 900, 600),
         'settings' => json_encode($newSettings),
     ], ['Accept' => 'application/json'])
@@ -77,12 +77,12 @@ test('PUT /posts/{post}/screenshot/{media} replaces composed + settings', functi
     expect(PostMedia::findOrFail($mediaId)->source_path)->not->toBeNull();
 });
 
-test('it rejects a screenshot upload to a non-editable post', function () {
+test('it rejects an image upload to a non-editable post', function () {
     Storage::fake('public');
-    [$user, $workspace, $post] = screenshotMember();
+    [$user, $workspace, $post] = imageEditMember();
     Post::findOrFail($post['id'])->forceFill(['status' => 'published'])->save();
 
-    test()->post("/posts/{$post['id']}/screenshot", [
+    test()->post("/posts/{$post['id']}/image-edit", [
         'composed' => UploadedFile::fake()->image('out.png', 800, 600),
         'source' => UploadedFile::fake()->image('src.png', 1200, 900),
         'settings' => settingsPayload(),
@@ -91,10 +91,10 @@ test('it rejects a screenshot upload to a non-editable post', function () {
 
 test('it 404s when updating media from another workspace', function () {
     Storage::fake('public');
-    [$user, $workspace, $post] = screenshotMember();
+    [$user, $workspace, $post] = imageEditMember();
     $foreign = PostMedia::factory()->create();
 
-    test()->put("/posts/{$post['id']}/screenshot/{$foreign->id}", [
+    test()->put("/posts/{$post['id']}/image-edit/{$foreign->id}", [
         'composed' => UploadedFile::fake()->image('out.png', 800, 600),
         'settings' => settingsPayload(),
     ], ['Accept' => 'application/json'])->assertStatus(404);
@@ -102,9 +102,9 @@ test('it 404s when updating media from another workspace', function () {
 
 test('it rejects a non-image composed file', function () {
     Storage::fake('public');
-    [$user, $workspace, $post] = screenshotMember();
+    [$user, $workspace, $post] = imageEditMember();
 
-    test()->post("/posts/{$post['id']}/screenshot", [
+    test()->post("/posts/{$post['id']}/image-edit", [
         'composed' => UploadedFile::fake()->create('x.pdf', 10, 'application/pdf'),
         'source' => UploadedFile::fake()->image('src.png', 1200, 900),
         'settings' => settingsPayload(),

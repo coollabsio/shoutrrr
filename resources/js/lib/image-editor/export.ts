@@ -33,7 +33,7 @@ export async function rasterizeStage(
         skipFonts: true,
     });
     if (!blob) {
-        throw new Error('Failed to rasterize the screenshot.');
+        throw new Error('Failed to rasterize the image.');
     }
 
     return blob;

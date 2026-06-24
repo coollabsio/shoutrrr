@@ -9,25 +9,25 @@ import {
     DialogDescription,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { cropToBlob, loadImage } from '@/lib/screenshot/crop';
-import { rasterizeStage } from '@/lib/screenshot/export';
-import { GRADIENTS, gradientToFill } from '@/lib/screenshot/gradients';
+import { cropToBlob, loadImage } from '@/lib/image-editor/crop';
+import { rasterizeStage } from '@/lib/image-editor/export';
+import { GRADIENTS, gradientToFill } from '@/lib/image-editor/gradients';
 import {
     aspectToRatio,
     centeredCropForRatio,
     clampCropRect,
     stageDimensions,
-} from '@/lib/screenshot/layout';
+} from '@/lib/image-editor/layout';
 import {
     ASPECT_PRESETS,
     type AspectPreset,
     type EditSettings,
     SHADOW_PRESETS,
-} from '@/lib/screenshot/settings';
+} from '@/lib/image-editor/settings';
 import { cn } from '@/lib/utils';
 
 import { CropOverlay } from './crop-overlay';
-import { ScreenshotStage } from './screenshot-stage';
+import { ImageStage } from './image-stage';
 
 type Props = {
     open: boolean;
@@ -48,7 +48,7 @@ type Props = {
     queue?: { thumbnails: string[]; index: number };
 };
 
-export function ScreenshotEditor({
+export function ImageEditor({
     open,
     sourceUrl,
     initialSettings,
@@ -298,7 +298,7 @@ export function ScreenshotEditor({
                                             transformOrigin: 'top left',
                                         }}
                                     >
-                                        <ScreenshotStage
+                                        <ImageStage
                                             ref={stageRef}
                                             imageSrc={croppedUrl}
                                             settings={settings}
@@ -418,6 +418,13 @@ export function ScreenshotEditor({
                                                                 gradientToFill(
                                                                     g,
                                                                 ),
+                                                            // A background is invisible without padding,
+                                                            // so add a sensible amount the first time one
+                                                            // is chosen.
+                                                            padding:
+                                                                s.padding === 0
+                                                                    ? 64
+                                                                    : s.padding,
                                                         }))
                                                     }
                                                     className={cn(

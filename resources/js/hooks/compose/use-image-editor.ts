@@ -2,8 +2,8 @@ import { useHttp } from '@inertiajs/react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import PostScreenshotController from '@/actions/App/Http/Controllers/Posts/PostScreenshotController';
-import type { EditSettings } from '@/lib/screenshot/settings';
+import PostImageEditController from '@/actions/App/Http/Controllers/Posts/PostImageEditController';
+import type { EditSettings } from '@/lib/image-editor/settings';
 import type { MediaView } from '@/types/compose';
 
 type Options = {
@@ -16,7 +16,7 @@ function blobToFile(blob: Blob, name: string): File {
     return new File([blob], name, { type: blob.type || 'image/png' });
 }
 
-export function useScreenshot({
+export function useImageEditor({
     onEnsurePost,
     onAddMedia,
     onReplaceMedia,
@@ -36,17 +36,17 @@ export function useScreenshot({
                 return;
             }
             http.transform(() => ({
-                composed: blobToFile(composed, 'screenshot.png'),
+                composed: blobToFile(composed, 'image.png'),
                 source: blobToFile(source, 'source.png'),
                 settings: JSON.stringify(settings),
             }));
             const { media } = await http.post(
-                PostScreenshotController.store(id).url,
+                PostImageEditController.store(id).url,
                 { onNetworkError: () => undefined },
             );
             onAddMedia(media);
         } catch {
-            toast.error('Could not save the screenshot.');
+            toast.error('Could not save the image.');
         } finally {
             setIsSaving(false);
         }
@@ -64,18 +64,18 @@ export function useScreenshot({
                 return;
             }
             http.transform(() => ({
-                composed: blobToFile(composed, 'screenshot.png'),
+                composed: blobToFile(composed, 'image.png'),
                 settings: JSON.stringify(settings),
                 _method: 'put',
             }));
             const { media } = await http.post(
-                PostScreenshotController.update({ post: id, media: mediaId })
+                PostImageEditController.update({ post: id, media: mediaId })
                     .url,
                 { onNetworkError: () => undefined },
             );
             onReplaceMedia(media);
         } catch {
-            toast.error('Could not update the screenshot.');
+            toast.error('Could not update the image.');
         } finally {
             setIsSaving(false);
         }

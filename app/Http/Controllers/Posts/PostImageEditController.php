@@ -5,18 +5,18 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Posts;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Post\StorePostScreenshotRequest;
-use App\Http\Requests\Post\UpdatePostScreenshotRequest;
+use App\Http\Requests\Post\StorePostImageEditRequest;
+use App\Http\Requests\Post\UpdatePostImageEditRequest;
 use App\Models\Post;
 use App\Models\PostMedia;
 use App\Services\Posts\MediaStorageService;
 use Illuminate\Http\JsonResponse;
 
-class PostScreenshotController extends Controller
+class PostImageEditController extends Controller
 {
     public function __construct(private readonly MediaStorageService $media) {}
 
-    public function store(StorePostScreenshotRequest $request, Post $post): JsonResponse
+    public function store(StorePostImageEditRequest $request, Post $post): JsonResponse
     {
         abort_unless($post->status->isEditable(), 422, 'This post can no longer be edited.');
 
@@ -30,7 +30,7 @@ class PostScreenshotController extends Controller
         return response()->json(['media' => $media->toView()], 201);
     }
 
-    public function update(UpdatePostScreenshotRequest $request, Post $post, PostMedia $media): JsonResponse
+    public function update(UpdatePostImageEditRequest $request, Post $post, PostMedia $media): JsonResponse
     {
         abort_unless($media->workspace_id === $post->workspace_id, 404);
         abort_unless($post->status->isEditable(), 422, 'This post can no longer be edited.');
