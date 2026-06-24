@@ -94,7 +94,8 @@ function CornerButton({
                 'transition-opacity hover:bg-destructive/90',
                 always
                     ? 'flex'
-                    : 'opacity-0 group-focus-within/chip:opacity-100 group-hover/chip:opacity-100',
+                    : // Always visible on touch (no hover); reveal on hover/focus on pointer devices.
+                      'max-md:opacity-100 md:opacity-0 md:group-focus-within/chip:opacity-100 md:group-hover/chip:opacity-100',
             )}
         >
             {children}
@@ -214,7 +215,8 @@ export function MediaChips({
                                         className={cn(
                                             'absolute -top-1.5 -left-1.5 z-10 grid size-4 place-items-center rounded-full',
                                             'border border-background bg-foreground text-background shadow-sm',
-                                            'opacity-0 transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100',
+                                            // Always visible — it's the primary edit affordance.
+                                            'transition-opacity',
                                         )}
                                     >
                                         <Pencil
@@ -253,7 +255,7 @@ export function MediaChips({
                                             'transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100',
                                             excluded
                                                 ? 'opacity-100'
-                                                : 'opacity-0',
+                                                : 'opacity-0 max-md:opacity-100',
                                         )}
                                     >
                                         {excluded ? (

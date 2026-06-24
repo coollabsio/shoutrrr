@@ -242,7 +242,7 @@ export function ImageEditor({
                     <section className="flex h-[45dvh] min-h-0 shrink-0 flex-col bg-muted/20 md:h-auto md:flex-1">
                         <div
                             ref={previewBoxRef}
-                            className="grid flex-1 place-items-center overflow-hidden bg-[radial-gradient(var(--color-border)_1px,transparent_1px)] [background-size:16px_16px] p-6"
+                            className="relative grid flex-1 place-items-center overflow-hidden bg-[radial-gradient(var(--color-border)_1px,transparent_1px)] [background-size:16px_16px] p-6"
                         >
                             {loadError ? (
                                 <p className="text-sm text-muted-foreground">
@@ -279,37 +279,25 @@ export function ImageEditor({
                                     }
                                 />
                             ) : croppedUrl ? (
-                                // Outer box takes the SCALED footprint so it centres
-                                // cleanly; the inner stage renders at natural size and
-                                // scales from the top-left to fill that footprint.
+                                // The stage is rendered at natural size, then absolutely
+                                // centred and scaled to fit. Absolute positioning keeps its
+                                // (large) layout box out of flow, so the overflow-hidden
+                                // canvas always clips it — it can never escape the modal.
                                 <div
+                                    className="absolute top-1/2 left-1/2"
                                     style={{
-                                        width: Math.round(
-                                            stage.width * previewScale,
-                                        ),
-                                        height: Math.round(
-                                            stage.height * previewScale,
-                                        ),
+                                        transform: `translate(-50%, -50%) scale(${previewScale})`,
                                     }}
                                 >
-                                    <div
-                                        style={{
-                                            width: stage.width,
-                                            height: stage.height,
-                                            transform: `scale(${previewScale})`,
-                                            transformOrigin: 'top left',
+                                    <ImageStage
+                                        ref={stageRef}
+                                        imageSrc={croppedUrl}
+                                        settings={settings}
+                                        contentSize={{
+                                            width: contentW,
+                                            height: contentH,
                                         }}
-                                    >
-                                        <ImageStage
-                                            ref={stageRef}
-                                            imageSrc={croppedUrl}
-                                            settings={settings}
-                                            contentSize={{
-                                                width: contentW,
-                                                height: contentH,
-                                            }}
-                                        />
-                                    </div>
+                                    />
                                 </div>
                             ) : (
                                 <div className="size-7 animate-spin rounded-full border-2 border-foreground/40 border-t-transparent" />
