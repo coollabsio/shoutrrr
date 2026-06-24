@@ -1,4 +1,4 @@
-import { ChevronDown, Crop, Wand2, X } from 'lucide-react';
+import { ChevronDown, Crop, Trash2, Wand2, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -40,8 +40,12 @@ type Props = {
      * replace) and advances the queue / closes the modal afterwards.
      */
     onApply: (composed: Blob, settings: EditSettings) => Promise<void> | void;
-    /** Dismiss without applying (X / Escape / Cancel). The parent decides the fallback. */
+    /** Keep the image without editing (attach the original on a fresh upload; close on re-edit). */
     onCancel: () => void;
+    /** Discard entirely — don't attach a fresh upload / remove an existing image. */
+    onDiscard: () => void;
+    /** 'new' = a just-uploaded image (offer "Continue without editing"); 'existing' = re-editing. */
+    variant: 'new' | 'existing';
     /** True while an upload triggered by onApply is in flight. */
     isSaving: boolean;
     /** Thumbnails of a multi-image batch + the index being edited, shown as a strip. */
@@ -54,6 +58,8 @@ export function ImageEditor({
     initialSettings,
     onApply,
     onCancel,
+    onDiscard,
+    variant,
     isSaving,
     queue,
 }: Props) {
@@ -212,13 +218,17 @@ export function ImageEditor({
     }
 
     const hasQueue = queue !== undefined && queue.thumbnails.length > 1;
+    const cancelLabel =
+        variant === 'new' ? 'Continue without editing' : 'Cancel';
+    // Closing via X / Escape discards a fresh upload, or just closes a re-edit.
+    const closeAction = variant === 'new' ? onDiscard : onCancel;
 
     return (
         <Dialog
             open={open}
             onOpenChange={(next) => {
                 if (!next) {
-                    onCancel();
+                    closeAction();
                 }
             }}
         >
@@ -245,7 +255,7 @@ export function ImageEditor({
                         <button
                             type="button"
                             aria-label="Close"
-                            onClick={onCancel}
+                            onClick={closeAction}
                             className="-mr-1 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         >
                             <X className="size-4" aria-hidden="true" />
@@ -529,27 +539,37 @@ export function ImageEditor({
                     </aside>
                 </div>
 
-                {/* Footer */}
-                <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">
+                {/* Footer — Remove (discard) on the left; keep/apply on the right */}
+                <footer className="flex shrink-0 items-center gap-2 border-t border-border px-4 py-3 sm:px-5">
                     <button
                         type="button"
-                        className="rounded-md px-3.5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground md:py-2"
-                        onClick={onCancel}
+                        onClick={onDiscard}
+                        className="flex items-center gap-1.5 rounded-md px-2.5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive md:py-2"
                     >
-                        Cancel
+                        <Trash2 className="size-4" aria-hidden="true" />
+                        Remove
                     </button>
-                    <button
-                        type="button"
-                        disabled={isSaving || !croppedUrl}
-                        onClick={apply}
-                        className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50 md:py-2"
-                    >
-                        {isSaving
-                            ? 'Saving…'
-                            : hasQueue
-                              ? 'Apply & next'
-                              : 'Apply'}
-                    </button>
+                    <div className="ml-auto flex items-center gap-2">
+                        <button
+                            type="button"
+                            className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground md:py-2"
+                            onClick={onCancel}
+                        >
+                            {cancelLabel}
+                        </button>
+                        <button
+                            type="button"
+                            disabled={isSaving || !croppedUrl}
+                            onClick={apply}
+                            className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50 md:py-2"
+                        >
+                            {isSaving
+                                ? 'Saving…'
+                                : hasQueue
+                                  ? 'Apply & next'
+                                  : 'Apply'}
+                        </button>
+                    </div>
                 </footer>
             </DialogContent>
         </Dialog>

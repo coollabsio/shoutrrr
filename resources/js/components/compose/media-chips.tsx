@@ -200,30 +200,18 @@ export function MediaChips({
                                     )}
                                 >
                                     <MediaThumb media={m} />
+                                    {/* Edit signpost INSIDE the thumbnail (so it can
+                                        never be clipped by an ancestor). The whole
+                                        thumbnail is the edit trigger for images. */}
+                                    {m.kind === 'image' && (
+                                        <span className="pointer-events-none absolute right-0.5 bottom-0.5 grid size-[15px] place-items-center rounded-full bg-black/65 text-white ring-1 ring-white/25">
+                                            <Pencil
+                                                className="size-2.5"
+                                                aria-hidden="true"
+                                            />
+                                        </span>
+                                    )}
                                 </button>
-                                {/* Edit — always visible at the bottom-right (the
-                                    conventional edit spot). Tapping the thumbnail also
-                                    opens the editor; this is the explicit signpost. */}
-                                {m.kind === 'image' && onImageClick && (
-                                    <button
-                                        type="button"
-                                        aria-label="Edit image"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onImageClick(m.id);
-                                        }}
-                                        className={cn(
-                                            'absolute -right-1.5 -bottom-1.5 z-10 grid size-[18px] place-items-center rounded-full',
-                                            'border border-background bg-foreground text-background shadow-sm',
-                                            'transition-colors hover:bg-foreground/90',
-                                        )}
-                                    >
-                                        <Pencil
-                                            className="size-3"
-                                            aria-hidden="true"
-                                        />
-                                    </button>
-                                )}
                                 <CornerButton
                                     label="Remove"
                                     onClick={() => onRemove(m.id)}

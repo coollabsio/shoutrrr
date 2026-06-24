@@ -301,10 +301,20 @@ export default function Composer({
         endEditingStep();
     }
 
-    // Cancel: a freshly-added image still attaches as-is (raw); re-edits just close.
+    // Continue without editing: a freshly-added image still attaches as-is (raw);
+    // re-edits just close with no change.
     function cancelEditing() {
         if (editing?.kind === 'batch') {
             void mediaUploads.handleFiles([editing.items[editing.index].file]);
+        }
+        endEditingStep();
+    }
+
+    // Remove/discard: drop a fresh upload without attaching, or remove an existing
+    // attached image from the post.
+    function discardEditing() {
+        if (editing?.kind === 'reedit' || editing?.kind === 'raw') {
+            dispatch({ type: 'removeMedia', mediaId: editing.mediaId });
         }
         endEditingStep();
     }
@@ -695,6 +705,8 @@ export default function Composer({
                     initialSettings={editorSettings}
                     onApply={applyEditing}
                     onCancel={cancelEditing}
+                    onDiscard={discardEditing}
+                    variant={editing?.kind === 'batch' ? 'new' : 'existing'}
                     isSaving={imageEditor.isSaving}
                     queue={editorQueue}
                 />
