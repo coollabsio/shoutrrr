@@ -1,3 +1,5 @@
+import type { EditSettings } from '@/lib/screenshot/settings';
+
 export const BASE_TAB = '__base__';
 
 export type PlatformName = 'x' | 'bluesky' | 'linkedin';
@@ -58,6 +60,8 @@ export type MediaView = {
     alt_text: string | null;
     duration_seconds: number | null;
     position: number;
+    edit_settings: EditSettings | null;
+    source_url: string | null;
 };
 
 /** An upload still in flight (or just failed) — rendered as a ghost chip. */

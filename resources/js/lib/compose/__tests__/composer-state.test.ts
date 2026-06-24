@@ -240,6 +240,8 @@ describe('composerReducer', () => {
                 alt_text: null,
                 duration_seconds: null,
                 position: 0,
+                edit_settings: null,
+                source_url: null,
             },
         });
         expect(state.media.map((m) => m.id)).toEqual(['m1']);
@@ -255,6 +257,8 @@ describe('composerReducer', () => {
                 alt_text: null,
                 duration_seconds: null,
                 position: 1,
+                edit_settings: null,
+                source_url: null,
             },
         });
         expect(state.media.map((m) => m.id)).toEqual(['m1', 'm2']);
@@ -278,6 +282,8 @@ describe('composerReducer', () => {
                 alt_text: null,
                 duration_seconds: null,
                 position: 0,
+                edit_settings: null,
+                source_url: null,
             },
         });
         state = composerReducer(state, {
@@ -290,6 +296,8 @@ describe('composerReducer', () => {
                 alt_text: null,
                 duration_seconds: null,
                 position: 1,
+                edit_settings: null,
+                source_url: null,
             },
         });
         state = composerReducer(state, {
@@ -311,6 +319,8 @@ describe('composerReducer', () => {
                 alt_text: null,
                 duration_seconds: null,
                 position: 0,
+                edit_settings: null,
+                source_url: null,
             },
         });
         state = composerReducer(state, {
@@ -323,6 +333,8 @@ describe('composerReducer', () => {
                 alt_text: null,
                 duration_seconds: null,
                 position: 1,
+                edit_settings: null,
+                source_url: null,
             },
         });
         // unknown id ignored; m1 missing from the sequence is appended
@@ -624,6 +636,8 @@ describe('buildPutBody', () => {
                 alt_text: null,
                 duration_seconds: null,
                 position: 0,
+                edit_settings: null,
+                source_url: null,
             },
         });
         state = composerReducer(state, {
@@ -636,6 +650,8 @@ describe('buildPutBody', () => {
                 alt_text: null,
                 duration_seconds: null,
                 position: 1,
+                edit_settings: null,
+                source_url: null,
             },
         });
         const body = buildPutBody(state, ['a1', 'a2']);
@@ -679,6 +695,8 @@ describe('composerHasContent', () => {
                 alt_text: null,
                 duration_seconds: null,
                 position: 0,
+                edit_settings: null,
+                source_url: null,
             },
         });
         expect(composerHasContent(state)).toBe(true);
