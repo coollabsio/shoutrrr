@@ -4,6 +4,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import { useAutosave } from '@/hooks/compose/use-autosave';
+import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
 import { usePublishStatus } from '@/hooks/compose/use-publish-status';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
@@ -106,8 +107,6 @@ export default function Composer({
     useEffect(() => {
         setSavedMentions(initialSavedMentions);
     }, [initialSavedMentions]);
-    // True while any attachment is still uploading — blocks publish/schedule.
-    const [mediaUploading, setMediaUploading] = useState(false);
     const [state, dispatch] = useReducer(composerReducer, post, (p) =>
         p
             ? composerReducer(initialComposerState(), {
@@ -156,6 +155,16 @@ export default function Composer({
         dispatch,
     });
     const publishStatus = usePublishStatus({ pagePost: post });
+
+    // Owns the media-upload pipeline (image/video validation + upload). Lifted
+    // here so both the editor (⌘/Ctrl+V paste) and the toolbar (picker/drop)
+    // feed the same handleFiles and share one in-flight `pending` list.
+    const mediaUploads = useMediaUploads({
+        media: state.media,
+        videoLimits: selectedVideoLimits,
+        onEnsurePost: ensurePost,
+        onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
+    });
 
     // Persist a destination change immediately rather than waiting out the
     // autosave debounce. This MUST run in an effect — AFTER the reducer commits
@@ -388,6 +397,7 @@ export default function Composer({
                 onBlur={flush}
                 editable={!readOnly}
                 autoFocus={autoFocusEditor}
+                onPasteFiles={readOnly ? undefined : mediaUploads.handleFiles}
                 overrideBanner={overrideActive}
                 activePlatformLabel={activeAccount?.platform ?? null}
                 onResetOverride={() =>
@@ -467,7 +477,6 @@ export default function Composer({
                     overrideActive={overrideActive}
                     showSplitControls={activeAccount !== null}
                     media={state.media}
-                    onAddMedia={(m) => dispatch({ type: 'addMedia', media: m })}
                     onRemove={(id) =>
                         dispatch({ type: 'removeMedia', mediaId: id })
                     }
@@ -514,9 +523,9 @@ export default function Composer({
                             accountId: activeAccount.id,
                         })
                     }
-                    onEnsurePost={ensurePost}
-                    videoLimits={selectedVideoLimits}
-                    onUploadingChange={setMediaUploading}
+                    pending={mediaUploads.pending}
+                    handleFiles={mediaUploads.handleFiles}
+                    dismissPending={mediaUploads.dismissPending}
                 />
             )}
 
@@ -536,7 +545,7 @@ export default function Composer({
                         postId={state.postId}
                         disabled={accounts.length === 0}
                         queueDisabled={queueState.status !== 'found'}
-                        uploading={mediaUploading}
+                        uploading={mediaUploads.isUploading}
                         onSaveDraft={flush}
                         onEnsurePost={ensurePost}
                         onOptimisticSubmit={publishStatus.applyOptimistic}

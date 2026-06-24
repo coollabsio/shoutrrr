@@ -47,6 +47,11 @@ type EditorBodyProps = {
     /** Focus the editor when it mounts. */
     autoFocus?: boolean;
     /**
+     * Handle image/video files pasted (⌘/Ctrl+V) into the editor. Omit on a
+     * read-only post to disable paste-to-upload.
+     */
+    onPasteFiles?: (files: FileList) => void;
+    /**
      * Active platform + splitting config pushed into the section-markers plugin
      * whenever the active tab changes. Omit to leave markers at their defaults.
      */
@@ -79,12 +84,23 @@ export function shouldFocusEditorOnMount(
     return autoFocus && editable;
 }
 
+/** A file we attach on paste/drop — images and videos only. */
+export function isPasteableMediaFile(file: File): boolean {
+    return file.type.startsWith('image/') || file.type.startsWith('video/');
+}
+
+/** True when a paste carries at least one image/video we should intercept. */
+export function hasPasteableMedia(files: FileList | null | undefined): boolean {
+    return !!files && Array.from(files).some(isPasteableMediaFile);
+}
+
 export default function EditorBody({
     value,
     onChange,
     onBlur,
     placeholder,
     autoFocus = false,
+    onPasteFiles,
     overrideBanner = false,
     activePlatformLabel,
     onResetOverride,
@@ -102,10 +118,27 @@ export default function EditorBody({
     const [activeMentionId, setActiveMentionId] = useState<string | null>(null);
     const previousMentionCount = useRef(mentions.length);
     const mentionNameInput = useRef<HTMLInputElement>(null);
+    // editorProps is captured once at editor creation, but onPasteFiles is a
+    // fresh closure each render (it reads the current media/limits). Route through
+    // a ref so handlePaste always enforces the latest one-video / no-mixing rule.
+    const onPasteFilesRef = useRef(onPasteFiles);
+    onPasteFilesRef.current = onPasteFiles;
     const editor = useEditor({
         extensions: composerExtensions({ placeholder }),
         content: baseTextToDoc(value) as object,
         editable,
+        editorProps: {
+            handlePaste: (_view, event) => {
+                const files = event.clipboardData?.files;
+                if (!onPasteFilesRef.current || !hasPasteableMedia(files)) {
+                    return false;
+                }
+                event.preventDefault();
+                onPasteFilesRef.current(files as FileList);
+
+                return true;
+            },
+        },
         onUpdate: ({ editor }) =>
             onChange(docToBaseText(editor.getJSON() as DocNode)),
         onBlur,

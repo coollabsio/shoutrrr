@@ -1,10 +1,9 @@
 import { Image as ImageIcon, Shuffle, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
-import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { cn } from '@/lib/utils';
-import type { MediaView, PlatformLimits, PlatformName } from '@/types/compose';
+import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
 
 import { MediaChips } from './media-chips';
 
@@ -16,20 +15,20 @@ type Props = {
     /** When false, hides Override + Auto-split (generic tab has no platform). */
     showSplitControls?: boolean;
     media: MediaView[];
-    onAddMedia: (media: MediaView) => void;
     onRemove: (mediaId: string) => void;
     onReorder: (ids: string[]) => void;
     onToggleAutoSplit: () => void;
     onToggleOverride: () => void;
     isExcluded: (mediaId: string) => boolean;
     onToggleExclude: (mediaId: string) => void;
-    /** Guarantee a persisted post id before uploading; returns the post id. */
-    onEnsurePost: () => Promise<string>;
     /** Read-only post: show attached media, hide all editing controls. */
     readOnly?: boolean;
-    videoLimits: PlatformLimits[];
-    /** Reports whether any media upload is currently in flight. */
-    onUploadingChange?: (uploading: boolean) => void;
+    /** In-flight uploads (owned by the parent's useMediaUploads). */
+    pending: PendingUpload[];
+    /** Validate + upload a picked/dropped batch. */
+    handleFiles: (files: FileList) => Promise<void>;
+    /** Drop a failed/pending upload chip. */
+    dismissPending: (tempId: string) => void;
 };
 
 export function ComposerToolbar({
@@ -38,28 +37,18 @@ export function ComposerToolbar({
     overrideActive,
     showSplitControls = true,
     media,
-    onAddMedia,
     onRemove,
     onReorder,
     onToggleAutoSplit,
     onToggleOverride,
     isExcluded,
     onToggleExclude,
-    onEnsurePost,
     readOnly = false,
-    videoLimits,
-    onUploadingChange,
+    pending,
+    handleFiles,
+    dismissPending,
 }: Props) {
     const input = useRef<HTMLInputElement | null>(null);
-    const { pending, isUploading, handleFiles, dismissPending } =
-        useMediaUploads({ media, videoLimits, onEnsurePost, onAddMedia });
-
-    // Surface in-flight uploads so the parent can block publish/schedule until
-    // every attachment has finished (a still-uploading file isn't yet in `media`,
-    // so publishing mid-upload would omit it).
-    useEffect(() => {
-        onUploadingChange?.(isUploading);
-    }, [isUploading, onUploadingChange]);
 
     // Process a picked/dropped batch, then reset the input so re-picking the same
     // file fires onChange again.
