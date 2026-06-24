@@ -1,12 +1,11 @@
-import { Settings2 } from 'lucide-react';
+import { ChevronDown, Crop, Wand2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
-    DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
 import { cropToBlob, loadImage } from '@/lib/screenshot/crop';
@@ -48,8 +47,6 @@ type Props = {
     queue?: { thumbnails: string[]; index: number };
 };
 
-const PREVIEW_MAX = 460;
-
 export function ScreenshotEditor({
     open,
     sourceUrl,
@@ -61,6 +58,7 @@ export function ScreenshotEditor({
 }: Props) {
     const stageRef = useRef<HTMLDivElement | null>(null);
     const croppedUrlRef = useRef<string | null>(null);
+    const previewBoxRef = useRef<HTMLDivElement | null>(null);
     const [settings, setSettings] = useState<EditSettings>(initialSettings);
     const [sourceImg, setSourceImg] = useState<HTMLImageElement | null>(null);
     // The cropped image as an object-URL fed to the stage; null until prepared.
@@ -68,6 +66,24 @@ export function ScreenshotEditor({
     const [cropMode, setCropMode] = useState(false);
     const [advanced, setAdvanced] = useState(false);
     const [loadError, setLoadError] = useState(false);
+    const [box, setBox] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+
+    // Measure the preview area so the image scales to fill it at any modal size.
+    useEffect(() => {
+        const el = previewBoxRef.current;
+        if (!el) {
+            return;
+        }
+        const ro = new ResizeObserver((entries) => {
+            const rect = entries[0]?.contentRect;
+            if (rect) {
+                setBox({ w: rect.width, h: rect.height });
+            }
+        });
+        ro.observe(el);
+
+        return () => ro.disconnect();
+    }, [open]);
 
     // (Re)load the source and reset settings whenever the edited image changes
     // — covers both a fresh open and advancing to the next queued image.
@@ -151,10 +167,10 @@ export function ScreenshotEditor({
     // The canvas always hugs the (cropped) image + padding; the aspect preset
     // drives the crop ratio, not a letterboxed background.
     const stage = stageDimensions(contentW, contentH, settings.padding, 'auto');
-    const previewScale = Math.min(
-        1,
-        PREVIEW_MAX / Math.max(stage.width, stage.height),
-    );
+    const previewScale =
+        box.w > 0 && box.h > 0
+            ? Math.min(box.w / stage.width, box.h / stage.height, 1)
+            : Math.min(1, 460 / Math.max(stage.width, stage.height));
 
     // Picking an aspect crops the image to that ratio (centred); 'auto' clears it.
     function selectAspect(aspect: AspectPreset) {
@@ -189,6 +205,8 @@ export function ScreenshotEditor({
         }
     }
 
+    const hasQueue = queue !== undefined && queue.thumbnails.length > 1;
+
     return (
         <Dialog
             open={open}
@@ -198,22 +216,35 @@ export function ScreenshotEditor({
                 }
             }}
         >
-            <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col overflow-hidden">
-                <DialogHeader>
-                    <DialogTitle>Edit image</DialogTitle>
+            <DialogContent className="flex h-[85vh] max-h-[760px] w-[min(1080px,95vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
+                {/* Header */}
+                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3 pr-12">
+                    <DialogTitle className="text-sm font-semibold">
+                        Edit image
+                    </DialogTitle>
                     <DialogDescription className="sr-only">
                         Crop, set an aspect ratio, and optionally add a
                         background and effects before attaching the image.
                     </DialogDescription>
-                </DialogHeader>
+                    {hasQueue && (
+                        <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                            Image {queue.index + 1} of {queue.thumbnails.length}
+                        </span>
+                    )}
+                </header>
 
-                <div className="grid flex-1 gap-6 overflow-y-auto md:grid-cols-[1fr_220px]">
-                    {/* Preview / crop */}
-                    <div className="flex min-h-[300px] flex-col gap-3">
-                        <div className="grid flex-1 place-items-center overflow-hidden rounded-lg bg-muted/40 p-4">
+                {/* Body: canvas + inspector rail */}
+                <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+                    {/* Canvas */}
+                    <section className="flex min-h-0 flex-1 flex-col bg-muted/20">
+                        <div
+                            ref={previewBoxRef}
+                            className="grid flex-1 place-items-center overflow-hidden bg-[radial-gradient(var(--color-border)_1px,transparent_1px)] [background-size:16px_16px] p-6"
+                        >
                             {loadError ? (
                                 <p className="text-sm text-muted-foreground">
-                                    Couldn’t load that image.
+                                    Couldn’t load that image. Remove it and try
+                                    again.
                                 </p>
                             ) : cropMode && sourceImg ? (
                                 <CropOverlay
@@ -260,25 +291,25 @@ export function ScreenshotEditor({
                                     />
                                 </div>
                             ) : (
-                                <div className="size-8 animate-spin rounded-full border-2 border-foreground/60 border-t-transparent" />
+                                <div className="size-7 animate-spin rounded-full border-2 border-foreground/40 border-t-transparent" />
                             )}
                         </div>
 
-                        {/* Multi-image queue strip */}
-                        {queue && queue.thumbnails.length > 1 && (
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground tabular-nums">
-                                    {queue.index + 1}/{queue.thumbnails.length}
-                                </span>
-                                <div className="flex flex-1 gap-1.5 overflow-x-auto">
+                        {/* Multi-image filmstrip */}
+                        {hasQueue && (
+                            <div className="flex shrink-0 items-center gap-3 border-t border-border bg-popover px-4 py-2.5">
+                                <div className="flex flex-1 gap-2 overflow-x-auto">
                                     {queue.thumbnails.map((src, i) => (
                                         <div
                                             key={src}
+                                            aria-current={
+                                                i === queue.index || undefined
+                                            }
                                             className={cn(
-                                                'size-9 shrink-0 overflow-hidden rounded-md border',
+                                                'size-10 shrink-0 overflow-hidden rounded-md border transition',
                                                 i === queue.index
-                                                    ? 'border-foreground ring-1 ring-foreground'
-                                                    : 'border-border opacity-60',
+                                                    ? 'border-foreground ring-2 ring-foreground/25'
+                                                    : 'border-border opacity-45',
                                             )}
                                         >
                                             <img
@@ -292,160 +323,183 @@ export function ScreenshotEditor({
                                 </div>
                             </div>
                         )}
-                    </div>
+                    </section>
 
-                    {/* Controls */}
-                    <div className="space-y-4 text-sm">
-                        <Control label="Aspect">
-                            <div className="grid grid-cols-3 gap-1">
+                    {/* Inspector rail */}
+                    <aside className="flex w-full shrink-0 flex-col gap-5 overflow-y-auto border-t border-border p-5 md:w-[288px] md:border-t-0 md:border-l">
+                        <Field label="Aspect ratio">
+                            <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted/60 p-1">
                                 {ASPECT_PRESETS.map((a) => (
-                                    <button
+                                    <Segment
                                         key={a}
-                                        type="button"
+                                        active={settings.aspect === a}
                                         onClick={() => selectAspect(a)}
-                                        className={cn(
-                                            'rounded-md border border-border py-1 text-xs',
-                                            settings.aspect === a &&
-                                                'bg-foreground text-background',
-                                        )}
                                     >
-                                        {a}
-                                    </button>
+                                        {a === 'auto' ? 'Auto' : a}
+                                    </Segment>
                                 ))}
                             </div>
-                        </Control>
+                        </Field>
 
                         <button
                             type="button"
                             onClick={() => setCropMode((v) => !v)}
                             className={cn(
-                                'w-full rounded-md border border-border py-1.5 text-xs',
-                                cropMode && 'bg-foreground text-background',
+                                'flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition-colors',
+                                cropMode
+                                    ? 'border-foreground bg-foreground text-background'
+                                    : 'border-border hover:bg-muted',
                             )}
                         >
-                            {cropMode ? 'Done cropping' : 'Crop'}
+                            <Crop className="size-4" aria-hidden="true" />
+                            {cropMode ? 'Done cropping' : 'Crop image'}
                         </button>
 
-                        <button
-                            type="button"
-                            onClick={() => setAdvanced((v) => !v)}
-                            className={cn(
-                                'flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-xs',
-                                'text-muted-foreground hover:text-foreground',
+                        {/* Effects & background (opt-in) */}
+                        <div className="border-t border-border pt-5">
+                            <button
+                                type="button"
+                                aria-expanded={advanced}
+                                onClick={() => setAdvanced((v) => !v)}
+                                className="flex w-full items-center justify-between text-sm font-medium text-foreground"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Wand2
+                                        className="size-4 text-muted-foreground"
+                                        aria-hidden="true"
+                                    />
+                                    Effects &amp; background
+                                </span>
+                                <ChevronDown
+                                    className={cn(
+                                        'size-4 text-muted-foreground transition-transform',
+                                        advanced && 'rotate-180',
+                                    )}
+                                    aria-hidden="true"
+                                />
+                            </button>
+
+                            {advanced && (
+                                <div className="mt-4 space-y-5">
+                                    <Field label="Background">
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {GRADIENTS.map((g) => (
+                                                <button
+                                                    key={g.id}
+                                                    type="button"
+                                                    aria-label={g.name}
+                                                    aria-pressed={
+                                                        settings.background
+                                                            .id === g.id
+                                                    }
+                                                    onClick={() =>
+                                                        setSettings((s) => ({
+                                                            ...s,
+                                                            background:
+                                                                gradientToFill(
+                                                                    g,
+                                                                ),
+                                                        }))
+                                                    }
+                                                    className={cn(
+                                                        'h-8 rounded-md ring-offset-2 ring-offset-popover transition',
+                                                        settings.background
+                                                            .id === g.id
+                                                            ? 'ring-2 ring-foreground'
+                                                            : 'hover:scale-105',
+                                                    )}
+                                                    style={{
+                                                        background: `linear-gradient(${g.angle}deg, ${g.stops[0].color}, ${g.stops[g.stops.length - 1].color})`,
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </Field>
+
+                                    <Slider
+                                        label="Padding"
+                                        min={0}
+                                        max={200}
+                                        value={settings.padding}
+                                        onChange={(padding) =>
+                                            setSettings((s) => ({
+                                                ...s,
+                                                padding,
+                                            }))
+                                        }
+                                    />
+                                    <Slider
+                                        label="Corner radius"
+                                        min={0}
+                                        max={64}
+                                        value={settings.radius}
+                                        onChange={(radius) =>
+                                            setSettings((s) => ({
+                                                ...s,
+                                                radius,
+                                            }))
+                                        }
+                                    />
+                                    <Slider
+                                        label="Tilt X"
+                                        min={-30}
+                                        max={30}
+                                        suffix="°"
+                                        value={settings.tilt.rotateX}
+                                        onChange={(rotateX) =>
+                                            setSettings((s) => ({
+                                                ...s,
+                                                tilt: { ...s.tilt, rotateX },
+                                            }))
+                                        }
+                                    />
+                                    <Slider
+                                        label="Tilt Y"
+                                        min={-30}
+                                        max={30}
+                                        suffix="°"
+                                        value={settings.tilt.rotateY}
+                                        onChange={(rotateY) =>
+                                            setSettings((s) => ({
+                                                ...s,
+                                                tilt: { ...s.tilt, rotateY },
+                                            }))
+                                        }
+                                    />
+
+                                    <Field label="Shadow">
+                                        <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted/60 p-1">
+                                            {SHADOW_PRESETS.map((sh) => (
+                                                <Segment
+                                                    key={sh}
+                                                    active={
+                                                        settings.shadow === sh
+                                                    }
+                                                    onClick={() =>
+                                                        setSettings((s) => ({
+                                                            ...s,
+                                                            shadow: sh,
+                                                        }))
+                                                    }
+                                                >
+                                                    <span className="capitalize">
+                                                        {sh}
+                                                    </span>
+                                                </Segment>
+                                            ))}
+                                        </div>
+                                    </Field>
+                                </div>
                             )}
-                        >
-                            <Settings2
-                                className="size-3.5"
-                                aria-hidden="true"
-                            />
-                            {advanced ? 'Hide effects' : 'Effects & background'}
-                        </button>
-
-                        {advanced && (
-                            <div className="space-y-4 border-t border-border pt-4">
-                                <Control label="Background">
-                                    <div className="grid grid-cols-4 gap-1.5">
-                                        {GRADIENTS.map((g) => (
-                                            <button
-                                                key={g.id}
-                                                type="button"
-                                                aria-label={g.name}
-                                                onClick={() =>
-                                                    setSettings((s) => ({
-                                                        ...s,
-                                                        background:
-                                                            gradientToFill(g),
-                                                    }))
-                                                }
-                                                className={cn(
-                                                    'h-7 rounded-md ring-offset-2 ring-offset-background',
-                                                    settings.background.id ===
-                                                        g.id &&
-                                                        'ring-2 ring-foreground',
-                                                )}
-                                                style={{
-                                                    background: `linear-gradient(${g.angle}deg, ${g.stops[0].color}, ${g.stops[g.stops.length - 1].color})`,
-                                                }}
-                                            />
-                                        ))}
-                                    </div>
-                                </Control>
-
-                                <RangeControl
-                                    label="Padding"
-                                    min={0}
-                                    max={200}
-                                    value={settings.padding}
-                                    onChange={(padding) =>
-                                        setSettings((s) => ({ ...s, padding }))
-                                    }
-                                />
-                                <RangeControl
-                                    label="Corner radius"
-                                    min={0}
-                                    max={64}
-                                    value={settings.radius}
-                                    onChange={(radius) =>
-                                        setSettings((s) => ({ ...s, radius }))
-                                    }
-                                />
-                                <RangeControl
-                                    label="Tilt X"
-                                    min={-30}
-                                    max={30}
-                                    value={settings.tilt.rotateX}
-                                    onChange={(rotateX) =>
-                                        setSettings((s) => ({
-                                            ...s,
-                                            tilt: { ...s.tilt, rotateX },
-                                        }))
-                                    }
-                                />
-                                <RangeControl
-                                    label="Tilt Y"
-                                    min={-30}
-                                    max={30}
-                                    value={settings.tilt.rotateY}
-                                    onChange={(rotateY) =>
-                                        setSettings((s) => ({
-                                            ...s,
-                                            tilt: { ...s.tilt, rotateY },
-                                        }))
-                                    }
-                                />
-
-                                <Control label="Shadow">
-                                    <div className="flex gap-1">
-                                        {SHADOW_PRESETS.map((sh) => (
-                                            <button
-                                                key={sh}
-                                                type="button"
-                                                onClick={() =>
-                                                    setSettings((s) => ({
-                                                        ...s,
-                                                        shadow: sh,
-                                                    }))
-                                                }
-                                                className={cn(
-                                                    'flex-1 rounded-md border border-border py-1 text-xs capitalize',
-                                                    settings.shadow === sh &&
-                                                        'bg-foreground text-background',
-                                                )}
-                                            >
-                                                {sh}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </Control>
-                            </div>
-                        )}
-                    </div>
+                        </div>
+                    </aside>
                 </div>
 
-                <DialogFooter>
+                {/* Footer */}
+                <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">
                     <button
                         type="button"
-                        className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                        className="rounded-md px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                         onClick={onCancel}
                     >
                         Cancel
@@ -454,25 +508,23 @@ export function ScreenshotEditor({
                         type="button"
                         disabled={isSaving || !croppedUrl}
                         onClick={apply}
-                        className="rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background disabled:opacity-50"
+                        className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
                     >
-                        {isSaving ? 'Saving…' : 'Apply'}
+                        {isSaving
+                            ? 'Saving…'
+                            : hasQueue
+                              ? 'Apply & next'
+                              : 'Apply'}
                     </button>
-                </DialogFooter>
+                </footer>
             </DialogContent>
         </Dialog>
     );
 }
 
-function Control({
-    label,
-    children,
-}: {
-    label: string;
-    children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
     return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
             <div className="text-xs font-medium text-muted-foreground">
                 {label}
             </div>
@@ -481,29 +533,67 @@ function Control({
     );
 }
 
-function RangeControl({
+function Segment({
+    active,
+    onClick,
+    children,
+}: {
+    active: boolean;
+    onClick: () => void;
+    children: ReactNode;
+}) {
+    return (
+        <button
+            type="button"
+            aria-pressed={active}
+            onClick={onClick}
+            className={cn(
+                'rounded-md py-1.5 text-center text-xs font-medium transition-colors',
+                active
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+            )}
+        >
+            {children}
+        </button>
+    );
+}
+
+function Slider({
     label,
     min,
     max,
     value,
+    suffix = '',
     onChange,
 }: {
     label: string;
     min: number;
     max: number;
     value: number;
+    suffix?: string;
     onChange: (value: number) => void;
 }) {
     return (
-        <Control label={`${label} (${Math.round(value)})`}>
+        <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-foreground/80">
+                    {label}
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                    {Math.round(value)}
+                    {suffix}
+                </span>
+            </div>
             <input
                 type="range"
                 min={min}
                 max={max}
                 value={value}
+                aria-label={label}
                 onChange={(e) => onChange(Number(e.target.value))}
                 className="w-full accent-foreground"
             />
-        </Control>
+        </div>
     );
 }
