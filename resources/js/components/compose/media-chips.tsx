@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -64,6 +64,8 @@ type Props = {
     onDismissPending: (tempId: string) => void;
     /** Read-only post: show the images, no add/remove/reorder/exclude affordances. */
     readOnly?: boolean;
+    /** Open the screenshot editor for a beautified media item. */
+    onEdit?: (mediaId: string) => void;
 };
 
 /** A square overlay button that protrudes past the chip's top-right corner. */
@@ -110,6 +112,7 @@ export function MediaChips({
     onRemove,
     onDismissPending,
     readOnly = false,
+    onEdit,
 }: Props) {
     const [dragIdx, setDragIdx] = useState<number | null>(null);
 
@@ -194,6 +197,26 @@ export function MediaChips({
                                         aria-hidden="true"
                                     />
                                 </CornerButton>
+                                {onEdit && m.edit_settings && (
+                                    <button
+                                        type="button"
+                                        aria-label="Edit screenshot"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onEdit(m.id);
+                                        }}
+                                        className={cn(
+                                            'absolute -right-1.5 -bottom-1.5 z-10 grid size-4 place-items-center rounded-full',
+                                            'border border-background bg-foreground text-background shadow-sm',
+                                            'opacity-0 transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100',
+                                        )}
+                                    >
+                                        <Pencil
+                                            className="size-2.5"
+                                            aria-hidden="true"
+                                        />
+                                    </button>
+                                )}
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[11px]">

@@ -7,6 +7,7 @@ import { useAutosave } from '@/hooks/compose/use-autosave';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
 import { usePublishStatus } from '@/hooks/compose/use-publish-status';
+import { useScreenshot } from '@/hooks/compose/use-screenshot';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import {
     composerReducer,
@@ -20,6 +21,10 @@ import {
     syncMentionsFromText,
 } from '@/lib/compose/mentions';
 import { postCapabilities } from '@/lib/posts/capabilities';
+import {
+    normalizeSettings,
+    type EditSettings,
+} from '@/lib/screenshot/settings';
 import { index as accountsRoute } from '@/routes/accounts';
 import {
     BASE_TAB,
@@ -41,6 +46,7 @@ import EditorBody from './editor-body';
 import PlatformTabs from './platform-tabs';
 import SaveIndicator from './save-indicator';
 import { ScheduleTray } from './schedule-tray';
+import { ScreenshotEditor } from './screenshot-editor';
 import { SubmitBar } from './submit-bar';
 import { TargetStatusChips } from './target-status-chips';
 
@@ -165,6 +171,41 @@ export default function Composer({
         onEnsurePost: ensurePost,
         onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
     });
+
+    const screenshot = useScreenshot({
+        onEnsurePost: ensurePost,
+        onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
+        onReplaceMedia: (m) => dispatch({ type: 'replaceMedia', media: m }),
+    });
+
+    const beautifyInput = useRef<HTMLInputElement | null>(null);
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [beautifyFile, setBeautifyFile] = useState<File | null>(null);
+    const [editTarget, setEditTarget] = useState<{
+        mediaId: string;
+        sourceUrl: string;
+        settings: EditSettings;
+    } | null>(null);
+
+    function openBeautifyPicker() {
+        setEditTarget(null);
+        setBeautifyFile(null);
+        beautifyInput.current?.click();
+    }
+
+    function openEditMedia(mediaId: string) {
+        const m = state.media.find((x) => x.id === mediaId);
+        if (!m || !m.source_url || !m.edit_settings) {
+            return;
+        }
+        setBeautifyFile(null);
+        setEditTarget({
+            mediaId,
+            sourceUrl: m.source_url,
+            settings: normalizeSettings(m.edit_settings),
+        });
+        setEditorOpen(true);
+    }
 
     // Persist a destination change immediately rather than waiting out the
     // autosave debounce. This MUST run in an effect — AFTER the reducer commits
@@ -526,7 +567,36 @@ export default function Composer({
                     pending={mediaUploads.pending}
                     handleFiles={mediaUploads.handleFiles}
                     dismissPending={mediaUploads.dismissPending}
+                    onBeautify={openBeautifyPicker}
+                    onEditMedia={openEditMedia}
                 />
+            )}
+
+            {!readOnly && (
+                <>
+                    <input
+                        ref={beautifyInput}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        hidden
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                                setBeautifyFile(file);
+                                setEditTarget(null);
+                                setEditorOpen(true);
+                            }
+                            e.target.value = '';
+                        }}
+                    />
+                    <ScreenshotEditor
+                        open={editorOpen}
+                        onOpenChange={setEditorOpen}
+                        sourceFile={beautifyFile}
+                        editTarget={editTarget}
+                        screenshot={screenshot}
+                    />
+                </>
             )}
 
             {/* Schedule + submit row — hidden once the post is read-only. */}
