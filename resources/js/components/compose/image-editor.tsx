@@ -1,4 +1,4 @@
-import { ChevronDown, Crop, Wand2 } from 'lucide-react';
+import { ChevronDown, Crop, Wand2, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -222,9 +222,12 @@ export function ImageEditor({
                 }
             }}
         >
-            <DialogContent className="flex h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[85vh] sm:max-h-[760px] sm:w-[min(1080px,95vw)] sm:max-w-none sm:rounded-[min(var(--radius-4xl),24px)]">
-                {/* Header */}
-                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3.5 pr-12 sm:px-5 sm:py-3">
+            <DialogContent
+                showCloseButton={false}
+                className="flex h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[85vh] sm:max-h-[760px] sm:w-[min(1080px,95vw)] sm:max-w-none sm:rounded-[min(var(--radius-4xl),24px)]"
+            >
+                {/* Header — own the close button so it aligns with the title */}
+                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
                     <DialogTitle className="text-sm font-semibold">
                         Edit image
                     </DialogTitle>
@@ -232,11 +235,22 @@ export function ImageEditor({
                         Crop, set an aspect ratio, and optionally add a
                         background and effects before attaching the image.
                     </DialogDescription>
-                    {hasQueue && (
-                        <span className="text-xs font-medium text-muted-foreground tabular-nums">
-                            Image {queue.index + 1} of {queue.thumbnails.length}
-                        </span>
-                    )}
+                    <div className="flex items-center gap-3">
+                        {hasQueue && (
+                            <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                                Image {queue.index + 1} of{' '}
+                                {queue.thumbnails.length}
+                            </span>
+                        )}
+                        <button
+                            type="button"
+                            aria-label="Close"
+                            onClick={onCancel}
+                            className="-mr-1 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                            <X className="size-4" aria-hidden="true" />
+                        </button>
+                    </div>
                 </header>
 
                 {/* Body: canvas + inspector rail (stacked on mobile, side-by-side on desktop) */}
