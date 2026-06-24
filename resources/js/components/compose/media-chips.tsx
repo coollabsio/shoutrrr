@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -188,7 +189,10 @@ export function MediaChips({
                                     label="Remove"
                                     onClick={() => onRemove(m.id)}
                                 >
-                                    ×
+                                    <X
+                                        className="size-2.5 text-black"
+                                        aria-hidden="true"
+                                    />
                                 </CornerButton>
                             </div>
                         </TooltipTrigger>
@@ -253,7 +257,10 @@ export function MediaChips({
                                     onClick={() => onDismissPending(p.tempId)}
                                     always
                                 >
-                                    ×
+                                    <X
+                                        className="size-2.5 text-black"
+                                        aria-hidden="true"
+                                    />
                                 </CornerButton>
                             )}
                         </div>
