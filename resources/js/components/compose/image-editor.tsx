@@ -59,7 +59,7 @@ export function ImageEditor({
 }: Props) {
     const stageRef = useRef<HTMLDivElement | null>(null);
     const croppedUrlRef = useRef<string | null>(null);
-    const previewBoxRef = useRef<HTMLDivElement | null>(null);
+    const [previewEl, setPreviewEl] = useState<HTMLDivElement | null>(null);
     const [settings, setSettings] = useState<EditSettings>(initialSettings);
     const [sourceImg, setSourceImg] = useState<HTMLImageElement | null>(null);
     // The cropped image as an object-URL fed to the stage; null until prepared.
@@ -69,10 +69,11 @@ export function ImageEditor({
     const [loadError, setLoadError] = useState(false);
     const [box, setBox] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
 
-    // Measure the preview area so the image scales to fill it at any modal size.
+    // Measure the canvas so the image scales to fit it at any modal size. Keyed on
+    // the element (a callback ref) rather than `open`, so it observes the moment the
+    // canvas mounts — the `open`-keyed version could miss the measurement on mobile.
     useEffect(() => {
-        const el = previewBoxRef.current;
-        if (!el) {
+        if (!previewEl) {
             return;
         }
         const ro = new ResizeObserver((entries) => {
@@ -81,10 +82,10 @@ export function ImageEditor({
                 setBox({ w: rect.width, h: rect.height });
             }
         });
-        ro.observe(el);
+        ro.observe(previewEl);
 
         return () => ro.disconnect();
-    }, [open]);
+    }, [previewEl]);
 
     // (Re)load the source and reset settings whenever the edited image changes
     // — covers both a fresh open and advancing to the next queued image.
@@ -168,10 +169,12 @@ export function ImageEditor({
     // The canvas always hugs the (cropped) image + padding; the aspect preset
     // drives the crop ratio, not a letterboxed background.
     const stage = stageDimensions(contentW, contentH, settings.padding, 'auto');
-    const previewScale =
-        box.w > 0 && box.h > 0
-            ? Math.min(box.w / stage.width, box.h / stage.height, 1)
-            : Math.min(1, 460 / Math.max(stage.width, stage.height));
+    const fits = box.w > 0 && box.h > 0;
+    // Fit the (cropped) image inside the measured canvas, leaving a margin so the
+    // dotted background always frames it and the bounds stay obvious.
+    const previewScale = fits
+        ? Math.min(box.w / stage.width, box.h / stage.height, 1) * 0.92
+        : 1;
 
     // Picking an aspect crops the image to that ratio (centred); 'auto' clears it.
     function selectAspect(aspect: AspectPreset) {
@@ -221,7 +224,7 @@ export function ImageEditor({
         >
             <DialogContent className="flex h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[85vh] sm:max-h-[760px] sm:w-[min(1080px,95vw)] sm:max-w-none sm:rounded-[min(var(--radius-4xl),24px)]">
                 {/* Header */}
-                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3 pr-12">
+                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3.5 pr-12 sm:px-5 sm:py-3">
                     <DialogTitle className="text-sm font-semibold">
                         Edit image
                     </DialogTitle>
@@ -241,8 +244,8 @@ export function ImageEditor({
                     {/* Canvas — bounded height on mobile so controls keep scrollable room */}
                     <section className="flex h-[45dvh] min-h-0 shrink-0 flex-col bg-muted/20 md:h-auto md:flex-1">
                         <div
-                            ref={previewBoxRef}
-                            className="relative grid flex-1 place-items-center overflow-hidden bg-[radial-gradient(var(--color-border)_1px,transparent_1px)] [background-size:16px_16px] p-6"
+                            ref={setPreviewEl}
+                            className="relative grid flex-1 place-items-center overflow-hidden bg-[radial-gradient(var(--color-border)_1px,transparent_1px)] [background-size:16px_16px] p-5 sm:p-6"
                         >
                             {loadError ? (
                                 <p className="text-sm text-muted-foreground">
@@ -278,7 +281,7 @@ export function ImageEditor({
                                         }))
                                     }
                                 />
-                            ) : croppedUrl ? (
+                            ) : croppedUrl && fits ? (
                                 // The stage is rendered at natural size, then absolutely
                                 // centred and scaled to fit. Absolute positioning keeps its
                                 // (large) layout box out of flow, so the overflow-hidden
