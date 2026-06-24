@@ -219,7 +219,7 @@ export function ImageEditor({
                 }
             }}
         >
-            <DialogContent className="flex h-[85vh] max-h-[760px] w-[min(1080px,95vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
+            <DialogContent className="flex h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[85vh] sm:max-h-[760px] sm:w-[min(1080px,95vw)] sm:max-w-none sm:rounded-[min(var(--radius-4xl),24px)]">
                 {/* Header */}
                 <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3 pr-12">
                     <DialogTitle className="text-sm font-semibold">
@@ -236,10 +236,10 @@ export function ImageEditor({
                     )}
                 </header>
 
-                {/* Body: canvas + inspector rail */}
+                {/* Body: canvas + inspector rail (stacked on mobile, side-by-side on desktop) */}
                 <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-                    {/* Canvas */}
-                    <section className="flex min-h-0 flex-1 flex-col bg-muted/20">
+                    {/* Canvas — bounded height on mobile so controls keep scrollable room */}
+                    <section className="flex h-[45dvh] min-h-0 shrink-0 flex-col bg-muted/20 md:h-auto md:flex-1">
                         <div
                             ref={previewBoxRef}
                             className="grid flex-1 place-items-center overflow-hidden bg-[radial-gradient(var(--color-border)_1px,transparent_1px)] [background-size:16px_16px] p-6"
@@ -265,6 +265,8 @@ export function ImageEditor({
                                         }
                                     }
                                     ratio={aspectToRatio(settings.aspect)}
+                                    maxW={box.w || undefined}
+                                    maxH={box.h || undefined}
                                     onChange={(crop) =>
                                         setSettings((s) => ({
                                             ...s,
@@ -344,8 +346,9 @@ export function ImageEditor({
                         )}
                     </section>
 
-                    {/* Inspector rail */}
-                    <aside className="flex w-full shrink-0 flex-col gap-5 overflow-y-auto border-t border-border p-5 md:w-[288px] md:border-t-0 md:border-l">
+                    {/* Inspector rail — fills remaining height and scrolls on mobile;
+                        a fixed-width side panel on desktop */}
+                    <aside className="flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto border-t border-border p-5 md:w-[288px] md:flex-none md:border-t-0 md:border-l">
                         <Field label="Aspect ratio">
                             <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted/60 p-1">
                                 {ASPECT_PRESETS.map((a) => (
@@ -428,7 +431,7 @@ export function ImageEditor({
                                                         }))
                                                     }
                                                     className={cn(
-                                                        'h-8 rounded-md ring-offset-2 ring-offset-popover transition',
+                                                        'h-10 rounded-md ring-offset-2 ring-offset-popover transition md:h-8',
                                                         settings.background
                                                             .id === g.id
                                                             ? 'ring-2 ring-foreground'
@@ -525,7 +528,7 @@ export function ImageEditor({
                 <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">
                     <button
                         type="button"
-                        className="rounded-md px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        className="rounded-md px-3.5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground md:py-2"
                         onClick={onCancel}
                     >
                         Cancel
@@ -534,7 +537,7 @@ export function ImageEditor({
                         type="button"
                         disabled={isSaving || !croppedUrl}
                         onClick={apply}
-                        className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                        className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50 md:py-2"
                     >
                         {isSaving
                             ? 'Saving…'
@@ -574,7 +577,7 @@ function Segment({
             aria-pressed={active}
             onClick={onClick}
             className={cn(
-                'rounded-md py-1.5 text-center text-xs font-medium transition-colors',
+                'rounded-md py-2 text-center text-sm font-medium transition-colors md:py-1.5 md:text-xs',
                 active
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground',

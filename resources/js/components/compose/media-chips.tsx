@@ -200,15 +200,28 @@ export function MediaChips({
                                 >
                                     <MediaThumb media={m} />
                                 </button>
-                                {/* Hover hint that an image is editable; the click is
-                                    handled by the thumbnail button beneath it. */}
+                                {/* Edit button, mirroring the remove (X) on the
+                                    opposite corner. Tapping the thumbnail also opens
+                                    the editor; this is the explicit affordance. */}
                                 {m.kind === 'image' && onImageClick && (
-                                    <div className="pointer-events-none absolute inset-0 grid place-items-center rounded-md bg-black/45 opacity-0 transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100">
+                                    <button
+                                        type="button"
+                                        aria-label="Edit image"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onImageClick(m.id);
+                                        }}
+                                        className={cn(
+                                            'absolute -top-1.5 -left-1.5 z-10 grid size-4 place-items-center rounded-full',
+                                            'border border-background bg-foreground text-background shadow-sm',
+                                            'opacity-0 transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100',
+                                        )}
+                                    >
                                         <Pencil
-                                            className="size-3 text-white"
+                                            className="size-2.5"
                                             aria-hidden="true"
                                         />
-                                    </div>
+                                    </button>
                                 )}
                                 <CornerButton
                                     label="Remove"

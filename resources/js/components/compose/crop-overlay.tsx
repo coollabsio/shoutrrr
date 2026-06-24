@@ -11,6 +11,9 @@ type Props = {
     rect: CropRect;
     ratio: number | null;
     onChange: (rect: CropRect) => void;
+    /** Available display area (the editor's measured canvas); the crop UI fits within it. */
+    maxW?: number;
+    maxH?: number;
 };
 
 const CORNERS: { corner: Corner; className: string }[] = [
@@ -36,7 +39,7 @@ const CORNERS: { corner: Corner; className: string }[] = [
     },
 ];
 
-const DISPLAY_MAX = 420;
+const DISPLAY_FALLBACK = 420;
 
 export function CropOverlay({
     imageSrc,
@@ -44,6 +47,8 @@ export function CropOverlay({
     rect,
     ratio,
     onChange,
+    maxW = DISPLAY_FALLBACK,
+    maxH = DISPLAY_FALLBACK,
 }: Props) {
     const boxRef = useRef<HTMLDivElement | null>(null);
     const [drag, setDrag] = useState<{
@@ -53,10 +58,10 @@ export function CropOverlay({
         startRect: CropRect;
     } | null>(null);
 
-    // Scale source pixels → on-screen display pixels.
+    // Scale source pixels → on-screen display pixels, fitting the available area.
     const scale = Math.min(
-        DISPLAY_MAX / sourceSize.width,
-        DISPLAY_MAX / sourceSize.height,
+        (maxW || DISPLAY_FALLBACK) / sourceSize.width,
+        (maxH || DISPLAY_FALLBACK) / sourceSize.height,
     );
     const dispW = sourceSize.width * scale;
     const dispH = sourceSize.height * scale;
@@ -150,7 +155,8 @@ export function CropOverlay({
                         aria-label={`Resize ${corner}`}
                         onPointerDown={(e) => onPointerDown(e, corner)}
                         className={cn(
-                            'absolute size-3 rounded-full border border-border bg-white',
+                            // Larger hit area on touch; compact dot on pointer devices.
+                            'absolute size-5 rounded-full border border-border bg-white shadow-sm md:size-3',
                             className,
                         )}
                     />
