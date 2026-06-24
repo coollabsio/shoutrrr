@@ -1,8 +1,10 @@
+import { Settings2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
@@ -12,11 +14,13 @@ import { rasterizeStage } from '@/lib/screenshot/export';
 import { GRADIENTS, gradientToFill } from '@/lib/screenshot/gradients';
 import {
     aspectToRatio,
+    centeredCropForRatio,
     clampCropRect,
     stageDimensions,
 } from '@/lib/screenshot/layout';
 import {
     ASPECT_PRESETS,
+    type AspectPreset,
     type EditSettings,
     SHADOW_PRESETS,
 } from '@/lib/screenshot/settings';
@@ -40,6 +44,8 @@ type Props = {
     onCancel: () => void;
     /** True while an upload triggered by onApply is in flight. */
     isSaving: boolean;
+    /** Thumbnails of a multi-image batch + the index being edited, shown as a strip. */
+    queue?: { thumbnails: string[]; index: number };
 };
 
 const PREVIEW_MAX = 460;
@@ -51,6 +57,7 @@ export function ScreenshotEditor({
     onApply,
     onCancel,
     isSaving,
+    queue,
 }: Props) {
     const stageRef = useRef<HTMLDivElement | null>(null);
     const croppedUrlRef = useRef<string | null>(null);
@@ -59,6 +66,8 @@ export function ScreenshotEditor({
     // The cropped image as an object-URL fed to the stage; null until prepared.
     const [croppedUrl, setCroppedUrl] = useState<string | null>(null);
     const [cropMode, setCropMode] = useState(false);
+    const [advanced, setAdvanced] = useState(false);
+    const [loadError, setLoadError] = useState(false);
 
     // (Re)load the source and reset settings whenever the edited image changes
     // — covers both a fresh open and advancing to the next queued image.
@@ -69,12 +78,19 @@ export function ScreenshotEditor({
         setSettings(initialSettings);
         setSourceImg(null);
         setCropMode(false);
+        setLoadError(false);
         let revoked = false;
-        void loadImage(sourceUrl).then((img) => {
-            if (!revoked) {
-                setSourceImg(img);
-            }
-        });
+        loadImage(sourceUrl)
+            .then((img) => {
+                if (!revoked) {
+                    setSourceImg(img);
+                }
+            })
+            .catch(() => {
+                if (!revoked) {
+                    setLoadError(true);
+                }
+            });
 
         return () => {
             revoked = true;
@@ -93,20 +109,26 @@ export function ScreenshotEditor({
             height: sourceImg.naturalHeight,
         };
         let revoked = false;
-        void cropToBlob(sourceImg, rect).then((blob) => {
-            if (revoked) {
-                return;
-            }
-            const url = URL.createObjectURL(blob);
-            croppedUrlRef.current = url;
-            setCroppedUrl((prev) => {
-                if (prev) {
-                    URL.revokeObjectURL(prev);
+        cropToBlob(sourceImg, rect)
+            .then((blob) => {
+                if (revoked) {
+                    return;
                 }
+                const url = URL.createObjectURL(blob);
+                croppedUrlRef.current = url;
+                setCroppedUrl((prev) => {
+                    if (prev) {
+                        URL.revokeObjectURL(prev);
+                    }
 
-                return url;
+                    return url;
+                });
+            })
+            .catch(() => {
+                if (!revoked) {
+                    setLoadError(true);
+                }
             });
-        });
 
         return () => {
             revoked = true;
@@ -126,16 +148,30 @@ export function ScreenshotEditor({
 
     const contentW = settings.crop?.width ?? sourceImg?.naturalWidth ?? 1;
     const contentH = settings.crop?.height ?? sourceImg?.naturalHeight ?? 1;
-    const stage = stageDimensions(
-        contentW,
-        contentH,
-        settings.padding,
-        settings.aspect,
-    );
+    // The canvas always hugs the (cropped) image + padding; the aspect preset
+    // drives the crop ratio, not a letterboxed background.
+    const stage = stageDimensions(contentW, contentH, settings.padding, 'auto');
     const previewScale = Math.min(
         1,
         PREVIEW_MAX / Math.max(stage.width, stage.height),
     );
+
+    // Picking an aspect crops the image to that ratio (centred); 'auto' clears it.
+    function selectAspect(aspect: AspectPreset) {
+        const ratio = aspectToRatio(aspect);
+        setSettings((s) => ({
+            ...s,
+            aspect,
+            crop:
+                ratio !== null && sourceImg
+                    ? centeredCropForRatio(
+                          sourceImg.naturalWidth,
+                          sourceImg.naturalHeight,
+                          ratio,
+                      )
+                    : null,
+        }));
+    }
 
     async function apply() {
         const node = stageRef.current;
@@ -165,167 +201,108 @@ export function ScreenshotEditor({
             <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col overflow-hidden">
                 <DialogHeader>
                     <DialogTitle>Edit image</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Crop, set an aspect ratio, and optionally add a
+                        background and effects before attaching the image.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid flex-1 gap-6 overflow-y-auto md:grid-cols-[1fr_220px]">
                     {/* Preview / crop */}
-                    <div className="grid min-h-[300px] place-items-center overflow-hidden rounded-lg bg-muted/40 p-4">
-                        {cropMode && sourceImg ? (
-                            <CropOverlay
-                                imageSrc={sourceUrl ?? ''}
-                                sourceSize={{
-                                    width: sourceImg.naturalWidth,
-                                    height: sourceImg.naturalHeight,
-                                }}
-                                rect={
-                                    settings.crop ?? {
-                                        x: 0,
-                                        y: 0,
+                    <div className="flex min-h-[300px] flex-col gap-3">
+                        <div className="grid flex-1 place-items-center overflow-hidden rounded-lg bg-muted/40 p-4">
+                            {loadError ? (
+                                <p className="text-sm text-muted-foreground">
+                                    Couldn’t load that image.
+                                </p>
+                            ) : cropMode && sourceImg ? (
+                                <CropOverlay
+                                    imageSrc={sourceUrl ?? ''}
+                                    sourceSize={{
                                         width: sourceImg.naturalWidth,
                                         height: sourceImg.naturalHeight,
-                                    }
-                                }
-                                ratio={aspectToRatio(settings.aspect)}
-                                onChange={(crop) =>
-                                    setSettings((s) => ({
-                                        ...s,
-                                        crop: clampCropRect(
-                                            crop,
-                                            sourceImg.naturalWidth,
-                                            sourceImg.naturalHeight,
-                                        ),
-                                    }))
-                                }
-                            />
-                        ) : croppedUrl ? (
-                            <div
-                                style={{
-                                    transform: `scale(${previewScale})`,
-                                    transformOrigin: 'center',
-                                }}
-                            >
-                                <ScreenshotStage
-                                    ref={stageRef}
-                                    imageSrc={croppedUrl}
-                                    settings={settings}
-                                    contentSize={{
-                                        width: contentW,
-                                        height: contentH,
                                     }}
+                                    rect={
+                                        settings.crop ?? {
+                                            x: 0,
+                                            y: 0,
+                                            width: sourceImg.naturalWidth,
+                                            height: sourceImg.naturalHeight,
+                                        }
+                                    }
+                                    ratio={aspectToRatio(settings.aspect)}
+                                    onChange={(crop) =>
+                                        setSettings((s) => ({
+                                            ...s,
+                                            crop: clampCropRect(
+                                                crop,
+                                                sourceImg.naturalWidth,
+                                                sourceImg.naturalHeight,
+                                            ),
+                                        }))
+                                    }
                                 />
+                            ) : croppedUrl ? (
+                                <div
+                                    style={{
+                                        transform: `scale(${previewScale})`,
+                                        transformOrigin: 'center',
+                                    }}
+                                >
+                                    <ScreenshotStage
+                                        ref={stageRef}
+                                        imageSrc={croppedUrl}
+                                        settings={settings}
+                                        contentSize={{
+                                            width: contentW,
+                                            height: contentH,
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="size-8 animate-spin rounded-full border-2 border-foreground/60 border-t-transparent" />
+                            )}
+                        </div>
+
+                        {/* Multi-image queue strip */}
+                        {queue && queue.thumbnails.length > 1 && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                    {queue.index + 1}/{queue.thumbnails.length}
+                                </span>
+                                <div className="flex flex-1 gap-1.5 overflow-x-auto">
+                                    {queue.thumbnails.map((src, i) => (
+                                        <div
+                                            key={src}
+                                            className={cn(
+                                                'size-9 shrink-0 overflow-hidden rounded-md border',
+                                                i === queue.index
+                                                    ? 'border-foreground ring-1 ring-foreground'
+                                                    : 'border-border opacity-60',
+                                            )}
+                                        >
+                                            <img
+                                                src={src}
+                                                alt=""
+                                                draggable={false}
+                                                className="size-full object-cover"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        ) : (
-                            <div className="size-8 animate-spin rounded-full border-2 border-foreground/60 border-t-transparent" />
                         )}
                     </div>
 
                     {/* Controls */}
                     <div className="space-y-4 text-sm">
-                        <Control label="Background">
-                            <div className="grid grid-cols-4 gap-1.5">
-                                {GRADIENTS.map((g) => (
-                                    <button
-                                        key={g.id}
-                                        type="button"
-                                        aria-label={g.name}
-                                        onClick={() =>
-                                            setSettings((s) => ({
-                                                ...s,
-                                                background: gradientToFill(g),
-                                            }))
-                                        }
-                                        className={cn(
-                                            'h-7 rounded-md ring-offset-2 ring-offset-background',
-                                            settings.background.id === g.id &&
-                                                'ring-2 ring-foreground',
-                                        )}
-                                        style={{
-                                            background: `linear-gradient(${g.angle}deg, ${g.stops[0].color}, ${g.stops[g.stops.length - 1].color})`,
-                                        }}
-                                    />
-                                ))}
-                            </div>
-                        </Control>
-
-                        <RangeControl
-                            label="Padding"
-                            min={0}
-                            max={200}
-                            value={settings.padding}
-                            onChange={(padding) =>
-                                setSettings((s) => ({ ...s, padding }))
-                            }
-                        />
-                        <RangeControl
-                            label="Corner radius"
-                            min={0}
-                            max={64}
-                            value={settings.radius}
-                            onChange={(radius) =>
-                                setSettings((s) => ({ ...s, radius }))
-                            }
-                        />
-                        <RangeControl
-                            label="Tilt X"
-                            min={-30}
-                            max={30}
-                            value={settings.tilt.rotateX}
-                            onChange={(rotateX) =>
-                                setSettings((s) => ({
-                                    ...s,
-                                    tilt: { ...s.tilt, rotateX },
-                                }))
-                            }
-                        />
-                        <RangeControl
-                            label="Tilt Y"
-                            min={-30}
-                            max={30}
-                            value={settings.tilt.rotateY}
-                            onChange={(rotateY) =>
-                                setSettings((s) => ({
-                                    ...s,
-                                    tilt: { ...s.tilt, rotateY },
-                                }))
-                            }
-                        />
-
-                        <Control label="Shadow">
-                            <div className="flex gap-1">
-                                {SHADOW_PRESETS.map((sh) => (
-                                    <button
-                                        key={sh}
-                                        type="button"
-                                        onClick={() =>
-                                            setSettings((s) => ({
-                                                ...s,
-                                                shadow: sh,
-                                            }))
-                                        }
-                                        className={cn(
-                                            'flex-1 rounded-md border border-border py-1 text-xs capitalize',
-                                            settings.shadow === sh &&
-                                                'bg-foreground text-background',
-                                        )}
-                                    >
-                                        {sh}
-                                    </button>
-                                ))}
-                            </div>
-                        </Control>
-
                         <Control label="Aspect">
                             <div className="grid grid-cols-3 gap-1">
                                 {ASPECT_PRESETS.map((a) => (
                                     <button
                                         key={a}
                                         type="button"
-                                        onClick={() =>
-                                            setSettings((s) => ({
-                                                ...s,
-                                                aspect: a,
-                                            }))
-                                        }
+                                        onClick={() => selectAspect(a)}
                                         className={cn(
                                             'rounded-md border border-border py-1 text-xs',
                                             settings.aspect === a &&
@@ -348,6 +325,120 @@ export function ScreenshotEditor({
                         >
                             {cropMode ? 'Done cropping' : 'Crop'}
                         </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setAdvanced((v) => !v)}
+                            className={cn(
+                                'flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-xs',
+                                'text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            <Settings2
+                                className="size-3.5"
+                                aria-hidden="true"
+                            />
+                            {advanced ? 'Hide effects' : 'Effects & background'}
+                        </button>
+
+                        {advanced && (
+                            <div className="space-y-4 border-t border-border pt-4">
+                                <Control label="Background">
+                                    <div className="grid grid-cols-4 gap-1.5">
+                                        {GRADIENTS.map((g) => (
+                                            <button
+                                                key={g.id}
+                                                type="button"
+                                                aria-label={g.name}
+                                                onClick={() =>
+                                                    setSettings((s) => ({
+                                                        ...s,
+                                                        background:
+                                                            gradientToFill(g),
+                                                    }))
+                                                }
+                                                className={cn(
+                                                    'h-7 rounded-md ring-offset-2 ring-offset-background',
+                                                    settings.background.id ===
+                                                        g.id &&
+                                                        'ring-2 ring-foreground',
+                                                )}
+                                                style={{
+                                                    background: `linear-gradient(${g.angle}deg, ${g.stops[0].color}, ${g.stops[g.stops.length - 1].color})`,
+                                                }}
+                                            />
+                                        ))}
+                                    </div>
+                                </Control>
+
+                                <RangeControl
+                                    label="Padding"
+                                    min={0}
+                                    max={200}
+                                    value={settings.padding}
+                                    onChange={(padding) =>
+                                        setSettings((s) => ({ ...s, padding }))
+                                    }
+                                />
+                                <RangeControl
+                                    label="Corner radius"
+                                    min={0}
+                                    max={64}
+                                    value={settings.radius}
+                                    onChange={(radius) =>
+                                        setSettings((s) => ({ ...s, radius }))
+                                    }
+                                />
+                                <RangeControl
+                                    label="Tilt X"
+                                    min={-30}
+                                    max={30}
+                                    value={settings.tilt.rotateX}
+                                    onChange={(rotateX) =>
+                                        setSettings((s) => ({
+                                            ...s,
+                                            tilt: { ...s.tilt, rotateX },
+                                        }))
+                                    }
+                                />
+                                <RangeControl
+                                    label="Tilt Y"
+                                    min={-30}
+                                    max={30}
+                                    value={settings.tilt.rotateY}
+                                    onChange={(rotateY) =>
+                                        setSettings((s) => ({
+                                            ...s,
+                                            tilt: { ...s.tilt, rotateY },
+                                        }))
+                                    }
+                                />
+
+                                <Control label="Shadow">
+                                    <div className="flex gap-1">
+                                        {SHADOW_PRESETS.map((sh) => (
+                                            <button
+                                                key={sh}
+                                                type="button"
+                                                onClick={() =>
+                                                    setSettings((s) => ({
+                                                        ...s,
+                                                        shadow: sh,
+                                                    }))
+                                                }
+                                                className={cn(
+                                                    'flex-1 rounded-md border border-border py-1 text-xs capitalize',
+                                                    settings.shadow === sh &&
+                                                        'bg-foreground text-background',
+                                                )}
+                                            >
+                                                {sh}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </Control>
+                            </div>
+                        )}
                     </div>
                 </div>
 

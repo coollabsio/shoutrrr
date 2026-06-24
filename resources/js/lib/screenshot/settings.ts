@@ -34,12 +34,15 @@ export const ASPECT_PRESETS: readonly AspectPreset[] = [
 ];
 
 export function defaultSettings(): EditSettings {
+    // Plain by default — a basic crop/aspect tool. Gradient background, padding,
+    // radius, shadow and 3D tilt are opt-in via the editor's Advanced controls
+    // (the background only becomes visible once padding is added).
     return {
         version: 1,
         background: gradientToFill(GRADIENTS[0]),
-        padding: 64,
-        radius: 12,
-        shadow: 'medium',
+        padding: 0,
+        radius: 0,
+        shadow: 'none',
         aspect: 'auto',
         tilt: { rotateX: 0, rotateY: 0 },
         crop: null,

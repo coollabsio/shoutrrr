@@ -54,9 +54,13 @@ import { TargetStatusChips } from './target-status-chips';
 
 /** What the screenshot editor is currently working on. */
 type Editing =
-    | { kind: 'new'; url: string; settings: EditSettings; file: File }
+    | {
+          kind: 'batch';
+          items: { file: File; url: string }[];
+          index: number;
+      }
     | { kind: 'reedit'; url: string; settings: EditSettings; mediaId: string }
-    | { kind: 'raw'; url: string; settings: EditSettings; mediaId: string };
+    | { kind: 'raw'; url: string; mediaId: string };
 
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
 const DEFAULT_EDIT_SETTINGS = defaultSettings();
@@ -190,37 +194,42 @@ export default function Composer({
     });
 
     // The editor opens automatically when image(s) are added and when an attached
-    // image is clicked. A multi-image add queues up and opens one at a time:
-    // `editing` is the image in the editor now, `imageQueue` holds the rest.
+    // image is clicked. A multi-image add becomes a `batch` edited one item at a
+    // time; the editor shows the batch as a thumbnail strip.
     const [editing, setEditing] = useState<Editing | null>(null);
-    const [imageQueue, setImageQueue] = useState<File[]>([]);
+    // Revoke any outstanding batch object URLs if the composer unmounts mid-batch.
+    const editingRef = useRef<Editing | null>(null);
+    editingRef.current = editing;
+    useEffect(
+        () => () => {
+            const e = editingRef.current;
+            if (e?.kind === 'batch') {
+                for (const it of e.items) {
+                    URL.revokeObjectURL(it.url);
+                }
+            }
+        },
+        [],
+    );
 
-    function newEditing(file: File): Editing {
-        return {
-            kind: 'new',
-            url: URL.createObjectURL(file),
-            settings: defaultSettings(),
-            file,
-        };
-    }
+    // Advance to the next batch image, or close the editor (revoking the batch's
+    // object URLs) when the batch is done. Re-edits just close.
+    function endEditingStep() {
+        if (editing?.kind === 'batch') {
+            if (editing.index + 1 < editing.items.length) {
+                setEditing({ ...editing, index: editing.index + 1 });
 
-    // Advance to the next queued image, or close the editor when the batch is done.
-    // Revokes the object URL minted for a fresh file as its turn ends.
-    function advanceQueue() {
-        if (editing?.kind === 'new') {
-            URL.revokeObjectURL(editing.url);
+                return;
+            }
+            for (const it of editing.items) {
+                URL.revokeObjectURL(it.url);
+            }
         }
-        if (imageQueue.length > 0) {
-            const [next, ...rest] = imageQueue;
-            setImageQueue(rest);
-            setEditing(newEditing(next));
-        } else {
-            setEditing(null);
-        }
+        setEditing(null);
     }
 
     // Split a picked/dropped/pasted batch: videos upload directly; images open
-    // the editor (the first now, the rest queued).
+    // the editor as a batch (edited one at a time).
     async function handleAddedFiles(files: FileList | File[]): Promise<void> {
         const all = Array.from(files);
         const videos = all.filter((f) => f.type.startsWith('video/'));
@@ -237,9 +246,14 @@ export default function Composer({
 
             return;
         }
-        const [first, ...rest] = images;
-        setImageQueue(rest);
-        setEditing(newEditing(first));
+        setEditing({
+            kind: 'batch',
+            items: images.map((f) => ({
+                file: f,
+                url: URL.createObjectURL(f),
+            })),
+            index: 0,
+        });
     }
 
     // Re-open an attached image: a beautified one rehydrates from its persisted
@@ -257,16 +271,11 @@ export default function Composer({
                 mediaId: m.id,
             });
         } else {
-            setEditing({
-                kind: 'raw',
-                url: m.url,
-                settings: defaultSettings(),
-                mediaId: m.id,
-            });
+            setEditing({ kind: 'raw', url: m.url, mediaId: m.id });
         }
     }
 
-    // Apply: persist the composed image, then advance the queue / close.
+    // Apply: persist the composed image, then advance the batch / close.
     async function applyEditing(
         composed: Blob,
         settings: EditSettings,
@@ -274,8 +283,12 @@ export default function Composer({
         if (!editing) {
             return;
         }
-        if (editing.kind === 'new') {
-            await screenshot.applyNew(composed, editing.file, settings);
+        if (editing.kind === 'batch') {
+            await screenshot.applyNew(
+                composed,
+                editing.items[editing.index].file,
+                settings,
+            );
         } else if (editing.kind === 'reedit') {
             await screenshot.applyEdit(editing.mediaId, composed, settings);
         } else {
@@ -285,16 +298,31 @@ export default function Composer({
             await screenshot.applyNew(composed, rawBlob, settings);
             dispatch({ type: 'removeMedia', mediaId: editing.mediaId });
         }
-        advanceQueue();
+        endEditingStep();
     }
 
     // Cancel: a freshly-added image still attaches as-is (raw); re-edits just close.
     function cancelEditing() {
-        if (editing?.kind === 'new') {
-            void mediaUploads.handleFiles([editing.file]);
+        if (editing?.kind === 'batch') {
+            void mediaUploads.handleFiles([editing.items[editing.index].file]);
         }
-        advanceQueue();
+        endEditingStep();
     }
+
+    // Resolve the editor's current source/settings/queue from `editing`.
+    const editorSourceUrl =
+        editing?.kind === 'batch'
+            ? editing.items[editing.index].url
+            : (editing?.url ?? null);
+    const editorSettings =
+        editing?.kind === 'reedit' ? editing.settings : DEFAULT_EDIT_SETTINGS;
+    const editorQueue =
+        editing?.kind === 'batch'
+            ? {
+                  thumbnails: editing.items.map((it) => it.url),
+                  index: editing.index,
+              }
+            : undefined;
 
     // Persist a destination change immediately rather than waiting out the
     // autosave debounce. This MUST run in an effect — AFTER the reducer commits
@@ -663,11 +691,12 @@ export default function Composer({
             {!readOnly && (
                 <ScreenshotEditor
                     open={editing !== null}
-                    sourceUrl={editing?.url ?? null}
-                    initialSettings={editing?.settings ?? DEFAULT_EDIT_SETTINGS}
+                    sourceUrl={editorSourceUrl}
+                    initialSettings={editorSettings}
                     onApply={applyEditing}
                     onCancel={cancelEditing}
                     isSaving={screenshot.isSaving}
+                    queue={editorQueue}
                 />
             )}
 

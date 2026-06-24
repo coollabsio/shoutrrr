@@ -119,3 +119,24 @@ export function moveCropRect(
         boundsH,
     );
 }
+
+/** The largest rect of the given ratio (w/h) centered within the source. */
+export function centeredCropForRatio(
+    sourceW: number,
+    sourceH: number,
+    ratio: number,
+): CropRect {
+    let width = sourceW;
+    let height = width / ratio;
+    if (height > sourceH) {
+        height = sourceH;
+        width = height * ratio;
+    }
+
+    return {
+        x: (sourceW - width) / 2,
+        y: (sourceH - height) / 2,
+        width,
+        height,
+    };
+}

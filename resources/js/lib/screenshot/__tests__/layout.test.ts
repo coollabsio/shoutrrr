@@ -2,11 +2,31 @@ import { describe, expect, it } from 'vitest';
 
 import {
     aspectToRatio,
+    centeredCropForRatio,
     clampCropRect,
     moveCropRect,
     resizeCorner,
     stageDimensions,
 } from '../layout';
+
+describe('centeredCropForRatio', () => {
+    it('returns a centered square for ratio 1 on a landscape source', () => {
+        expect(centeredCropForRatio(800, 600, 1)).toEqual({
+            x: 100,
+            y: 0,
+            width: 600,
+            height: 600,
+        });
+    });
+
+    it('is width-bound for a wide ratio and stays inside the source', () => {
+        const r = centeredCropForRatio(800, 600, 16 / 9);
+        expect(r.width).toBe(800);
+        expect(r.height).toBeCloseTo(450);
+        expect(r.y).toBeCloseTo(75);
+        expect(r.width / r.height).toBeCloseTo(16 / 9);
+    });
+});
 
 describe('aspectToRatio', () => {
     it('maps presets to ratios, auto to null', () => {
