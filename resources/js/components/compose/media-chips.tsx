@@ -1,6 +1,6 @@
-import { Eye, EyeOff, Pencil, X } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
     Tooltip,
@@ -116,6 +116,8 @@ export function MediaChips({
     onImageClick,
 }: Props) {
     const [dragIdx, setDragIdx] = useState<number | null>(null);
+    // Pointer-down position, so a click that moved (a drag) doesn't open the editor.
+    const downPos = useRef<{ x: number; y: number } | null>(null);
 
     if (media.length === 0 && pending.length === 0) {
         return null;
@@ -128,7 +130,7 @@ export function MediaChips({
                 {media.map((m) => (
                     <div
                         key={m.id}
-                        className="size-9 overflow-hidden rounded-md border border-border"
+                        className="size-7 overflow-hidden rounded-md border border-border"
                     >
                         <MediaThumb media={m} />
                     </div>
@@ -185,13 +187,33 @@ export function MediaChips({
                                             ? !excluded
                                             : undefined
                                     }
-                                    onClick={() =>
-                                        m.kind === 'image'
-                                            ? onImageClick?.(m.id)
-                                            : onToggleExclude(m.id)
-                                    }
+                                    onPointerDown={(e) => {
+                                        downPos.current = {
+                                            x: e.clientX,
+                                            y: e.clientY,
+                                        };
+                                    }}
+                                    onClick={(e) => {
+                                        // Ignore clicks that moved — those are drags
+                                        // (reordering), not a deliberate tap.
+                                        const start = downPos.current;
+                                        if (
+                                            start &&
+                                            (Math.abs(e.clientX - start.x) >
+                                                5 ||
+                                                Math.abs(e.clientY - start.y) >
+                                                    5)
+                                        ) {
+                                            return;
+                                        }
+                                        if (m.kind === 'image') {
+                                            onImageClick?.(m.id);
+                                        } else {
+                                            onToggleExclude(m.id);
+                                        }
+                                    }}
                                     className={cn(
-                                        'block size-9 cursor-grab overflow-hidden rounded-md border border-border active:cursor-grabbing',
+                                        'block size-7 cursor-pointer overflow-hidden rounded-md border border-border',
                                         'transition-[opacity,transform]',
                                         excluded &&
                                             'opacity-40 ring-1 ring-destructive/50',
@@ -200,17 +222,6 @@ export function MediaChips({
                                     )}
                                 >
                                     <MediaThumb media={m} />
-                                    {/* Edit signpost INSIDE the thumbnail (so it can
-                                        never be clipped by an ancestor). The whole
-                                        thumbnail is the edit trigger for images. */}
-                                    {m.kind === 'image' && (
-                                        <span className="pointer-events-none absolute right-0.5 bottom-0.5 grid size-[15px] place-items-center rounded-full bg-black/65 text-white ring-1 ring-white/25">
-                                            <Pencil
-                                                className="size-2.5"
-                                                aria-hidden="true"
-                                            />
-                                        </span>
-                                    )}
                                 </button>
                                 <CornerButton
                                     label="Remove"
@@ -286,7 +297,7 @@ export function MediaChips({
                         >
                             <div
                                 className={cn(
-                                    'relative size-9 overflow-hidden rounded-md border border-border',
+                                    'relative size-7 overflow-hidden rounded-md border border-border',
                                     p.status === 'error' &&
                                         'ring-1 ring-destructive/60',
                                 )}
