@@ -49,6 +49,7 @@ export function ScreenshotEditor({
     screenshot,
 }: Props) {
     const stageRef = useRef<HTMLDivElement | null>(null);
+    const croppedUrlRef = useRef<string | null>(null);
     const [settings, setSettings] = useState<EditSettings>(defaultSettings);
     const [sourceUrl, setSourceUrl] = useState<string | null>(null);
     const [sourceImg, setSourceImg] = useState<HTMLImageElement | null>(null);
@@ -101,6 +102,7 @@ export function ScreenshotEditor({
                 return;
             }
             const url = URL.createObjectURL(blob);
+            croppedUrlRef.current = url;
             setCroppedUrl((prev) => {
                 if (prev) {
                     URL.revokeObjectURL(prev);
@@ -115,9 +117,16 @@ export function ScreenshotEditor({
         };
     }, [sourceImg, settings.crop]);
 
-    if (!sourceImg || !sourceUrl) {
-        // Still loading; render the shell so the dialog can animate in.
-    }
+    // Revoke the last-held croppedUrl when the editor unmounts (between-crops
+    // revocation is already handled by the functional updater above).
+    useEffect(
+        () => () => {
+            if (croppedUrlRef.current) {
+                URL.revokeObjectURL(croppedUrlRef.current);
+            }
+        },
+        [],
+    );
 
     const contentW = settings.crop?.width ?? sourceImg?.naturalWidth ?? 1;
     const contentH = settings.crop?.height ?? sourceImg?.naturalHeight ?? 1;
