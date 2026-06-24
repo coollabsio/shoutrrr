@@ -94,14 +94,7 @@ class PostVideoUploadController extends Controller
             'position' => 0,
         ]);
 
-        return response()->json(['media' => [
-            'id' => $media->id,
-            'url' => $media->url(),
-            'mime' => $media->mime,
-            'kind' => $media->kind,
-            'duration_seconds' => $media->duration_seconds,
-            'alt_text' => $media->alt_text,
-        ]], 201);
+        return response()->json(['media' => $media->toView()], 201);
     }
 
     /**

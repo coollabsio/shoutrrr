@@ -53,15 +53,7 @@ final class PostView
                         $target->account?->maxTextLength(),
                     ),
                 ])->values()->all(),
-            'media' => $post->media->map(fn (PostMedia $media): array => [
-                'id' => $media->id,
-                'url' => $media->url(),
-                'mime' => $media->mime,
-                'kind' => $media->kind,
-                'duration_seconds' => $media->duration_seconds,
-                'alt_text' => $media->alt_text,
-                'position' => $media->position,
-            ])->all(),
+            'media' => $post->media->map(fn (PostMedia $media): array => $media->toView())->values()->all(),
         ];
     }
 

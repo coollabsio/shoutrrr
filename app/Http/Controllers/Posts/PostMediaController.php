@@ -25,14 +25,7 @@ class PostMediaController extends Controller
             $request->validated('alt_text'),
         );
 
-        return response()->json(['media' => [
-            'id' => $media->id,
-            'url' => $media->url(),
-            'mime' => $media->mime,
-            'kind' => $media->kind,
-            'duration_seconds' => $media->duration_seconds,
-            'alt_text' => $media->alt_text,
-        ]], 201);
+        return response()->json(['media' => $media->toView()], 201);
     }
 
     public function destroy(Post $post, PostMedia $media): JsonResponse

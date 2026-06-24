@@ -27,6 +27,9 @@ use Illuminate\Support\Facades\Storage;
  * @property int $position
  * @property string $kind
  * @property int|null $duration_seconds
+ * @property string|null $source_disk
+ * @property string|null $source_path
+ * @property array<string, mixed>|null $edit_settings
  */
 #[Fillable([
     'workspace_id',
@@ -41,6 +44,9 @@ use Illuminate\Support\Facades\Storage;
     'position',
     'kind',
     'duration_seconds',
+    'source_disk',
+    'source_path',
+    'edit_settings',
 ])]
 class PostMedia extends Model
 {
@@ -65,9 +71,44 @@ class PostMedia extends Model
         return $this->belongsTo(Post::class);
     }
 
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return ['edit_settings' => 'array'];
+    }
+
     public function url(): string
     {
         return Storage::disk($this->disk)->url($this->path);
+    }
+
+    public function source_url(): ?string
+    {
+        if ($this->source_path === null) {
+            return null;
+        }
+
+        return Storage::disk($this->source_disk ?? $this->disk)->url($this->source_path);
+    }
+
+    /**
+     * @return array{id: string, url: string, mime: string, kind: string, duration_seconds: int|null, alt_text: string|null, position: int, edit_settings: array<string, mixed>|null, source_url: string|null}
+     */
+    public function toView(): array
+    {
+        return [
+            'id' => $this->id,
+            'url' => $this->url(),
+            'mime' => $this->mime,
+            'kind' => $this->kind,
+            'duration_seconds' => $this->duration_seconds,
+            'alt_text' => $this->alt_text,
+            'position' => $this->position,
+            'edit_settings' => $this->edit_settings,
+            'source_url' => $this->source_url(),
+        ];
     }
 
     public function isVideo(): bool
