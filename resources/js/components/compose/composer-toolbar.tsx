@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Shuffle, Sparkles, Split } from 'lucide-react';
+import { Image as ImageIcon, Shuffle, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 
@@ -29,10 +29,8 @@ type Props = {
     handleFiles: (files: FileList) => Promise<void>;
     /** Drop a failed/pending upload chip. */
     dismissPending: (tempId: string) => void;
-    /** Open the screenshot beautifier with a fresh file picker. */
-    onBeautify?: () => void;
-    /** Open the screenshot editor rehydrated from an existing media item. */
-    onEditMedia?: (mediaId: string) => void;
+    /** Click an attached image to (re)open it in the editor. */
+    onImageClick?: (mediaId: string) => void;
 };
 
 export function ComposerToolbar({
@@ -51,8 +49,7 @@ export function ComposerToolbar({
     pending,
     handleFiles,
     dismissPending,
-    onBeautify,
-    onEditMedia,
+    onImageClick,
 }: Props) {
     const input = useRef<HTMLInputElement | null>(null);
 
@@ -110,15 +107,6 @@ export function ComposerToolbar({
                             </span>
                         )}
                     </EToolButton>
-                    {onBeautify && (
-                        <EToolButton
-                            title="Beautify a screenshot"
-                            onClick={onBeautify}
-                        >
-                            <Sparkles className="size-3.5" aria-hidden="true" />
-                            <span>Beautify</span>
-                        </EToolButton>
-                    )}
                 </>
             )}
 
@@ -132,7 +120,7 @@ export function ComposerToolbar({
                 onRemove={onRemove}
                 onDismissPending={dismissPending}
                 readOnly={readOnly}
-                onEdit={onEditMedia}
+                onImageClick={onImageClick}
             />
 
             <div className="ml-auto sm:flex-1" />

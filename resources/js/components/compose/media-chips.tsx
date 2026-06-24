@@ -1,4 +1,4 @@
-import { Pencil, X } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -64,8 +64,8 @@ type Props = {
     onDismissPending: (tempId: string) => void;
     /** Read-only post: show the images, no add/remove/reorder/exclude affordances. */
     readOnly?: boolean;
-    /** Open the screenshot editor for a beautified media item. */
-    onEdit?: (mediaId: string) => void;
+    /** Click an image to (re)open it in the editor. */
+    onImageClick?: (mediaId: string) => void;
 };
 
 /** A square overlay button that protrudes past the chip's top-right corner. */
@@ -112,7 +112,7 @@ export function MediaChips({
     onRemove,
     onDismissPending,
     readOnly = false,
-    onEdit,
+    onImageClick,
 }: Props) {
     const [dragIdx, setDragIdx] = useState<number | null>(null);
 
@@ -174,9 +174,21 @@ export function MediaChips({
                             >
                                 <button
                                     type="button"
-                                    aria-label={`Media ${idx + 1}`}
-                                    aria-pressed={!excluded}
-                                    onClick={() => onToggleExclude(m.id)}
+                                    aria-label={
+                                        m.kind === 'image'
+                                            ? `Edit media ${idx + 1}`
+                                            : `Media ${idx + 1}`
+                                    }
+                                    aria-pressed={
+                                        m.kind === 'video'
+                                            ? !excluded
+                                            : undefined
+                                    }
+                                    onClick={() =>
+                                        m.kind === 'image'
+                                            ? onImageClick?.(m.id)
+                                            : onToggleExclude(m.id)
+                                    }
                                     className={cn(
                                         'block size-7 cursor-grab overflow-hidden rounded-md border border-border active:cursor-grabbing',
                                         'transition-[opacity,transform]',
@@ -197,34 +209,53 @@ export function MediaChips({
                                         aria-hidden="true"
                                     />
                                 </CornerButton>
-                                {onEdit && m.edit_settings && (
+                                {/* Per-account include/exclude lives on a hover toggle so
+                                    the chip body is free to (re)open the editor. */}
+                                {m.kind === 'image' && activePlatform && (
                                     <button
                                         type="button"
-                                        aria-label="Edit screenshot"
+                                        aria-label={
+                                            excluded
+                                                ? `Include on ${activePlatform}`
+                                                : `Exclude on ${activePlatform}`
+                                        }
+                                        aria-pressed={!excluded}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            onEdit(m.id);
+                                            onToggleExclude(m.id);
                                         }}
                                         className={cn(
                                             'absolute -right-1.5 -bottom-1.5 z-10 grid size-4 place-items-center rounded-full',
                                             'border border-background bg-foreground text-background shadow-sm',
-                                            'opacity-0 transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100',
+                                            'transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100',
+                                            excluded
+                                                ? 'opacity-100'
+                                                : 'opacity-0',
                                         )}
                                     >
-                                        <Pencil
-                                            className="size-2.5"
-                                            aria-hidden="true"
-                                        />
+                                        {excluded ? (
+                                            <EyeOff
+                                                className="size-2.5"
+                                                aria-hidden="true"
+                                            />
+                                        ) : (
+                                            <Eye
+                                                className="size-2.5"
+                                                aria-hidden="true"
+                                            />
+                                        )}
                                     </button>
                                 )}
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[11px]">
-                            {activePlatform
-                                ? excluded
-                                    ? `Excluded on ${activePlatform} — click to include`
-                                    : `Included on ${activePlatform} — click to exclude`
-                                : 'Attached media'}
+                            {m.kind === 'image'
+                                ? 'Click to edit'
+                                : activePlatform
+                                  ? excluded
+                                      ? `Excluded on ${activePlatform}`
+                                      : `Included on ${activePlatform}`
+                                  : 'Attached media'}
                         </TooltipContent>
                     </Tooltip>
                 );

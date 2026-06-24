@@ -26,7 +26,7 @@ type MediaUploads = {
     pending: PendingUpload[];
     isUploading: boolean;
     /** Validate + upload each file, enforcing the one-video / no-mixing rule. */
-    handleFiles: (files: FileList) => Promise<void>;
+    handleFiles: (files: FileList | File[]) => Promise<void>;
     dismissPending: (tempId: string) => void;
 };
 
@@ -225,7 +225,7 @@ export function useMediaUploads({
 
     // --- One-video / no-mixing-with-images rule -----------------------------
 
-    async function handleFiles(files: FileList): Promise<void> {
+    async function handleFiles(files: FileList | File[]): Promise<void> {
         const hasVideo = media.some((m) => m.kind === 'video');
         const hasImages = media.some((m) => m.kind === 'image');
         // Track this batch too: render-closure `media` is stale for files already

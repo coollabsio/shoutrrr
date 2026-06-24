@@ -1,6 +1,7 @@
 import { Link, useHttp } from '@inertiajs/react';
 import { Plug } from 'lucide-react';
 import { useEffect, useReducer, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import { useAutosave } from '@/hooks/compose/use-autosave';
@@ -22,6 +23,7 @@ import {
 } from '@/lib/compose/mentions';
 import { postCapabilities } from '@/lib/posts/capabilities';
 import {
+    defaultSettings,
     normalizeSettings,
     type EditSettings,
 } from '@/lib/screenshot/settings';
@@ -49,6 +51,15 @@ import { ScheduleTray } from './schedule-tray';
 import { ScreenshotEditor } from './screenshot-editor';
 import { SubmitBar } from './submit-bar';
 import { TargetStatusChips } from './target-status-chips';
+
+/** What the screenshot editor is currently working on. */
+type Editing =
+    | { kind: 'new'; url: string; settings: EditSettings; file: File }
+    | { kind: 'reedit'; url: string; settings: EditSettings; mediaId: string }
+    | { kind: 'raw'; url: string; settings: EditSettings; mediaId: string };
+
+/** Stable fallback so a closed editor doesn't reallocate settings each render. */
+const DEFAULT_EDIT_SETTINGS = defaultSettings();
 
 type ComposerProps = {
     post: PostView | null;
@@ -178,33 +189,111 @@ export default function Composer({
         onReplaceMedia: (m) => dispatch({ type: 'replaceMedia', media: m }),
     });
 
-    const beautifyInput = useRef<HTMLInputElement | null>(null);
-    const [editorOpen, setEditorOpen] = useState(false);
-    const [beautifyFile, setBeautifyFile] = useState<File | null>(null);
-    const [editTarget, setEditTarget] = useState<{
-        mediaId: string;
-        sourceUrl: string;
-        settings: EditSettings;
-    } | null>(null);
+    // The editor opens automatically when image(s) are added and when an attached
+    // image is clicked. A multi-image add queues up and opens one at a time:
+    // `editing` is the image in the editor now, `imageQueue` holds the rest.
+    const [editing, setEditing] = useState<Editing | null>(null);
+    const [imageQueue, setImageQueue] = useState<File[]>([]);
 
-    function openBeautifyPicker() {
-        setEditTarget(null);
-        setBeautifyFile(null);
-        beautifyInput.current?.click();
+    function newEditing(file: File): Editing {
+        return {
+            kind: 'new',
+            url: URL.createObjectURL(file),
+            settings: defaultSettings(),
+            file,
+        };
     }
 
-    function openEditMedia(mediaId: string) {
-        const m = state.media.find((x) => x.id === mediaId);
-        if (!m || !m.source_url || !m.edit_settings) {
+    // Advance to the next queued image, or close the editor when the batch is done.
+    // Revokes the object URL minted for a fresh file as its turn ends.
+    function advanceQueue() {
+        if (editing?.kind === 'new') {
+            URL.revokeObjectURL(editing.url);
+        }
+        if (imageQueue.length > 0) {
+            const [next, ...rest] = imageQueue;
+            setImageQueue(rest);
+            setEditing(newEditing(next));
+        } else {
+            setEditing(null);
+        }
+    }
+
+    // Split a picked/dropped/pasted batch: videos upload directly; images open
+    // the editor (the first now, the rest queued).
+    async function handleAddedFiles(files: FileList | File[]): Promise<void> {
+        const all = Array.from(files);
+        const videos = all.filter((f) => f.type.startsWith('video/'));
+        const images = all.filter((f) => f.type.startsWith('image/'));
+
+        if (videos.length > 0) {
+            void mediaUploads.handleFiles(videos);
+        }
+        if (images.length === 0) {
             return;
         }
-        setBeautifyFile(null);
-        setEditTarget({
-            mediaId,
-            sourceUrl: m.source_url,
-            settings: normalizeSettings(m.edit_settings),
-        });
-        setEditorOpen(true);
+        if (videos.length > 0 || state.media.some((m) => m.kind === 'video')) {
+            toast.error('A post can contain one video or images, not both.');
+
+            return;
+        }
+        const [first, ...rest] = images;
+        setImageQueue(rest);
+        setEditing(newEditing(first));
+    }
+
+    // Re-open an attached image: a beautified one rehydrates from its persisted
+    // source + settings; a plain one is beautified from scratch.
+    function openImage(mediaId: string) {
+        const m = state.media.find((x) => x.id === mediaId);
+        if (!m || m.kind !== 'image') {
+            return;
+        }
+        if (m.edit_settings && m.source_url) {
+            setEditing({
+                kind: 'reedit',
+                url: m.source_url,
+                settings: normalizeSettings(m.edit_settings),
+                mediaId: m.id,
+            });
+        } else {
+            setEditing({
+                kind: 'raw',
+                url: m.url,
+                settings: defaultSettings(),
+                mediaId: m.id,
+            });
+        }
+    }
+
+    // Apply: persist the composed image, then advance the queue / close.
+    async function applyEditing(
+        composed: Blob,
+        settings: EditSettings,
+    ): Promise<void> {
+        if (!editing) {
+            return;
+        }
+        if (editing.kind === 'new') {
+            await screenshot.applyNew(composed, editing.file, settings);
+        } else if (editing.kind === 'reedit') {
+            await screenshot.applyEdit(editing.mediaId, composed, settings);
+        } else {
+            // A plain image beautified for the first time: keep the raw image as
+            // the source, attach the composed result, drop the raw attachment.
+            const rawBlob = await fetch(editing.url).then((r) => r.blob());
+            await screenshot.applyNew(composed, rawBlob, settings);
+            dispatch({ type: 'removeMedia', mediaId: editing.mediaId });
+        }
+        advanceQueue();
+    }
+
+    // Cancel: a freshly-added image still attaches as-is (raw); re-edits just close.
+    function cancelEditing() {
+        if (editing?.kind === 'new') {
+            void mediaUploads.handleFiles([editing.file]);
+        }
+        advanceQueue();
     }
 
     // Persist a destination change immediately rather than waiting out the
@@ -438,7 +527,7 @@ export default function Composer({
                 onBlur={flush}
                 editable={!readOnly}
                 autoFocus={autoFocusEditor}
-                onPasteFiles={readOnly ? undefined : mediaUploads.handleFiles}
+                onPasteFiles={readOnly ? undefined : handleAddedFiles}
                 overrideBanner={overrideActive}
                 activePlatformLabel={activeAccount?.platform ?? null}
                 onResetOverride={() =>
@@ -565,38 +654,21 @@ export default function Composer({
                         })
                     }
                     pending={mediaUploads.pending}
-                    handleFiles={mediaUploads.handleFiles}
+                    handleFiles={handleAddedFiles}
                     dismissPending={mediaUploads.dismissPending}
-                    onBeautify={openBeautifyPicker}
-                    onEditMedia={openEditMedia}
+                    onImageClick={openImage}
                 />
             )}
 
             {!readOnly && (
-                <>
-                    <input
-                        ref={beautifyInput}
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/gif"
-                        hidden
-                        onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                                setBeautifyFile(file);
-                                setEditTarget(null);
-                                setEditorOpen(true);
-                            }
-                            e.target.value = '';
-                        }}
-                    />
-                    <ScreenshotEditor
-                        open={editorOpen}
-                        onOpenChange={setEditorOpen}
-                        sourceFile={beautifyFile}
-                        editTarget={editTarget}
-                        screenshot={screenshot}
-                    />
-                </>
+                <ScreenshotEditor
+                    open={editing !== null}
+                    sourceUrl={editing?.url ?? null}
+                    initialSettings={editing?.settings ?? DEFAULT_EDIT_SETTINGS}
+                    onApply={applyEditing}
+                    onCancel={cancelEditing}
+                    isSaving={screenshot.isSaving}
+                />
             )}
 
             {/* Schedule + submit row — hidden once the post is read-only. */}

@@ -7,7 +7,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import type { useScreenshot } from '@/hooks/compose/use-screenshot';
 import { cropToBlob, loadImage } from '@/lib/screenshot/crop';
 import { rasterizeStage } from '@/lib/screenshot/export';
 import { GRADIENTS, gradientToFill } from '@/lib/screenshot/gradients';
@@ -18,7 +17,6 @@ import {
 } from '@/lib/screenshot/layout';
 import {
     ASPECT_PRESETS,
-    defaultSettings,
     type EditSettings,
     SHADOW_PRESETS,
 } from '@/lib/screenshot/settings';
@@ -29,49 +27,50 @@ import { ScreenshotStage } from './screenshot-stage';
 
 type Props = {
     open: boolean;
-    onOpenChange: (open: boolean) => void;
-    sourceFile?: File | null;
-    editTarget?: {
-        mediaId: string;
-        sourceUrl: string;
-        settings: EditSettings;
-    } | null;
-    screenshot: ReturnType<typeof useScreenshot>;
+    /** Source image to edit — an object URL or same-origin URL. The PARENT owns its lifecycle. */
+    sourceUrl: string | null;
+    /** Initial settings: defaults for a fresh image, persisted settings on re-edit. */
+    initialSettings: EditSettings;
+    /**
+     * Compose + persist the result. The parent decides what to upload (new vs
+     * replace) and advances the queue / closes the modal afterwards.
+     */
+    onApply: (composed: Blob, settings: EditSettings) => Promise<void> | void;
+    /** Dismiss without applying (X / Escape / Cancel). The parent decides the fallback. */
+    onCancel: () => void;
+    /** True while an upload triggered by onApply is in flight. */
+    isSaving: boolean;
 };
 
 const PREVIEW_MAX = 460;
 
 export function ScreenshotEditor({
     open,
-    onOpenChange,
-    sourceFile,
-    editTarget,
-    screenshot,
+    sourceUrl,
+    initialSettings,
+    onApply,
+    onCancel,
+    isSaving,
 }: Props) {
     const stageRef = useRef<HTMLDivElement | null>(null);
     const croppedUrlRef = useRef<string | null>(null);
-    const [settings, setSettings] = useState<EditSettings>(defaultSettings);
-    const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+    const [settings, setSettings] = useState<EditSettings>(initialSettings);
     const [sourceImg, setSourceImg] = useState<HTMLImageElement | null>(null);
     // The cropped image as an object-URL fed to the stage; null until prepared.
     const [croppedUrl, setCroppedUrl] = useState<string | null>(null);
     const [cropMode, setCropMode] = useState(false);
 
-    // Load the source (fresh file or re-edit URL) whenever the editor opens.
+    // (Re)load the source and reset settings whenever the edited image changes
+    // — covers both a fresh open and advancing to the next queued image.
     useEffect(() => {
-        if (!open) {
+        if (!sourceUrl) {
             return;
         }
-        const url = sourceFile
-            ? URL.createObjectURL(sourceFile)
-            : (editTarget?.sourceUrl ?? null);
-        setSourceUrl(url);
-        setSettings(editTarget?.settings ?? defaultSettings());
-        if (!url) {
-            return;
-        }
+        setSettings(initialSettings);
+        setSourceImg(null);
+        setCropMode(false);
         let revoked = false;
-        void loadImage(url).then((img) => {
+        void loadImage(sourceUrl).then((img) => {
             if (!revoked) {
                 setSourceImg(img);
             }
@@ -79,11 +78,8 @@ export function ScreenshotEditor({
 
         return () => {
             revoked = true;
-            if (sourceFile && url) {
-                URL.revokeObjectURL(url);
-            }
         };
-    }, [open, sourceFile, editTarget]);
+    }, [sourceUrl, initialSettings]);
 
     // Recompute the cropped image whenever the source or crop rect changes.
     useEffect(() => {
@@ -151,32 +147,27 @@ export function ScreenshotEditor({
                 node,
                 Math.max(stage.width, stage.height),
             );
-            if (editTarget) {
-                await screenshot.applyEdit(
-                    editTarget.mediaId,
-                    composed,
-                    settings,
-                );
-            } else {
-                const sourceBlob = await fetch(sourceUrl!).then((r) =>
-                    r.blob(),
-                );
-                await screenshot.applyNew(composed, sourceBlob, settings);
-            }
-            onOpenChange(false);
+            await onApply(composed, settings);
         } catch {
-            // toast handled in the hook / rasterizeStage throw surfaces below
+            // upload errors are toasted by the hook; a rasterize throw lands here
         }
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl">
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                if (!next) {
+                    onCancel();
+                }
+            }}
+        >
+            <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col overflow-hidden">
                 <DialogHeader>
-                    <DialogTitle>Beautify screenshot</DialogTitle>
+                    <DialogTitle>Edit image</DialogTitle>
                 </DialogHeader>
 
-                <div className="grid gap-6 md:grid-cols-[1fr_220px]">
+                <div className="grid flex-1 gap-6 overflow-y-auto md:grid-cols-[1fr_220px]">
                     {/* Preview / crop */}
                     <div className="grid min-h-[300px] place-items-center overflow-hidden rounded-lg bg-muted/40 p-4">
                         {cropMode && sourceImg ? (
@@ -364,17 +355,17 @@ export function ScreenshotEditor({
                     <button
                         type="button"
                         className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                        onClick={() => onOpenChange(false)}
+                        onClick={onCancel}
                     >
                         Cancel
                     </button>
                     <button
                         type="button"
-                        disabled={screenshot.isSaving || !croppedUrl}
+                        disabled={isSaving || !croppedUrl}
                         onClick={apply}
                         className="rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background disabled:opacity-50"
                     >
-                        {screenshot.isSaving ? 'Saving…' : 'Apply'}
+                        {isSaving ? 'Saving…' : 'Apply'}
                     </button>
                 </DialogFooter>
             </DialogContent>
