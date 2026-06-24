@@ -274,21 +274,37 @@ export function ScreenshotEditor({
                                     }
                                 />
                             ) : croppedUrl ? (
+                                // Outer box takes the SCALED footprint so it centres
+                                // cleanly; the inner stage renders at natural size and
+                                // scales from the top-left to fill that footprint.
                                 <div
                                     style={{
-                                        transform: `scale(${previewScale})`,
-                                        transformOrigin: 'center',
+                                        width: Math.round(
+                                            stage.width * previewScale,
+                                        ),
+                                        height: Math.round(
+                                            stage.height * previewScale,
+                                        ),
                                     }}
                                 >
-                                    <ScreenshotStage
-                                        ref={stageRef}
-                                        imageSrc={croppedUrl}
-                                        settings={settings}
-                                        contentSize={{
-                                            width: contentW,
-                                            height: contentH,
+                                    <div
+                                        style={{
+                                            width: stage.width,
+                                            height: stage.height,
+                                            transform: `scale(${previewScale})`,
+                                            transformOrigin: 'top left',
                                         }}
-                                    />
+                                    >
+                                        <ScreenshotStage
+                                            ref={stageRef}
+                                            imageSrc={croppedUrl}
+                                            settings={settings}
+                                            contentSize={{
+                                                width: contentW,
+                                                height: contentH,
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="size-7 animate-spin rounded-full border-2 border-foreground/40 border-t-transparent" />

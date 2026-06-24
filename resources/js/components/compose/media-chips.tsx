@@ -1,4 +1,4 @@
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Eye, EyeOff, Pencil, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -200,6 +200,16 @@ export function MediaChips({
                                 >
                                     <MediaThumb media={m} />
                                 </button>
+                                {/* Hover hint that an image is editable; the click is
+                                    handled by the thumbnail button beneath it. */}
+                                {m.kind === 'image' && onImageClick && (
+                                    <div className="pointer-events-none absolute inset-0 grid place-items-center rounded-md bg-black/45 opacity-0 transition-opacity group-focus-within/chip:opacity-100 group-hover/chip:opacity-100">
+                                        <Pencil
+                                            className="size-3 text-white"
+                                            aria-hidden="true"
+                                        />
+                                    </div>
+                                )}
                                 <CornerButton
                                     label="Remove"
                                     onClick={() => onRemove(m.id)}
