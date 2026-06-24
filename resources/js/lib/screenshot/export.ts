@@ -25,7 +25,12 @@ export async function rasterizeStage(
 ): Promise<Blob> {
     const blob = await toBlob(node, {
         pixelRatio: computeExportScale(naturalLongestEdge),
-        cacheBust: true,
+        // The stage has no text, so skip web-font embedding entirely. It is the
+        // step that fails: html-to-image reads every stylesheet's cssRules to
+        // inline @font-face, which throws a SecurityError on cross-origin sheets
+        // (the Vite dev server serves CSS from a different origin than the app)
+        // and mis-parses url() backgrounds — aborting the whole rasterization.
+        skipFonts: true,
     });
     if (!blob) {
         throw new Error('Failed to rasterize the screenshot.');

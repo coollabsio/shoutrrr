@@ -1,6 +1,7 @@
 import { ChevronDown, Crop, Wand2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import {
     Dialog,
@@ -201,7 +202,9 @@ export function ScreenshotEditor({
             );
             await onApply(composed, settings);
         } catch {
-            // upload errors are toasted by the hook; a rasterize throw lands here
+            // Upload errors are toasted by the hook; a rasterize failure lands
+            // here — surface it rather than failing silently.
+            toast.error('Couldn’t process that image. Please try again.');
         }
     }
 
