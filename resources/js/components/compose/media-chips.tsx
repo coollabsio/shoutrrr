@@ -182,9 +182,9 @@ export function MediaChips({
                                 <button
                                     type="button"
                                     aria-label={
-                                        m.kind === 'image'
-                                            ? `Edit media ${idx + 1}`
-                                            : `Media ${idx + 1}`
+                                        m.kind === 'video'
+                                            ? `Media ${idx + 1}`
+                                            : `Edit media ${idx + 1}`
                                     }
                                     aria-pressed={
                                         m.kind === 'video'
@@ -199,10 +199,18 @@ export function MediaChips({
                                         if (dragged.current) {
                                             return;
                                         }
-                                        if (m.kind === 'image') {
-                                            onImageClick?.(m.id);
-                                        } else {
+                                        // TEMP diagnostic — remove once confirmed.
+                                        console.info('[chip click]', {
+                                            id: m.id,
+                                            kind: m.kind,
+                                            media: m,
+                                        });
+                                        // Anything that isn't a video is an editable
+                                        // image (matches how the thumbnail renders).
+                                        if (m.kind === 'video') {
                                             onToggleExclude(m.id);
+                                        } else {
+                                            onImageClick?.(m.id);
                                         }
                                     }}
                                     className={cn(
@@ -227,7 +235,7 @@ export function MediaChips({
                                 </CornerButton>
                                 {/* Per-account include/exclude — top-left, so it
                                     doesn't collide with edit (bottom-right) or remove. */}
-                                {m.kind === 'image' && activePlatform && (
+                                {m.kind !== 'video' && activePlatform && (
                                     <button
                                         type="button"
                                         aria-label={
@@ -265,13 +273,13 @@ export function MediaChips({
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[11px]">
-                            {m.kind === 'image'
-                                ? 'Click to edit'
-                                : activePlatform
-                                  ? excluded
-                                      ? `Click to include on ${activePlatform}`
-                                      : `Click to exclude on ${activePlatform}`
-                                  : 'Attached media'}
+                            {m.kind === 'video'
+                                ? activePlatform
+                                    ? excluded
+                                        ? `Click to include on ${activePlatform}`
+                                        : `Click to exclude on ${activePlatform}`
+                                    : 'Attached media'
+                                : 'Click to edit'}
                         </TooltipContent>
                     </Tooltip>
                 );
