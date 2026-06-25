@@ -24,4 +24,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware('engagement.enabled')->name('engagement.read');
     Route::post('engagement/{reply}/archive', [EngagementController::class, 'archive'])
         ->middleware('engagement.enabled')->name('engagement.archive');
+    Route::post('engagement/{reply}/reply', [EngagementController::class, 'respond'])
+        ->middleware(['engagement.enabled', 'throttle:30,1'])->name('engagement.respond');
 });

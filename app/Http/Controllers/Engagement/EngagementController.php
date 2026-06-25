@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Engagement;
 
+use App\Enums\Platform;
 use App\Enums\ReplyStatus;
+use App\Exceptions\TokenRefreshException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Engagement\RespondToReplyRequest;
 use App\Models\ConnectedAccount;
 use App\Models\PostTargetReply;
+use App\Services\Engagement\EngagementConnectorRegistry;
+use App\Services\Publishing\TokenManager;
 use App\Support\ReplyListItem;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Inertia\Inertia;
@@ -111,5 +117,58 @@ class EngagementController extends Controller
         $reply->forceFill(['status' => ReplyStatus::Archived->value])->save();
 
         return response()->noContent();
+    }
+
+    public function respond(
+        RespondToReplyRequest $request,
+        PostTargetReply $reply,
+        EngagementConnectorRegistry $registry,
+        TokenManager $tokens,
+    ): RedirectResponse {
+        $target = $reply->target;
+        $account = $target?->account;
+
+        if ($account === null) {
+            return back()->with('error', 'This account is no longer connected.');
+        }
+
+        try {
+            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky], true)
+                ? $tokens->fresh($account)
+                : [];
+        } catch (TokenRefreshException) {
+            return back()->with('error', 'Could not authenticate with the platform. Reconnect the account.');
+        }
+
+        $result = $registry->for($reply->platform)->postReply($account, $reply, (string) $request->validated('text'), $credentials);
+
+        if (! $result->isOk()) {
+            return back()->with('error', $result->message ?? 'Could not post the reply.');
+        }
+
+        $reply->forceFill([
+            'status' => ReplyStatus::Responded->value,
+            'our_reply_remote_id' => $result->remoteReplyId,
+        ])->save();
+
+        PostTargetReply::withoutGlobalScopes()->create([
+            'workspace_id' => $reply->workspace_id,
+            'post_target_id' => $reply->post_target_id,
+            'platform' => $reply->platform,
+            'remote_reply_id' => $result->remoteReplyId,
+            'remote_cid' => $result->remoteCid,
+            'parent_remote_id' => $reply->remote_reply_id,
+            'author_handle' => $account->handle ?? '',
+            'author_name' => $account->display_name,
+            'author_avatar_url' => $account->avatar_url,
+            'text' => (string) $request->validated('text'),
+            'remote_created_at' => now(),
+            'read_at' => now(),
+            'status' => ReplyStatus::Pending->value,
+            'is_ours' => true,
+            'fetched_at' => now(),
+        ]);
+
+        return back()->with('success', 'Reply sent.');
     }
 }
