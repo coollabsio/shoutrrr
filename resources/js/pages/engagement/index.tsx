@@ -230,7 +230,6 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
                 postId={selected.post_id}
                 thread={thread}
                 loading={loading}
-                focusId={selected.id}
             />
 
             <QuickReplyBox
