@@ -65,6 +65,10 @@ export function ImageEditor({
 }: Props) {
     const stageRef = useRef<HTMLDivElement | null>(null);
     const croppedUrlRef = useRef<string | null>(null);
+    // Tracks whether picking a background has already styled this image, so the
+    // one-time padding/radius/shadow defaults are applied on the FIRST background
+    // choice only — never re-imposed if the user later dials them back.
+    const hasAutoStyledRef = useRef(false);
     const [previewEl, setPreviewEl] = useState<HTMLDivElement | null>(null);
     const [settings, setSettings] = useState<EditSettings>(initialSettings);
     const [sourceImg, setSourceImg] = useState<HTMLImageElement | null>(null);
@@ -100,6 +104,12 @@ export function ImageEditor({
             return;
         }
         setSettings(initialSettings);
+        // An image opened with existing padding/radius/shadow is already styled,
+        // so a background change must not re-apply the one-time defaults.
+        hasAutoStyledRef.current =
+            initialSettings.padding > 0 ||
+            initialSettings.radius > 0 ||
+            initialSettings.shadow !== 'none';
         setSourceImg(null);
         setCropMode(false);
         setLoadError(false);
@@ -433,20 +443,31 @@ export function ImageEditor({
                                                             .id === g.id
                                                     }
                                                     onClick={() =>
-                                                        setSettings((s) => ({
-                                                            ...s,
-                                                            background:
-                                                                gradientToFill(
-                                                                    g,
-                                                                ),
-                                                            // A background is invisible without padding,
-                                                            // so add a sensible amount the first time one
-                                                            // is chosen.
-                                                            padding:
-                                                                s.padding === 0
-                                                                    ? 64
-                                                                    : s.padding,
-                                                        }))
+                                                        setSettings((s) => {
+                                                            const next = {
+                                                                ...s,
+                                                                background:
+                                                                    gradientToFill(
+                                                                        g,
+                                                                    ),
+                                                            };
+                                                            // The first time a background is chosen it's
+                                                            // invisible without framing, so apply a sensible
+                                                            // padding + corner radius + shadow once. Never
+                                                            // re-impose them afterwards — the user may dial
+                                                            // any of them back deliberately.
+                                                            if (
+                                                                !hasAutoStyledRef.current
+                                                            ) {
+                                                                next.padding = 96;
+                                                                next.radius = 16;
+                                                                next.shadow =
+                                                                    'medium';
+                                                            }
+                                                            hasAutoStyledRef.current = true;
+
+                                                            return next;
+                                                        })
                                                     }
                                                     className={cn(
                                                         'h-10 rounded-md ring-offset-2 ring-offset-popover transition md:h-8',
