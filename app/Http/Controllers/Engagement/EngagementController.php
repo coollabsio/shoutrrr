@@ -9,13 +9,15 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Models\PostTargetReply;
 use App\Support\ReplyListItem;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Inertia\Inertia;
-use Inertia\Response;
+use Inertia\Response as InertiaResponse;
 
 class EngagementController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): InertiaResponse
     {
         $account = $request->string('account')->toString();
         $platform = $request->string('platform')->toString();
@@ -54,5 +56,60 @@ class EngagementController extends Controller
             ],
             'facets' => ['accounts' => $accounts],
         ]);
+    }
+
+    public function thread(PostTargetReply $reply): JsonResponse
+    {
+        if ($reply->read_at === null) {
+            $reply->forceFill(['read_at' => now()])->save();
+        }
+
+        $onTarget = PostTargetReply::query()
+            ->withoutGlobalScopes()
+            ->where('workspace_id', $reply->workspace_id)
+            ->where('post_target_id', $reply->post_target_id)
+            ->with(['target.post', 'target.account'])
+            ->get();
+
+        $byRemoteId = $onTarget->keyBy('remote_reply_id');
+
+        $ancestors = collect();
+        $visited = [];
+        $cursor = $reply;
+        while (
+            $cursor->parent_remote_id !== null
+            && $byRemoteId->has($cursor->parent_remote_id)
+            && ! in_array($cursor->parent_remote_id, $visited, true)
+        ) {
+            $visited[] = $cursor->parent_remote_id;
+            $cursor = $byRemoteId->get($cursor->parent_remote_id);
+            $ancestors->prepend($cursor);
+        }
+
+        $children = $onTarget->filter(fn (PostTargetReply $r): bool => $r->parent_remote_id === $reply->remote_reply_id);
+
+        $thread = $ancestors->push($reply)->merge($children->sortBy('remote_created_at'))
+            ->map(fn (PostTargetReply $r): array => ReplyListItem::make($r))
+            ->values()
+            ->all();
+
+        return response()->json([
+            'post_excerpt' => $reply->target?->post?->excerpt(),
+            'thread' => $thread,
+        ]);
+    }
+
+    public function markRead(PostTargetReply $reply): Response
+    {
+        $reply->forceFill(['read_at' => now()])->save();
+
+        return response()->noContent();
+    }
+
+    public function archive(PostTargetReply $reply): Response
+    {
+        $reply->forceFill(['status' => ReplyStatus::Archived->value])->save();
+
+        return response()->noContent();
     }
 }
