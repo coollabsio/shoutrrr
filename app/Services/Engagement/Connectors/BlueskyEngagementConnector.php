@@ -7,15 +7,19 @@ namespace App\Services\Engagement\Connectors;
 use App\Dto\Engagement\FetchedReply;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
+use App\Enums\Platform;
 use App\Models\ConnectedAccount;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
 use Carbon\CarbonImmutable;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Storage;
 
 class BlueskyEngagementConnector implements EngagementConnector
 {
@@ -111,17 +115,27 @@ class BlueskyEngagementConnector implements EngagementConnector
         try {
             $root = $this->resolveRoot($pds, $jwt, $did, $parent, $parentRef);
 
+            $embed = $media === [] ? null : $this->buildEmbed($media, $pds, $jwt, $did);
+
+            $record = [
+                '$type' => 'app.bsky.feed.post',
+                'text' => $text,
+                'createdAt' => Date::now()->toIso8601String(),
+                'reply' => ['root' => $root, 'parent' => $parentRef],
+            ];
+
+            if ($embed !== null) {
+                $record['embed'] = $embed;
+            }
+
             $response = $this->http->withToken($jwt)->acceptJson()
                 ->post($pds.'/xrpc/com.atproto.repo.createRecord', [
                     'repo' => $did,
                     'collection' => 'app.bsky.feed.post',
-                    'record' => [
-                        '$type' => 'app.bsky.feed.post',
-                        'text' => $text,
-                        'createdAt' => Date::now()->toIso8601String(),
-                        'reply' => ['root' => $root, 'parent' => $parentRef],
-                    ],
+                    'record' => $record,
                 ]);
+        } catch (BlueskyReplyMediaFailed) {
+            return ReplyPostResult::failed('Could not upload media.');
         } catch (ConnectionException $e) {
             return ReplyPostResult::failed($e->getMessage());
         }
@@ -131,6 +145,85 @@ class BlueskyEngagementConnector implements EngagementConnector
         }
 
         return ReplyPostResult::ok((string) $response->json('uri'), (string) $response->json('cid'));
+    }
+
+    /**
+     * @param  list<PostMedia>  $media
+     * @return array<string, mixed>
+     */
+    private function buildEmbed(array $media, string $pds, string $jwt, string $did): array
+    {
+        $video = array_values(array_filter($media, fn ($m) => $m->isVideo()));
+
+        if ($video !== []) {
+            return $this->videoEmbed($video[0], $pds, $jwt, $did);
+        }
+
+        return $this->imagesEmbed($media, $pds, $jwt);
+    }
+
+    /**
+     * @param  list<PostMedia>  $media
+     * @return array{'$type': string, images: list<array{alt: string, image: array<string, mixed>}>}
+     */
+    private function imagesEmbed(array $media, string $pds, string $jwt): array
+    {
+        $images = [];
+        foreach (array_slice($media, 0, Platform::Bluesky->maxMedia()) as $item) {
+            $bytes = (string) Storage::disk($item->disk)->get($item->path);
+            $response = $this->http->withToken($jwt)->withBody($bytes, $item->mime)
+                ->post($pds.'/xrpc/com.atproto.repo.uploadBlob');
+            if ($response->failed()) {
+                throw new BlueskyReplyMediaFailed($response->status());
+            }
+            $images[] = ['alt' => (string) ($item->alt_text ?? ''), 'image' => (array) $response->json('blob')];
+        }
+
+        return ['$type' => 'app.bsky.embed.images', 'images' => $images];
+    }
+
+    /**
+     * @return array{'$type': string, video: array<string, mixed>, alt?: string}
+     */
+    private function videoEmbed(PostMedia $media, string $pds, string $jwt, string $did): array
+    {
+        $pdsHost = (string) parse_url($pds, PHP_URL_HOST);
+        $auth = $this->http->withToken($jwt)->acceptJson()
+            ->get($pds.'/xrpc/com.atproto.server.getServiceAuth', [
+                'aud' => 'did:web:'.$pdsHost, 'lxm' => 'com.atproto.repo.uploadBlob', 'exp' => time() + 1800,
+            ]);
+        if ($auth->failed()) {
+            throw new BlueskyReplyMediaFailed($auth->status());
+        }
+
+        $body = Utils::streamFor(Storage::disk($media->disk)->readStream($media->path));
+        $upload = $this->http->withToken((string) $auth->json('token'))->withBody($body, 'video/mp4')
+            ->post('https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?did='.rawurlencode($did).'&name=video.mp4');
+        if ($upload->failed() && $upload->json('error') !== 'already_exists') {
+            throw new BlueskyReplyMediaFailed($upload->status());
+        }
+        $jobId = (string) $upload->json('jobId');
+
+        // Poll to completion — safe inside the SendReply job.
+        for ($i = 0; $i < 60; $i++) {
+            $status = $this->http->acceptJson()
+                ->get('https://video.bsky.app/xrpc/app.bsky.video.getJobStatus', ['jobId' => $jobId]);
+            $state = (string) $status->json('jobStatus.state', '');
+            if ($state === 'JOB_STATE_COMPLETED') {
+                $embed = ['$type' => 'app.bsky.embed.video', 'video' => (array) $status->json('jobStatus.blob')];
+                if (($media->alt_text ?? '') !== '') {
+                    $embed['alt'] = (string) $media->alt_text;
+                }
+
+                return $embed;
+            }
+            if ($state === 'JOB_STATE_FAILED') {
+                throw new BlueskyReplyMediaFailed(500);
+            }
+            usleep(2_000_000);
+        }
+
+        throw new BlueskyReplyMediaFailed(504);
     }
 
     /**
@@ -174,5 +267,14 @@ class BlueskyEngagementConnector implements EngagementConnector
     private function excerpt(Response $response): string
     {
         return (string) ($response->json('message') ?? $response->json('error') ?? mb_substr($response->body(), 0, 200));
+    }
+}
+
+/** @internal */
+final class BlueskyReplyMediaFailed extends \RuntimeException
+{
+    public function __construct(public readonly int $status)
+    {
+        parent::__construct('Bluesky reply media upload failed.');
     }
 }
