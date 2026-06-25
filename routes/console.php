@@ -2,6 +2,7 @@
 
 use App\Console\Commands\CaptureMetrics;
 use App\Console\Commands\DispatchDuePosts;
+use App\Console\Commands\DispatchDueReplyFetches;
 use App\Console\Commands\PruneAbandonedUploads;
 use App\Console\Commands\PruneMcpBindings;
 use App\Console\Commands\RefreshExpiringTokens;
@@ -20,4 +21,8 @@ Schedule::command(PruneAbandonedUploads::class)->hourly();
 
 if (config('metrics.enabled')) {
     Schedule::command(CaptureMetrics::class)->everyFifteenMinutes()->withoutOverlapping();
+}
+
+if (config('engagement.enabled')) {
+    Schedule::command(DispatchDueReplyFetches::class)->everyFifteenMinutes()->withoutOverlapping();
 }
