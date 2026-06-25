@@ -1,10 +1,17 @@
-import { Deferred, Head } from '@inertiajs/react';
-import { useState } from 'react';
+import { Deferred, Head, router } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
-import { index as engagementRoute } from '@/routes/engagement';
+import {
+    archive as archiveRoute,
+    index as engagementRoute,
+    respond as respondRoute,
+    thread as threadRoute,
+} from '@/routes/engagement';
 
+import { QuickReplyBox } from './components/quick-reply-box';
 import { ReplyFilters } from './components/reply-filters';
 import { ReplyStream } from './components/reply-stream';
+import { ReplyThread } from './components/reply-thread';
 import type { AccountFacet, EngagementFilters, ReplyItem } from './types';
 
 type PageProps = {
@@ -25,6 +32,109 @@ function StreamSkeleton() {
                     </div>
                 </div>
             ))}
+        </div>
+    );
+}
+
+type RightPaneProps = {
+    selected: ReplyItem | null;
+    onArchived: () => void;
+};
+
+function RightPane({ selected, onArchived }: RightPaneProps) {
+    const [thread, setThread] = useState<ReplyItem[]>([]);
+    const [postExcerpt, setPostExcerpt] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    const selectedId = selected?.id ?? null;
+
+    useEffect(() => {
+        if (!selectedId) {
+            setThread([]);
+            setPostExcerpt(null);
+            return;
+        }
+        setLoading(true);
+        fetch(threadRoute(selectedId).url, {
+            headers: { Accept: 'application/json' },
+        })
+            .then((r) => r.json())
+            .then(
+                (data: {
+                    post_excerpt: string | null;
+                    thread: ReplyItem[];
+                }) => {
+                    setPostExcerpt(data.post_excerpt);
+                    setThread(data.thread);
+                },
+            )
+            .catch(() => {
+                setPostExcerpt(null);
+                setThread([]);
+            })
+            .finally(() => setLoading(false));
+    }, [selectedId]);
+
+    if (!selected) {
+        return (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Select a reply to see the conversation.
+            </div>
+        );
+    }
+
+    async function send(text: string) {
+        await new Promise<void>((resolve, reject) => {
+            router.post(
+                respondRoute(selected!.id).url,
+                { text },
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setThread((prev) => [
+                            ...prev,
+                            {
+                                ...selected!,
+                                id: `temp-${Date.now()}`,
+                                text,
+                                is_read: true,
+                                status: 'responded',
+                                author_handle: 'you',
+                                author_name: 'You',
+                            },
+                        ]);
+                        resolve();
+                    },
+                    onError: () => reject(new Error('send failed')),
+                },
+            );
+        });
+    }
+
+    return (
+        <div className="flex h-full flex-col">
+            <div className="flex items-center justify-between border-b p-3">
+                <span className="text-sm font-medium">Conversation</span>
+                <button
+                    type="button"
+                    onClick={() =>
+                        router.post(
+                            archiveRoute(selected.id).url,
+                            {},
+                            { preserveScroll: true, onSuccess: onArchived },
+                        )
+                    }
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                    Archive
+                </button>
+            </div>
+            <ReplyThread
+                postExcerpt={postExcerpt}
+                thread={thread}
+                loading={loading}
+            />
+            <QuickReplyBox platform={selected.platform} onSend={send} />
         </div>
     );
 }
@@ -60,11 +170,12 @@ export default function EngagementIndex({
                     </div>
                 </div>
 
-                {/* Right pane: thread + quick reply (wired in Task 16) */}
+                {/* Right pane: thread + quick reply */}
                 <div className="hidden min-h-0 flex-col md:flex">
-                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                        Select a reply to see the conversation.
-                    </div>
+                    <RightPane
+                        selected={selected}
+                        onArchived={() => setSelected(null)}
+                    />
                 </div>
             </div>
         </>
