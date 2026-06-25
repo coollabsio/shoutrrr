@@ -25,6 +25,8 @@ class RespondToReplyRequest extends FormRequest
 
         return [
             'text' => ['required', 'string', 'max:'.$max],
+            'media' => ['sometimes', 'array', 'max:'.$reply->platform->maxMedia()],
+            'media.*' => ['string', 'exists:post_media,id'],
         ];
     }
 }

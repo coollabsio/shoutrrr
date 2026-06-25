@@ -6,10 +6,12 @@ namespace App\Http\Controllers\Engagement;
 
 use App\Enums\Platform;
 use App\Enums\ReplyStatus;
+use App\Enums\SendStatus;
 use App\Exceptions\TokenRefreshException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Engagement\RespondToReplyRequest;
 use App\Jobs\FetchPostTargetReplies;
+use App\Jobs\SendReply;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostTarget;
@@ -21,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -174,23 +177,47 @@ class EngagementController extends Controller
             return back()->with('error', 'Could not authenticate with the platform. Reconnect the account.');
         }
 
-        $result = $registry->for($reply->platform)->postReply($account, $reply, (string) $request->validated('text'), $credentials);
+        $mediaIds = array_values($request->validated('media', []));
 
-        if (! $result->isOk()) {
-            return back()->with('error', $result->message ?? 'Could not post the reply.');
+        if ($mediaIds === []) {
+            $result = $registry->for($reply->platform)->postReply($account, $reply, (string) $request->validated('text'), $credentials);
+
+            if (! $result->isOk()) {
+                return back()->with('error', $result->message ?? 'Could not post the reply.');
+            }
+
+            $reply->forceFill([
+                'status' => ReplyStatus::Responded->value,
+                'our_reply_remote_id' => $result->remoteReplyId,
+            ])->save();
+
+            PostTargetReply::withoutGlobalScopes()->create([
+                'workspace_id' => $reply->workspace_id,
+                'post_target_id' => $reply->post_target_id,
+                'platform' => $reply->platform,
+                'remote_reply_id' => $result->remoteReplyId,
+                'remote_cid' => $result->remoteCid,
+                'parent_remote_id' => $reply->remote_reply_id,
+                'author_handle' => $account->handle ?? '',
+                'author_name' => $account->display_name,
+                'author_avatar_url' => $account->avatar_url,
+                'text' => (string) $request->validated('text'),
+                'remote_created_at' => now(),
+                'read_at' => now(),
+                'status' => ReplyStatus::Pending->value,
+                'is_ours' => true,
+                'fetched_at' => now(),
+            ]);
+
+            return back()->with('success', 'Reply sent.');
         }
 
-        $reply->forceFill([
-            'status' => ReplyStatus::Responded->value,
-            'our_reply_remote_id' => $result->remoteReplyId,
-        ])->save();
-
-        PostTargetReply::withoutGlobalScopes()->create([
+        // Media path: create the outgoing row in a sending state, then dispatch.
+        $ourRow = PostTargetReply::withoutGlobalScopes()->create([
             'workspace_id' => $reply->workspace_id,
             'post_target_id' => $reply->post_target_id,
             'platform' => $reply->platform,
-            'remote_reply_id' => $result->remoteReplyId,
-            'remote_cid' => $result->remoteCid,
+            'remote_reply_id' => 'pending:'.Str::uuid(),
             'parent_remote_id' => $reply->remote_reply_id,
             'author_handle' => $account->handle ?? '',
             'author_name' => $account->display_name,
@@ -200,9 +227,12 @@ class EngagementController extends Controller
             'read_at' => now(),
             'status' => ReplyStatus::Pending->value,
             'is_ours' => true,
+            'send_status' => SendStatus::Sending->value,
             'fetched_at' => now(),
         ]);
 
-        return back()->with('success', 'Reply sent.');
+        SendReply::dispatch($ourRow->id, $reply->id, $mediaIds, (string) $request->validated('text'));
+
+        return back()->with('success', 'Sending your reply…');
     }
 }

@@ -11,6 +11,7 @@ enum NotificationType: string
     case WorkspaceInvite = 'workspace_invite';
     case AccountNeedsAttention = 'account_needs_attention';
     case NewReplies = 'new_replies';
+    case ReplyFailed = 'reply_failed';
 
     /**
      * Events whose in-app delivery is mandatory — the preferences matrix may not
@@ -19,7 +20,7 @@ enum NotificationType: string
     public function inAppAlwaysOn(): bool
     {
         return match ($this) {
-            self::PublishFailed, self::WorkspaceInvite, self::AccountNeedsAttention => true,
+            self::PublishFailed, self::WorkspaceInvite, self::AccountNeedsAttention, self::ReplyFailed => true,
             default => false,
         };
     }
@@ -27,7 +28,7 @@ enum NotificationType: string
     public function emailOnByDefault(): bool
     {
         return match ($this) {
-            self::PublishFailed, self::WorkspaceInvite, self::AccountNeedsAttention => true,
+            self::PublishFailed, self::WorkspaceInvite, self::AccountNeedsAttention, self::ReplyFailed => true,
             default => false,
         };
     }
