@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Concerns\HasWorkspaceScope;
 use App\Enums\Platform;
 use App\Enums\ReplyStatus;
+use App\Enums\SendStatus;
 use Carbon\CarbonImmutable;
 use Database\Factories\PostTargetReplyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -33,6 +34,7 @@ use Override;
  * @property ReplyStatus $status
  * @property string|null $our_reply_remote_id
  * @property bool $is_ours
+ * @property SendStatus|null $send_status
  * @property CarbonImmutable $fetched_at
  */
 #[Fillable([
@@ -51,6 +53,7 @@ use Override;
     'status',
     'our_reply_remote_id',
     'is_ours',
+    'send_status',
     'fetched_at',
 ])]
 class PostTargetReply extends Model
@@ -70,6 +73,7 @@ class PostTargetReply extends Model
             'platform' => Platform::class,
             'status' => ReplyStatus::class,
             'is_ours' => 'boolean',
+            'send_status' => SendStatus::class,
             'remote_created_at' => 'immutable_datetime',
             'read_at' => 'immutable_datetime',
             'fetched_at' => 'immutable_datetime',

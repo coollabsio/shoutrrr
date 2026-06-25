@@ -25,6 +25,7 @@ final class ReplyListItem
             'remote_created_at' => $reply->remote_created_at->toIso8601String(),
             'is_read' => $reply->read_at !== null,
             'is_ours' => $reply->is_ours,
+            'send_status' => $reply->send_status?->value,
             'status' => $reply->status->value,
             'post_target_id' => $reply->post_target_id,
             'post_id' => $target?->post_id,

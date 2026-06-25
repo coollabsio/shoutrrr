@@ -8,6 +8,7 @@ export type ReplyItem = {
     remote_created_at: string;
     is_read: boolean;
     is_ours: boolean;
+    send_status: 'sending' | 'sent' | 'failed' | null;
     status: 'pending' | 'responded' | 'archived';
     post_target_id: string;
     post_id: string | null;
