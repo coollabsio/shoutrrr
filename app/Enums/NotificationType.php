@@ -10,6 +10,7 @@ enum NotificationType: string
     case PublishFailed = 'publish_failed';
     case WorkspaceInvite = 'workspace_invite';
     case AccountNeedsAttention = 'account_needs_attention';
+    case NewReplies = 'new_replies';
 
     /**
      * Events whose in-app delivery is mandatory — the preferences matrix may not

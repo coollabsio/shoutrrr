@@ -8,6 +8,7 @@ use App\Enums\Platform;
 use App\Exceptions\TokenRefreshException;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
+use App\Notifications\NewRepliesNotification;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -133,12 +134,16 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * Batched notification hook — implemented in Task 8.
-     *
      * @param  list<PostTargetReply>  $inserted
      */
     private function notify(PostTarget $target, array $inserted): void
     {
-        // Wired up in Task 8.
+        if ($inserted === []) {
+            return;
+        }
+
+        $author = $target->post()->withoutGlobalScopes()->first()?->author()->first();
+
+        $author?->notify(new NewRepliesNotification($target, count($inserted)));
     }
 }
