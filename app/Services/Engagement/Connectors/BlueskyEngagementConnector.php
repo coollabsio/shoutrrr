@@ -78,10 +78,13 @@ class BlueskyEngagementConnector implements EngagementConnector
             $afterSince = $since === null || $createdAt->greaterThan($since);
 
             if ($uri !== '' && ! $isOwner && $afterSince) {
+                $reply = $record['reply'] ?? null;
+                $parentRemoteId = is_array($reply) ? (string) ($reply['parent']['uri'] ?? $parentUri) : $parentUri;
+
                 $out[] = new FetchedReply(
                     remoteReplyId: $uri,
                     remoteCid: isset($post['cid']) ? (string) $post['cid'] : null,
-                    parentRemoteId: (string) ($record['reply']['parent']['uri'] ?? $parentUri),
+                    parentRemoteId: $parentRemoteId,
                     authorHandle: (string) ($author['handle'] ?? ''),
                     authorName: isset($author['displayName']) ? (string) $author['displayName'] : null,
                     authorAvatarUrl: isset($author['avatar']) ? (string) $author['avatar'] : null,
@@ -139,11 +142,15 @@ class BlueskyEngagementConnector implements EngagementConnector
      */
     private function resolveRoot(string $pds, string $jwt, string $did, PostTargetReply $parent, array $parentRef): array
     {
-        $rkey = (string) (explode('/', $parent->remote_reply_id)[4] ?? '');
+        // The parent reply lives in the parent author's repo, whose DID is embedded in
+        // the at-uri (at://<did>/<collection>/<rkey>), not the posting user's repo.
+        $segments = explode('/', $parent->remote_reply_id);
+        $repoDid = $segments[2] ?? $did;
+        $rkey = (string) ($segments[4] ?? '');
 
         $response = $this->http->withToken($jwt)->acceptJson()
             ->get($pds.'/xrpc/com.atproto.repo.getRecord', [
-                'repo' => $did,
+                'repo' => $repoDid,
                 'collection' => 'app.bsky.feed.post',
                 'rkey' => $rkey,
             ]);

@@ -92,3 +92,21 @@ test('postReply creates a record threaded under the parent', function () {
         && $req['record']['reply']['parent']['uri'] === 'at://reply1'
         && $req['record']['reply']['root']['uri'] === 'at://root');
 });
+
+test('postReply falls back to the parent as root when the parent is the original post', function () {
+    Http::fake([
+        '*com.atproto.repo.getRecord*' => Http::response(['value' => []]),
+        '*com.atproto.repo.createRecord*' => Http::response(['uri' => 'at://mine', 'cid' => 'cidmine']),
+    ]);
+
+    $parent = PostTargetReply::factory()->create(['remote_reply_id' => 'at://did:plc:author/app.bsky.feed.post/abc', 'remote_cid' => 'cid1']);
+
+    $result = (new BlueskyEngagementConnector(app(Factory::class)))
+        ->postReply(blueskyAccount(), $parent, 'thanks!', ['session' => ['pds' => 'https://bsky.social', 'accessJwt' => 'jwt']]);
+
+    expect($result->isOk())->toBeTrue();
+
+    Http::assertSent(fn ($req) => str_contains($req->url(), 'createRecord')
+        && $req['record']['reply']['root']['uri'] === 'at://did:plc:author/app.bsky.feed.post/abc'
+        && $req['record']['reply']['root']['cid'] === 'cid1');
+});
