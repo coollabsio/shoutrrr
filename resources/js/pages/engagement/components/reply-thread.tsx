@@ -1,49 +1,108 @@
+import { Link } from '@inertiajs/react';
+import { ArrowUpRight } from 'lucide-react';
+
+import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+
+import { atHandle, initials, relativeTime } from '../helpers';
 import type { ReplyItem } from '../types';
 
 type Props = {
     postExcerpt: string | null;
+    postId: string | null;
     thread: ReplyItem[];
     loading: boolean;
 };
 
-export function ReplyThread({ postExcerpt, thread, loading }: Props) {
+export function ReplyThread({ postExcerpt, postId, thread, loading }: Props) {
     if (loading) {
         return (
-            <div className="space-y-3 p-4">
-                {[0, 1, 2].map((i) => (
-                    <div
-                        key={i}
-                        className="h-12 animate-pulse rounded bg-muted"
-                    />
-                ))}
+            <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                <Skeleton className="h-16 w-full rounded-xl" />
+                <Skeleton className="ml-10 h-20 w-2/3 rounded-2xl" />
+                <Skeleton className="h-20 w-2/3 rounded-2xl" />
             </div>
         );
     }
 
     return (
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {postExcerpt ? (
-                <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-                    Your post: {postExcerpt}
+                <div className="rounded-xl border bg-muted/40 p-3">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                            Your post
+                        </span>
+                        {postId ? (
+                            <Link
+                                href={ComposerController.show(postId).url}
+                                className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                            >
+                                Open post
+                                <ArrowUpRight className="size-3" />
+                            </Link>
+                        ) : null}
+                    </div>
+                    <p className="line-clamp-3 text-sm text-foreground/80">
+                        {postExcerpt}
+                    </p>
                 </div>
             ) : null}
 
-            {thread.map((reply) => (
-                <div
-                    key={reply.id}
-                    className={`rounded-md border p-3 ${reply.status === 'archived' ? 'opacity-60' : ''} ${reply.is_read ? '' : 'border-primary/40'}`}
-                >
-                    <div className="mb-1 flex items-center gap-2">
-                        <span className="text-sm font-medium">
-                            {reply.author_name ?? reply.author_handle}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                            {reply.author_handle}
-                        </span>
+            {thread.map((reply) =>
+                reply.is_ours ? (
+                    <div key={reply.id} className="flex justify-end">
+                        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2.5 text-primary-foreground">
+                            <p className="text-sm whitespace-pre-wrap">
+                                {reply.text}
+                            </p>
+                            <div className="mt-1 text-right text-[11px] text-primary-foreground/70">
+                                You · {relativeTime(reply.remote_created_at)}
+                            </div>
+                        </div>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{reply.text}</p>
-                </div>
-            ))}
+                ) : (
+                    <div key={reply.id} className="flex gap-2.5">
+                        <Avatar className="mt-0.5 size-7 shrink-0">
+                            {reply.author_avatar_url ? (
+                                <AvatarImage
+                                    src={reply.author_avatar_url}
+                                    alt=""
+                                />
+                            ) : null}
+                            <AvatarFallback className="text-[10px]">
+                                {initials(reply)}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div
+                            className={cn(
+                                'max-w-[85%] rounded-2xl rounded-bl-sm border bg-card px-3.5 py-2.5',
+                                !reply.is_read && 'border-primary/40',
+                            )}
+                        >
+                            <div className="mb-0.5 flex items-baseline gap-1.5">
+                                <span className="text-xs font-semibold">
+                                    {reply.author_name ??
+                                        atHandle(reply.author_handle)}
+                                </span>
+                                {reply.author_name ? (
+                                    <span className="text-[11px] text-muted-foreground">
+                                        {atHandle(reply.author_handle)}
+                                    </span>
+                                ) : null}
+                                <span className="text-[11px] text-muted-foreground tabular-nums">
+                                    · {relativeTime(reply.remote_created_at)}
+                                </span>
+                            </div>
+                            <p className="text-sm whitespace-pre-wrap">
+                                {reply.text}
+                            </p>
+                        </div>
+                    </div>
+                ),
+            )}
         </div>
     );
 }

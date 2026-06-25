@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Str;
 use Override;
 
@@ -104,6 +105,17 @@ class Post extends Model
     public function shares(): HasMany
     {
         return $this->hasMany(PostShare::class);
+    }
+
+    /**
+     * Every reply across all of this post's per-platform targets — used to
+     * count and filter engagement by post.
+     *
+     * @return HasManyThrough<PostTargetReply, PostTarget, $this>
+     */
+    public function replies(): HasManyThrough
+    {
+        return $this->hasManyThrough(PostTargetReply::class, PostTarget::class);
     }
 
     /**

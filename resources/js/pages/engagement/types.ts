@@ -7,8 +7,10 @@ export type ReplyItem = {
     text: string;
     remote_created_at: string;
     is_read: boolean;
+    is_ours: boolean;
     status: 'pending' | 'responded' | 'archived';
     post_target_id: string;
+    post_id: string | null;
     post_excerpt: string | null;
     account_handle: string | null;
     account_max_text_length: number | null;
@@ -20,9 +22,16 @@ export type AccountFacet = {
     platform: string;
 };
 
+export type PostFacet = {
+    id: string;
+    excerpt: string;
+    count: number;
+};
+
 export type EngagementFilters = {
     account: string;
     platform: string;
     target: string;
+    post: string;
     unread: boolean;
 };

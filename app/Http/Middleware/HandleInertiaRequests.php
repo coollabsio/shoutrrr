@@ -68,6 +68,7 @@ class HandleInertiaRequests extends Middleware
             'notifications' => $this->notificationsData($request->user()),
             'features' => [
                 'analytics' => (bool) config('metrics.enabled'),
+                'engagement' => (bool) config('engagement.enabled'),
             ],
             'instance' => [
                 'isOwner' => $request->user()?->isInstanceOwner() ?? false,

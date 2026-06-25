@@ -46,6 +46,52 @@ test('the inbox lists unarchived inbound replies for the workspace', function ()
             ->has('facets.accounts'));
 });
 
+test('the posts facet lists posts that drew replies with a count', function (): void {
+    $post = Post::factory()->create(['workspace_id' => $this->workspace->id, 'base_text' => 'Launch day thread']);
+    $target = PostTarget::factory()->for($post)->create(['platform' => Platform::Bluesky]);
+
+    PostTargetReply::factory()->count(3)->for($target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'is_ours' => false,
+    ]);
+    // Our own reply and an archived one must not be counted.
+    PostTargetReply::factory()->for($target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'is_ours' => true,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('engagement.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('facets.posts', 1)
+            ->where('facets.posts.0.id', $post->id)
+            ->where('facets.posts.0.count', 3));
+});
+
+test('filtering by post narrows the stream to that post', function (): void {
+    $kept = Post::factory()->create(['workspace_id' => $this->workspace->id]);
+    $other = Post::factory()->create(['workspace_id' => $this->workspace->id]);
+    $keptTarget = PostTarget::factory()->for($kept)->create(['platform' => Platform::Bluesky]);
+    $otherTarget = PostTarget::factory()->for($other)->create(['platform' => Platform::Bluesky]);
+
+    PostTargetReply::factory()->for($keptTarget, 'target')->create([
+        'workspace_id' => $this->workspace->id, 'text' => 'on kept post', 'is_ours' => false,
+    ]);
+    PostTargetReply::factory()->for($otherTarget, 'target')->create([
+        'workspace_id' => $this->workspace->id, 'text' => 'on other post', 'is_ours' => false,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('engagement.index', ['post' => $kept->id]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filters.post', $kept->id)
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->has('replies.data', 1)
+                ->where('replies.data.0.text', 'on kept post')));
+});
+
 test('replies from another workspace are not visible', function (): void {
     PostTargetReply::factory()->create(['workspace_id' => 'other-workspace', 'text' => 'foreign']);
 

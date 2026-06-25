@@ -154,36 +154,51 @@ export function AppSidebar() {
                     <SidebarGroupLabel>Posts</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {postsNavItems.map((item) => {
-                                const cacheFor: [string, string] =
-                                    item.title === 'Calendar' ||
-                                    item.title === 'Queue'
-                                        ? ['10s', '30s']
-                                        : ['30s', '1m'];
-                                return (
-                                    <SidebarMenuItem key={item.title}>
-                                        <SidebarMenuButton
-                                            asChild
-                                            tooltip={item.title}
-                                            isActive={isCurrentUrl(item.href)}
-                                        >
-                                            <Link
-                                                href={item.href}
-                                                prefetch={['mount', 'hover']}
-                                                cacheFor={cacheFor}
+                            {postsNavItems
+                                .filter(
+                                    (item) =>
+                                        item.title !== 'Engagement' ||
+                                        features?.engagement,
+                                )
+                                .map((item) => {
+                                    const cacheFor: [string, string] =
+                                        item.title === 'Calendar' ||
+                                        item.title === 'Queue'
+                                            ? ['10s', '30s']
+                                            : ['30s', '1m'];
+                                    return (
+                                        <SidebarMenuItem key={item.title}>
+                                            <SidebarMenuButton
+                                                asChild
+                                                tooltip={item.title}
+                                                isActive={isCurrentUrl(
+                                                    item.href,
+                                                )}
                                             >
-                                                <item.icon aria-hidden="true" />
-                                                <span>{item.title}</span>
-                                                {item.title === 'Engagement' && unreadReplies > 0 ? (
-                                                    <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
-                                                        {unreadReplies > 99 ? '99+' : unreadReplies}
-                                                    </span>
-                                                ) : null}
-                                            </Link>
-                                        </SidebarMenuButton>
-                                    </SidebarMenuItem>
-                                );
-                            })}
+                                                <Link
+                                                    href={item.href}
+                                                    prefetch={[
+                                                        'mount',
+                                                        'hover',
+                                                    ]}
+                                                    cacheFor={cacheFor}
+                                                >
+                                                    <item.icon aria-hidden="true" />
+                                                    <span>{item.title}</span>
+                                                    {item.title ===
+                                                        'Engagement' &&
+                                                    unreadReplies > 0 ? (
+                                                        <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                            {unreadReplies > 99
+                                                                ? '99+'
+                                                                : unreadReplies}
+                                                        </span>
+                                                    ) : null}
+                                                </Link>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    );
+                                })}
                             {features?.analytics && (
                                 <SidebarMenuItem>
                                     <SidebarMenuButton

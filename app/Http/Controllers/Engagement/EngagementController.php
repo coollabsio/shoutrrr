@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Engagement\RespondToReplyRequest;
 use App\Jobs\FetchPostTargetReplies;
 use App\Models\ConnectedAccount;
+use App\Models\Post;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\EngagementConnectorRegistry;
@@ -30,6 +31,7 @@ class EngagementController extends Controller
         $account = $request->string('account')->toString();
         $platform = $request->string('platform')->toString();
         $target = $request->string('target')->toString();
+        $post = $request->string('post')->toString();
         $unread = $request->boolean('unread');
 
         $apply = fn ($query) => $query
@@ -38,6 +40,8 @@ class EngagementController extends Controller
             ->when($unread, fn ($q) => $q->whereNull('read_at'))
             ->when($platform !== '', fn ($q) => $q->where('platform', $platform))
             ->when($target !== '', fn ($q) => $q->where('post_target_id', $target))
+            ->when($post !== '', fn ($q) => $q->whereHas('target',
+                fn ($t) => $t->where('post_id', $post)))
             ->when($account !== '', fn ($q) => $q->whereHas('target',
                 fn ($t) => $t->where('connected_account_id', $account)));
 
@@ -46,6 +50,26 @@ class EngagementController extends Controller
                 'id' => $a->id,
                 'handle' => $a->handle,
                 'platform' => $a->platform->value,
+            ])->all();
+
+        // Posts with at least one live (inbound, unarchived) reply, plus a
+        // running count, so the inbox can be filtered by which post drew them.
+        // Qualify the columns: this closure runs inside whereHas/withCount joins
+        // where `status`/`is_ours` also exist on posts and post_targets.
+        $liveReplies = fn ($q) => $q
+            ->where('post_target_replies.is_ours', false)
+            ->where('post_target_replies.status', '!=', ReplyStatus::Archived->value);
+
+        $posts = Post::query()
+            ->whereHas('replies', $liveReplies)
+            ->withCount(['replies as reply_count' => $liveReplies])
+            ->orderByDesc('reply_count')
+            ->limit(50)
+            ->get()
+            ->map(fn (Post $p): array => [
+                'id' => $p->id,
+                'excerpt' => $p->excerpt(),
+                'count' => (int) $p->getAttribute('reply_count'),
             ])->all();
 
         return Inertia::render('engagement/index', [
@@ -60,9 +84,10 @@ class EngagementController extends Controller
                 'account' => $account,
                 'platform' => $platform,
                 'target' => $target,
+                'post' => $post,
                 'unread' => $unread,
             ],
-            'facets' => ['accounts' => $accounts],
+            'facets' => ['accounts' => $accounts, 'posts' => $posts],
         ]);
     }
 

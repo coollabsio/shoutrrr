@@ -1,7 +1,8 @@
-import { router, useHttp } from '@inertiajs/react';
+import { Link, router, useHttp, usePage } from '@inertiajs/react';
 import {
     CalendarClock,
     CalendarX,
+    MessageCircle,
     RotateCw,
     Share2,
     Trash2,
@@ -21,6 +22,7 @@ import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { postCapabilities } from '@/lib/posts/capabilities';
 import { postLiveStatus } from '@/lib/posts/live-status';
+import { index as engagementRoute } from '@/routes/engagement';
 import { index as postsRoute } from '@/routes/posts';
 import { retry as retryRoute } from '@/routes/posts/targets';
 import type { PostView } from '@/types/compose';
@@ -39,10 +41,18 @@ type Props = {
  * the posts index. A live "going live in …" line ticks once a minute.
  */
 export function PostPageActions({ post }: Props) {
+    const { features } = usePage().props;
     const caps = postCapabilities(post);
     const tz = useSchedulingTimezone();
     const confirm = useConfirm();
     const http = useHttp<Record<string, never>, { post: PostView }>({});
+
+    // A post can draw replies only once it's live somewhere, so the jump to its
+    // engagement is offered exactly when at least one target has published.
+    const hasPublishedTarget = post.targets.some(
+        (t) => t.status === 'published',
+    );
+    const showReplies = Boolean(features?.engagement) && hasPublishedTarget;
 
     const [rescheduling, setRescheduling] = useState(false);
     const [pickedAt, setPickedAt] = useState<string>(() => defaultPickedAt(tz));
@@ -135,6 +145,20 @@ export function PostPageActions({ post }: Props) {
                 <span className="mr-1 hidden text-[12px] text-muted-foreground tabular-nums sm:inline">
                     {liveStatus}
                 </span>
+            )}
+
+            {showReplies && (
+                <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    aria-label="View replies"
+                >
+                    <Link href={`${engagementRoute().url}?post=${post.id}`}>
+                        <MessageCircle className="size-3.5" aria-hidden />
+                        <span className="hidden sm:inline">Replies</span>
+                    </Link>
+                </Button>
             )}
 
             {rescheduling ? (
