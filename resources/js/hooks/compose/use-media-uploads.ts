@@ -20,6 +20,12 @@ type Options = {
     onEnsurePost: () => Promise<string>;
     /** Append a finished upload to the composer's media. */
     onAddMedia: (media: MediaView) => void;
+    /** Upload-target URL builders; defaults to the post controllers. */
+    endpoints?: {
+        imageStore: (ownerId: string) => string;
+        videoSign: (ownerId: string) => string;
+        videoStore: (ownerId: string) => string;
+    };
 };
 
 type MediaUploads = {
@@ -40,7 +46,13 @@ export function useMediaUploads({
     videoLimits,
     onEnsurePost,
     onAddMedia,
+    endpoints,
 }: Options): MediaUploads {
+    const ep = endpoints ?? {
+        imageStore: (id: string) => PostMediaController.store(id).url,
+        videoSign: (id: string) => PostVideoUploadController.url(id).url,
+        videoStore: (id: string) => PostVideoUploadController.store(id).url,
+    };
     const imageHttp = useHttp<{ file?: File | null }, { media: MediaView }>({});
     const signHttp = useHttp<
         { content_type: string },
@@ -150,10 +162,9 @@ export function useMediaUploads({
         // transform injects the file at submit time (multipart upload).
         imageHttp.transform(() => ({ file }));
         try {
-            const { media: result } = await imageHttp.post(
-                PostMediaController.store(id).url,
-                { onNetworkError: () => undefined },
-            );
+            const { media: result } = await imageHttp.post(ep.imageStore(id), {
+                onNetworkError: () => undefined,
+            });
             finishUpload(tempId, result, previewUrl);
         } catch {
             failUpload(tempId);
@@ -196,10 +207,9 @@ export function useMediaUploads({
         try {
             // 1. Sign (CSRF handled by useHttp) → 2. PUT direct to storage → 3. confirm.
             signHttp.setData({ content_type: 'video/mp4' });
-            const signed = await signHttp.post(
-                PostVideoUploadController.url(id).url,
-                { onNetworkError: () => undefined },
-            );
+            const signed = await signHttp.post(ep.videoSign(id), {
+                onNetworkError: () => undefined,
+            });
 
             await putWithProgress(signed.url, signed.headers, file, (pct) =>
                 setProgress(tempId, pct),
@@ -213,7 +223,7 @@ export function useMediaUploads({
                 alt_text: null,
             });
             const { media: result } = await confirmHttp.post(
-                PostVideoUploadController.store(id).url,
+                ep.videoStore(id),
                 { onNetworkError: () => undefined },
             );
 
