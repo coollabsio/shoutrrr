@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Models\PostMedia;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -33,6 +34,19 @@ class PruneAbandonedUploads extends Command
         }
 
         $this->info("Pruned {$deleted} abandoned upload file(s).");
+
+        $orphans = PostMedia::query()->withoutGlobalScopes()
+            ->whereNull('post_id')
+            ->where('created_at', '<', Carbon::now()->subHours(6))
+            ->get();
+
+        foreach ($orphans as $orphan) {
+            $orphan->delete(); // model's deleting hook removes the underlying file(s)
+        }
+
+        if ($orphans->isNotEmpty()) {
+            Log::info('Pruned '.$orphans->count().' orphan media record(s).');
+        }
 
         return self::SUCCESS;
     }
