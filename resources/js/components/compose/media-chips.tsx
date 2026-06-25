@@ -116,8 +116,9 @@ export function MediaChips({
     onImageClick,
 }: Props) {
     const [dragIdx, setDragIdx] = useState<number | null>(null);
-    // Pointer-down position, so a click that moved (a drag) doesn't open the editor.
-    const downPos = useRef<{ x: number; y: number } | null>(null);
+    // True only once a real drag (reorder) has started, so the click that ends a
+    // drag doesn't also open the editor. Reset at the start of every interaction.
+    const dragged = useRef(false);
 
     if (media.length === 0 && pending.length === 0) {
         return null;
@@ -164,7 +165,10 @@ export function MediaChips({
                             <div
                                 className="group/chip relative"
                                 draggable
-                                onDragStart={() => setDragIdx(idx)}
+                                onDragStart={() => {
+                                    dragged.current = true;
+                                    setDragIdx(idx);
+                                }}
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => {
                                     e.preventDefault();
@@ -187,23 +191,12 @@ export function MediaChips({
                                             ? !excluded
                                             : undefined
                                     }
-                                    onPointerDown={(e) => {
-                                        downPos.current = {
-                                            x: e.clientX,
-                                            y: e.clientY,
-                                        };
+                                    onPointerDown={() => {
+                                        dragged.current = false;
                                     }}
-                                    onClick={(e) => {
-                                        // Ignore clicks that moved — those are drags
-                                        // (reordering), not a deliberate tap.
-                                        const start = downPos.current;
-                                        if (
-                                            start &&
-                                            (Math.abs(e.clientX - start.x) >
-                                                5 ||
-                                                Math.abs(e.clientY - start.y) >
-                                                    5)
-                                        ) {
+                                    onClick={() => {
+                                        // Skip the click that ends a reorder drag.
+                                        if (dragged.current) {
                                             return;
                                         }
                                         if (m.kind === 'image') {
@@ -276,8 +269,8 @@ export function MediaChips({
                                 ? 'Click to edit'
                                 : activePlatform
                                   ? excluded
-                                      ? `Excluded on ${activePlatform}`
-                                      : `Included on ${activePlatform}`
+                                      ? `Click to include on ${activePlatform}`
+                                      : `Click to exclude on ${activePlatform}`
                                   : 'Attached media'}
                         </TooltipContent>
                     </Tooltip>
