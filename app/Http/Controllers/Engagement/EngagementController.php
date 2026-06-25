@@ -9,7 +9,9 @@ use App\Enums\ReplyStatus;
 use App\Exceptions\TokenRefreshException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Engagement\RespondToReplyRequest;
+use App\Jobs\FetchPostTargetReplies;
 use App\Models\ConnectedAccount;
+use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Publishing\TokenManager;
@@ -117,6 +119,13 @@ class EngagementController extends Controller
         $reply->forceFill(['status' => ReplyStatus::Archived->value])->save();
 
         return response()->noContent();
+    }
+
+    public function refresh(PostTarget $target): RedirectResponse
+    {
+        FetchPostTargetReplies::dispatch($target);
+
+        return back()->with('success', 'Checking for new replies…');
     }
 
     public function respond(
