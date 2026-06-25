@@ -219,7 +219,7 @@ test('updateDraft resolves typed at-mention placeholders per target platform bef
             'label' => '@guest',
             'handles' => [
                 'x' => '@guest_x',
-                'linkedin' => 'Guest LinkedIn',
+                'linkedin' => '@GuestLinkedIn',
             ],
         ]],
         'destination' => ['kind' => 'accounts', 'ids' => [$x->id, $linkedin->id]],
@@ -231,5 +231,6 @@ test('updateDraft resolves typed at-mention placeholders per target platform bef
     ]));
 
     expect($updated->targets->firstWhere('connected_account_id', $x->id)->sections)->toBe(['Hello @guest_x'])
-        ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)->toBe(['Hello Guest LinkedIn']);
+        ->and($updated->mentions[0]['handles']['linkedin'])->toBe('GuestLinkedIn')
+        ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)->toBe(['Hello GuestLinkedIn']);
 });

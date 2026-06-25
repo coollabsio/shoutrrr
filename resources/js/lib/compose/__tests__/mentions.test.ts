@@ -7,6 +7,7 @@ import {
     replaceMentionTokens,
     setPlatformMentionMode,
     updateMentionHandle,
+    updateMentionName,
     syncMentionsFromText,
     usesPlatformMention,
     type MentionPlaceholder,
@@ -20,7 +21,7 @@ describe('mention helpers', () => {
         expect(mention.handles).toEqual({
             x: '@Guest',
             bluesky: '@Guest',
-            linkedin: '@Guest',
+            linkedin: 'Guest',
         });
         expect(mentionToken(mention.id)).toBe(`{{mention:${mention.id}}}`);
     });
@@ -77,18 +78,58 @@ describe('mention helpers', () => {
         ).toBe('Hi Guest LinkedIn');
     });
 
-    it('toggles a platform between @ mention and display text', () => {
+    it('toggles a non-LinkedIn platform between @ mention and display text', () => {
+        const mention: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { x: '@guest' },
+        };
+
+        const text = setPlatformMentionMode(mention, 'x', false);
+        const atMention = setPlatformMentionMode(text, 'x', true);
+
+        expect(text.handles.x).toBe('guest');
+        expect(atMention.handles.x).toBe('@guest');
+    });
+
+    it('keeps generated LinkedIn text in sync while the mention name changes', () => {
+        const mention: MentionPlaceholder = {
+            id: 'm',
+            label: '@m',
+            handles: {
+                x: '@m',
+                bluesky: '@m',
+                linkedin: 'm',
+            },
+        };
+
+        const updated = updateMentionName(mention, 'misterfdsfsfds');
+
+        expect(updated.handles).toEqual({
+            x: '@misterfdsfsfds',
+            bluesky: '@misterfdsfsfds',
+            linkedin: 'misterfdsfsfds',
+        });
+    });
+
+    it('forces LinkedIn values to text only', () => {
         const mention: MentionPlaceholder = {
             id: 'guest',
             label: '@guest',
             handles: { linkedin: '@guest' },
         };
 
-        const text = setPlatformMentionMode(mention, 'linkedin', false);
-        const atMention = setPlatformMentionMode(text, 'linkedin', true);
+        const updated = updateMentionHandle(
+            mention,
+            'linkedin',
+            '@guest',
+            true,
+        );
+        const toggled = setPlatformMentionMode(updated, 'linkedin', true);
 
-        expect(text.handles.linkedin).toBe('guest');
-        expect(atMention.handles.linkedin).toBe('@guest');
+        expect(updated.handles.linkedin).toBe('guest');
+        expect(toggled.handles.linkedin).toBe('guest');
+        expect(usesPlatformMention(toggled, 'linkedin')).toBe(false);
     });
 
     it('shows mention inputs without the permanent @ prefix', () => {
@@ -110,7 +151,7 @@ describe('mention helpers', () => {
         ).toBe('Hi @guest_x');
         expect(
             replaceMentionTokens('Hi {{mention:guest}}', mentions, 'linkedin'),
-        ).toBe('Hi @GuestLinkedIn');
+        ).toBe('Hi GuestLinkedIn');
     });
 });
 
@@ -125,7 +166,7 @@ describe('syncMentionsFromText', () => {
                 handles: {
                     x: '@guest',
                     bluesky: '@guest',
-                    linkedin: '@guest',
+                    linkedin: 'guest',
                 },
             },
         ]);
@@ -141,7 +182,7 @@ describe('syncMentionsFromText', () => {
                 handles: {
                     x: '@',
                     bluesky: '@',
-                    linkedin: '@',
+                    linkedin: '',
                 },
             },
         ]);
@@ -158,7 +199,7 @@ describe('syncMentionsFromText', () => {
                 handles: {
                     x: '@guest',
                     bluesky: '@guest',
-                    linkedin: '@guest',
+                    linkedin: 'guest',
                 },
             },
         ]);

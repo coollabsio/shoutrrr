@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Posts;
 
 use App\Dto\Post\DraftData;
+use App\Enums\Platform;
 use App\Enums\PostStatus;
 use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
@@ -228,7 +229,10 @@ class DraftService
             foreach (($mention['handles'] ?? []) as $platform => $handle) {
                 $handle = trim((string) $handle);
                 if ($handle !== '') {
-                    $handles[(string) $platform] = $handle;
+                    $platform = (string) $platform;
+                    $handles[$platform] = $platform === Platform::LinkedIn->value
+                        ? ltrim($handle, '@')
+                        : $handle;
                 }
             }
 
@@ -251,7 +255,7 @@ class DraftService
 
         $resolved = $text;
         foreach ($mentions as $mention) {
-            $resolved = str_replace($mention['label'], $mention['handles'][$platform] ?? $mention['label'], $resolved);
+            $resolved = str_replace($mention['label'], $this->mentionTextForPlatform($mention, $platform), $resolved);
         }
 
         $byId = [];
@@ -265,8 +269,18 @@ class DraftService
                 return $matches[0];
             }
 
-            return $mention['handles'][$platform] ?? $mention['label'];
+            return $this->mentionTextForPlatform($mention, $platform);
         }, $resolved);
+    }
+
+    /**
+     * @param  array{id: string, label: string, handles: array<string, string>}  $mention
+     */
+    private function mentionTextForPlatform(array $mention, string $platform): string
+    {
+        $handle = $mention['handles'][$platform] ?? $mention['label'];
+
+        return $platform === Platform::LinkedIn->value ? ltrim($handle, '@') : $handle;
     }
 
     /**

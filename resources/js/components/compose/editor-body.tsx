@@ -387,10 +387,14 @@ export default function EditorBody({
                             </div>
                             <div className="flex flex-col gap-2">
                                 {activePlatforms.map((platform, index) => {
-                                    const useMention = usesPlatformMention(
-                                        activeMention,
-                                        platform,
-                                    );
+                                    const canUseMention =
+                                        platform !== 'linkedin';
+                                    const useMention =
+                                        canUseMention &&
+                                        usesPlatformMention(
+                                            activeMention,
+                                            platform,
+                                        );
                                     const value =
                                         activeMention.handles[platform] ??
                                         activeMention.label;
@@ -446,24 +450,26 @@ export default function EditorBody({
                                                         autoFocus={index === 0}
                                                     />
                                                 </InputGroup>
-                                                <button
-                                                    type="button"
-                                                    className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                                                    onClick={() =>
-                                                        updateMention(
-                                                            activeMention,
-                                                            setPlatformMentionMode(
+                                                {canUseMention && (
+                                                    <button
+                                                        type="button"
+                                                        className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                                                        onClick={() =>
+                                                            updateMention(
                                                                 activeMention,
-                                                                platform,
-                                                                !useMention,
-                                                            ),
-                                                        )
-                                                    }
-                                                >
-                                                    {useMention
-                                                        ? 'Use text only'
-                                                        : 'Use @ mention'}
-                                                </button>
+                                                                setPlatformMentionMode(
+                                                                    activeMention,
+                                                                    platform,
+                                                                    !useMention,
+                                                                ),
+                                                            )
+                                                        }
+                                                    >
+                                                        {useMention
+                                                            ? 'Use text only'
+                                                            : 'Use @ mention'}
+                                                    </button>
+                                                )}
                                             </div>
                                         </label>
                                     );

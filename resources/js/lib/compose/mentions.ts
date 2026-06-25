@@ -7,6 +7,7 @@ export type MentionPlaceholder = {
 };
 
 const PLATFORMS: PlatformName[] = ['x', 'bluesky', 'linkedin'];
+const MENTION_PLATFORMS = new Set<PlatformName>(['x', 'bluesky']);
 const HANDLE_PATTERN = /(^|\s)@([a-zA-Z0-9_.-]{0,50})(?=\s|$|[.,!?;:])/g;
 
 export function createMention(label: string): MentionPlaceholder {
@@ -16,7 +17,10 @@ export function createMention(label: string): MentionPlaceholder {
         id: mentionIdFromLabel(normalizedLabel),
         label: normalizedLabel,
         handles: Object.fromEntries(
-            PLATFORMS.map((platform) => [platform, normalizedLabel]),
+            PLATFORMS.map((platform) => [
+                platform,
+                mentionTextInput(platform, normalizedLabel),
+            ]),
         ) as Record<PlatformName, string>,
     };
 }
@@ -30,10 +34,15 @@ export function updateMentionName(
     name: string,
 ): MentionPlaceholder {
     const label = normalizeMentionName(name);
+    const previousText = mentionInputValue(mention.label);
     const handles = Object.fromEntries(
         Object.entries(mention.handles).map(([platform, handle]) => [
             platform,
-            handle === mention.label ? label : handle,
+            handle === mention.label ||
+            handle === previousText ||
+            (mention.label === '@' && handle === '')
+                ? mentionTextInput(platform as PlatformName, label)
+                : handle,
         ]),
     ) as Partial<Record<PlatformName, string>>;
 
@@ -56,9 +65,7 @@ export function updateMentionHandle(
     if (trimmed === '') {
         delete handles[platform];
     } else {
-        handles[platform] = useMention
-            ? normalizeMentionName(trimmed)
-            : trimmed;
+        handles[platform] = mentionTextInput(platform, trimmed, useMention);
     }
 
     return { ...mention, handles };
@@ -68,7 +75,10 @@ export function usesPlatformMention(
     mention: MentionPlaceholder,
     platform: PlatformName,
 ): boolean {
-    return (mention.handles[platform] ?? mention.label).startsWith('@');
+    return (
+        MENTION_PLATFORMS.has(platform) &&
+        (mention.handles[platform] ?? mention.label).startsWith('@')
+    );
 }
 
 export function setPlatformMentionMode(
@@ -82,8 +92,18 @@ export function setPlatformMentionMode(
         mention,
         platform,
         mentionInputValue(current),
-        useMention,
+        useMention && MENTION_PLATFORMS.has(platform),
     );
+}
+
+function mentionTextInput(
+    platform: PlatformName,
+    value: string,
+    useMention = true,
+): string {
+    return useMention && MENTION_PLATFORMS.has(platform)
+        ? normalizeMentionName(value)
+        : mentionInputValue(value);
 }
 
 export function syncMentionsFromText(
@@ -135,7 +155,7 @@ export function replaceMentionTokens(
     )) {
         replaced = replaced.replaceAll(
             mention.label,
-            mention.handles[platform] ?? mention.label,
+            mentionTextOutput(mention, platform),
         );
     }
 
@@ -146,9 +166,18 @@ export function replaceMentionTokens(
         (token, id) => {
             const mention = byId.get(id);
 
-            return mention?.handles[platform] ?? mention?.label ?? token;
+            return mention ? mentionTextOutput(mention, platform) : token;
         },
     );
+}
+
+function mentionTextOutput(
+    mention: MentionPlaceholder,
+    platform: PlatformName,
+): string {
+    const handle = mention.handles[platform] ?? mention.label;
+
+    return platform === 'linkedin' ? mentionInputValue(handle) : handle;
 }
 
 function extractMentionLabels(text: string): string[] {
