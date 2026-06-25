@@ -77,6 +77,39 @@ test('responding rejects over-length text', function (): void {
         ->assertSessionHasErrors('text');
 });
 
+test('replying up to account capability limit is accepted', function (): void {
+    // Create a premium account with a higher max_text_length capability
+    $premiumAccount = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'capabilities' => ['max_text_length' => 25000],
+        'token_expires_at' => now()->addHour(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $premiumAccount->id,
+        'access_token' => 'tok-premium',
+    ]);
+
+    $target = PostTarget::factory()
+        ->for(Post::factory()->create(['workspace_id' => $this->workspace->id]))
+        ->for($premiumAccount, 'account')
+        ->create(['platform' => Platform::X, 'remote_id' => '501']);
+
+    $reply = PostTargetReply::factory()->for($target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'remote_reply_id' => '901',
+        'remote_cid' => null,
+        'status' => ReplyStatus::Pending,
+    ]);
+
+    fakePostReply(ReplyPostResult::ok('id-premium'));
+
+    // A ~1000-char text exceeds X default (280) but is within the capability (25000)
+    $this->post(route('engagement.respond', $reply), ['text' => str_repeat('a', 1000)])
+        ->assertSessionHasNoErrors();
+});
+
 test('a failed post surfaces an error and does not mark responded', function (): void {
     fakePostReply(ReplyPostResult::failed('platform down'));
 

@@ -11,6 +11,7 @@ export type ReplyItem = {
     post_target_id: string;
     post_excerpt: string | null;
     account_handle: string | null;
+    account_max_text_length: number | null;
 };
 
 export type AccountFacet = {

@@ -21,7 +21,7 @@ class RespondToReplyRequest extends FormRequest
     {
         /** @var PostTargetReply $reply */
         $reply = $this->route('reply');
-        $max = $reply->platform->maxLength();
+        $max = $reply->target?->account?->maxTextLength() ?? $reply->platform->maxLength();
 
         return [
             'text' => ['required', 'string', 'max:'.$max],

@@ -134,7 +134,11 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
                 thread={thread}
                 loading={loading}
             />
-            <QuickReplyBox platform={selected.platform} onSend={send} />
+            <QuickReplyBox
+                platform={selected.platform}
+                maxLength={selected.account_max_text_length ?? undefined}
+                onSend={send}
+            />
         </div>
     );
 }

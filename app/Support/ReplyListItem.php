@@ -28,6 +28,7 @@ final class ReplyListItem
             'post_target_id' => $reply->post_target_id,
             'post_excerpt' => $target?->post?->excerpt(),
             'account_handle' => $target?->account?->handle,
+            'account_max_text_length' => $target?->account?->maxTextLength(),
         ];
     }
 }

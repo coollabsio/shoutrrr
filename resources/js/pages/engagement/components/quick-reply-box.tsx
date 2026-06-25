@@ -7,14 +7,20 @@ const LIMITS: Record<string, number> = { x: 280, bluesky: 300, linkedin: 3000 };
 
 type Props = {
     platform: string;
+    maxLength?: number;
     disabled?: boolean;
     onSend: (text: string) => Promise<void>;
 };
 
-export function QuickReplyBox({ platform, disabled, onSend }: Props) {
+export function QuickReplyBox({
+    platform,
+    maxLength,
+    disabled,
+    onSend,
+}: Props) {
     const [text, setText] = useState('');
     const [sending, setSending] = useState(false);
-    const limit = LIMITS[platform] ?? 280;
+    const limit = maxLength ?? LIMITS[platform] ?? 280;
     const remaining = limit - text.length;
     const tooLong = remaining < 0;
 
