@@ -135,28 +135,50 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
             .finally(() => setLoading(false));
     }, [selectedId]);
 
-    async function send(text: string) {
+    async function send(text: string, mediaIds: string[]) {
+        const tempId = `temp-${Date.now()}`;
+        setThread((prev) => [
+            ...prev,
+            {
+                ...selected,
+                id: tempId,
+                text,
+                is_read: true,
+                is_ours: true,
+                status: 'responded',
+                send_status: 'sending' as const,
+            },
+        ]);
         await new Promise<void>((resolve, reject) => {
             router.post(
                 respondRoute(selected.id).url,
-                { text },
+                { text, media: mediaIds },
                 {
+                    forceFormData: true,
                     preserveScroll: true,
                     onSuccess: () => {
-                        setThread((prev) => [
-                            ...prev,
-                            {
-                                ...selected,
-                                id: `temp-${Date.now()}`,
-                                text,
-                                is_read: true,
-                                is_ours: true,
-                                status: 'responded',
-                            },
-                        ]);
+                        setThread((prev) =>
+                            prev.map((r) =>
+                                r.id === tempId
+                                    ? { ...r, send_status: null }
+                                    : r,
+                            ),
+                        );
                         resolve();
                     },
-                    onError: () => reject(new Error('send failed')),
+                    onError: () => {
+                        setThread((prev) =>
+                            prev.map((r) =>
+                                r.id === tempId
+                                    ? {
+                                          ...r,
+                                          send_status: 'failed' as const,
+                                      }
+                                    : r,
+                            ),
+                        );
+                        reject(new Error('send failed'));
+                    },
                 },
             );
         });
@@ -233,6 +255,7 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
             />
 
             <QuickReplyBox
+                replyId={selected.id}
                 platform={selected.platform}
                 replyingTo={atHandle(selected.author_handle)}
                 maxLength={selected.account_max_text_length ?? undefined}

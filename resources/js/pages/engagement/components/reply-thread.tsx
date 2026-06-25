@@ -59,7 +59,21 @@ export function ReplyThread({ postExcerpt, postId, thread, loading }: Props) {
                                 {reply.text}
                             </p>
                             <div className="mt-1 text-right text-[11px] text-primary-foreground/70">
-                                You · {relativeTime(reply.remote_created_at)}
+                                {reply.send_status === 'sending' ? (
+                                    <span className="flex items-center justify-end gap-1">
+                                        <span className="size-2.5 animate-spin rounded-full border border-primary-foreground/50 border-t-transparent" />
+                                        Sending…
+                                    </span>
+                                ) : reply.send_status === 'failed' ? (
+                                    <span className="text-destructive-foreground/80">
+                                        Failed to send
+                                    </span>
+                                ) : (
+                                    <>
+                                        You ·{' '}
+                                        {relativeTime(reply.remote_created_at)}
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
