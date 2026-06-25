@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Engagement\EngagementController;
+use App\Http\Controllers\Engagement\ReplyImageEditController;
 use App\Http\Controllers\Engagement\ReplyMediaController;
 use App\Http\Controllers\Engagement\ReplyVideoUploadController;
 use App\Models\PostMedia;
@@ -48,5 +49,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::delete('engagement/{reply}/media/{media}', [ReplyMediaController::class, 'destroy'])->name('engagement.media.destroy');
         Route::post('engagement/{reply}/media/video-url', [ReplyVideoUploadController::class, 'url'])->name('engagement.media.video-url');
         Route::post('engagement/{reply}/media/video', [ReplyVideoUploadController::class, 'store'])->name('engagement.media.video');
+        Route::post('engagement/{reply}/image-edit', [ReplyImageEditController::class, 'store'])->name('engagement.image-edit.store');
+        Route::put('engagement/{reply}/image-edit/{media}', [ReplyImageEditController::class, 'update'])->name('engagement.image-edit.update');
     });
 });
