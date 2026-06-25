@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CaptureMcpWorkspaceSelection;
+use App\Http\Middleware\EnsureEngagementEnabled;
 use App\Http\Middleware\EnsureMetricsEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -21,7 +22,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
-        $middleware->alias(['metrics.enabled' => EnsureMetricsEnabled::class]);
+        $middleware->alias([
+            'engagement.enabled' => EnsureEngagementEnabled::class,
+            'metrics.enabled' => EnsureMetricsEnabled::class,
+        ]);
 
         $middleware->web(append: [
             // Outermost: sets the CSP nonce before the view renders and writes
