@@ -63,6 +63,51 @@ test('a reply with media creates a sending row and dispatches SendReply', functi
     Queue::assertPushed(SendReply::class, 1);
 });
 
+test('a media-only reply with empty text is accepted', function () {
+    Queue::fake();
+
+    $this->post(route('engagement.respond', $this->reply), [
+        'text' => '', 'media' => [$this->media->id],
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    Queue::assertPushed(SendReply::class, 1);
+});
+
+test('a reply with neither text nor media is rejected', function () {
+    Queue::fake();
+
+    $this->post(route('engagement.respond', $this->reply), [])
+        ->assertSessionHasErrors('text');
+
+    Queue::assertNothingPushed();
+});
+
+test('a foreign-workspace media id is rejected', function () {
+    Queue::fake();
+
+    $otherWorkspace = Workspace::factory()->create();
+    $foreignMedia = PostMedia::factory()->create(['workspace_id' => $otherWorkspace->id, 'kind' => 'image']);
+
+    $this->post(route('engagement.respond', $this->reply), [
+        'text' => 'with pic', 'media' => [$foreignMedia->id],
+    ])->assertSessionHasErrors('media.0');
+
+    Queue::assertNothingPushed();
+});
+
+test('SendReply::failed marks the row failed', function () {
+    $ourRow = PostTargetReply::factory()->create([
+        'workspace_id' => $this->workspace->id, 'post_target_id' => $this->reply->post_target_id,
+        'platform' => Platform::X, 'is_ours' => true, 'send_status' => SendStatus::Sending->value,
+        'parent_remote_id' => $this->reply->remote_reply_id,
+    ]);
+
+    (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic'))
+        ->failed(new RuntimeException('boom'));
+
+    expect($ourRow->fresh()->send_status)->toBe(SendStatus::Failed);
+});
+
 test('SendReply posts the media reply and marks it sent', function () {
     $connector = Mockery::mock(EngagementConnector::class);
     $connector->shouldReceive('postReply')->andReturn(ReplyPostResult::ok('rid', 'cid'));

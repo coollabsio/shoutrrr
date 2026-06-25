@@ -16,6 +16,7 @@ use App\Services\Publishing\TokenManager;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\RateLimited;
+use Throwable;
 
 class SendReply implements ShouldQueue
 {
@@ -98,6 +99,20 @@ class SendReply implements ShouldQueue
             'status' => ReplyStatus::Responded->value,
             'our_reply_remote_id' => $result->remoteReplyId,
         ])->save();
+    }
+
+    /**
+     * Runs after the queue exhausts retries (or on an explicitly released failure).
+     * Guards against the outgoing row being left stuck on `sending` forever when an
+     * uncaught exception escapes handle(): mark it failed and notify the author.
+     */
+    public function failed(Throwable $e): void
+    {
+        $ourRow = PostTargetReply::withoutGlobalScopes()->find($this->ourRowId);
+
+        if ($ourRow !== null) {
+            $this->failRow($ourRow);
+        }
     }
 
     private function failRow(PostTargetReply $ourRow): void

@@ -9,6 +9,7 @@ use App\Models\PostTargetReply;
 use App\Notifications\Concerns\GatedByPreferences;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class ReplyFailedNotification extends Notification implements ShouldQueue
@@ -41,5 +42,13 @@ class ReplyFailedNotification extends Notification implements ShouldQueue
             'href' => '/engagement',
             'icon' => 'alert-triangle',
         ]);
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        return (new MailMessage)
+            ->subject('Your reply failed to send')
+            ->line('We could not post your reply on '.$this->reply->platform->label().'.')
+            ->action('Open inbox', url('/engagement'));
     }
 }

@@ -6,6 +6,7 @@ namespace App\Http\Requests\Engagement;
 
 use App\Models\PostTargetReply;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class RespondToReplyRequest extends FormRequest
 {
@@ -24,9 +25,9 @@ class RespondToReplyRequest extends FormRequest
         $max = $reply->target?->account?->maxTextLength() ?? $reply->platform->maxLength();
 
         return [
-            'text' => ['required', 'string', 'max:'.$max],
+            'text' => ['required_without:media', 'nullable', 'string', 'max:'.$max],
             'media' => ['sometimes', 'array', 'max:'.$reply->platform->maxMedia()],
-            'media.*' => ['string', 'exists:post_media,id'],
+            'media.*' => ['string', Rule::exists('post_media', 'id')->where('workspace_id', $reply->workspace_id)],
         ];
     }
 }
