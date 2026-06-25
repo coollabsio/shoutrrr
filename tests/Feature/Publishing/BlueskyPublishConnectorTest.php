@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 /**
+ * @param  list<string>  $segments
  * @param  list<PostMedia>  $media
  */
 function bskyContext(array $segments, array $media = []): PublishContext
@@ -36,6 +37,28 @@ test('bluesky creates a single post and returns its uri', function () {
 
     expect($result->isSuccessful())->toBeTrue()
         ->and($result->remoteIds)->toBe(['at://did:plc:me/app.bsky.feed.post/1']);
+});
+
+test('bluesky resolves handles and sends mention facets', function () {
+    Http::fake([
+        '*com.atproto.identity.resolveHandle*' => Http::response(['did' => 'did:plc:ada']),
+        '*com.atproto.repo.createRecord' => Http::response(['uri' => 'at://did:plc:me/app.bsky.feed.post/1', 'cid' => 'cid1']),
+    ]);
+
+    $result = app(BlueskyPublishConnector::class)->publish(bskyContext(['Hi 👋 @ada.bsky.social']));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'com.atproto.repo.createRecord')) {
+            return false;
+        }
+
+        return ($request['record']['facets'][0] ?? null) === [
+            'index' => ['byteStart' => 8, 'byteEnd' => 24],
+            'features' => [['$type' => 'app.bsky.richtext.facet#mention', 'did' => 'did:plc:ada']],
+        ];
+    });
 });
 
 test('bluesky uploads media blobs and embeds them on the post', function () {

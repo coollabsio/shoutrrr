@@ -74,7 +74,7 @@ class BlueskyPublishConnector implements PublishConnector
                 $record = [
                     '$type' => 'app.bsky.feed.post',
                     'text' => $text,
-                    'facets' => $this->linkFacets($text),
+                    'facets' => $this->richTextFacets($text),
                     'createdAt' => Date::now()->toIso8601String(),
                 ];
 
@@ -323,6 +323,41 @@ class BlueskyPublishConnector implements PublishConnector
     /**
      * @return list<array<string, mixed>>
      */
+    private function richTextFacets(string $text): array
+    {
+        $facets = $this->linkFacets($text);
+
+        if (preg_match_all('/(?<![A-Za-z0-9._-])@([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z][A-Za-z0-9.-]*)(?![A-Za-z0-9._-])/', $text, $matches, PREG_OFFSET_CAPTURE) === false) {
+            return $facets;
+        }
+
+        foreach ($matches[0] as $index => [$mention, $offset]) {
+            $byteStart = $offset;
+            $byteEnd = $offset + strlen($mention);
+
+            if ($this->overlapsFacet($facets, $byteStart, $byteEnd)) {
+                continue;
+            }
+
+            $did = $this->resolveHandle((string) $matches[1][$index][0]);
+            if ($did === null) {
+                continue;
+            }
+
+            $facets[] = [
+                'index' => ['byteStart' => $byteStart, 'byteEnd' => $byteEnd],
+                'features' => [['$type' => 'app.bsky.richtext.facet#mention', 'did' => $did]],
+            ];
+        }
+
+        usort($facets, static fn (array $left, array $right): int => $left['index']['byteStart'] <=> $right['index']['byteStart']);
+
+        return $facets;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
     private function linkFacets(string $text): array
     {
         $facets = [];
@@ -339,6 +374,39 @@ class BlueskyPublishConnector implements PublishConnector
         }
 
         return $facets;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $facets
+     */
+    private function overlapsFacet(array $facets, int $byteStart, int $byteEnd): bool
+    {
+        foreach ($facets as $facet) {
+            $index = (array) ($facet['index'] ?? []);
+            $facetStart = (int) ($index['byteStart'] ?? 0);
+            $facetEnd = (int) ($index['byteEnd'] ?? 0);
+
+            if ($byteStart < $facetEnd && $byteEnd > $facetStart) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolveHandle(string $handle): ?string
+    {
+        $response = $this->http
+            ->acceptJson()
+            ->get(self::DEFAULT_PDS.'/xrpc/com.atproto.identity.resolveHandle', ['handle' => $handle]);
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        $did = (string) $response->json('did', '');
+
+        return $did !== '' ? $did : null;
     }
 
     private function mapFailure(Response $response): PublishResult
