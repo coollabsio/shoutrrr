@@ -11,7 +11,11 @@ import {
 } from '@/components/ui/dialog';
 import { cropToBlob, loadImage } from '@/lib/image-editor/crop';
 import { rasterizeStage } from '@/lib/image-editor/export';
-import { GRADIENTS, gradientToFill } from '@/lib/image-editor/gradients';
+import {
+    GRADIENTS,
+    gradientToFill,
+    NO_BACKGROUND,
+} from '@/lib/image-editor/gradients';
 import {
     aspectToRatio,
     centeredCropForRatio,
@@ -241,6 +245,14 @@ export function ImageEditor({
         variant === 'new' ? 'Continue without editing' : 'Cancel';
     // Closing via X / Escape discards a fresh upload, or just closes a re-edit.
     const closeAction = variant === 'new' ? onDiscard : onCancel;
+    const primaryLabel = cropMode
+        ? 'Done cropping'
+        : isSaving
+          ? 'Saving…'
+          : hasQueue
+            ? 'Apply & next'
+            : 'Apply';
+    const primaryAction = cropMode ? () => setCropMode(false) : apply;
 
     return (
         <Dialog
@@ -397,19 +409,16 @@ export function ImageEditor({
                             </div>
                         </Field>
 
-                        <button
-                            type="button"
-                            onClick={() => setCropMode((v) => !v)}
-                            className={cn(
-                                'flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition-colors',
-                                cropMode
-                                    ? 'border-foreground bg-foreground text-background'
-                                    : 'border-border hover:bg-muted',
-                            )}
-                        >
-                            <Crop className="size-4" aria-hidden="true" />
-                            {cropMode ? 'Done cropping' : 'Crop image'}
-                        </button>
+                        {!cropMode && (
+                            <button
+                                type="button"
+                                onClick={() => setCropMode(true)}
+                                className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium transition-colors hover:bg-muted"
+                            >
+                                <Crop className="size-4" aria-hidden="true" />
+                                Crop image
+                            </button>
+                        )}
 
                         {/* Effects & background (opt-in) */}
                         <div className="border-t border-border pt-5">
@@ -439,6 +448,34 @@ export function ImageEditor({
                                 <div className="mt-4 space-y-5">
                                     <Field label="Background">
                                         <div className="grid grid-cols-4 gap-2">
+                                            <button
+                                                type="button"
+                                                aria-label="No background"
+                                                aria-pressed={
+                                                    settings.background.type ===
+                                                    'none'
+                                                }
+                                                onClick={() =>
+                                                    setSettings((s) => ({
+                                                        ...s,
+                                                        background:
+                                                            NO_BACKGROUND,
+                                                    }))
+                                                }
+                                                className={cn(
+                                                    'relative h-10 overflow-hidden rounded-md bg-[linear-gradient(45deg,var(--color-muted)_25%,transparent_25%,transparent_75%,var(--color-muted)_75%),linear-gradient(45deg,var(--color-muted)_25%,transparent_25%,transparent_75%,var(--color-muted)_75%)] bg-[length:14px_14px] bg-[position:0_0,7px_7px] ring-offset-2 ring-offset-popover transition md:h-8',
+                                                    settings.background.type ===
+                                                        'none'
+                                                        ? 'ring-2 ring-foreground'
+                                                        : 'hover:scale-105',
+                                                )}
+                                            >
+                                                <span
+                                                    className="absolute top-1/2 left-1/2 h-0.5 w-12 -translate-x-1/2 -translate-y-1/2 -rotate-45 rounded-full bg-destructive"
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
+
                                             {GRADIENTS.map((g) => (
                                                 <button
                                                     key={g.id}
@@ -602,15 +639,11 @@ export function ImageEditor({
                         </button>
                         <button
                             type="button"
-                            disabled={isSaving || !croppedUrl}
-                            onClick={apply}
+                            disabled={isSaving || (!cropMode && !croppedUrl)}
+                            onClick={primaryAction}
                             className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50 md:py-2"
                         >
-                            {isSaving
-                                ? 'Saving…'
-                                : hasQueue
-                                  ? 'Apply & next'
-                                  : 'Apply'}
+                            {primaryLabel}
                         </button>
                     </div>
                 </footer>

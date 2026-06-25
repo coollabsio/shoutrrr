@@ -289,7 +289,7 @@ class LinkedInConnector implements PublishConnector
 
             $upload = $this->http
                 ->withToken($token)
-                ->withBody($image->body(), (string) $image->header('Content-Type', 'image/jpeg'))
+                ->withBody($image->body(), $image->header('Content-Type') ?: 'image/jpeg')
                 ->put($uploadUrl);
 
             return $upload->failed() || $urn === '' ? null : $urn;

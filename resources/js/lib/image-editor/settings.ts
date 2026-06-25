@@ -1,5 +1,5 @@
 import type { BackgroundFill } from './gradients';
-import { findGradient, gradientToFill, GRADIENTS } from './gradients';
+import { findGradient, gradientToFill, NO_BACKGROUND } from './gradients';
 
 export type ShadowPreset = 'none' | 'soft' | 'medium' | 'strong';
 export type AspectPreset = 'auto' | '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
@@ -43,12 +43,11 @@ export const ASPECT_PRESETS: readonly AspectPreset[] = [
 ];
 
 export function defaultSettings(): EditSettings {
-    // Plain by default — a basic crop/aspect tool. Gradient background, padding,
-    // radius, shadow and 3D tilt are opt-in via the editor's Advanced controls
-    // (the background only becomes visible once padding is added).
+    // Plain by default — a basic crop/aspect tool. Background, padding,
+    // radius, shadow and 3D tilt are opt-in via the editor's Advanced controls.
     return {
         version: 1,
-        background: gradientToFill(GRADIENTS[0]),
+        background: NO_BACKGROUND,
         padding: 0,
         radius: 0,
         shadow: 'none',
@@ -73,10 +72,15 @@ function numberOr(value: unknown, fallback: number): number {
 
 function normalizeBackground(raw: unknown): BackgroundFill {
     const rec = asRecord(raw);
-    const preset =
-        (typeof rec.id === 'string' && findGradient(rec.id)) || GRADIENTS[0];
 
-    return gradientToFill(preset);
+    if (rec.type === 'none' || rec.id === NO_BACKGROUND.id) {
+        return NO_BACKGROUND;
+    }
+
+    const preset =
+        typeof rec.id === 'string' ? findGradient(rec.id) : undefined;
+
+    return preset ? gradientToFill(preset) : NO_BACKGROUND;
 }
 
 function normalizeCrop(raw: unknown): CropRect | null {

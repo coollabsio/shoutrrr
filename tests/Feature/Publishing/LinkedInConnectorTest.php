@@ -69,6 +69,29 @@ test('linkedin sends article content for a text-only link post', function () {
         && ($request['content']['article']['thumbnail'] ?? null) === 'urn:li:image:preview');
 });
 
+test('linkedin uses a default article thumbnail content type when the image response omits one', function () {
+    Http::fake([
+        'https://example.com/post' => Http::response(
+            '<html><head><meta property="og:title" content="Example"><meta property="og:image" content="https://cdn.example.com/preview"></head></html>',
+            200,
+        ),
+        'https://cdn.example.com/preview' => Http::response('image-bytes', 200),
+        'https://api.linkedin.com/rest/images?action=initializeUpload' => Http::response([
+            'value' => ['uploadUrl' => 'https://upload.linkedin.com/put/preview', 'image' => 'urn:li:image:preview'],
+        ]),
+        'https://upload.linkedin.com/put/preview' => Http::response('', 201),
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:99']),
+    ]);
+
+    $result = app(LinkedInConnector::class)->publish(liContext(['testing https://example.com/post']));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://upload.linkedin.com/put/preview'
+        && $request->body() === 'image-bytes'
+        && $request->hasHeader('Content-Type', 'image/jpeg'));
+});
+
 test('linkedin falls back to text-only when link metadata cannot be fetched', function () {
     Http::fake([
         'https://example.com/*' => Http::response('', 404),

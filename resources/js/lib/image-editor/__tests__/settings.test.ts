@@ -6,7 +6,7 @@ describe('edit settings', () => {
     it('defaultSettings is a valid version-1 settings object', () => {
         const s = defaultSettings();
         expect(s.version).toBe(1);
-        expect(s.background.type).toBe('gradient');
+        expect(s.background.type).toBe('none');
         expect(s.crop).toBeNull();
         expect(s.zoom).toBe(1);
         expect(s.tilt).toEqual({ rotateX: 0, rotateY: 0 });
@@ -33,6 +33,14 @@ describe('edit settings', () => {
             defaultSettings().shadow,
         );
         expect(normalizeSettings({ aspect: 'wat' }).aspect).toBe('auto');
+    });
+
+    it('normalizeSettings preserves the no-background option', () => {
+        const s = normalizeSettings({
+            background: { type: 'none', id: 'none' },
+        });
+
+        expect(s.background).toEqual({ type: 'none', id: 'none' });
     });
 
     it('normalizeSettings resolves a known gradient id and ignores unknown ids', () => {

@@ -7,8 +7,14 @@ export type GradientFill = {
     stops: GradientStop[];
 };
 
-/** Future background sources (solid, image, …) join this union. */
-export type BackgroundFill = GradientFill;
+export type NoBackgroundFill = {
+    type: 'none';
+    id: 'none';
+};
+
+export type BackgroundFill = NoBackgroundFill | GradientFill;
+
+export const NO_BACKGROUND: NoBackgroundFill = { type: 'none', id: 'none' };
 
 export type GradientPreset = {
     id: string;
@@ -112,6 +118,10 @@ export function findGradient(id: string): GradientPreset | undefined {
 }
 
 export function backgroundCss(fill: BackgroundFill): string {
+    if (fill.type === 'none') {
+        return 'transparent';
+    }
+
     const stopList = fill.stops
         .map((s) => `${s.color} ${Math.round(s.at * 100)}%`)
         .join(', ');

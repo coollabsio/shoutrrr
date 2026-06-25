@@ -127,7 +127,7 @@ export function CropOverlay({
             />
             <div className="pointer-events-none absolute inset-0 bg-black/40" />
             <div
-                className="absolute cursor-move border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]"
+                className="absolute cursor-move shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]"
                 style={{
                     left: rect.x * scale,
                     top: rect.y * scale,
@@ -140,7 +140,7 @@ export function CropOverlay({
                     src={imageSrc}
                     alt=""
                     draggable={false}
-                    className="pointer-events-none absolute max-w-none"
+                    className="pointer-events-none absolute z-0 max-w-none"
                     style={{
                         width: dispW,
                         height: dispH,
@@ -148,6 +148,7 @@ export function CropOverlay({
                         top: -rect.y * scale,
                     }}
                 />
+                <div className="pointer-events-none absolute inset-0 z-10 border-2 border-white" />
                 {CORNERS.map(({ corner, className }) => (
                     <button
                         key={corner}
@@ -156,7 +157,7 @@ export function CropOverlay({
                         onPointerDown={(e) => onPointerDown(e, corner)}
                         className={cn(
                             // Larger hit area on touch; compact dot on pointer devices.
-                            'absolute size-5 rounded-full border border-border bg-white shadow-sm md:size-3',
+                            'absolute z-10 size-5 rounded-full border border-border bg-white shadow-sm md:size-3',
                             className,
                         )}
                     />

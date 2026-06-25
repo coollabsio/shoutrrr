@@ -37,4 +37,8 @@ describe('gradient presets', () => {
         expect(css).toContain('deg');
         expect(css).toContain('%');
     });
+
+    it('backgroundCss renders no background as transparent', () => {
+        expect(backgroundCss({ type: 'none', id: 'none' })).toBe('transparent');
+    });
 });
