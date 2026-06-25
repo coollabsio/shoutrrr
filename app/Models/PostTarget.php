@@ -128,4 +128,10 @@ class PostTarget extends Model
     {
         return $this->hasMany(PostTargetMetric::class, 'post_target_id')->orderBy('captured_at');
     }
+
+    /** @return HasMany<PostTargetReply, $this> */
+    public function replies(): HasMany
+    {
+        return $this->hasMany(PostTargetReply::class, 'post_target_id');
+    }
 }
