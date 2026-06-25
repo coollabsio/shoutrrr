@@ -122,8 +122,11 @@ export function ImageEditor({
     }, [sourceUrl, initialSettings]);
 
     // Recompute the cropped image whenever the source or crop rect changes.
+    // Skipped while cropping: the crop overlay (not the cropped output) is shown
+    // then, so re-encoding the full-resolution PNG on every drag tick is wasted
+    // work — it runs once when crop mode is committed.
     useEffect(() => {
-        if (!sourceImg) {
+        if (!sourceImg || cropMode) {
             return;
         }
         const rect = settings.crop ?? {
@@ -157,7 +160,7 @@ export function ImageEditor({
         return () => {
             revoked = true;
         };
-    }, [sourceImg, settings.crop]);
+    }, [sourceImg, settings.crop, cropMode]);
 
     // Revoke the last-held croppedUrl when the editor unmounts (between-crops
     // revocation is already handled by the functional updater above).

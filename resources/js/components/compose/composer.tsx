@@ -233,17 +233,30 @@ export default function Composer({
     async function handleAddedFiles(files: FileList | File[]): Promise<void> {
         const all = Array.from(files);
         const videos = all.filter((f) => f.type.startsWith('video/'));
-        const images = all.filter((f) => f.type.startsWith('image/'));
+        // Anything that isn't a video is treated as an image: some clipboard
+        // pastes report an empty/unknown MIME type, and the server validates the
+        // real content type on upload.
+        const images = all.filter((f) => !f.type.startsWith('video/'));
+
+        // A post is one video OR images, never both — decide before uploading
+        // anything, so a mixed drop doesn't half-attach the video.
+        const hasVideo = state.media.some((m) => m.kind === 'video');
+        const hasImage = state.media.some((m) => m.kind !== 'video');
+        if (
+            (videos.length > 0 && (images.length > 0 || hasImage)) ||
+            (images.length > 0 && hasVideo)
+        ) {
+            toast.error('A post can contain one video or images, not both.');
+
+            return;
+        }
 
         if (videos.length > 0) {
             void mediaUploads.handleFiles(videos);
-        }
-        if (images.length === 0) {
+
             return;
         }
-        if (videos.length > 0 || state.media.some((m) => m.kind === 'video')) {
-            toast.error('A post can contain one video or images, not both.');
-
+        if (images.length === 0) {
             return;
         }
         setEditing({
@@ -283,19 +296,34 @@ export default function Composer({
         if (!editing) {
             return;
         }
+        // On a failed save the editor stays open (the hook already toasted) so the
+        // user can retry — and, crucially, we never drop the original attachment.
         if (editing.kind === 'batch') {
-            await imageEditor.applyNew(
+            const ok = await imageEditor.applyNew(
                 composed,
                 editing.items[editing.index].file,
                 settings,
             );
+            if (!ok) {
+                return;
+            }
         } else if (editing.kind === 'reedit') {
-            await imageEditor.applyEdit(editing.mediaId, composed, settings);
+            const ok = await imageEditor.applyEdit(
+                editing.mediaId,
+                composed,
+                settings,
+            );
+            if (!ok) {
+                return;
+            }
         } else {
             // A plain image beautified for the first time: keep the raw image as
             // the source, attach the composed result, drop the raw attachment.
             const rawBlob = await fetch(editing.url).then((r) => r.blob());
-            await imageEditor.applyNew(composed, rawBlob, settings);
+            const ok = await imageEditor.applyNew(composed, rawBlob, settings);
+            if (!ok) {
+                return;
+            }
             dispatch({ type: 'removeMedia', mediaId: editing.mediaId });
         }
         endEditingStep();

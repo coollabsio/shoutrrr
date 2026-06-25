@@ -24,16 +24,19 @@ export function useImageEditor({
     const http = useHttp<{ composed?: File | null }, { media: MediaView }>({});
     const [isSaving, setIsSaving] = useState(false);
 
+    /** Returns true only if the image was saved and attached. */
     async function applyNew(
         composed: Blob,
         source: Blob,
         settings: EditSettings,
-    ): Promise<void> {
+    ): Promise<boolean> {
         setIsSaving(true);
         try {
             const id = await onEnsurePost();
             if (!id) {
-                return;
+                toast.error('Could not save the image.');
+
+                return false;
             }
             http.transform(() => ({
                 composed: blobToFile(composed, 'image.png'),
@@ -45,23 +48,30 @@ export function useImageEditor({
                 { onNetworkError: () => undefined },
             );
             onAddMedia(media);
+
+            return true;
         } catch {
             toast.error('Could not save the image.');
+
+            return false;
         } finally {
             setIsSaving(false);
         }
     }
 
+    /** Returns true only if the edit was persisted. */
     async function applyEdit(
         mediaId: string,
         composed: Blob,
         settings: EditSettings,
-    ): Promise<void> {
+    ): Promise<boolean> {
         setIsSaving(true);
         try {
             const id = await onEnsurePost();
             if (!id) {
-                return;
+                toast.error('Could not update the image.');
+
+                return false;
             }
             http.transform(() => ({
                 composed: blobToFile(composed, 'image.png'),
@@ -74,8 +84,12 @@ export function useImageEditor({
                 { onNetworkError: () => undefined },
             );
             onReplaceMedia(media);
+
+            return true;
         } catch {
             toast.error('Could not update the image.');
+
+            return false;
         } finally {
             setIsSaving(false);
         }

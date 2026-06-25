@@ -117,8 +117,9 @@ class MediaStorageService
      */
     public function replaceBeautified(PostMedia $media, UploadedFile $composed, array $settings): PostMedia
     {
-        Storage::disk($media->disk)->delete($media->path);
-
+        // Store the new file and commit the row before deleting the old file, so a
+        // failed store never leaves the row pointing at a now-missing path.
+        $oldPath = $media->path;
         $path = $composed->store('media/'.$media->workspace_id, $media->disk);
         $dimensions = @getimagesize($composed->getRealPath()) ?: [null, null];
 
@@ -130,6 +131,10 @@ class MediaStorageService
             'width' => $dimensions[0] ?? null,
             'height' => $dimensions[1] ?? null,
         ]);
+
+        if ($oldPath !== $path) {
+            Storage::disk($media->disk)->delete($oldPath);
+        }
 
         return $media->refresh();
     }

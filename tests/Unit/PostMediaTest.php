@@ -39,3 +39,25 @@ test('toView returns null edit settings and source url for a plain image', funct
     expect($media->toView()['edit_settings'])->toBeNull()
         ->and($media->toView()['source_url'])->toBeNull();
 });
+
+test('a new media instance defaults to the image kind in memory', function () {
+    expect((new PostMedia)->kind)->toBe('image');
+});
+
+test('deleting a media removes its composed and retained source files', function () {
+    Storage::fake('public');
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/ws/composed.png',
+        'source_disk' => 'public',
+        'source_path' => 'media/ws/source.png',
+    ]);
+    Storage::disk('public')->put('media/ws/composed.png', 'composed');
+    Storage::disk('public')->put('media/ws/source.png', 'source');
+
+    $media->delete();
+
+    Storage::disk('public')->assertMissing('media/ws/composed.png');
+    Storage::disk('public')->assertMissing('media/ws/source.png');
+});

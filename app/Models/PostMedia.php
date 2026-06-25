@@ -56,6 +56,29 @@ class PostMedia extends Model
     protected $table = 'post_media';
 
     /**
+     * In-memory default so a row freshly created without an explicit kind still
+     * serializes as an image (Eloquent does not hydrate DB defaults after create).
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = ['kind' => 'image'];
+
+    /**
+     * Delete the backing file(s) when the row is removed, so storage doesn't
+     * accumulate orphans. Covers both the composed file and a retained source.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (PostMedia $media): void {
+            Storage::disk($media->disk)->delete($media->path);
+
+            if ($media->source_path !== null) {
+                Storage::disk($media->source_disk ?? $media->disk)->delete($media->source_path);
+            }
+        });
+    }
+
+    /**
      * @return BelongsTo<Workspace, $this>
      */
     public function workspace(): BelongsTo
