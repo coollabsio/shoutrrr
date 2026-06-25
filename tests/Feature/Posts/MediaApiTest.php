@@ -32,7 +32,9 @@ test('POST /posts/{post}/media uploads and returns the media descriptor', functi
     // Accept header when a file is present).
     test()->post("/posts/{$post['id']}/media", [
         'file' => UploadedFile::fake()->image('p.jpg', 800, 600)->size(300),
-    ], ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('media.mime', 'image/jpeg');
+    ], ['Accept' => 'application/json'])->assertCreated()
+        ->assertJsonPath('media.mime', 'image/jpeg')
+        ->assertJsonPath('media.kind', 'image');
 });
 
 test('it rejects a non-image upload', function () {

@@ -260,15 +260,7 @@ export default function Composer({
     // source + settings; a plain one is beautified from scratch.
     function openImage(mediaId: string) {
         const m = state.media.find((x) => x.id === mediaId);
-        // TEMP diagnostic — remove once re-edit is confirmed working.
-        console.info('[openImage]', {
-            mediaId,
-            found: !!m,
-            kind: m?.kind,
-            hasSource: !!m?.source_url,
-            hasSettings: !!m?.edit_settings,
-        });
-        if (!m || m.kind !== 'image') {
+        if (!m || m.kind === 'video') {
             return;
         }
         if (m.edit_settings && m.source_url) {

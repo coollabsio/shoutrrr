@@ -199,12 +199,6 @@ export function MediaChips({
                                         if (dragged.current) {
                                             return;
                                         }
-                                        // TEMP diagnostic — remove once confirmed.
-                                        console.info('[chip click]', {
-                                            id: m.id,
-                                            kind: m.kind,
-                                            media: m,
-                                        });
                                         // Anything that isn't a video is an editable
                                         // image (matches how the thumbnail renders).
                                         if (m.kind === 'video') {

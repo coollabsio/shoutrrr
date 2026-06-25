@@ -40,7 +40,10 @@ test('storeBeautified persists composed + source files and settings', function (
     Storage::disk('public')->assertExists($media->source_path);
     expect($media->edit_settings)->toBe(['version' => 1, 'padding' => 64])
         ->and($media->source_disk)->toBe('public')
-        ->and($media->workspace_id)->toBe($workspace->id);
+        ->and($media->workspace_id)->toBe($workspace->id)
+        // The returned instance must carry kind (not rely on the DB default), or
+        // toView() serializes null and the client can't tell it's an image.
+        ->and($media->kind)->toBe('image');
 });
 
 test('replaceBeautified swaps the composed file and settings but keeps the source', function () {
