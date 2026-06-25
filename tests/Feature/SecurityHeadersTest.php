@@ -21,6 +21,7 @@ test('responses carry a nonce-based content security policy', function () {
         ->and($csp)->toContain("frame-ancestors 'none'")
         ->and($csp)->toContain("object-src 'none'")
         ->and($csp)->toContain("base-uri 'self'")
+        ->and($csp)->toContain("img-src 'self' data: blob: https:")
         ->and($csp)->toMatch("/script-src [^;]*'nonce-[A-Za-z0-9+\/=]+'/")
         ->and($csp)->toContain("'strict-dynamic'");
 });

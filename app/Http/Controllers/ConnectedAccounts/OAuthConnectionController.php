@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider;
+use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as SocialiteUser;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -56,6 +57,12 @@ class OAuthConnectionController extends Controller
         try {
             $oauthUser = $this->driver($resolved)->user();
         } catch (Throwable $exception) {
+            if ($exception instanceof InvalidStateException && $this->hasSuccessfulConnectionFlash($request, $resolved)) {
+                $request->session()->keep('success');
+
+                return redirect()->route('accounts.index');
+            }
+
             Log::warning('Connected-account OAuth callback failed.', [
                 'platform' => $resolved->value,
                 'exception' => $exception::class,
@@ -78,12 +85,22 @@ class OAuthConnectionController extends Controller
         $this->connections->store($data, $request->user());
 
         return redirect()->route('accounts.index')
-            ->with('success', "{$resolved->label()} account connected.");
+            ->with('success', $this->successMessage($resolved));
     }
 
     private function failed(string $message): RedirectResponse
     {
         return redirect()->route('accounts.index')->with('error', $message);
+    }
+
+    private function successMessage(Platform $platform): string
+    {
+        return "{$platform->label()} account connected.";
+    }
+
+    private function hasSuccessfulConnectionFlash(Request $request, Platform $platform): bool
+    {
+        return $request->session()->get('success') === $this->successMessage($platform);
     }
 
     /**

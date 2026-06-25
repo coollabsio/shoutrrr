@@ -71,7 +71,7 @@ class SecurityHeaders
             // <style> element recharts injects at runtime; style injection is a low
             // XSS risk and script-src remains strict.
             "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data: https:",
+            "img-src 'self' data: blob: https:",
             "font-src 'self' data:",
             "connect-src 'self'",
             "frame-ancestors 'none'",

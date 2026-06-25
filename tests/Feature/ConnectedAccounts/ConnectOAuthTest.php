@@ -10,6 +10,7 @@ use App\Models\WorkspaceMembership;
 use Illuminate\Support\Facades\Http;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider;
+use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as SocialiteUser;
 
 function ownerActingIn(): array
@@ -158,6 +159,43 @@ test('callback maps a linkedin-openid user', function () {
     expect($account->platform)->toBe(Platform::LinkedIn)
         ->and($account->handle)->toBe('Grace Hopper')
         ->and($account->token_expires_at)->not->toBeNull();
+});
+
+test('duplicate callback after a successful OAuth connection keeps the success flash', function () {
+    config()->set('services.linkedin-openid.client_id', 'cid');
+    config()->set('services.linkedin-openid.client_secret', 'secret');
+    config()->set('services.linkedin-openid.redirect', 'https://app.test/accounts/callback/linkedin');
+    ownerActingIn();
+    $oauthUser = (new SocialiteUser)
+        ->map([
+            'id' => 'sub-duplicate',
+            'nickname' => null,
+            'name' => 'Duplicate Callback',
+            'avatar' => null,
+        ])
+        ->setToken('tok')
+        ->setExpiresIn(5184000);
+
+    $provider = Mockery::mock(AbstractProvider::class);
+    $provider->shouldReceive('redirectUrl')->andReturnSelf();
+    $provider->shouldReceive('user')
+        ->once()
+        ->andReturn($oauthUser)
+        ->ordered();
+    $provider->shouldReceive('user')
+        ->once()
+        ->andThrow(new InvalidStateException)
+        ->ordered();
+    Socialite::shouldReceive('driver')->with('linkedin-openid')->twice()->andReturn($provider);
+
+    test()->get('/accounts/callback/linkedin')
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('success', 'LinkedIn account connected.');
+
+    test()->get('/accounts/callback/linkedin')
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionMissing('error')
+        ->assertSessionHas('success', 'LinkedIn account connected.');
 });
 
 test('a member is forbidden from connecting', function () {
