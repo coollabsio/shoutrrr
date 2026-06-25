@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Engagement\EngagementController;
+use App\Http\Controllers\Engagement\ReplyMediaController;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +22,11 @@ Route::bind('target', fn (string $value): PostTarget => PostTarget::query()
     ->whereHas('post', fn ($q) => $q->where('workspace_id', request()->user()?->current_workspace_id))
     ->firstOrFail());
 
+Route::bind('media', fn (string $value): PostMedia => PostMedia::query()
+    ->where('workspace_id', request()->user()?->current_workspace_id)
+    ->whereKey($value)
+    ->firstOrFail());
+
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('engagement', [EngagementController::class, 'index'])
         ->middleware('engagement.enabled')
@@ -34,4 +41,9 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware(['engagement.enabled', 'throttle:30,1'])->name('engagement.respond');
     Route::post('engagement/posts/{target}/refresh', [EngagementController::class, 'refresh'])
         ->middleware('engagement.enabled')->name('engagement.refresh');
+
+    Route::middleware(['engagement.enabled', 'throttle:60,1'])->group(function (): void {
+        Route::post('engagement/{reply}/media', [ReplyMediaController::class, 'store'])->name('engagement.media.store');
+        Route::delete('engagement/{reply}/media/{media}', [ReplyMediaController::class, 'destroy'])->name('engagement.media.destroy');
+    });
 });
