@@ -13,9 +13,18 @@ export type EditSettings = {
     radius: number;
     shadow: ShadowPreset;
     aspect: AspectPreset;
+    /** Scale applied to the (cropped) image within the frame; 1 = 100%. */
+    zoom: number;
     tilt: { rotateX: number; rotateY: number };
     crop: CropRect | null;
 };
+
+export const ZOOM_MIN = 0.5;
+export const ZOOM_MAX = 2;
+
+function clampZoom(zoom: number): number {
+    return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
+}
 
 export const SHADOW_PRESETS: readonly ShadowPreset[] = [
     'none',
@@ -44,6 +53,7 @@ export function defaultSettings(): EditSettings {
         radius: 0,
         shadow: 'none',
         aspect: 'auto',
+        zoom: 1,
         tilt: { rotateX: 0, rotateY: 0 },
         crop: null,
     };
@@ -102,6 +112,7 @@ export function normalizeSettings(raw: unknown): EditSettings {
         aspect: ASPECT_PRESETS.includes(rec.aspect as AspectPreset)
             ? (rec.aspect as AspectPreset)
             : d.aspect,
+        zoom: clampZoom(numberOr(rec.zoom, d.zoom)),
         tilt: {
             rotateX: numberOr(tilt.rotateX, 0),
             rotateY: numberOr(tilt.rotateY, 0),

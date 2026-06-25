@@ -8,7 +8,15 @@ describe('edit settings', () => {
         expect(s.version).toBe(1);
         expect(s.background.type).toBe('gradient');
         expect(s.crop).toBeNull();
+        expect(s.zoom).toBe(1);
         expect(s.tilt).toEqual({ rotateX: 0, rotateY: 0 });
+    });
+
+    it('normalizeSettings clamps zoom to range and falls back when invalid', () => {
+        expect(normalizeSettings({ zoom: 1.5 }).zoom).toBe(1.5);
+        expect(normalizeSettings({ zoom: 5 }).zoom).toBe(2);
+        expect(normalizeSettings({ zoom: 0.1 }).zoom).toBe(0.5);
+        expect(normalizeSettings({ zoom: 'big' }).zoom).toBe(1);
     });
 
     it('normalizeSettings fills a partial object with defaults', () => {

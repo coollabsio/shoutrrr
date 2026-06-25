@@ -40,6 +40,7 @@ abstract class AbstractImageEditRequest extends FormRequest
             'settings.radius' => ['required', 'numeric'],
             'settings.shadow' => ['required', 'string'],
             'settings.aspect' => ['required', 'string'],
+            'settings.zoom' => ['required', 'numeric'],
             'settings.tilt' => ['required', 'array'],
             'settings.crop' => ['nullable', 'array'],
         ];

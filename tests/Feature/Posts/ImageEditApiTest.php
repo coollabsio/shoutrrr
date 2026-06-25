@@ -33,6 +33,7 @@ function settingsPayload(): string
         'radius' => 12,
         'shadow' => 'medium',
         'aspect' => 'auto',
+        'zoom' => 1,
         'tilt' => ['rotateX' => 0, 'rotateY' => 0],
         'crop' => null,
     ]);

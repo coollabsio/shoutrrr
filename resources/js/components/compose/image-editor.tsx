@@ -23,6 +23,8 @@ import {
     type AspectPreset,
     type EditSettings,
     SHADOW_PRESETS,
+    ZOOM_MAX,
+    ZOOM_MIN,
 } from '@/lib/image-editor/settings';
 import { cn } from '@/lib/utils';
 
@@ -185,9 +187,13 @@ export function ImageEditor({
 
     const contentW = settings.crop?.width ?? sourceImg?.naturalWidth ?? 1;
     const contentH = settings.crop?.height ?? sourceImg?.naturalHeight ?? 1;
-    // The canvas always hugs the (cropped) image + padding; the aspect preset
+    // Zoom scales the (cropped) image within the frame; the background padding
+    // stays fixed, so zooming out reveals more background and zooming in fills it.
+    const renderW = Math.max(1, Math.round(contentW * settings.zoom));
+    const renderH = Math.max(1, Math.round(contentH * settings.zoom));
+    // The canvas always hugs the (scaled) image + padding; the aspect preset
     // drives the crop ratio, not a letterboxed background.
-    const stage = stageDimensions(contentW, contentH, settings.padding, 'auto');
+    const stage = stageDimensions(renderW, renderH, settings.padding, 'auto');
     const fits = box.w > 0 && box.h > 0;
     // Fit the (cropped) image inside the measured canvas, leaving a margin so the
     // dotted background always frames it and the bounds stay obvious.
@@ -334,8 +340,8 @@ export function ImageEditor({
                                         imageSrc={croppedUrl}
                                         settings={settings}
                                         contentSize={{
-                                            width: contentW,
-                                            height: contentH,
+                                            width: renderW,
+                                            height: renderH,
                                         }}
                                     />
                                 </div>
@@ -493,6 +499,19 @@ export function ImageEditor({
                                             setSettings((s) => ({
                                                 ...s,
                                                 padding,
+                                            }))
+                                        }
+                                    />
+                                    <Slider
+                                        label="Zoom"
+                                        min={ZOOM_MIN * 100}
+                                        max={ZOOM_MAX * 100}
+                                        suffix="%"
+                                        value={settings.zoom * 100}
+                                        onChange={(percent) =>
+                                            setSettings((s) => ({
+                                                ...s,
+                                                zoom: percent / 100,
                                             }))
                                         }
                                     />
