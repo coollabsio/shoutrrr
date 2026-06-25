@@ -3,9 +3,11 @@
 namespace App\Http\Middleware;
 
 use App\Enums\Platform;
+use App\Enums\ReplyStatus;
 use App\Enums\SocialProvider;
 use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
+use App\Models\PostTargetReply;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
 use App\Support\InstanceSettings;
@@ -77,12 +79,12 @@ class HandleInertiaRequests extends Middleware
      * Shell data needed by the sidebar, composer, and command palette on nearly
      * every page. Kept lightweight so it is cheap to resolve per request.
      *
-     * @return array{accounts: array<int, array<string, mixed>>, sets: array<int, array<string, mixed>>, limits: mixed}
+     * @return array{accounts: array<int, array<string, mixed>>, sets: array<int, array<string, mixed>>, limits: mixed, unreadReplies: int}
      */
     private function shellData(?User $user): array
     {
         if (! $user || ! $user->current_workspace_id) {
-            return ['accounts' => [], 'sets' => [], 'limits' => Platform::allLimits()];
+            return ['accounts' => [], 'sets' => [], 'limits' => Platform::allLimits(), 'unreadReplies' => 0];
         }
 
         // Scope explicitly to the current workspace. The HasWorkspaceScope global
@@ -120,6 +122,14 @@ class HandleInertiaRequests extends Middleware
             'accounts' => $accounts,
             'sets' => $sets,
             'limits' => Platform::allLimits(),
+            'unreadReplies' => config('engagement.enabled')
+                ? PostTargetReply::query()
+                    ->where('workspace_id', $workspaceId)
+                    ->where('is_ours', false)
+                    ->where('status', '!=', ReplyStatus::Archived->value)
+                    ->whereNull('read_at')
+                    ->count()
+                : 0,
         ];
     }
 

@@ -23,6 +23,7 @@ declare module '@inertiajs/core' {
                 accounts: Account[];
                 sets: AccountSet[];
                 limits: PlatformLimits[];
+                unreadReplies: number;
             };
             notifications: NotificationsData;
             features?: { analytics: boolean };

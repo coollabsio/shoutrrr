@@ -4,6 +4,7 @@ import {
     ChartColumn,
     Inbox,
     ListChecks,
+    MessageCircle,
     Pencil,
     Settings,
     Share2,
@@ -41,6 +42,7 @@ import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
 import { index as analyticsRoute } from '@/routes/analytics';
 import { index as calendarRoute } from '@/routes/calendar';
+import { index as engagementRoute } from '@/routes/engagement';
 import { index as postsRoute } from '@/routes/posts';
 
 type NavItem = {
@@ -61,10 +63,12 @@ const postsNavItems: NavItem[] = [
         icon: ListChecks,
     },
     { title: 'Accounts', href: accountsRoute(), icon: Share2 },
+    { title: 'Engagement', href: engagementRoute(), icon: MessageCircle },
 ];
 
 export function AppSidebar() {
-    const { workspaces, features, instance } = usePage().props;
+    const { workspaces, features, instance, shell } = usePage().props;
+    const unreadReplies = shell?.unreadReplies ?? 0;
     const { isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
     const { state, setOpenMobile } = useSidebar();
     const collapsed = state === 'collapsed';
@@ -170,6 +174,11 @@ export function AppSidebar() {
                                             >
                                                 <item.icon aria-hidden="true" />
                                                 <span>{item.title}</span>
+                                                {item.title === 'Engagement' && unreadReplies > 0 ? (
+                                                    <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                        {unreadReplies > 99 ? '99+' : unreadReplies}
+                                                    </span>
+                                                ) : null}
                                             </Link>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
