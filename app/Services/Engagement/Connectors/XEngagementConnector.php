@@ -83,7 +83,7 @@ class XEngagementConnector implements EngagementConnector
         return ReplyFetchResult::ok($replies);
     }
 
-    public function postReply(ConnectedAccount $account, PostTargetReply $parent, string $text, array $credentials): ReplyPostResult
+    public function postReply(ConnectedAccount $account, PostTargetReply $parent, string $text, array $credentials, array $media = []): ReplyPostResult
     {
         try {
             $response = $this->http

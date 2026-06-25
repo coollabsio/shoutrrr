@@ -7,6 +7,7 @@ namespace App\Services\Engagement\Contracts;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
 use App\Models\ConnectedAccount;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use Carbon\CarbonImmutable;
@@ -30,11 +31,13 @@ interface EngagementConnector
      * Post a reply back to the platform, threaded under $parent.
      *
      * @param  array<string, mixed>  $credentials
+     * @param  list<PostMedia>  $media
      */
     public function postReply(
         ConnectedAccount $account,
         PostTargetReply $parent,
         string $text,
         array $credentials,
+        array $media = [],
     ): ReplyPostResult;
 }

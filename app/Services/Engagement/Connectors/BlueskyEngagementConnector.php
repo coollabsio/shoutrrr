@@ -99,7 +99,7 @@ class BlueskyEngagementConnector implements EngagementConnector
         }
     }
 
-    public function postReply(ConnectedAccount $account, PostTargetReply $parent, string $text, array $credentials): ReplyPostResult
+    public function postReply(ConnectedAccount $account, PostTargetReply $parent, string $text, array $credentials, array $media = []): ReplyPostResult
     {
         $session = (array) ($credentials['session'] ?? []);
         $pds = (string) ($session['pds'] ?? self::DEFAULT_PDS);

@@ -27,7 +27,7 @@ class LinkedInEngagementConnector implements EngagementConnector
         return ReplyFetchResult::unsupported(self::MESSAGE);
     }
 
-    public function postReply(ConnectedAccount $account, PostTargetReply $parent, string $text, array $credentials): ReplyPostResult
+    public function postReply(ConnectedAccount $account, PostTargetReply $parent, string $text, array $credentials, array $media = []): ReplyPostResult
     {
         return ReplyPostResult::unsupported(self::MESSAGE);
     }
