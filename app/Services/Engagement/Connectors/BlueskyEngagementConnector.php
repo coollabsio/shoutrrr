@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Engagement\Connectors;
 
 use App\Dto\Engagement\FetchedReply;
+use App\Dto\Engagement\ReplyActionResult;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
 use App\Enums\Platform;
@@ -145,6 +146,86 @@ class BlueskyEngagementConnector implements EngagementConnector
         }
 
         return ReplyPostResult::ok((string) $response->json('uri'), (string) $response->json('cid'));
+    }
+
+    public function likeReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
+    {
+        $session = (array) ($credentials['session'] ?? []);
+        $pds = (string) ($session['pds'] ?? self::DEFAULT_PDS);
+        $jwt = (string) ($session['accessJwt'] ?? '');
+
+        try {
+            $response = $this->http->withToken($jwt)->acceptJson()
+                ->post($pds.'/xrpc/com.atproto.repo.createRecord', [
+                    'repo' => $account->remote_account_id,
+                    'collection' => 'app.bsky.feed.like',
+                    'record' => [
+                        '$type' => 'app.bsky.feed.like',
+                        'subject' => ['uri' => $reply->remote_reply_id, 'cid' => (string) $reply->remote_cid],
+                        'createdAt' => Date::now()->toIso8601String(),
+                    ],
+                ]);
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        return $response->failed()
+            ? $this->mapActionFailure($response)
+            : ReplyActionResult::ok((string) $response->json('uri'));
+    }
+
+    public function unlikeReply(ConnectedAccount $account, PostTargetReply $reply, ?string $likeRemoteId, array $credentials): ReplyActionResult
+    {
+        if ($likeRemoteId === null) {
+            return ReplyActionResult::ok();
+        }
+
+        return $this->deleteRecord($account, $credentials, 'app.bsky.feed.like', $likeRemoteId);
+    }
+
+    public function deleteReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
+    {
+        return $this->deleteRecord($account, $credentials, 'app.bsky.feed.post', $reply->remote_reply_id);
+    }
+
+    /**
+     * Delete a record in the user's repo by AT-URI. The rkey is the URI's final
+     * path segment (at://<did>/<collection>/<rkey>).
+     *
+     * @param  array<string, mixed>  $credentials
+     */
+    private function deleteRecord(ConnectedAccount $account, array $credentials, string $collection, string $uri): ReplyActionResult
+    {
+        $session = (array) ($credentials['session'] ?? []);
+        $pds = (string) ($session['pds'] ?? self::DEFAULT_PDS);
+        $jwt = (string) ($session['accessJwt'] ?? '');
+        $rkey = (string) (explode('/', $uri)[4] ?? '');
+
+        if ($rkey === '') {
+            return ReplyActionResult::failed('Could not resolve the record key.');
+        }
+
+        try {
+            $response = $this->http->withToken($jwt)->acceptJson()
+                ->post($pds.'/xrpc/com.atproto.repo.deleteRecord', [
+                    'repo' => $account->remote_account_id,
+                    'collection' => $collection,
+                    'rkey' => $rkey,
+                ]);
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
+    }
+
+    private function mapActionFailure(Response $response): ReplyActionResult
+    {
+        return match (true) {
+            $response->status() === 401 => ReplyActionResult::authExpired($this->excerpt($response)),
+            $response->status() === 429 => ReplyActionResult::rateLimited($this->excerpt($response)),
+            default => ReplyActionResult::failed($this->excerpt($response)),
+        };
     }
 
     /**

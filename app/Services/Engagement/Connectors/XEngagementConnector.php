@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Engagement\Connectors;
 
 use App\Dto\Engagement\FetchedReply;
+use App\Dto\Engagement\ReplyActionResult;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
 use App\Models\ConnectedAccount;
@@ -127,6 +128,54 @@ class XEngagementConnector implements EngagementConnector
         }
 
         return ReplyPostResult::ok((string) $response->json('data.id'));
+    }
+
+    public function likeReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
+    {
+        try {
+            $response = $this->http->withToken((string) ($credentials['access_token'] ?? ''))->acceptJson()
+                ->post(self::BASE.'/users/'.$account->remote_account_id.'/likes', [
+                    'tweet_id' => $reply->remote_reply_id,
+                ]);
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
+    }
+
+    public function unlikeReply(ConnectedAccount $account, PostTargetReply $reply, ?string $likeRemoteId, array $credentials): ReplyActionResult
+    {
+        try {
+            $response = $this->http->withToken((string) ($credentials['access_token'] ?? ''))->acceptJson()
+                ->delete(self::BASE.'/users/'.$account->remote_account_id.'/likes/'.$reply->remote_reply_id);
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
+    }
+
+    public function deleteReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
+    {
+        try {
+            $response = $this->http->withToken((string) ($credentials['access_token'] ?? ''))->acceptJson()
+                ->delete(self::BASE.'/tweets/'.$reply->remote_reply_id);
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
+    }
+
+    private function mapActionFailure(Response $response): ReplyActionResult
+    {
+        return match (true) {
+            $response->status() === 401 => ReplyActionResult::authExpired($this->excerpt($response)),
+            $response->status() === 403 => ReplyActionResult::unsupported($this->excerpt($response)),
+            $response->status() === 429 => ReplyActionResult::rateLimited($this->excerpt($response)),
+            default => ReplyActionResult::failed($this->excerpt($response)),
+        };
     }
 
     /**

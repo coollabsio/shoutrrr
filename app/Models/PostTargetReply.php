@@ -33,6 +33,8 @@ use Override;
  * @property CarbonImmutable|null $read_at
  * @property ReplyStatus $status
  * @property string|null $our_reply_remote_id
+ * @property CarbonImmutable|null $liked_at
+ * @property string|null $like_remote_id
  * @property bool $is_ours
  * @property SendStatus|null $send_status
  * @property CarbonImmutable $fetched_at
@@ -52,6 +54,8 @@ use Override;
     'read_at',
     'status',
     'our_reply_remote_id',
+    'liked_at',
+    'like_remote_id',
     'is_ours',
     'send_status',
     'fetched_at',
@@ -74,6 +78,7 @@ class PostTargetReply extends Model
             'status' => ReplyStatus::class,
             'is_ours' => 'boolean',
             'send_status' => SendStatus::class,
+            'liked_at' => 'immutable_datetime',
             'remote_created_at' => 'immutable_datetime',
             'read_at' => 'immutable_datetime',
             'fetched_at' => 'immutable_datetime',

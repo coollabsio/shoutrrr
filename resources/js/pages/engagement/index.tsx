@@ -25,9 +25,12 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { platformLabel } from '@/lib/posts/permalink';
 import {
     archive as archiveRoute,
+    destroy as destroyRoute,
     index as engagementRoute,
+    like as likeRoute,
     respond as respondRoute,
     thread as threadRoute,
+    unlike as unlikeRoute,
 } from '@/routes/engagement';
 
 import { QuickReplyBox } from './components/quick-reply-box';
@@ -193,6 +196,47 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
         });
     }
 
+    function toggleLike(reply: ReplyItem) {
+        const wasLiked = reply.is_liked;
+        setThread((prev) =>
+            prev.map((r) =>
+                r.id === reply.id ? { ...r, is_liked: !wasLiked } : r,
+            ),
+        );
+        const restore = () =>
+            setThread((prev) =>
+                prev.map((r) =>
+                    r.id === reply.id ? { ...r, is_liked: wasLiked } : r,
+                ),
+            );
+        if (wasLiked) {
+            router.delete(unlikeRoute(reply.id).url, {
+                preserveScroll: true,
+                onError: restore,
+            });
+        } else {
+            router.post(
+                likeRoute(reply.id).url,
+                {},
+                { preserveScroll: true, onError: restore },
+            );
+        }
+    }
+
+    function remove(reply: ReplyItem) {
+        const index = thread.findIndex((r) => r.id === reply.id);
+        setThread((prev) => prev.filter((r) => r.id !== reply.id));
+        router.delete(destroyRoute(reply.id).url, {
+            preserveScroll: true,
+            onError: () =>
+                setThread((prev) => {
+                    const next = [...prev];
+                    next.splice(index < 0 ? next.length : index, 0, reply);
+                    return next;
+                }),
+        });
+    }
+
     return (
         <div className="flex h-full flex-col">
             <header className="flex items-center gap-2.5 border-b px-4 py-3">
@@ -261,6 +305,8 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
                 postId={selected.post_id}
                 thread={thread}
                 loading={loading}
+                onToggleLike={toggleLike}
+                onDelete={remove}
             />
 
             <QuickReplyBox

@@ -45,6 +45,12 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware('engagement.enabled')->name('engagement.refresh');
 
     Route::middleware(['engagement.enabled', 'throttle:60,1'])->group(function (): void {
+        Route::post('engagement/{reply}/like', [EngagementController::class, 'like'])->name('engagement.like');
+        Route::delete('engagement/{reply}/like', [EngagementController::class, 'unlike'])->name('engagement.unlike');
+        Route::delete('engagement/{reply}', [EngagementController::class, 'destroyReply'])->name('engagement.destroy');
+    });
+
+    Route::middleware(['engagement.enabled', 'throttle:60,1'])->group(function (): void {
         Route::post('engagement/{reply}/media', [ReplyMediaController::class, 'store'])->name('engagement.media.store');
         Route::delete('engagement/{reply}/media/{media}', [ReplyMediaController::class, 'destroy'])->name('engagement.media.destroy');
         Route::post('engagement/{reply}/media/video-url', [ReplyVideoUploadController::class, 'url'])->name('engagement.media.video-url');

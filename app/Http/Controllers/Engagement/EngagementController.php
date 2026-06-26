@@ -235,4 +235,108 @@ class EngagementController extends Controller
 
         return back()->with('success', 'Sending your reply…');
     }
+
+    public function like(
+        PostTargetReply $reply,
+        EngagementConnectorRegistry $registry,
+        TokenManager $tokens,
+    ): RedirectResponse {
+        if ($reply->liked_at !== null) {
+            return back();
+        }
+
+        $account = $reply->target?->account;
+
+        if ($account === null) {
+            return back()->with('error', 'This account is no longer connected.');
+        }
+
+        try {
+            $credentials = $this->credentialsFor($account, $tokens);
+        } catch (TokenRefreshException) {
+            return back()->with('error', 'Could not authenticate with the platform. Reconnect the account.');
+        }
+
+        $result = $registry->for($reply->platform)->likeReply($account, $reply, $credentials);
+
+        if (! $result->isOk()) {
+            return back()->with('error', $result->message ?? 'Could not like this reply.');
+        }
+
+        $reply->forceFill(['liked_at' => now(), 'like_remote_id' => $result->remoteId])->save();
+
+        return back();
+    }
+
+    public function unlike(
+        PostTargetReply $reply,
+        EngagementConnectorRegistry $registry,
+        TokenManager $tokens,
+    ): RedirectResponse {
+        if ($reply->liked_at === null) {
+            return back();
+        }
+
+        $account = $reply->target?->account;
+
+        if ($account === null) {
+            return back()->with('error', 'This account is no longer connected.');
+        }
+
+        try {
+            $credentials = $this->credentialsFor($account, $tokens);
+        } catch (TokenRefreshException) {
+            return back()->with('error', 'Could not authenticate with the platform. Reconnect the account.');
+        }
+
+        $result = $registry->for($reply->platform)->unlikeReply($account, $reply, $reply->like_remote_id, $credentials);
+
+        if (! $result->isOk()) {
+            return back()->with('error', $result->message ?? 'Could not remove the like.');
+        }
+
+        $reply->forceFill(['liked_at' => null, 'like_remote_id' => null])->save();
+
+        return back();
+    }
+
+    public function destroyReply(
+        PostTargetReply $reply,
+        EngagementConnectorRegistry $registry,
+        TokenManager $tokens,
+    ): RedirectResponse {
+        abort_unless($reply->is_ours, 403);
+
+        $account = $reply->target?->account;
+
+        if ($account === null) {
+            return back()->with('error', 'This account is no longer connected.');
+        }
+
+        try {
+            $credentials = $this->credentialsFor($account, $tokens);
+        } catch (TokenRefreshException) {
+            return back()->with('error', 'Could not authenticate with the platform. Reconnect the account.');
+        }
+
+        $result = $registry->for($reply->platform)->deleteReply($account, $reply, $credentials);
+
+        if (! $result->isOk()) {
+            return back()->with('error', $result->message ?? 'Could not delete this reply.');
+        }
+
+        $reply->delete();
+
+        return back()->with('success', 'Reply deleted.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function credentialsFor(ConnectedAccount $account, TokenManager $tokens): array
+    {
+        return in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn], true)
+            ? $tokens->fresh($account)
+            : [];
+    }
 }

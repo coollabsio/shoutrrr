@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Engagement\Connectors;
 
 use App\Dto\Engagement\FetchedReply;
+use App\Dto\Engagement\ReplyActionResult;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
 use App\Models\ConnectedAccount;
@@ -150,6 +151,91 @@ class LinkedInEngagementConnector implements EngagementConnector
         $commentUrn = (string) $response->json('commentUrn', '');
 
         return ReplyPostResult::ok($commentUrn !== '' ? $commentUrn : (string) $response->header('x-restli-id'));
+    }
+
+    public function likeReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
+    {
+        $actor = 'urn:li:person:'.$account->remote_account_id;
+
+        try {
+            $response = $this->http
+                ->withToken((string) ($credentials['access_token'] ?? ''))
+                ->withHeaders($this->headers())
+                ->acceptJson()
+                ->post(self::SOCIAL_ACTIONS_URL.'/'.rawurlencode($reply->remote_reply_id).'/likes', [
+                    'actor' => $actor,
+                    'object' => $reply->remote_reply_id,
+                ]);
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
+    }
+
+    public function unlikeReply(ConnectedAccount $account, PostTargetReply $reply, ?string $likeRemoteId, array $credentials): ReplyActionResult
+    {
+        $actor = 'urn:li:person:'.$account->remote_account_id;
+
+        try {
+            $response = $this->http
+                ->withToken((string) ($credentials['access_token'] ?? ''))
+                ->withHeaders($this->headers())
+                ->acceptJson()
+                ->delete(self::SOCIAL_ACTIONS_URL.'/'.rawurlencode($reply->remote_reply_id).'/likes/'.rawurlencode($actor));
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
+    }
+
+    public function deleteReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
+    {
+        $object = $this->objectUrnFor($reply);
+        $commentId = $this->commentId($reply->remote_reply_id);
+
+        if ($object === null || $commentId === null) {
+            return ReplyActionResult::failed('Could not resolve the LinkedIn comment to delete.');
+        }
+
+        try {
+            $response = $this->http
+                ->withToken((string) ($credentials['access_token'] ?? ''))
+                ->withHeaders($this->headers())
+                ->acceptJson()
+                ->delete(self::SOCIAL_ACTIONS_URL.'/'.rawurlencode($object).'/comments/'.rawurlencode($commentId), [
+                    'actor' => 'urn:li:person:'.$account->remote_account_id,
+                ]);
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
+    }
+
+    /** The numeric id segment of a comment URN `urn:li:comment:(OBJECT,ID)`. */
+    private function commentId(string $commentUrn): ?string
+    {
+        if (! str_starts_with($commentUrn, 'urn:li:comment:(')) {
+            return null;
+        }
+
+        $inner = substr($commentUrn, strlen('urn:li:comment:('), -1);
+        $parts = explode(',', $inner, 2);
+        $id = $parts[1] ?? '';
+
+        return $id !== '' ? $id : null;
+    }
+
+    private function mapActionFailure(Response $response): ReplyActionResult
+    {
+        return match (true) {
+            $response->status() === 401 => ReplyActionResult::authExpired($this->excerpt($response)),
+            $response->status() === 403 => ReplyActionResult::unsupported($this->excerpt($response)),
+            $response->status() === 429 => ReplyActionResult::rateLimited($this->excerpt($response)),
+            default => ReplyActionResult::failed($this->excerpt($response)),
+        };
     }
 
     /**

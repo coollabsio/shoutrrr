@@ -1,9 +1,10 @@
 import { Link } from '@inertiajs/react';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, ExternalLink, Heart, Trash2 } from 'lucide-react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { postPermalink } from '@/lib/posts/permalink';
 import { cn } from '@/lib/utils';
 
 import { atHandle, initials, relativeTime } from '../helpers';
@@ -14,9 +15,21 @@ type Props = {
     postId: string | null;
     thread: ReplyItem[];
     loading: boolean;
+    onToggleLike: (reply: ReplyItem) => void;
+    onDelete: (reply: ReplyItem) => void;
 };
 
-export function ReplyThread({ postExcerpt, postId, thread, loading }: Props) {
+const actionButton =
+    'flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors';
+
+export function ReplyThread({
+    postExcerpt,
+    postId,
+    thread,
+    loading,
+    onToggleLike,
+    onDelete,
+}: Props) {
     if (loading) {
         return (
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -51,9 +64,23 @@ export function ReplyThread({ postExcerpt, postId, thread, loading }: Props) {
                 </div>
             ) : null}
 
-            {thread.map((reply) =>
-                reply.is_ours ? (
-                    <div key={reply.id} className="flex justify-end">
+            {thread.map((reply) => {
+                const settled =
+                    reply.send_status !== 'sending' &&
+                    reply.send_status !== 'failed';
+                const permalink = settled
+                    ? postPermalink(
+                          reply.platform,
+                          reply.author_handle,
+                          reply.remote_reply_id,
+                      )
+                    : null;
+
+                return reply.is_ours ? (
+                    <div
+                        key={reply.id}
+                        className="group flex flex-col items-end gap-1"
+                    >
                         <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2.5 text-primary-foreground">
                             <p className="text-sm whitespace-pre-wrap">
                                 {reply.text}
@@ -76,9 +103,38 @@ export function ReplyThread({ postExcerpt, postId, thread, loading }: Props) {
                                 )}
                             </div>
                         </div>
+                        {settled ? (
+                            <div className="flex items-center gap-0.5 pr-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                                {permalink ? (
+                                    <a
+                                        href={permalink}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        aria-label="Open on platform"
+                                        className={cn(
+                                            actionButton,
+                                            'hover:text-foreground',
+                                        )}
+                                    >
+                                        <ExternalLink className="size-3.5" />
+                                    </a>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => onDelete(reply)}
+                                    aria-label="Delete reply"
+                                    className={cn(
+                                        actionButton,
+                                        'hover:text-destructive',
+                                    )}
+                                >
+                                    <Trash2 className="size-3.5" />
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
                 ) : (
-                    <div key={reply.id} className="flex gap-2.5">
+                    <div key={reply.id} className="group flex gap-2.5">
                         <Avatar className="mt-0.5 size-7 shrink-0">
                             {reply.author_avatar_url ? (
                                 <AvatarImage
@@ -90,33 +146,80 @@ export function ReplyThread({ postExcerpt, postId, thread, loading }: Props) {
                                 {initials(reply)}
                             </AvatarFallback>
                         </Avatar>
-                        <div
-                            className={cn(
-                                'max-w-[85%] rounded-2xl rounded-bl-sm border bg-card px-3.5 py-2.5',
-                                !reply.is_read && 'border-primary/40',
-                            )}
-                        >
-                            <div className="mb-0.5 flex items-baseline gap-1.5">
-                                <span className="text-xs font-semibold">
-                                    {reply.author_name ??
-                                        atHandle(reply.author_handle)}
-                                </span>
-                                {reply.author_name ? (
-                                    <span className="text-[11px] text-muted-foreground">
-                                        {atHandle(reply.author_handle)}
+                        <div className="min-w-0">
+                            <div
+                                className={cn(
+                                    'max-w-[85%] rounded-2xl rounded-bl-sm border bg-card px-3.5 py-2.5',
+                                    !reply.is_read && 'border-primary/40',
+                                )}
+                            >
+                                <div className="mb-0.5 flex items-baseline gap-1.5">
+                                    <span className="text-xs font-semibold">
+                                        {reply.author_name ??
+                                            atHandle(reply.author_handle)}
                                     </span>
-                                ) : null}
-                                <span className="text-[11px] text-muted-foreground tabular-nums">
-                                    · {relativeTime(reply.remote_created_at)}
-                                </span>
+                                    {reply.author_name ? (
+                                        <span className="text-[11px] text-muted-foreground">
+                                            {atHandle(reply.author_handle)}
+                                        </span>
+                                    ) : null}
+                                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                                        ·{' '}
+                                        {relativeTime(reply.remote_created_at)}
+                                    </span>
+                                </div>
+                                <p className="text-sm whitespace-pre-wrap">
+                                    {reply.text}
+                                </p>
                             </div>
-                            <p className="text-sm whitespace-pre-wrap">
-                                {reply.text}
-                            </p>
+                            <div
+                                className={cn(
+                                    'mt-1 flex items-center gap-0.5 pl-1 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
+                                    reply.is_liked
+                                        ? 'opacity-100'
+                                        : 'opacity-0',
+                                )}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => onToggleLike(reply)}
+                                    aria-label={
+                                        reply.is_liked ? 'Unlike' : 'Like'
+                                    }
+                                    aria-pressed={reply.is_liked}
+                                    className={cn(
+                                        actionButton,
+                                        reply.is_liked
+                                            ? 'text-rose-500'
+                                            : 'hover:text-foreground',
+                                    )}
+                                >
+                                    <Heart
+                                        className={cn(
+                                            'size-3.5',
+                                            reply.is_liked && 'fill-current',
+                                        )}
+                                    />
+                                </button>
+                                {permalink ? (
+                                    <a
+                                        href={permalink}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        aria-label="Open on platform"
+                                        className={cn(
+                                            actionButton,
+                                            'hover:text-foreground',
+                                        )}
+                                    >
+                                        <ExternalLink className="size-3.5" />
+                                    </a>
+                                ) : null}
+                            </div>
                         </div>
                     </div>
-                ),
-            )}
+                );
+            })}
         </div>
     );
 }
