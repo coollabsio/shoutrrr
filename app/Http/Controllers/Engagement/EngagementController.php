@@ -170,7 +170,7 @@ class EngagementController extends Controller
         }
 
         try {
-            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky], true)
+            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn], true)
                 ? $tokens->fresh($account)
                 : [];
         } catch (TokenRefreshException) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Engagement\Connectors;
 
+use App\Dto\Engagement\FetchedReply;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
 use App\Models\ConnectedAccount;
@@ -11,24 +12,189 @@ use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Http\Client\Response;
 
 /**
- * LinkedIn comment read/write needs elevated partner permissions the current
- * `w_member_social` scope lacks, so engagement is reported as unsupported until
- * that access lands. Kept as a real connector so the registry and UI degrade
- * cleanly rather than special-casing the platform.
+ * Reads and writes comments on a member's LinkedIn posts via the Community
+ * Management `socialActions` API (the same versioned REST surface the publish
+ * connector uses). Reading requires the `r_member_social_feed` permission and
+ * writing `w_member_social_feed`; without them LinkedIn returns 403, which we
+ * map to `Unsupported` so the inbox degrades cleanly rather than erroring.
+ *
+ * LinkedIn's API rejects media on app-created comments, so reply media is
+ * declined with a clear message.
  */
 class LinkedInEngagementConnector implements EngagementConnector
 {
-    private const string MESSAGE = 'LinkedIn replies require partner comment permissions that are not yet available.';
+    private const string SOCIAL_ACTIONS_URL = 'https://api.linkedin.com/rest/socialActions';
+
+    public function __construct(private readonly HttpFactory $http) {}
+
+    private function apiVersion(): string
+    {
+        // Mirrors the publish connector's default versioned-API month.
+        return (string) config('services.linkedin-openid.api_version', '202605');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function headers(): array
+    {
+        return [
+            'LinkedIn-Version' => $this->apiVersion(),
+            'X-Restli-Protocol-Version' => '2.0.0',
+        ];
+    }
 
     public function fetchReplies(ConnectedAccount $account, PostTarget $target, array $credentials, ?CarbonImmutable $since): ReplyFetchResult
     {
-        return ReplyFetchResult::unsupported(self::MESSAGE);
+        $shareUrn = $target->remote_ids[0] ?? $target->remote_id;
+
+        if ($shareUrn === null) {
+            return ReplyFetchResult::failed('Target has no remote id.');
+        }
+
+        try {
+            $response = $this->http
+                ->withToken((string) ($credentials['access_token'] ?? ''))
+                ->withHeaders($this->headers())
+                ->acceptJson()
+                ->get(self::SOCIAL_ACTIONS_URL.'/'.rawurlencode($shareUrn).'/comments', ['count' => 50]);
+        } catch (ConnectionException $e) {
+            return ReplyFetchResult::failed($e->getMessage());
+        }
+
+        // LinkedIn returns 404 for a post that simply has no comments yet.
+        if ($response->status() === 404) {
+            return ReplyFetchResult::ok([]);
+        }
+
+        if ($response->failed()) {
+            return $this->mapFetchFailure($response);
+        }
+
+        $ownerActor = 'urn:li:person:'.$account->remote_account_id;
+
+        $replies = [];
+        foreach ((array) $response->json('elements', []) as $element) {
+            $actor = (string) ($element['actor'] ?? '');
+            $commentUrn = (string) ($element['commentUrn'] ?? '');
+
+            if ($commentUrn === '' || $actor === $ownerActor) {
+                continue;
+            }
+
+            $createdMs = (int) ($element['created']['time'] ?? 0);
+            $createdAt = $createdMs > 0
+                ? CarbonImmutable::createFromTimestampMs($createdMs)
+                : CarbonImmutable::now();
+
+            if ($since !== null && ! $createdAt->greaterThan($since)) {
+                continue;
+            }
+
+            $replies[] = new FetchedReply(
+                remoteReplyId: $commentUrn,
+                remoteCid: null,
+                parentRemoteId: (string) ($element['parentComment'] ?? $shareUrn),
+                authorHandle: $this->urnId($actor),
+                authorName: null,
+                authorAvatarUrl: null,
+                text: (string) ($element['message']['text'] ?? ''),
+                remoteCreatedAt: $createdAt,
+            );
+        }
+
+        return ReplyFetchResult::ok($replies);
     }
 
     public function postReply(ConnectedAccount $account, PostTargetReply $parent, string $text, array $credentials, array $media = []): ReplyPostResult
     {
-        return ReplyPostResult::unsupported(self::MESSAGE);
+        if ($media !== []) {
+            return ReplyPostResult::failed('LinkedIn comments cannot include attachments.');
+        }
+
+        $object = $this->objectUrnFor($parent);
+
+        if ($object === null) {
+            return ReplyPostResult::failed('Could not resolve the LinkedIn post for this comment.');
+        }
+
+        try {
+            $response = $this->http
+                ->withToken((string) ($credentials['access_token'] ?? ''))
+                ->withHeaders($this->headers())
+                ->acceptJson()
+                ->post(self::SOCIAL_ACTIONS_URL.'/'.rawurlencode($object).'/comments', [
+                    'actor' => 'urn:li:person:'.$account->remote_account_id,
+                    'object' => $object,
+                    'message' => ['text' => $text],
+                    'parentComment' => $parent->remote_reply_id,
+                ]);
+        } catch (ConnectionException $e) {
+            return ReplyPostResult::failed($e->getMessage());
+        }
+
+        if ($response->failed()) {
+            return match (true) {
+                $response->status() === 401 => ReplyPostResult::authExpired($this->excerpt($response)),
+                $response->status() === 403 => ReplyPostResult::unsupported($this->excerpt($response)),
+                $response->status() === 429 => ReplyPostResult::rateLimited($this->excerpt($response)),
+                default => ReplyPostResult::failed($this->excerpt($response)),
+            };
+        }
+
+        $commentUrn = (string) $response->json('commentUrn', '');
+
+        return ReplyPostResult::ok($commentUrn !== '' ? $commentUrn : (string) $response->header('x-restli-id'));
+    }
+
+    /**
+     * The share/ugcPost/activity URN a reply belongs to: the parent's
+     * `parent_remote_id` when it is already a post URN (top-level comment), else
+     * parsed out of the parent comment URN `urn:li:comment:(OBJECT,ID)`.
+     */
+    private function objectUrnFor(PostTargetReply $parent): ?string
+    {
+        if ($parent->parent_remote_id !== null && ! str_starts_with($parent->parent_remote_id, 'urn:li:comment:')) {
+            return $parent->parent_remote_id;
+        }
+
+        if (! str_starts_with($parent->remote_reply_id, 'urn:li:comment:(')) {
+            return null;
+        }
+
+        $inner = substr($parent->remote_reply_id, strlen('urn:li:comment:('), -1);
+        $object = explode(',', $inner, 2)[0];
+
+        return $object !== '' ? $object : null;
+    }
+
+    /** The trailing id segment of a URN, e.g. `urn:li:person:ABC` → `ABC`. */
+    private function urnId(string $urn): string
+    {
+        // explode() always yields at least one element, so the last index exists.
+        $segments = explode(':', $urn);
+        $last = $segments[count($segments) - 1];
+
+        return $last !== '' ? $last : $urn;
+    }
+
+    private function mapFetchFailure(Response $response): ReplyFetchResult
+    {
+        return match (true) {
+            $response->status() === 401 => ReplyFetchResult::authExpired($this->excerpt($response)),
+            $response->status() === 403 => ReplyFetchResult::unsupported($this->excerpt($response)),
+            $response->status() === 429 => ReplyFetchResult::rateLimited($this->excerpt($response)),
+            default => ReplyFetchResult::failed($this->excerpt($response)),
+        };
+    }
+
+    private function excerpt(Response $response): string
+    {
+        return (string) ($response->json('message') ?? mb_substr($response->body(), 0, 200));
     }
 }
