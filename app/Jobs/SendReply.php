@@ -34,14 +34,18 @@ class SendReply implements ShouldQueue
         public string $parentReplyId,
         public array $mediaIds,
         public string $text,
+        public Platform $platform,
     ) {}
 
     /**
+     * Throttle outbound replies on the same per-platform limiter as the fetch job,
+     * so a burst of replies can't trip the platform's own rate limits.
+     *
      * @return array<int, object>
      */
     public function middleware(): array
     {
-        return [new RateLimited('engagement-x'), new RateLimited('engagement-bluesky')];
+        return [new RateLimited("engagement-{$this->platform->value}")];
     }
 
     /**
@@ -58,6 +62,11 @@ class SendReply implements ShouldQueue
         $parent = PostTargetReply::withoutGlobalScopes()->find($this->parentReplyId);
 
         if ($ourRow === null || $parent === null) {
+            return;
+        }
+
+        // A prior attempt already delivered to the platform: never re-post on retry.
+        if ($ourRow->send_status === SendStatus::Sent) {
             return;
         }
 
@@ -110,7 +119,9 @@ class SendReply implements ShouldQueue
     {
         $ourRow = PostTargetReply::withoutGlobalScopes()->find($this->ourRowId);
 
-        if ($ourRow !== null) {
+        // Don't report failure (or re-notify) for a reply that actually went out
+        // — handle() may have posted successfully and thrown only afterwards.
+        if ($ourRow !== null && $ourRow->send_status !== SendStatus::Sent) {
             $this->failRow($ourRow);
         }
     }

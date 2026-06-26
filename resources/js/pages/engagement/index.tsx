@@ -157,10 +157,19 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
                     forceFormData: true,
                     preserveScroll: true,
                     onSuccess: () => {
+                        // Text replies post synchronously, so they're done. Media
+                        // replies hand off to an async job — keep them "sending"
+                        // until a later thread refetch reflects the real outcome.
+                        const stillSending = mediaIds.length > 0;
                         setThread((prev) =>
                             prev.map((r) =>
                                 r.id === tempId
-                                    ? { ...r, send_status: null }
+                                    ? {
+                                          ...r,
+                                          send_status: stillSending
+                                              ? ('sending' as const)
+                                              : null,
+                                      }
                                     : r,
                             ),
                         );

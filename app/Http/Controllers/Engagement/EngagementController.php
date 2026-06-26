@@ -231,7 +231,7 @@ class EngagementController extends Controller
             'fetched_at' => now(),
         ]);
 
-        SendReply::dispatch($ourRow->id, $reply->id, $mediaIds, (string) $request->validated('text'));
+        SendReply::dispatch($ourRow->id, $reply->id, $mediaIds, (string) $request->validated('text'), $reply->platform);
 
         return back()->with('success', 'Sending your reply…');
     }

@@ -102,7 +102,7 @@ test('SendReply::failed marks the row failed', function () {
         'parent_remote_id' => $this->reply->remote_reply_id,
     ]);
 
-    (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic'))
+    (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic', Platform::X))
         ->failed(new RuntimeException('boom'));
 
     expect($ourRow->fresh()->send_status)->toBe(SendStatus::Failed);
@@ -121,7 +121,7 @@ test('SendReply posts the media reply and marks it sent', function () {
         'parent_remote_id' => $this->reply->remote_reply_id,
     ]);
 
-    (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic'))
+    (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic', Platform::X))
         ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
 
     expect($ourRow->fresh()->send_status)->toBe(SendStatus::Sent);

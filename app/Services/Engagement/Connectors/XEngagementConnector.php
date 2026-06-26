@@ -23,8 +23,6 @@ class XEngagementConnector implements EngagementConnector
 {
     private const string BASE = 'https://api.twitter.com/2';
 
-    private const string MEDIA_URL = 'https://api.x.com/2/media/upload';
-
     private const string MEDIA_BASE = 'https://api.x.com/2/media/upload';
 
     private const int APPEND_CHUNK = 4 * 1024 * 1024;
@@ -160,7 +158,7 @@ class XEngagementConnector implements EngagementConnector
                 ->withToken($token)
                 ->asMultipart()
                 ->attach('media', (string) $bytes, 'upload')
-                ->post(self::MEDIA_URL, ['media_category' => 'tweet_image']);
+                ->post(self::MEDIA_BASE, ['media_category' => 'tweet_image']);
 
             if ($response->failed()) {
                 throw new XReplyMediaFailed($response);
