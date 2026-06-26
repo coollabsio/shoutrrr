@@ -1,6 +1,5 @@
 import { useHttp, usePage } from '@inertiajs/react';
-import { Paperclip } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import ReplyImageEditController from '@/actions/App/Http/Controllers/Engagement/ReplyImageEditController';
@@ -8,12 +7,11 @@ import ReplyMediaController from '@/actions/App/Http/Controllers/Engagement/Repl
 import ReplyVideoUploadController from '@/actions/App/Http/Controllers/Engagement/ReplyVideoUploadController';
 import { ImageEditor } from '@/components/compose/image-editor';
 import { MediaChips } from '@/components/compose/media-chips';
-import { Button } from '@/components/ui/button';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import {
-    normalizeSettings,
     defaultSettings,
     type EditSettings,
+    normalizeSettings,
 } from '@/lib/image-editor/settings';
 import type { MediaView, PlatformName } from '@/types/compose';
 
@@ -30,27 +28,51 @@ type Editing =
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
 const DEFAULT_EDIT_SETTINGS = defaultSettings();
 
-type Props = {
+type Args = {
     replyId: string;
     platform: PlatformName;
     media: MediaView[];
     onChange: (media: MediaView[]) => void;
-    /** Called whenever the upload-in-flight state changes, so the parent can gate Send. */
-    onUploadingChange?: (uploading: boolean) => void;
+};
+
+/**
+ * The render-ready pieces the reply box composes into its own layout: a hidden
+ * file input, the attach trigger, the media-chips strip (null when empty), the
+ * single image-editor instance, and the drag-drop handlers.
+ */
+type ReplyMedia = {
+    isUploading: boolean;
+    hasMedia: boolean;
+    openFilePicker: () => void;
+    fileInput: ReactNode;
+    chips: ReactNode | null;
+    editor: ReactNode;
+    dropHandlers: {
+        onDragOver: (e: React.DragEvent) => void;
+        onDrop: (e: React.DragEvent) => void;
+    };
 };
 
 function blobToFile(blob: Blob, name: string): File {
     return new File([blob], name, { type: blob.type || 'image/png' });
 }
 
-export function ReplyMediaComposer({
+/**
+ * Owns the reply box's media lifecycle — upload, the crop/beautify editor, and
+ * the attached-media strip — and hands back render-ready pieces so the reply box
+ * can lay out the attach button, chips, and footer however it likes. All upload
+ * logic is reused from the composer's `useMediaUploads`, `MediaChips`, and
+ * `ImageEditor`; only the upload endpoints are reply-scoped.
+ */
+export function useReplyMedia({
     replyId,
+    platform,
     media,
     onChange,
-    onUploadingChange,
-}: Props) {
+}: Args): ReplyMedia {
     const { shell } = usePage().props;
-    const videoLimits = shell.limits;
+    // Validate video against the reply's own platform limits, not every platform.
+    const videoLimits = shell.limits.filter((l) => l.platform === platform);
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -87,15 +109,6 @@ export function ReplyMediaComposer({
                 videoStore: (id) => ReplyVideoUploadController.store(id).url,
             },
         });
-
-    // Bubble uploading state to the parent so it can disable Send.
-    const prevUploading = useRef(isUploading);
-    useEffect(() => {
-        if (prevUploading.current !== isUploading) {
-            prevUploading.current = isUploading;
-            onUploadingChange?.(isUploading);
-        }
-    });
 
     // --- Image-editor HTTP (inline, mirrors use-image-editor.ts) ----------
 
@@ -206,11 +219,11 @@ export function ReplyMediaComposer({
         const videos = all.filter((f) => f.type.startsWith('video/'));
         const images = all.filter((f) => !f.type.startsWith('video/'));
 
-        const hasVideo = media.some((m) => m.kind === 'video');
-        const hasImage = media.some((m) => m.kind !== 'video');
+        const hasVideoNow = media.some((m) => m.kind === 'video');
+        const hasImageNow = media.some((m) => m.kind !== 'video');
         if (
-            (videos.length > 0 && (images.length > 0 || hasImage)) ||
-            (images.length > 0 && hasVideo)
+            (videos.length > 0 && (images.length > 0 || hasImageNow)) ||
+            (images.length > 0 && hasVideoNow)
         ) {
             toast.error('A reply can contain one video or images, not both.');
 
@@ -235,8 +248,6 @@ export function ReplyMediaComposer({
         });
     }
 
-    // --- Open an attached image for re-editing ----------------------------
-
     function openEditor(mediaId: string) {
         const m = media.find((x) => x.id === mediaId);
         if (!m || m.kind === 'video') {
@@ -254,7 +265,7 @@ export function ReplyMediaComposer({
         }
     }
 
-    // --- Derive editor props ----------------------------------------------
+    // --- Derived editor props ---------------------------------------------
 
     const editorSourceUrl =
         editing?.kind === 'batch'
@@ -271,8 +282,7 @@ export function ReplyMediaComposer({
             : undefined;
 
     const hasVideo = media.some((m) => m.kind === 'video');
-
-    // --- Accept files from the hidden input -------------------------------
+    const hasMedia = media.length > 0 || pending.length > 0;
 
     function acceptFromInput(files: FileList) {
         void handleAddedFiles(files).finally(() => {
@@ -282,106 +292,69 @@ export function ReplyMediaComposer({
         });
     }
 
-    if (media.length === 0 && pending.length === 0) {
-        return (
-            <>
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={hasVideo ? 'image/*' : 'image/*,video/*'}
-                    multiple
-                    hidden
-                    onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                            acceptFromInput(e.target.files);
-                        }
-                    }}
-                />
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Attach media"
-                    className="size-7 text-muted-foreground hover:text-foreground"
-                    onClick={() => fileInputRef.current?.click()}
-                >
-                    <Paperclip className="size-4" aria-hidden="true" />
-                </Button>
-                <ImageEditor
-                    open={editing !== null}
-                    sourceUrl={editorSourceUrl}
-                    initialSettings={editorSettings}
-                    onApply={applyEditing}
-                    onCancel={cancelEditing}
-                    onDiscard={discardEditing}
-                    variant={editing?.kind === 'batch' ? 'new' : 'existing'}
-                    isSaving={isSaving}
-                    queue={editorQueue}
-                />
-            </>
-        );
-    }
+    const fileInput = (
+        <input
+            ref={fileInputRef}
+            type="file"
+            accept={hasVideo ? 'image/*' : 'image/*,video/*'}
+            multiple
+            hidden
+            onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    acceptFromInput(e.target.files);
+                }
+            }}
+        />
+    );
 
-    return (
-        <div
-            className="flex flex-wrap items-center gap-2 pt-2"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
+    const chips = hasMedia ? (
+        <MediaChips
+            media={media}
+            pending={pending}
+            isExcluded={() => false}
+            onToggleExclude={() => {}}
+            onReorder={(ids) =>
+                onChange(
+                    ids
+                        .map((id) => media.find((m) => m.id === id)!)
+                        .filter(Boolean),
+                )
+            }
+            onRemove={(id) => onChange(media.filter((m) => m.id !== id))}
+            onDismissPending={dismissPending}
+            onImageClick={openEditor}
+        />
+    ) : null;
+
+    const editor = (
+        <ImageEditor
+            open={editing !== null}
+            sourceUrl={editorSourceUrl}
+            initialSettings={editorSettings}
+            onApply={applyEditing}
+            onCancel={cancelEditing}
+            onDiscard={discardEditing}
+            variant={editing?.kind === 'batch' ? 'new' : 'existing'}
+            isSaving={isSaving}
+            queue={editorQueue}
+        />
+    );
+
+    return {
+        isUploading,
+        hasMedia,
+        openFilePicker: () => fileInputRef.current?.click(),
+        fileInput,
+        chips,
+        editor,
+        dropHandlers: {
+            onDragOver: (e) => e.preventDefault(),
+            onDrop: (e) => {
                 e.preventDefault();
                 if (e.dataTransfer.files.length > 0) {
                     void handleAddedFiles(e.dataTransfer.files);
                 }
-            }}
-        >
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept={hasVideo ? 'image/*' : 'image/*,video/*'}
-                multiple
-                hidden
-                onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                        acceptFromInput(e.target.files);
-                    }
-                }}
-            />
-            <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Attach media"
-                className="size-7 text-muted-foreground hover:text-foreground"
-                onClick={() => fileInputRef.current?.click()}
-            >
-                <Paperclip className="size-4" aria-hidden="true" />
-            </Button>
-            <MediaChips
-                media={media}
-                pending={pending}
-                isExcluded={() => false}
-                onToggleExclude={() => {}}
-                onReorder={(ids) =>
-                    onChange(
-                        ids
-                            .map((id) => media.find((m) => m.id === id)!)
-                            .filter(Boolean),
-                    )
-                }
-                onRemove={(id) => onChange(media.filter((m) => m.id !== id))}
-                onDismissPending={dismissPending}
-                onImageClick={openEditor}
-            />
-            <ImageEditor
-                open={editing !== null}
-                sourceUrl={editorSourceUrl}
-                initialSettings={editorSettings}
-                onApply={applyEditing}
-                onCancel={cancelEditing}
-                onDiscard={discardEditing}
-                variant={editing?.kind === 'batch' ? 'new' : 'existing'}
-                isSaving={isSaving}
-                queue={editorQueue}
-            />
-        </div>
-    );
+            },
+        },
+    };
 }
