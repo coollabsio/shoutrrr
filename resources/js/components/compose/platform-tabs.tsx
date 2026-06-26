@@ -108,14 +108,68 @@ export default function PlatformTabs({
         );
     }
 
-    const { visibleAccounts, overflowAccounts } = visiblePlatformTabAccounts(
-        accounts,
-        activeTab,
-    );
+    const mobileTabs = visiblePlatformTabAccounts(accounts, activeTab, 1);
+    const desktopTabs = visiblePlatformTabAccounts(accounts, activeTab);
 
     return (
+        <>
+            <PlatformTabRow
+                className="flex md:hidden"
+                visibleAccounts={mobileTabs.visibleAccounts}
+                overflowAccounts={mobileTabs.overflowAccounts}
+                overflowOpen={overflowOpen}
+                setOverflowOpen={setOverflowOpen}
+                activeTab={activeTab}
+                onChange={onChange}
+                chipFor={chipFor}
+                stateFor={stateFor}
+                hasOverride={hasOverride}
+            />
+            <PlatformTabRow
+                className="hidden md:flex"
+                visibleAccounts={desktopTabs.visibleAccounts}
+                overflowAccounts={desktopTabs.overflowAccounts}
+                overflowOpen={overflowOpen}
+                setOverflowOpen={setOverflowOpen}
+                activeTab={activeTab}
+                onChange={onChange}
+                chipFor={chipFor}
+                stateFor={stateFor}
+                hasOverride={hasOverride}
+            />
+        </>
+    );
+}
+
+function PlatformTabRow({
+    className,
+    visibleAccounts,
+    overflowAccounts,
+    overflowOpen,
+    setOverflowOpen,
+    activeTab,
+    onChange,
+    chipFor,
+    stateFor,
+    hasOverride,
+}: {
+    className: string;
+    visibleAccounts: Account[];
+    overflowAccounts: Account[];
+    overflowOpen: boolean;
+    setOverflowOpen: (open: boolean) => void;
+    activeTab: string;
+    onChange: (tab: string) => void;
+    chipFor: (accountId: string) => string;
+    stateFor: (accountId: string) => 'ok' | 'warn' | 'over';
+    hasOverride: (accountId: string) => boolean;
+}) {
+    return (
         <div
-            className="flex min-w-0 flex-1 items-end gap-0.5 overflow-hidden"
+            className={cn(
+                'min-w-0 flex-1 items-end gap-0.5 overflow-hidden',
+                className,
+            )}
             role="tablist"
             aria-label="Accounts"
         >

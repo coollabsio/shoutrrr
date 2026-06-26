@@ -8,6 +8,7 @@ import { nextSlot } from '@/routes/posts';
 export type NextSlotPayload = {
     has_schedule: boolean;
     slot: string | null;
+    slots?: string[];
     timezone: string;
 };
 
@@ -23,6 +24,8 @@ export type QueueSlotState = {
     status: QueueSlotStatus;
     /** ISO-8601 UTC instant when status === 'found', else null. */
     slot: string | null;
+    /** Open ISO-8601 UTC instants the user may choose from. */
+    slots: string[];
     /** The scheduling timezone the slot should be displayed in. */
     tz: string;
 };
@@ -57,24 +60,30 @@ export function useNextSlot(
     const [state, setState] = useState<QueueSlotState>({
         status: 'idle',
         slot: null,
+        slots: [],
         tz: fallbackTz,
     });
 
     useEffect(() => {
         if (!active) {
-            setState({ status: 'idle', slot: null, tz: fallbackTz });
+            setState({ status: 'idle', slot: null, slots: [], tz: fallbackTz });
 
             return;
         }
 
         let cancelled = false;
-        setState({ status: 'loading', slot: null, tz: fallbackTz });
+        setState({ status: 'loading', slot: null, slots: [], tz: fallbackTz });
 
         const failTerminal = () => {
             if (cancelled) {
                 return;
             }
-            setState({ status: 'error', slot: null, tz: fallbackTz });
+            setState({
+                status: 'error',
+                slot: null,
+                slots: [],
+                tz: fallbackTz,
+            });
         };
 
         void http.get(nextSlot().url, {
@@ -85,6 +94,7 @@ export function useNextSlot(
                 setState({
                     status: deriveQueueStatus(data),
                     slot: data.slot,
+                    slots: data.slots ?? (data.slot ? [data.slot] : []),
                     tz: data.timezone || fallbackTz,
                 });
             },

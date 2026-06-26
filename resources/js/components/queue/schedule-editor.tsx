@@ -60,6 +60,14 @@ export function ScheduleEditor({ initialSlots, timezone, canManage }: Props) {
                 <QuickAddToolbar slots={slots} onSlotsChange={setSlots} />
             )}
 
+            {canManage && dirty && (
+                <SaveBar
+                    saving={saving}
+                    onSave={onSave}
+                    onDiscard={() => setSlots(initialSlots)}
+                />
+            )}
+
             {/* Week board */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
                 {DISPLAY_DAYS.map(({ weekday, label }) => (

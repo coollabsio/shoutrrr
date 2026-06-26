@@ -108,3 +108,64 @@ test('a member cannot queue a post in another workspace', function () {
 
     test()->postJson("/posts/{$foreign->id}/queue")->assertNotFound();
 });
+
+test('queueing can use a selected open slot instead of the next one', function () {
+    CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00');
+    [$user, $workspace] = queueMember();
+    workspaceSchedule($workspace, 'UTC', [[1, 9], [1, 11]]);
+
+    $post = Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'status' => PostStatus::Draft,
+    ]);
+
+    test()->postJson("/posts/{$post->id}/queue", [
+        'scheduled_at' => '2026-05-18T11:00:00+00:00',
+    ])
+        ->assertOk()
+        ->assertJsonPath('post.scheduled_at', '2026-05-18T11:00:00+00:00');
+
+    expect($post->refresh()->scheduled_at->toIso8601String())->toBe('2026-05-18T11:00:00+00:00');
+});
+
+test('queueing rejects a selected slot that is already occupied', function () {
+    CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00');
+    [$user, $workspace] = queueMember();
+    workspaceSchedule($workspace, 'UTC', [[1, 9], [1, 11]]);
+
+    Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'status' => PostStatus::Scheduled,
+        'scheduled_at' => '2026-05-18T09:00:00+00:00',
+    ]);
+
+    $post = Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'status' => PostStatus::Draft,
+    ]);
+
+    test()->postJson("/posts/{$post->id}/queue", [
+        'scheduled_at' => '2026-05-18T09:00:00+00:00',
+    ])
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'Choose an open slot from your posting queue.');
+
+    expect($post->refresh()->status)->toBe(PostStatus::Draft);
+});
+
+test('the next-slot endpoint includes open slots users can choose from', function () {
+    CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00');
+    [$user, $workspace] = queueMember();
+    workspaceSchedule($workspace, 'UTC', [[1, 9], [1, 11]]);
+
+    Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'status' => PostStatus::Scheduled,
+        'scheduled_at' => '2026-05-18T09:00:00+00:00',
+    ]);
+
+    test()->getJson('/posts/next-slot')
+        ->assertOk()
+        ->assertJsonPath('slot', '2026-05-18T11:00:00+00:00')
+        ->assertJsonPath('slots.0', '2026-05-18T11:00:00+00:00');
+});

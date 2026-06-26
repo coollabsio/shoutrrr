@@ -105,7 +105,9 @@ class XConnector implements PublishConnector
         $token = (string) ($credentials['access_token'] ?? '');
 
         foreach ($target->remote_ids ?? array_filter([$target->remote_id]) as $id) {
-            $this->http->withToken($token)->delete(self::TWEETS_URL.'/'.$id);
+            $response = $this->http->withToken($token)->delete(self::TWEETS_URL.'/'.$id);
+
+            $this->throwUnlessDeleteAccepted($response);
         }
     }
 

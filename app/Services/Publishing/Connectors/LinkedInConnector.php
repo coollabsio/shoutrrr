@@ -18,6 +18,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 class LinkedInConnector implements PublishConnector
@@ -444,14 +445,20 @@ class LinkedInConnector implements PublishConnector
         $token = (string) ($credentials['access_token'] ?? '');
         $urn = $target->remote_id;
 
-        if ($token === '' || $urn === null) {
+        if ($urn === null) {
             return;
         }
 
-        $this->http
+        if ($token === '') {
+            throw new RuntimeException('LinkedIn access token unavailable; reconnect the account.');
+        }
+
+        $response = $this->http
             ->withToken($token)
             ->withHeaders(['LinkedIn-Version' => $this->apiVersion()])
             ->delete(self::POSTS_URL.'/'.rawurlencode($urn));
+
+        $this->throwUnlessDeleteAccepted($response);
     }
 
     private function mapFailure(Response $response): PublishResult
@@ -469,7 +476,7 @@ class LinkedInConnector implements PublishConnector
  *
  * @internal
  */
-final class LinkedInRequestFailed extends \RuntimeException
+final class LinkedInRequestFailed extends RuntimeException
 {
     public function __construct(public readonly Response $response)
     {

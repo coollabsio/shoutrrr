@@ -60,7 +60,9 @@ export function SubmitBar({
 }: Props) {
     // useHttp verbs take NO inline data — the body is injected via transform()
     // at submit time so it always reflects the latest reducer state.
-    const http = useHttp<Record<string, never>, { post: PostView }>({});
+    const http = useHttp<{ scheduled_at?: string | null }, { post: PostView }>(
+        {},
+    );
     const [noSlot, setNoSlot] = useState(false);
     const [pastTime, setPastTime] = useState(false);
 
@@ -107,7 +109,9 @@ export function SubmitBar({
         if (tray.mode === 'queue') {
             // Flip the chips to "Queued" instantly; revert if the call fails.
             const revert = onOptimisticSubmit(OPTIMISTIC_SCHEDULE);
-            http.transform(() => ({}));
+            http.transform(() =>
+                tray.pickedAt ? { scheduled_at: tray.pickedAt } : {},
+            );
             await http.post(queue(id).url, {
                 onSuccess,
                 // 422 = no open slot in the workspace posting schedule.

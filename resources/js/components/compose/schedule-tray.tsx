@@ -57,7 +57,13 @@ export function ScheduleTray({ tray, onChange, tz, queueState }: Props) {
                 />
             )}
             {tray.mode === 'queue' ? (
-                <QueuePreview state={queueState} />
+                <QueuePreview
+                    state={queueState}
+                    selectedSlot={tray.pickedAt}
+                    onSelectSlot={(slot) =>
+                        onChange({ mode: 'queue', pickedAt: slot })
+                    }
+                />
             ) : (
                 <span className="text-[11px] text-muted-foreground">
                     Times in {tz}

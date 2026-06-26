@@ -27,6 +27,16 @@ final class NextSlotResolver
      */
     public function resolve(Workspace $workspace): ?CarbonImmutable
     {
+        return $this->availableSlots($workspace)[0] ?? null;
+    }
+
+    /**
+     * Resolve open future posting slots for the workspace, as UTC instants.
+     *
+     * @return list<CarbonImmutable>
+     */
+    public function availableSlots(Workspace $workspace): array
+    {
         /** @var PostingSchedule|null $schedule */
         $schedule = PostingSchedule::query()
             ->where('workspace_id', $workspace->id)
@@ -34,14 +44,13 @@ final class NextSlotResolver
             ->first();
 
         if ($schedule === null || $schedule->slots->isEmpty()) {
-            return null;
+            return [];
         }
 
         $occupied = $this->occupiedInstants($workspace);
         $now = CarbonImmutable::now();
         $today = $now->setTimezone($schedule->timezone);
-
-        $best = null;
+        $slots = [];
 
         for ($dayOffset = 0; $dayOffset < self::HORIZON_DAYS; $dayOffset++) {
             $date = $today->addDays($dayOffset);
@@ -64,13 +73,13 @@ final class NextSlotResolver
                     continue;
                 }
 
-                if ($best === null || $candidate->lessThan($best)) {
-                    $best = $candidate;
-                }
+                $slots[] = $candidate;
             }
         }
 
-        return $best;
+        usort($slots, fn (CarbonImmutable $first, CarbonImmutable $second): int => $first <=> $second);
+
+        return $slots;
     }
 
     /**

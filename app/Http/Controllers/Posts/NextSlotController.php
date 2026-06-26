@@ -30,11 +30,16 @@ class NextSlotController extends Controller
             ->first();
 
         $hasSchedule = $schedule !== null && $schedule->slots->isNotEmpty();
-        $slot = $hasSchedule ? $this->resolver->resolve($workspace) : null;
+        $slots = $hasSchedule ? $this->resolver->availableSlots($workspace) : [];
+        $slot = $slots[0] ?? null;
 
         return response()->json([
             'has_schedule' => $hasSchedule,
             'slot' => $slot?->toIso8601String(),
+            'slots' => array_map(
+                fn ($slot): string => $slot->toIso8601String(),
+                $slots,
+            ),
             'timezone' => $schedule !== null ? $schedule->timezone : 'UTC',
         ]);
     }

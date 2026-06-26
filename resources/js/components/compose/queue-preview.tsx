@@ -8,10 +8,12 @@ import {
 
 type Props = {
     state: QueueSlotState;
+    selectedSlot: string | null;
+    onSelectSlot: (slot: string) => void;
 };
 
 /** The slot-preview line shown under the tabs when the Queue tab is selected. */
-export function QueuePreview({ state }: Props) {
+export function QueuePreview({ state, selectedSlot, onSelectSlot }: Props) {
     if (state.status === 'idle' || state.status === 'loading') {
         return (
             <span className="text-[11px] text-muted-foreground">
@@ -51,6 +53,25 @@ export function QueuePreview({ state }: Props) {
     }
 
     if (state.status === 'found') {
+        if (state.slots.length > 1) {
+            return (
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    Add to
+                    <select
+                        value={selectedSlot ?? state.slot ?? state.slots[0]}
+                        onChange={(event) => onSelectSlot(event.target.value)}
+                        className="h-7 rounded-md border border-border bg-background px-2 text-[11px] font-medium text-foreground"
+                    >
+                        {state.slots.map((slot) => (
+                            <option key={slot} value={slot}>
+                                {formatSlotLabel(slot, state.tz)}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            );
+        }
+
         return (
             <span className="text-[11px] text-muted-foreground">
                 Next open slot:{' '}

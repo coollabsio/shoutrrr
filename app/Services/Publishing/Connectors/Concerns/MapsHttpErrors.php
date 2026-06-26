@@ -42,4 +42,13 @@ trait MapsHttpErrors
     {
         return mb_substr($response->body(), 0, 500);
     }
+
+    private function throwUnlessDeleteAccepted(Response $response): void
+    {
+        if ($response->status() === 404) {
+            return;
+        }
+
+        $response->throw();
+    }
 }

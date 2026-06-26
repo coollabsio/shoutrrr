@@ -140,11 +140,13 @@ class BlueskyPublishConnector implements PublishConnector
         foreach ($target->remote_ids ?? array_filter([$target->remote_id]) as $uri) {
             $rkey = (string) (explode('/', (string) $uri)[4] ?? '');
 
-            $this->http->withToken($jwt)->post($pds.'/xrpc/com.atproto.repo.deleteRecord', [
+            $response = $this->http->withToken($jwt)->post($pds.'/xrpc/com.atproto.repo.deleteRecord', [
                 'repo' => $did,
                 'collection' => 'app.bsky.feed.post',
                 'rkey' => $rkey,
             ]);
+
+            $this->throwUnlessDeleteAccepted($response);
         }
     }
 
