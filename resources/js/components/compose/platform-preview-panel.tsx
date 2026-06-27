@@ -1,6 +1,7 @@
 import {
     BarChart3,
     CheckCircle2,
+    Eye,
     Heart,
     MessageCircle,
     Repeat2,
@@ -177,33 +178,52 @@ export function PlatformPreviewPanel({
 }: {
     preview: PlatformPreview | null;
 }) {
-    const platform = preview?.platform ?? 'x';
-    const label = PLATFORM_LABELS[platform];
+    const label = preview ? PLATFORM_LABELS[preview.platform] : null;
 
     return (
         <aside className="rounded-xl border bg-card text-card-foreground shadow-sm">
-            <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-                <span
-                    className={cn(
-                        'grid size-5 place-items-center rounded-md border bg-background',
-                        PLATFORM_GLYPH_CLASS[platform],
-                    )}
-                >
-                    <PlatformGlyph platform={platform} size={11} />
-                </span>
+            {/* h-[45px] matches the composer's top bar so the two cards' headers
+            line up when shown side by side. */}
+            <div className="flex h-[45px] items-center gap-2 border-b border-border px-4">
+                {preview ? (
+                    <span
+                        className={cn(
+                            'grid size-5 place-items-center rounded-md border bg-background',
+                            PLATFORM_GLYPH_CLASS[preview.platform],
+                        )}
+                    >
+                        <PlatformGlyph platform={preview.platform} size={11} />
+                    </span>
+                ) : (
+                    <span className="grid size-5 place-items-center rounded-md border bg-background text-muted-foreground">
+                        <Eye className="size-3" />
+                    </span>
+                )}
                 <div className="min-w-0">
-                    <h2 className="truncate text-[13px] font-semibold tracking-tight">
-                        How it lands on {label}
+                    <h2 className="truncate text-[13px] leading-tight font-semibold tracking-tight">
+                        {preview ? `How it lands on ${label}` : 'Post preview'}
                     </h2>
-                    <p className="text-[12px] text-muted-foreground">
-                        Live preview from the current draft
+                    <p className="truncate text-[12px] leading-tight text-muted-foreground">
+                        {preview
+                            ? 'Live preview from the current draft'
+                            : 'See how your draft lands on each platform'}
                     </p>
                 </div>
             </div>
 
             {!preview ? (
-                <div className="px-4 py-10 text-center text-[13px] text-muted-foreground">
-                    Select a destination to see its live platform preview.
+                <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+                    <span className="grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
+                        <Eye className="size-4" />
+                    </span>
+                    <div className="space-y-1">
+                        <p className="text-[13px] font-medium text-foreground">
+                            Nothing to preview yet
+                        </p>
+                        <p className="text-[12px] leading-5 text-muted-foreground">
+                            Connect an account to see how your post will appear.
+                        </p>
+                    </div>
                 </div>
             ) : (
                 <div className="p-4">

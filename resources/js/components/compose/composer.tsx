@@ -1,5 +1,5 @@
 import { Link, useHttp } from '@inertiajs/react';
-import { Plug } from 'lucide-react';
+import { Eye, Plug } from 'lucide-react';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -28,6 +28,7 @@ import {
     type EditSettings,
 } from '@/lib/image-editor/settings';
 import { postCapabilities } from '@/lib/posts/capabilities';
+import { cn } from '@/lib/utils';
 import { index as accountsRoute } from '@/routes/accounts';
 import {
     BASE_TAB,
@@ -66,6 +67,17 @@ type Editing =
 
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
 const DEFAULT_EDIT_SETTINGS = defaultSettings();
+
+/** Placeholder identity for the default X preview shown before any account is connected. */
+const PREVIEW_FALLBACK_ACCOUNT: Account = {
+    id: 'preview-fallback-x',
+    platform: 'x',
+    handle: '@yourhandle',
+    display_name: 'Your name',
+    avatar_url: null,
+    max_text_length: 0,
+    x_premium: false,
+};
 
 type ComposerProps = {
     post: PostView | null;
@@ -203,6 +215,9 @@ export default function Composer({
     // image is clicked. A multi-image add becomes a `batch` edited one item at a
     // time; the editor shows the batch as a thumbnail strip.
     const [editing, setEditing] = useState<Editing | null>(null);
+    // Platform preview is opt-in: collapsed by default, revealed via the toolbar
+    // "Preview" toggle so it doesn't crowd the editor.
+    const [showPreview, setShowPreview] = useState(false);
     // Revoke any outstanding batch object URLs if the composer unmounts mid-batch.
     const editingRef = useRef<Editing | null>(null);
     editingRef.current = editing;
@@ -586,26 +601,57 @@ export default function Composer({
               limit: limitForAccount(previewAccount),
               autoSplit: state.autoSplitByAccount[previewAccount.id] ?? true,
           })
-        : null;
+        : buildPlatformPreview({
+              account: PREVIEW_FALLBACK_ACCOUNT,
+              text: state.baseText,
+              mentions: state.mentions,
+              media: state.media,
+              excludedMediaIds: new Set(),
+              limit: limitForPlatform('x'),
+              autoSplit: true,
+          });
 
     return (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">
+        <div
+            className={cn(
+                'grid items-start transition-[grid-template-columns,gap] duration-300 ease-out motion-reduce:transition-none',
+                showPreview
+                    ? 'gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]'
+                    : 'gap-0 xl:grid-cols-[minmax(0,1fr)_minmax(0px,0px)]',
+            )}
+        >
             <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color] duration-300 focus-within:border-primary/25 focus-within:shadow-[0_0_16px_-6px_color-mix(in_oklch,var(--primary)_28%,transparent)]">
                 {/* Tab-strip row */}
-                <div className="flex items-center border-b border-border px-2 pt-2">
-                    <PlatformTabs
-                        accounts={tabAccounts}
-                        activeTab={activeAccount?.id ?? state.activeTab}
-                        onChange={(tab) =>
-                            dispatch({ type: 'setActiveTab', tab })
-                        }
-                        chipFor={chipFor}
-                        stateFor={severityFor}
-                        hasOverride={(accountId) =>
-                            state.overrideByAccount[accountId] !== undefined
-                        }
-                    />
+                <div className="flex items-center border-b border-border px-2 py-2">
+                    {/* Tabs hang to the bottom border (underline meets it) via a
+                    negative margin that cancels the row's bottom padding, while
+                    the right-side controls stay vertically centered in the bar. */}
+                    <div className="-mb-2 flex min-w-0 flex-1 items-end">
+                        <PlatformTabs
+                            accounts={tabAccounts}
+                            activeTab={activeAccount?.id ?? state.activeTab}
+                            onChange={(tab) =>
+                                dispatch({ type: 'setActiveTab', tab })
+                            }
+                            chipFor={chipFor}
+                            stateFor={severityFor}
+                            hasOverride={(accountId) =>
+                                state.overrideByAccount[accountId] !== undefined
+                            }
+                        />
+                    </div>
                     <div className="ml-auto flex items-center gap-2 pr-1">
+                        <button
+                            type="button"
+                            aria-label="Toggle platform preview"
+                            aria-pressed={showPreview}
+                            data-active={showPreview}
+                            onClick={() => setShowPreview((open) => !open)}
+                            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground"
+                        >
+                            <Eye className="size-3.5 shrink-0" />
+                            <span>Preview</span>
+                        </button>
                         <DestinationSelector
                             accounts={accounts}
                             sets={sets}
@@ -844,8 +890,26 @@ export default function Composer({
                 )}
             </div>
 
-            <div className="xl:sticky xl:top-20">
-                <PlatformPreviewPanel preview={platformPreview} />
+            {/* Collapsible preview. The outer grid track animates the editor's
+            width on xl; this column collapses its own height (grid-rows 1fr↔0fr)
+            so a hidden preview reclaims its space instead of leaving a gap. The
+            card keeps a stable height via xl:min-w while it wipes, and sticky
+            lives on the wrapper so it still pins to the editor row. */}
+            <div className="xl:sticky xl:top-20" aria-hidden={!showPreview}>
+                <div
+                    className={cn(
+                        'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
+                        showPreview
+                            ? 'grid-rows-[1fr] opacity-100'
+                            : 'grid-rows-[0fr] opacity-0',
+                    )}
+                >
+                    <div className="min-h-0 w-full overflow-hidden">
+                        <div className="xl:min-w-[340px]">
+                            <PlatformPreviewPanel preview={platformPreview} />
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
