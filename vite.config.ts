@@ -25,7 +25,7 @@ const tailscaleHost = (): string | undefined => {
     return undefined;
 };
 
-const hmrHost = process.env.VITE_HMR_HOST ?? tailscaleHost();
+const hmrHost = process.env.VITE_HMR_HOST ?? tailscaleHost() ?? 'localhost';
 
 export default defineConfig({
     server: {
