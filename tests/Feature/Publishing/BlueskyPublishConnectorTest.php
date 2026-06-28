@@ -220,5 +220,6 @@ test('bluesky compresses oversized images via the compressor before upload', fun
     app(BlueskyPublishConnector::class)->publish(bskyContext(['look'], [$media]));
 
     Http::assertSent(fn ($request) => str_contains($request->url(), 'com.atproto.repo.uploadBlob')
-        && $request->body() === 'small-bytes');
+        && $request->body() === 'small-bytes'
+        && $request->hasHeader('Content-Type', 'image/jpeg'));
 });

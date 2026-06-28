@@ -73,3 +73,15 @@ test('undecodable bytes over the limit fall back to the original', function () {
     expect($result->wasCompressed)->toBeFalse()
         ->and($result->bytes)->toBe($junk);
 });
+
+test('an image exceeding the pixel guard is left untouched without decoding', function () {
+    $bytes = compressorJpeg(1200, 1200); // 1.44M pixels
+
+    // maxPixels below the image's pixel count -> the decode guard trips before any canvas
+    // allocation, so the oversized image is returned untouched rather than compressed.
+    $result = (new ImageCompressor(maxPixels: 100))->compressToFit($bytes, (int) (strlen($bytes) * 0.6), 'image/jpeg');
+
+    expect($result->wasCompressed)->toBeFalse()
+        ->and($result->bytes)->toBe($bytes)
+        ->and($result->mime)->toBe('image/jpeg');
+});

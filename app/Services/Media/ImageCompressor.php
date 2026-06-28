@@ -26,6 +26,14 @@ class ImageCompressor
 
     private const float DOWNSCALE_FACTOR = 0.85;
 
+    /**
+     * @param  int  $maxPixels  Decode guard: images whose pixel count exceeds this are left
+     *                          untouched rather than decoded, so a decompression-bomb (tiny
+     *                          file, enormous canvas) cannot OOM the publish worker. The
+     *                          default comfortably exceeds every platform's max dimensions.
+     */
+    public function __construct(private readonly int $maxPixels = 50_000_000) {}
+
     public function compressToFit(string $bytes, int $maxBytes, string $mime): CompressionResult
     {
         if (strlen($bytes) <= $maxBytes) {
@@ -33,6 +41,13 @@ class ImageCompressor
         }
 
         if ($mime === 'image/gif') {
+            return CompressionResult::untouched($bytes, $mime);
+        }
+
+        // Read dimensions from the header only (no canvas allocation) and refuse to decode
+        // pathologically large images, guarding the worker against decompression bombs.
+        $info = @getimagesizefromstring($bytes);
+        if (is_array($info) && ($info[0] * $info[1]) > $this->maxPixels) {
             return CompressionResult::untouched($bytes, $mime);
         }
 

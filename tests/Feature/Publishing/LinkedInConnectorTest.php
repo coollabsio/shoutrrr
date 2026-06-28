@@ -229,5 +229,6 @@ test('linkedin compresses oversized images via the compressor before upload', fu
     app(LinkedInConnector::class)->publish(liContext(['look'], [$media]));
 
     Http::assertSent(fn ($request) => $request->url() === 'https://upload.example/abc'
-        && $request->body() === 'small-bytes');
+        && $request->body() === 'small-bytes'
+        && $request->hasHeader('Content-Type', 'image/jpeg'));
 });
