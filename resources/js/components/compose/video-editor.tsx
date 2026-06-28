@@ -37,6 +37,9 @@ type Props = {
 /** Minimum gap enforced between the in and out trim handles (seconds). */
 const MIN_TRIM_GAP = 0.1;
 
+/** Keyboard step size for the trim handles (seconds). Shift multiplies by 10. */
+const STEP = 0.1;
+
 /** Format a duration as MM:SS, truncating to whole seconds. */
 function fmtMmSs(totalSeconds: number): string {
     const s = Math.max(0, Math.floor(totalSeconds));
@@ -251,14 +254,63 @@ export function VideoEditor({
 
                                 {/* In-point (start) handle */}
                                 <div
+                                    role="slider"
+                                    aria-label="Trim start"
+                                    aria-valuemin={0}
+                                    aria-valuemax={safeD}
+                                    aria-valuenow={settings.trim.start}
+                                    aria-valuetext={fmtMmSs(
+                                        settings.trim.start,
+                                    )}
+                                    tabIndex={0}
                                     className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
                                     style={{
                                         left: `${(settings.trim.start / safeD) * 100}%`,
                                     }}
-                                    onPointerDown={(e) => {
-                                        if (busy) {
-                                            return;
+                                    onKeyDown={(e) => {
+                                        const step = e.shiftKey ? 1 : STEP;
+                                        let next: number | null = null;
+                                        if (
+                                            e.key === 'ArrowLeft' ||
+                                            e.key === 'ArrowDown'
+                                        ) {
+                                            e.preventDefault();
+                                            next = settings.trim.start - step;
+                                        } else if (
+                                            e.key === 'ArrowRight' ||
+                                            e.key === 'ArrowUp'
+                                        ) {
+                                            e.preventDefault();
+                                            next = settings.trim.start + step;
+                                        } else if (e.key === 'Home') {
+                                            e.preventDefault();
+                                            next = 0;
+                                        } else if (e.key === 'End') {
+                                            e.preventDefault();
+                                            next =
+                                                settings.trim.end -
+                                                MIN_TRIM_GAP;
                                         }
+                                        if (next !== null) {
+                                            const start = Math.max(
+                                                0,
+                                                Math.min(
+                                                    settings.trim.end -
+                                                        MIN_TRIM_GAP,
+                                                    next,
+                                                ),
+                                            );
+                                            setSettings((s) => ({
+                                                ...s,
+                                                trim: { ...s.trim, start },
+                                            }));
+                                            if (videoRef.current) {
+                                                videoRef.current.currentTime =
+                                                    start;
+                                            }
+                                        }
+                                    }}
+                                    onPointerDown={(e) => {
                                         e.preventDefault();
                                         e.currentTarget.setPointerCapture(
                                             e.pointerId,
@@ -293,14 +345,58 @@ export function VideoEditor({
 
                                 {/* Out-point (end) handle */}
                                 <div
+                                    role="slider"
+                                    aria-label="Trim end"
+                                    aria-valuemin={0}
+                                    aria-valuemax={safeD}
+                                    aria-valuenow={settings.trim.end}
+                                    aria-valuetext={fmtMmSs(settings.trim.end)}
+                                    tabIndex={0}
                                     className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
                                     style={{
                                         left: `${(settings.trim.end / safeD) * 100}%`,
                                     }}
-                                    onPointerDown={(e) => {
-                                        if (busy) {
-                                            return;
+                                    onKeyDown={(e) => {
+                                        const step = e.shiftKey ? 1 : STEP;
+                                        let next: number | null = null;
+                                        if (
+                                            e.key === 'ArrowLeft' ||
+                                            e.key === 'ArrowDown'
+                                        ) {
+                                            e.preventDefault();
+                                            next = settings.trim.end - step;
+                                        } else if (
+                                            e.key === 'ArrowRight' ||
+                                            e.key === 'ArrowUp'
+                                        ) {
+                                            e.preventDefault();
+                                            next = settings.trim.end + step;
+                                        } else if (e.key === 'Home') {
+                                            e.preventDefault();
+                                            next =
+                                                settings.trim.start +
+                                                MIN_TRIM_GAP;
+                                        } else if (e.key === 'End') {
+                                            e.preventDefault();
+                                            next = safeD;
                                         }
+                                        if (next !== null) {
+                                            const end = Math.max(
+                                                settings.trim.start +
+                                                    MIN_TRIM_GAP,
+                                                Math.min(safeD, next),
+                                            );
+                                            setSettings((s) => ({
+                                                ...s,
+                                                trim: { ...s.trim, end },
+                                            }));
+                                            if (videoRef.current) {
+                                                videoRef.current.currentTime =
+                                                    end;
+                                            }
+                                        }
+                                    }}
+                                    onPointerDown={(e) => {
                                         e.preventDefault();
                                         e.currentTarget.setPointerCapture(
                                             e.pointerId,
