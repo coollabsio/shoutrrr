@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import type { Corner } from '@/lib/image-editor/layout';
 import { moveCropRect, resizeCorner } from '@/lib/image-editor/layout';
@@ -6,14 +6,12 @@ import type { CropRect } from '@/lib/image-editor/settings';
 import { cn } from '@/lib/utils';
 
 type Props = {
-    videoSrc: string;
     sourceSize: { width: number; height: number };
     rect: CropRect;
     ratio: number | null;
     onChange: (rect: CropRect) => void;
-    /** Available display area (the editor's measured canvas); the crop UI fits within it. */
-    maxW?: number;
-    maxH?: number;
+    /** On-screen display width of the video element the overlay sits above. */
+    dispW: number;
 };
 
 const CORNERS: { corner: Corner; className: string }[] = [
@@ -39,18 +37,13 @@ const CORNERS: { corner: Corner; className: string }[] = [
     },
 ];
 
-const DISPLAY_FALLBACK = 420;
-
 export function VideoCropOverlay({
-    videoSrc,
     sourceSize,
     rect,
     ratio,
     onChange,
-    maxW = DISPLAY_FALLBACK,
-    maxH = DISPLAY_FALLBACK,
+    dispW,
 }: Props) {
-    const boxRef = useRef<HTMLDivElement | null>(null);
     const [drag, setDrag] = useState<{
         kind: 'move' | Corner;
         startX: number;
@@ -58,13 +51,8 @@ export function VideoCropOverlay({
         startRect: CropRect;
     } | null>(null);
 
-    // Scale source pixels → on-screen display pixels, fitting the available area.
-    const scale = Math.min(
-        (maxW || DISPLAY_FALLBACK) / sourceSize.width,
-        (maxH || DISPLAY_FALLBACK) / sourceSize.height,
-    );
-    const dispW = sourceSize.width * scale;
-    const dispH = sourceSize.height * scale;
+    // Scale source pixels → on-screen display pixels.
+    const scale = dispW / sourceSize.width;
 
     function onPointerDown(e: React.PointerEvent, kind: 'move' | Corner) {
         e.preventDefault();
@@ -112,23 +100,15 @@ export function VideoCropOverlay({
 
     return (
         <div
-            ref={boxRef}
-            className="relative mx-auto touch-none select-none"
-            style={{ width: dispW, height: dispH }}
+            className="absolute inset-0 touch-none select-none"
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
             onPointerLeave={endDrag}
         >
-            <video
-                src={videoSrc}
-                muted
-                playsInline
-                preload="metadata"
-                className="pointer-events-none size-full object-contain select-none"
-            />
-            <div className="pointer-events-none absolute inset-0 bg-black/40" />
+            {/* Crop box — transparent interior so the live video beneath shows through.
+                The large box-shadow spread dims everything outside the crop region. */}
             <div
-                className="absolute cursor-move shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]"
+                className="absolute cursor-move shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
                 style={{
                     left: rect.x * scale,
                     top: rect.y * scale,
@@ -137,19 +117,7 @@ export function VideoCropOverlay({
                 }}
                 onPointerDown={(e) => onPointerDown(e, 'move')}
             >
-                <video
-                    src={videoSrc}
-                    muted
-                    playsInline
-                    preload="metadata"
-                    className="pointer-events-none absolute z-0 max-w-none"
-                    style={{
-                        width: dispW,
-                        height: dispH,
-                        left: -rect.x * scale,
-                        top: -rect.y * scale,
-                    }}
-                />
+                {/* White border outline */}
                 <div className="pointer-events-none absolute inset-0 z-10 border-2 border-white" />
                 {CORNERS.map(({ corner, className }) => (
                     <button

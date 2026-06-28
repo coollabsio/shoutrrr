@@ -1,4 +1,4 @@
-import { Crop, X } from 'lucide-react';
+import { Crop, Pause, Play, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -44,6 +44,9 @@ const MIN_TRIM_GAP = 0.1;
 /** Keyboard step size for the trim handles (seconds). Shift multiplies by 10. */
 const STEP = 0.1;
 
+/** Fallback display size before the preview container is measured. */
+const DISPLAY_FALLBACK = 420;
+
 /** Format a duration as MM:SS, truncating to whole seconds. */
 function fmtMmSs(totalSeconds: number): string {
     const s = Math.max(0, Math.floor(totalSeconds));
@@ -73,22 +76,41 @@ export function VideoEditor({
         height: number;
     } | null>(null);
     const [box, setBox] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+    const [playing, setPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
 
     const busy = phase !== 'idle';
     // Guard against divide-by-zero when duration hasn't been resolved yet.
     const safeD = durationSeconds > 0 ? durationSeconds : 1;
 
+    // Compute on-screen video dimensions from the measured canvas area.
+    const displayScale = sourceSize
+        ? Math.min(
+              (box.w || DISPLAY_FALLBACK) / sourceSize.width,
+              (box.h || DISPLAY_FALLBACK) / sourceSize.height,
+          )
+        : 1;
+    const dispW = sourceSize
+        ? sourceSize.width * displayScale
+        : DISPLAY_FALLBACK;
+    const dispH = sourceSize
+        ? sourceSize.height * displayScale
+        : DISPLAY_FALLBACK;
+
     // Reset settings and clear any previously loaded source size whenever the
     // modal opens or the video source changes (new upload, different clip).
     useEffect(() => {
         if (!open) {
+            videoRef.current?.pause();
             return;
         }
         setSettings(defaultSettings(durationSeconds));
         setSourceSize(null);
+        setPlaying(false);
+        setCurrentTime(0);
     }, [open, durationSeconds]);
 
-    // Observe the preview canvas so the crop overlay can fit within it.
+    // Observe the preview canvas so dispW/dispH stay in sync with the container.
     useEffect(() => {
         if (!previewEl) {
             return;
@@ -147,7 +169,7 @@ export function VideoEditor({
         return fraction * safeD;
     }
 
-    // The crop overlay is shown only once the natural video size is known, so
+    // The crop overlay is shown only once the natural video size is known so
     // the VideoCropOverlay can scale correctly. Until then the plain <video>
     // renders and fires onLoadedMetadata to supply the size.
     const showOverlay =
@@ -197,43 +219,78 @@ export function VideoEditor({
                             {!sourceUrl ? (
                                 /* No source yet — show a spinner */
                                 <div className="size-7 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
-                            ) : showOverlay ? (
-                                /* Crop mode: interactive overlay with drag handles */
-                                <VideoCropOverlay
-                                    videoSrc={sourceUrl}
-                                    sourceSize={sourceSize!}
-                                    rect={
-                                        settings.crop ?? {
-                                            x: 0,
-                                            y: 0,
-                                            width: sourceSize!.width,
-                                            height: sourceSize!.height,
-                                        }
-                                    }
-                                    ratio={videoAspectToRatio(settings.aspect)}
-                                    maxW={box.w || undefined}
-                                    maxH={box.h || undefined}
-                                    onChange={(crop) =>
-                                        setSettings((s) => ({ ...s, crop }))
-                                    }
-                                />
                             ) : (
-                                /* Plain preview — also the metadata source for sourceSize */
-                                <video
-                                    ref={videoRef}
-                                    src={sourceUrl}
-                                    muted
-                                    playsInline
-                                    preload="metadata"
-                                    className="max-h-full max-w-full object-contain"
-                                    onLoadedMetadata={(e) => {
-                                        const v = e.currentTarget;
-                                        setSourceSize({
-                                            width: v.videoWidth,
-                                            height: v.videoHeight,
-                                        });
-                                    }}
-                                />
+                                /* Single <video> for both plain and crop modes — never remounts on
+                                   the sourceSize null→non-null transition; only the wrapper style
+                                   and video className change conditionally. */
+                                <div
+                                    className="relative"
+                                    style={
+                                        sourceSize
+                                            ? { width: dispW, height: dispH }
+                                            : undefined
+                                    }
+                                >
+                                    <video
+                                        ref={videoRef}
+                                        src={sourceUrl}
+                                        muted
+                                        playsInline
+                                        preload="metadata"
+                                        className={
+                                            sourceSize
+                                                ? 'block size-full object-fill'
+                                                : 'block max-h-full max-w-full object-contain'
+                                        }
+                                        onLoadedMetadata={(e) => {
+                                            const v = e.currentTarget;
+                                            setSourceSize({
+                                                width: v.videoWidth,
+                                                height: v.videoHeight,
+                                            });
+                                        }}
+                                        onTimeUpdate={(e) => {
+                                            const video = e.currentTarget;
+                                            const t = video.currentTime;
+                                            setCurrentTime(t);
+                                            // Loop within the selected trim range.
+                                            if (t >= settings.trim.end) {
+                                                video.currentTime =
+                                                    settings.trim.start;
+                                            } else if (
+                                                t < settings.trim.start
+                                            ) {
+                                                video.currentTime =
+                                                    settings.trim.start;
+                                            }
+                                        }}
+                                        onPause={() => setPlaying(false)}
+                                        onPlay={() => setPlaying(true)}
+                                    />
+                                    {showOverlay && (
+                                        <VideoCropOverlay
+                                            sourceSize={sourceSize!}
+                                            dispW={dispW}
+                                            rect={
+                                                settings.crop ?? {
+                                                    x: 0,
+                                                    y: 0,
+                                                    width: sourceSize!.width,
+                                                    height: sourceSize!.height,
+                                                }
+                                            }
+                                            ratio={videoAspectToRatio(
+                                                settings.aspect,
+                                            )}
+                                            onChange={(rect) =>
+                                                setSettings((s) => ({
+                                                    ...s,
+                                                    crop: rect,
+                                                }))
+                                            }
+                                        />
+                                    )}
+                                </div>
                             )}
                         </div>
 
@@ -244,67 +301,160 @@ export function VideoEditor({
                                 busy && 'pointer-events-none opacity-50',
                             )}
                         >
-                            {/* Track */}
-                            <div
-                                ref={trackRef}
-                                className="relative h-8 touch-none rounded-lg bg-foreground/[0.07] select-none"
-                            >
-                                {/* Selected-range highlight */}
-                                <div
-                                    className="pointer-events-none absolute inset-y-0 rounded-lg bg-foreground/[0.16]"
-                                    style={{
-                                        left: `${(settings.trim.start / safeD) * 100}%`,
-                                        right: `${(1 - settings.trim.end / safeD) * 100}%`,
-                                    }}
-                                />
-
-                                {/* In-point (start) handle */}
-                                <div
-                                    role="slider"
-                                    aria-label="Trim start"
-                                    aria-valuemin={0}
-                                    aria-valuemax={safeD}
-                                    aria-valuenow={settings.trim.start}
-                                    aria-valuetext={fmtMmSs(
-                                        settings.trim.start,
-                                    )}
-                                    tabIndex={0}
-                                    className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
-                                    style={{
-                                        left: `${(settings.trim.start / safeD) * 100}%`,
-                                    }}
-                                    onKeyDown={(e) => {
-                                        const step = e.shiftKey ? 1 : STEP;
-                                        let next: number | null = null;
-                                        if (
-                                            e.key === 'ArrowLeft' ||
-                                            e.key === 'ArrowDown'
-                                        ) {
-                                            e.preventDefault();
-                                            next = settings.trim.start - step;
-                                        } else if (
-                                            e.key === 'ArrowRight' ||
-                                            e.key === 'ArrowUp'
-                                        ) {
-                                            e.preventDefault();
-                                            next = settings.trim.start + step;
-                                        } else if (e.key === 'Home') {
-                                            e.preventDefault();
-                                            next = 0;
-                                        } else if (e.key === 'End') {
-                                            e.preventDefault();
-                                            next =
-                                                settings.trim.end -
-                                                MIN_TRIM_GAP;
+                            {/* Play/Pause button + Track */}
+                            <div className="flex items-center gap-3">
+                                {/* Play/Pause button */}
+                                <button
+                                    type="button"
+                                    aria-label={
+                                        playing ? 'Pause' : 'Play selection'
+                                    }
+                                    disabled={busy || !sourceUrl}
+                                    onClick={() => {
+                                        if (!videoRef.current) {
+                                            return;
                                         }
-                                        if (next !== null) {
-                                            const start = Math.max(
-                                                0,
-                                                Math.min(
+                                        if (playing) {
+                                            videoRef.current.pause();
+                                        } else {
+                                            if (
+                                                currentTime <
+                                                    settings.trim.start ||
+                                                currentTime >= settings.trim.end
+                                            ) {
+                                                videoRef.current.currentTime =
+                                                    settings.trim.start;
+                                            }
+                                            void videoRef.current.play();
+                                        }
+                                    }}
+                                    className="grid size-8 shrink-0 place-items-center rounded-full border border-border text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                                >
+                                    {playing ? (
+                                        <Pause
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                    ) : (
+                                        <Play
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                    )}
+                                </button>
+
+                                {/* Track */}
+                                <div
+                                    ref={trackRef}
+                                    className="relative h-8 flex-1 touch-none rounded-lg bg-foreground/[0.07] select-none"
+                                    onPointerDown={(e) => {
+                                        // Click-to-seek: handles stop propagation so this only
+                                        // fires when clicking the track background or range fill.
+                                        const time = seekFromPointer(e);
+                                        if (videoRef.current) {
+                                            videoRef.current.currentTime = time;
+                                        }
+                                        setCurrentTime(time);
+                                    }}
+                                >
+                                    {/* Selected-range highlight */}
+                                    <div
+                                        className="pointer-events-none absolute inset-y-0 rounded-lg bg-foreground/[0.16]"
+                                        style={{
+                                            left: `${(settings.trim.start / safeD) * 100}%`,
+                                            right: `${(1 - settings.trim.end / safeD) * 100}%`,
+                                        }}
+                                    />
+
+                                    {/* Playhead */}
+                                    <div
+                                        className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-foreground/80"
+                                        style={{
+                                            left: `${Math.max(0, Math.min(100, (currentTime / safeD) * 100))}%`,
+                                        }}
+                                    />
+
+                                    {/* In-point (start) handle */}
+                                    <div
+                                        role="slider"
+                                        aria-label="Trim start"
+                                        aria-valuemin={0}
+                                        aria-valuemax={safeD}
+                                        aria-valuenow={settings.trim.start}
+                                        aria-valuetext={fmtMmSs(
+                                            settings.trim.start,
+                                        )}
+                                        tabIndex={0}
+                                        className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
+                                        style={{
+                                            left: `${(settings.trim.start / safeD) * 100}%`,
+                                        }}
+                                        onKeyDown={(e) => {
+                                            const step = e.shiftKey ? 1 : STEP;
+                                            let next: number | null = null;
+                                            if (
+                                                e.key === 'ArrowLeft' ||
+                                                e.key === 'ArrowDown'
+                                            ) {
+                                                e.preventDefault();
+                                                next =
+                                                    settings.trim.start - step;
+                                            } else if (
+                                                e.key === 'ArrowRight' ||
+                                                e.key === 'ArrowUp'
+                                            ) {
+                                                e.preventDefault();
+                                                next =
+                                                    settings.trim.start + step;
+                                            } else if (e.key === 'Home') {
+                                                e.preventDefault();
+                                                next = 0;
+                                            } else if (e.key === 'End') {
+                                                e.preventDefault();
+                                                next =
                                                     settings.trim.end -
-                                                        MIN_TRIM_GAP,
-                                                    next,
-                                                ),
+                                                    MIN_TRIM_GAP;
+                                            }
+                                            if (next !== null) {
+                                                const start = Math.max(
+                                                    0,
+                                                    Math.min(
+                                                        settings.trim.end -
+                                                            MIN_TRIM_GAP,
+                                                        next,
+                                                    ),
+                                                );
+                                                setSettings((s) => ({
+                                                    ...s,
+                                                    trim: { ...s.trim, start },
+                                                }));
+                                                if (videoRef.current) {
+                                                    videoRef.current.currentTime =
+                                                        start;
+                                                }
+                                            }
+                                        }}
+                                        onPointerDown={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            e.currentTarget.setPointerCapture(
+                                                e.pointerId,
+                                            );
+                                            videoRef.current?.pause();
+                                        }}
+                                        onPointerMove={(e) => {
+                                            if (
+                                                !(
+                                                    e.currentTarget as Element
+                                                ).hasPointerCapture(e.pointerId)
+                                            ) {
+                                                return;
+                                            }
+                                            const time = seekFromPointer(e);
+                                            const start = Math.min(
+                                                time,
+                                                settings.trim.end -
+                                                    MIN_TRIM_GAP,
                                             );
                                             setSettings((s) => ({
                                                 ...s,
@@ -314,83 +464,88 @@ export function VideoEditor({
                                                 videoRef.current.currentTime =
                                                     start;
                                             }
-                                        }
-                                    }}
-                                    onPointerDown={(e) => {
-                                        e.preventDefault();
-                                        e.currentTarget.setPointerCapture(
-                                            e.pointerId,
-                                        );
-                                    }}
-                                    onPointerMove={(e) => {
-                                        if (
-                                            !(
-                                                e.currentTarget as Element
-                                            ).hasPointerCapture(e.pointerId)
-                                        ) {
-                                            return;
-                                        }
-                                        const time = seekFromPointer(e);
-                                        const start = Math.min(
-                                            time,
-                                            settings.trim.end - MIN_TRIM_GAP,
-                                        );
-                                        setSettings((s) => ({
-                                            ...s,
-                                            trim: { ...s.trim, start },
-                                        }));
-                                        if (videoRef.current) {
-                                            videoRef.current.currentTime =
-                                                start;
-                                        }
-                                    }}
-                                >
-                                    {/* Circular grip — larger touch target */}
-                                    <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
-                                </div>
+                                        }}
+                                    >
+                                        {/* Circular grip — larger touch target */}
+                                        <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
+                                    </div>
 
-                                {/* Out-point (end) handle */}
-                                <div
-                                    role="slider"
-                                    aria-label="Trim end"
-                                    aria-valuemin={0}
-                                    aria-valuemax={safeD}
-                                    aria-valuenow={settings.trim.end}
-                                    aria-valuetext={fmtMmSs(settings.trim.end)}
-                                    tabIndex={0}
-                                    className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
-                                    style={{
-                                        left: `${(settings.trim.end / safeD) * 100}%`,
-                                    }}
-                                    onKeyDown={(e) => {
-                                        const step = e.shiftKey ? 1 : STEP;
-                                        let next: number | null = null;
-                                        if (
-                                            e.key === 'ArrowLeft' ||
-                                            e.key === 'ArrowDown'
-                                        ) {
+                                    {/* Out-point (end) handle */}
+                                    <div
+                                        role="slider"
+                                        aria-label="Trim end"
+                                        aria-valuemin={0}
+                                        aria-valuemax={safeD}
+                                        aria-valuenow={settings.trim.end}
+                                        aria-valuetext={fmtMmSs(
+                                            settings.trim.end,
+                                        )}
+                                        tabIndex={0}
+                                        className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
+                                        style={{
+                                            left: `${(settings.trim.end / safeD) * 100}%`,
+                                        }}
+                                        onKeyDown={(e) => {
+                                            const step = e.shiftKey ? 1 : STEP;
+                                            let next: number | null = null;
+                                            if (
+                                                e.key === 'ArrowLeft' ||
+                                                e.key === 'ArrowDown'
+                                            ) {
+                                                e.preventDefault();
+                                                next = settings.trim.end - step;
+                                            } else if (
+                                                e.key === 'ArrowRight' ||
+                                                e.key === 'ArrowUp'
+                                            ) {
+                                                e.preventDefault();
+                                                next = settings.trim.end + step;
+                                            } else if (e.key === 'Home') {
+                                                e.preventDefault();
+                                                next =
+                                                    settings.trim.start +
+                                                    MIN_TRIM_GAP;
+                                            } else if (e.key === 'End') {
+                                                e.preventDefault();
+                                                next = safeD;
+                                            }
+                                            if (next !== null) {
+                                                const end = Math.max(
+                                                    settings.trim.start +
+                                                        MIN_TRIM_GAP,
+                                                    Math.min(safeD, next),
+                                                );
+                                                setSettings((s) => ({
+                                                    ...s,
+                                                    trim: { ...s.trim, end },
+                                                }));
+                                                if (videoRef.current) {
+                                                    videoRef.current.currentTime =
+                                                        end;
+                                                }
+                                            }
+                                        }}
+                                        onPointerDown={(e) => {
                                             e.preventDefault();
-                                            next = settings.trim.end - step;
-                                        } else if (
-                                            e.key === 'ArrowRight' ||
-                                            e.key === 'ArrowUp'
-                                        ) {
-                                            e.preventDefault();
-                                            next = settings.trim.end + step;
-                                        } else if (e.key === 'Home') {
-                                            e.preventDefault();
-                                            next =
-                                                settings.trim.start +
-                                                MIN_TRIM_GAP;
-                                        } else if (e.key === 'End') {
-                                            e.preventDefault();
-                                            next = safeD;
-                                        }
-                                        if (next !== null) {
+                                            e.stopPropagation();
+                                            e.currentTarget.setPointerCapture(
+                                                e.pointerId,
+                                            );
+                                            videoRef.current?.pause();
+                                        }}
+                                        onPointerMove={(e) => {
+                                            if (
+                                                !(
+                                                    e.currentTarget as Element
+                                                ).hasPointerCapture(e.pointerId)
+                                            ) {
+                                                return;
+                                            }
+                                            const time = seekFromPointer(e);
                                             const end = Math.max(
+                                                time,
                                                 settings.trim.start +
                                                     MIN_TRIM_GAP,
-                                                Math.min(safeD, next),
                                             );
                                             setSettings((s) => ({
                                                 ...s,
@@ -400,43 +555,16 @@ export function VideoEditor({
                                                 videoRef.current.currentTime =
                                                     end;
                                             }
-                                        }
-                                    }}
-                                    onPointerDown={(e) => {
-                                        e.preventDefault();
-                                        e.currentTarget.setPointerCapture(
-                                            e.pointerId,
-                                        );
-                                    }}
-                                    onPointerMove={(e) => {
-                                        if (
-                                            !(
-                                                e.currentTarget as Element
-                                            ).hasPointerCapture(e.pointerId)
-                                        ) {
-                                            return;
-                                        }
-                                        const time = seekFromPointer(e);
-                                        const end = Math.max(
-                                            time,
-                                            settings.trim.start + MIN_TRIM_GAP,
-                                        );
-                                        setSettings((s) => ({
-                                            ...s,
-                                            trim: { ...s.trim, end },
-                                        }));
-                                        if (videoRef.current) {
-                                            videoRef.current.currentTime = end;
-                                        }
-                                    }}
-                                >
-                                    {/* Circular grip */}
-                                    <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
+                                        }}
+                                    >
+                                        {/* Circular grip */}
+                                        <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Time labels: start · selected duration · end */}
-                            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground tabular-nums">
+                            <div className="mt-2 flex items-center justify-between pl-11 text-xs text-muted-foreground tabular-nums">
                                 <span>{fmtMmSs(settings.trim.start)}</span>
                                 <span className="font-medium text-foreground">
                                     {fmtMmSs(
