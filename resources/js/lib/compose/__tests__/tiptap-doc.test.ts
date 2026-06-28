@@ -1,53 +1,54 @@
 import { describe, expect, it } from 'vitest';
 
-import { docToBaseText, baseTextToDoc } from '../tiptap-doc';
+import { docToSegments, segmentsToDoc } from '../tiptap-doc';
 
-describe('docToBaseText', () => {
-    it('joins paragraphs with newlines', () => {
+describe('docToSegments / segmentsToDoc', () => {
+    it('serializes section-break nodes to segment boundaries', () => {
         const doc = {
             type: 'doc',
             content: [
-                {
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: 'line one' }],
-                },
-                {
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: 'line two' }],
-                },
-            ],
-        };
-        expect(docToBaseText(doc)).toBe('line one\nline two');
-    });
-
-    it('renders a section break as a --- break line', () => {
-        const doc = {
-            type: 'doc',
-            content: [
-                {
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: 'first post' }],
-                },
+                { type: 'paragraph', content: [{ type: 'text', text: 'one' }] },
                 { type: 'sectionBreak' },
-                {
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: 'second post' }],
-                },
+                { type: 'paragraph', content: [{ type: 'text', text: 'two' }] },
             ],
         };
-        expect(docToBaseText(doc)).toBe('first post\n---\nsecond post');
+
+        expect(docToSegments(doc)).toEqual(['one', 'two']);
     });
 
-    it('treats an empty paragraph as a blank line', () => {
-        const doc = { type: 'doc', content: [{ type: 'paragraph' }] };
-        expect(docToBaseText(doc)).toBe('');
-    });
-});
+    it('keeps paragraph newlines inside a segment', () => {
+        const doc = {
+            type: 'doc',
+            content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'a' }] },
+                { type: 'paragraph', content: [{ type: 'text', text: 'b' }] },
+            ],
+        };
 
-describe('baseTextToDoc round-trips', () => {
-    it('rebuilds paragraphs and breaks from text', () => {
-        const text = 'first post\n---\nsecond post';
-        const doc = baseTextToDoc(text);
-        expect(docToBaseText(doc)).toBe(text);
+        expect(docToSegments(doc)).toEqual(['a\nb']);
+    });
+
+    it('treats a literal --- as ordinary paragraph text', () => {
+        const doc = {
+            type: 'doc',
+            content: [
+                { type: 'paragraph', content: [{ type: 'text', text: '---' }] },
+            ],
+        };
+
+        expect(docToSegments(doc)).toEqual(['---']);
+    });
+
+    it('round-trips segments through a doc and back', () => {
+        const segments = ['first\nline', 'second'];
+
+        expect(docToSegments(segmentsToDoc(segments))).toEqual(segments);
+    });
+
+    it('empty segments produce a single empty paragraph doc', () => {
+        expect(segmentsToDoc([''])).toEqual({
+            type: 'doc',
+            content: [{ type: 'paragraph' }],
+        });
     });
 });

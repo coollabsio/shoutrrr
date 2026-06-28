@@ -36,6 +36,7 @@ function post(targets: TargetView[]): PostView {
     return {
         id: 'p1',
         base_text: 'hi',
+        segments: ['hi'],
         status: 'publishing',
         published_at: null,
         updated_at: '2026-06-12T10:00:00+00:00',

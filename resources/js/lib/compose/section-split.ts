@@ -67,25 +67,22 @@ export function packSections(
 }
 
 /**
- * Split canonical base text into the section strings the composer previews —
- * the analogue of the server's `PostSplitter::split(...).sections` for the
- * common case where no single paragraph exceeds the limit.
+ * Split the structured author segments into the section strings the composer
+ * previews — the TS analogue of the server `PostSplitter::split(...).sections`.
+ * Each segment is trimmed; empties are dropped (falling back to one empty
+ * section), then packed per platform limit.
  */
-export function manualSegments(text: string): string[] {
-    const segments = text
-        .split(/^\s*---\s*$/gm)
-        .map((segment) => segment.trim())
-        .filter((segment) => segment !== '');
-
-    return segments.length > 0 ? segments : [''];
-}
-
 export function previewSections(
-    text: string,
+    segments: string[],
     platform: PlatformName,
     limit: number,
 ): string[] {
-    return manualSegments(text).flatMap((segment) =>
+    const clean = segments
+        .map((segment) => segment.trim())
+        .filter((segment) => segment !== '');
+    const use = clean.length > 0 ? clean : [''];
+
+    return use.flatMap((segment) =>
         packSections(segment.split('\n'), platform, limit).map(
             (section) => section.text,
         ),

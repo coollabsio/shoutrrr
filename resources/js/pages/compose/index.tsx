@@ -18,7 +18,7 @@ export default function ComposePage({
     savedMentions,
 }: ComposePageProps) {
     const { features } = usePage().props;
-    const title = firstLineTitle(post?.base_text ?? '');
+    const title = firstLineTitle(post?.segments ?? ['']);
     const isPublished = Boolean(
         post && post.targets.some((t) => t.status === 'published'),
     );

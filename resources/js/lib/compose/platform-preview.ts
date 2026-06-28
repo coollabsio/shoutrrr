@@ -1,9 +1,5 @@
 import { replaceMentionTokens } from '@/lib/compose/mentions';
-import {
-    manualSegments,
-    measure,
-    previewSections,
-} from '@/lib/compose/section-split';
+import { measure, previewSections } from '@/lib/compose/section-split';
 import type {
     Account,
     MediaView,
@@ -31,7 +27,7 @@ export type PlatformPreview = {
 
 type BuildPlatformPreviewInput = {
     account: Account;
-    text: string;
+    segments: string[];
     mentions: MentionPlaceholder[];
     media: MediaView[];
     excludedMediaIds: Set<string>;
@@ -41,21 +37,27 @@ type BuildPlatformPreviewInput = {
 
 export function buildPlatformPreview({
     account,
-    text,
+    segments,
     mentions,
     media,
     excludedMediaIds,
     limit,
     autoSplit,
 }: BuildPlatformPreviewInput): PlatformPreview {
-    const resolvedText = replaceMentionTokens(text, mentions, account.platform);
-    const shouldSplit = account.platform !== 'linkedin' && autoSplit;
+    const resolvedSegments = segments.map((segment) =>
+        replaceMentionTokens(segment, mentions, account.platform),
+    );
     const sections =
         account.platform === 'linkedin'
-            ? [manualSegments(resolvedText).join('\n')]
-            : shouldSplit
-              ? previewSections(resolvedText, account.platform, limit)
-              : manualSegments(resolvedText);
+            ? [
+                  resolvedSegments
+                      .map((s) => s.trim())
+                      .filter((s) => s !== '')
+                      .join('\n'),
+              ]
+            : autoSplit
+              ? previewSections(resolvedSegments, account.platform, limit)
+              : resolvedSegments;
     const visibleMedia = media.filter((item) => !excludedMediaIds.has(item.id));
 
     return {

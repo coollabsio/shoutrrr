@@ -54,7 +54,7 @@ describe('buildPlatformPreview', () => {
     it('builds a Bluesky thread preview using Bluesky mention handles', () => {
         const preview = buildPlatformPreview({
             account: account('bluesky'),
-            text: 'Launch with @Person\nSecond short paragraph',
+            segments: ['Launch with @Person\nSecond short paragraph'],
             mentions,
             media: [image],
             excludedMediaIds: new Set(),
@@ -70,10 +70,10 @@ describe('buildPlatformPreview', () => {
         expect(preview.items[0]?.media).toEqual([image]);
     });
 
-    it('honors manual split markers when automatic splitting is off', () => {
+    it('honors manual segment split when automatic splitting is off', () => {
         const preview = buildPlatformPreview({
             account: account('bluesky'),
-            text: `One\n---\nTwo`,
+            segments: ['One', 'Two'],
             mentions: [],
             media: [],
             excludedMediaIds: new Set(),
@@ -87,7 +87,7 @@ describe('buildPlatformPreview', () => {
     it('builds a single LinkedIn update with LinkedIn mention display text', () => {
         const preview = buildPlatformPreview({
             account: account('linkedin'),
-            text: 'Launch with @Person\n---\nSecond paragraph',
+            segments: ['Launch with @Person', 'Second paragraph'],
             mentions,
             media: [image],
             excludedMediaIds: new Set(['media-1']),

@@ -123,10 +123,6 @@ function measure(text: string, platform: PlatformName): number {
     return platform === 'x' ? text.length : [...text].length;
 }
 
-function hasManualSplit(text: string): boolean {
-    return /^\s*---\s*$/m.test(text);
-}
-
 export default function Composer({
     post,
     accounts,
@@ -410,10 +406,10 @@ export default function Composer({
         accounts,
         activeAccount,
     );
-    const activeText =
+    const activeSegments =
         activeAccount && state.overrideByAccount[activeAccount.id] !== undefined
-            ? (state.overrideByAccount[activeAccount.id] as string)
-            : state.baseText;
+            ? (state.overrideByAccount[activeAccount.id] as string[])
+            : state.segments;
 
     function limitForPlatform(platform: PlatformName): number {
         return limits.find((l) => l.platform === platform)?.maxLength ?? 0;
@@ -428,12 +424,12 @@ export default function Composer({
         if (!account) {
             return 'ok';
         }
-        const text =
+        const segments =
             state.overrideByAccount[accountId] !== undefined
-                ? (state.overrideByAccount[accountId] as string)
-                : state.baseText;
+                ? (state.overrideByAccount[accountId] as string[])
+                : state.segments;
         const resolvedText = replaceMentionTokens(
-            text,
+            segments.join('\n'),
             state.mentions,
             account.platform,
         );
@@ -458,12 +454,13 @@ export default function Composer({
     }
 
     function syncMentions(
-        nextBaseText: string,
+        nextSegments: string[],
         nextOverrides = state.overrideByAccount,
     ) {
-        const mentionSource = [nextBaseText, ...Object.values(nextOverrides)]
-            .filter((value): value is string => value !== undefined)
-            .join('\n');
+        const mentionSource = [
+            nextSegments.join('\n'),
+            ...Object.values(nextOverrides).map((s) => (s ?? []).join('\n')),
+        ].join('\n');
         const mentions = syncMentionsFromText(
             mentionSource,
             state.mentions,
@@ -478,19 +475,26 @@ export default function Composer({
         mention: MentionPlaceholder,
         next: MentionPlaceholder,
     ) {
-        const replace = (text: string): string =>
-            text.split(mention.label).join(next.label);
+        const replaceSeg = (segments: string[]): string[] =>
+            segments.map((s) => s.split(mention.label).join(next.label));
         const overrideByAccount = Object.fromEntries(
-            Object.entries(state.overrideByAccount).map(([accountId, text]) => [
+            Object.entries(state.overrideByAccount).map(([accountId, segs]) => [
                 accountId,
-                text === undefined ? undefined : replace(text),
+                segs === undefined ? undefined : replaceSeg(segs),
             ]),
-        ) as Record<string, string | undefined>;
+        ) as Record<string, string[] | undefined>;
 
-        dispatch({ type: 'updateBaseText', text: replace(state.baseText) });
-        for (const [accountId, text] of Object.entries(overrideByAccount)) {
-            if (text !== undefined) {
-                dispatch({ type: 'setOverrideText', accountId, text });
+        dispatch({
+            type: 'updateSegments',
+            segments: replaceSeg(state.segments),
+        });
+        for (const [accountId, segs] of Object.entries(overrideByAccount)) {
+            if (segs !== undefined) {
+                dispatch({
+                    type: 'setOverrideSegments',
+                    accountId,
+                    segments: segs,
+                });
             }
         }
         dispatch({
@@ -537,38 +541,39 @@ export default function Composer({
         });
     }
 
-    function handleText(text: string) {
+    function handleSegments(segments: string[]) {
+        const manualSplit = segments.length > 1;
         if (
             activeAccount &&
             state.overrideByAccount[activeAccount.id] !== undefined
         ) {
             const overrideByAccount = {
                 ...state.overrideByAccount,
-                [activeAccount.id]: text,
+                [activeAccount.id]: segments,
             };
             dispatch({
-                type: 'setOverrideText',
+                type: 'setOverrideSegments',
                 accountId: activeAccount.id,
-                text,
+                segments,
             });
-            if (hasManualSplit(text)) {
+            if (manualSplit) {
                 dispatch({
                     type: 'disableAutoSplit',
                     accountIds: accounts.map((account) => account.id),
                 });
             }
-            syncMentions(state.baseText, overrideByAccount);
+            syncMentions(state.segments, overrideByAccount);
 
             return;
         }
-        dispatch({ type: 'updateBaseText', text });
-        if (hasManualSplit(text)) {
+        dispatch({ type: 'updateSegments', segments });
+        if (manualSplit) {
             dispatch({
                 type: 'disableAutoSplit',
                 accountIds: accounts.map((account) => account.id),
             });
         }
-        syncMentions(text);
+        syncMentions(segments);
     }
 
     const activeTarget = activeAccount
@@ -585,8 +590,8 @@ export default function Composer({
     const platformPreview = previewAccount
         ? buildPlatformPreview({
               account: previewAccount,
-              text:
-                  state.overrideByAccount[previewAccount.id] ?? state.baseText,
+              segments:
+                  state.overrideByAccount[previewAccount.id] ?? state.segments,
               mentions: state.mentions,
               media: state.media,
               excludedMediaIds: new Set(
@@ -603,7 +608,7 @@ export default function Composer({
           })
         : buildPlatformPreview({
               account: PREVIEW_FALLBACK_ACCOUNT,
-              text: state.baseText,
+              segments: state.segments,
               mentions: state.mentions,
               media: state.media,
               excludedMediaIds: new Set(),
@@ -679,8 +684,8 @@ export default function Composer({
 
                 {/* Override banner (inside EditorBody) + editor */}
                 <EditorBody
-                    value={activeText}
-                    onChange={handleText}
+                    value={activeSegments}
+                    onChange={handleSegments}
                     onBlur={flush}
                     editable={!readOnly}
                     autoFocus={autoFocusEditor}
@@ -729,7 +734,7 @@ export default function Composer({
                     <CharCounter
                         count={measure(
                             replaceMentionTokens(
-                                activeText,
+                                activeSegments.join('\n'),
                                 state.mentions,
                                 activeAccount.platform,
                             ),
@@ -793,9 +798,9 @@ export default function Composer({
                                 });
                             } else {
                                 dispatch({
-                                    type: 'setOverrideText',
+                                    type: 'setOverrideSegments',
                                     accountId: activeAccount.id,
-                                    text: state.baseText,
+                                    segments: state.segments,
                                 });
                             }
                         }}
@@ -878,7 +883,7 @@ export default function Composer({
                 {state.conflict !== null && (
                     <ConflictDialog
                         open
-                        myBaseText={state.baseText}
+                        myBaseText={state.segments.join('\n')}
                         serverPost={state.conflict}
                         onKeepMine={() =>
                             dispatch({ type: 'resolveConflictKeepMine' })

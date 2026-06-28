@@ -27,11 +27,11 @@ export type ComposerState = {
     activeTab: string;
     saveState: SaveState;
     baselineUpdatedAt: string | null;
-    baseText: string;
+    segments: string[];
     mentions: MentionPlaceholder[];
     destination: Destination;
     autoSplitByAccount: Record<string, boolean>;
-    overrideByAccount: Record<string, string | undefined>;
+    overrideByAccount: Record<string, string[] | undefined>;
     mediaSubsetExcludes: Set<string>;
     media: MediaView[];
     scheduleTray: ScheduleTray;
@@ -42,13 +42,13 @@ export type ComposerAction =
     | { type: 'hydrate'; post: PostView }
     | { type: 'syncServerPost'; post: PostView }
     | { type: 'setPostId'; postId: string; updatedAt: string }
-    | { type: 'updateBaseText'; text: string }
+    | { type: 'updateSegments'; segments: string[] }
     | { type: 'setMentions'; mentions: MentionPlaceholder[] }
     | { type: 'setActiveTab'; tab: string }
     | { type: 'setDestination'; destination: Destination }
     | { type: 'toggleAutoSplit'; accountId: string }
     | { type: 'disableAutoSplit'; accountIds: string[] }
-    | { type: 'setOverrideText'; accountId: string; text: string }
+    | { type: 'setOverrideSegments'; accountId: string; segments: string[] }
     | { type: 'discardOverride'; accountId: string }
     | { type: 'toggleMediaExclude'; mediaId: string; accountId: string }
     | { type: 'addMedia'; media: MediaView }
@@ -106,7 +106,7 @@ export function initialComposerState(
         activeTab: BASE_TAB,
         saveState: 'idle',
         baselineUpdatedAt: null,
-        baseText: '',
+        segments: [''],
         mentions: [],
         destination: initialDestination ?? { kind: 'all' },
         autoSplitByAccount: {},
@@ -147,14 +147,14 @@ export function parseDestinationParam(raw: string | null): Destination | null {
 
 function hydrate(post: PostView): ComposerState {
     const autoSplitByAccount: Record<string, boolean> = {};
-    const overrideByAccount: Record<string, string | undefined> = {};
+    const overrideByAccount: Record<string, string[] | undefined> = {};
     const mediaSubsetExcludes = new Set<string>();
 
     for (const target of post.targets) {
         autoSplitByAccount[target.connected_account_id] = target.auto_split;
-        const overrideText = target.content_override?.text;
-        if (overrideText !== undefined && overrideText !== null) {
-            overrideByAccount[target.connected_account_id] = overrideText;
+        const overrideSegments = target.content_override?.segments;
+        if (overrideSegments !== undefined && overrideSegments !== null) {
+            overrideByAccount[target.connected_account_id] = overrideSegments;
         }
     }
 
@@ -163,7 +163,7 @@ function hydrate(post: PostView): ComposerState {
         activeTab: post.targets[0]?.connected_account_id ?? BASE_TAB,
         saveState: 'saved',
         baselineUpdatedAt: post.updated_at,
-        baseText: post.base_text,
+        segments: post.segments,
         mentions: post.mentions ?? [],
         destination:
             post.destination.kind === 'set' && post.destination.id
@@ -229,12 +229,12 @@ export function composerReducer(
                 saveState: 'saved',
             };
 
-        case 'updateBaseText':
+        case 'updateSegments':
             if (state.saveState === 'conflict') {
                 return state;
             }
 
-            return { ...state, baseText: action.text, saveState: 'dirty' };
+            return { ...state, segments: action.segments, saveState: 'dirty' };
 
         case 'setMentions':
             if (state.saveState === 'conflict') {
@@ -280,12 +280,12 @@ export function composerReducer(
                 saveState: 'dirty',
             };
 
-        case 'setOverrideText':
+        case 'setOverrideSegments':
             return {
                 ...state,
                 overrideByAccount: {
                     ...state.overrideByAccount,
-                    [action.accountId]: action.text,
+                    [action.accountId]: action.segments,
                 },
                 saveState: 'dirty',
             };
@@ -422,11 +422,11 @@ export function composerReducer(
 export type PutTarget = {
     connected_account_id: string;
     auto_split: boolean;
-    content_override: { text: string; media_ids: string[] } | null;
+    content_override: { segments: string[]; media_ids: string[] } | null;
 };
 
 export type PutBody = {
-    base_text: string;
+    segments: string[];
     destination: Destination;
     targets: PutTarget[];
     media_ids: string[];
@@ -449,7 +449,7 @@ export function buildPutBody(
         const content_override =
             override !== undefined
                 ? {
-                      text: override,
+                      segments: override,
                       media_ids: state.media
                           .map((m) => m.id)
                           .filter(
@@ -469,7 +469,7 @@ export function buildPutBody(
     });
 
     return {
-        base_text: state.baseText,
+        segments: state.segments,
         destination: state.destination,
         targets,
         media_ids: state.media.map((m) => m.id),
@@ -480,7 +480,7 @@ export function buildPutBody(
 
 /**
  * Whether the composer's editable content is byte-identical to a server post —
- * base text, the attached media set, and per-account override texts. Used to
+ * segments, the attached media set, and per-account override segments. Used to
  * distinguish a real edit conflict (content diverged) from a false one (only the
  * post's `updated_at` moved, e.g. a schedule/publish or a drifted baseline).
  */
@@ -488,7 +488,7 @@ export function contentMatchesServer(
     state: ComposerState,
     post: PostView,
 ): boolean {
-    if (state.baseText !== post.base_text) {
+    if (JSON.stringify(state.segments) !== JSON.stringify(post.segments)) {
         return false;
     }
 
@@ -510,9 +510,10 @@ export function contentMatchesServer(
     const localOverrides = normalizeOverrides(state.overrideByAccount);
     const serverOverrides: Record<string, string> = {};
     for (const target of post.targets) {
-        const text = target.content_override?.text;
-        if (text !== undefined && text !== null) {
-            serverOverrides[target.connected_account_id] = text;
+        const segments = target.content_override?.segments;
+        if (segments !== undefined && segments !== null) {
+            serverOverrides[target.connected_account_id] =
+                JSON.stringify(segments);
         }
     }
 
@@ -530,12 +531,12 @@ export function contentMatchesServer(
  * equal when they carry the same *defined* per-account overrides.
  */
 function normalizeOverrides(
-    overrides: Record<string, string | undefined>,
+    overrides: Record<string, string[] | undefined>,
 ): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const [accountId, text] of Object.entries(overrides)) {
-        if (text !== undefined && text !== null) {
-            out[accountId] = text;
+    for (const [accountId, segments] of Object.entries(overrides)) {
+        if (segments !== undefined && segments !== null) {
+            out[accountId] = JSON.stringify(segments);
         }
     }
 
@@ -543,13 +544,13 @@ function normalizeOverrides(
 }
 
 /**
- * Whether the composer holds anything worth persisting as a draft: base text,
- * any per-account override text, or attached media. Destination and schedule
+ * Whether the composer holds anything worth persisting as a draft: segments,
+ * any per-account override segments, or attached media. Destination and schedule
  * changes are deliberately NOT content — they must not spawn a blank draft.
  */
 export function composerHasContent(state: ComposerState): boolean {
     if (
-        state.baseText.trim().length > 0 ||
+        state.segments.join('').trim().length > 0 ||
         state.media.length > 0 ||
         state.mentions.length > 0
     ) {
@@ -557,18 +558,21 @@ export function composerHasContent(state: ComposerState): boolean {
     }
 
     return Object.values(state.overrideByAccount).some(
-        (text) => (text ?? '').trim().length > 0,
+        (segments) => (segments ?? []).join('').trim().length > 0,
     );
 }
 
 /**
- * Derive a draft title from base text: the first non-empty line, trimmed, and
- * truncated to 80 characters with an ellipsis. Returns '' when the text has no
- * non-empty line.
+ * Derive a draft title from segments: the first non-empty line across all
+ * segments, trimmed, and truncated to 80 characters with an ellipsis. Returns
+ * '' when the segments have no non-empty line.
  */
-export function firstLineTitle(text: string): string {
+export function firstLineTitle(segments: string[]): string {
     const trimmed = (
-        text.split('\n').find((line) => line.trim().length > 0) ?? ''
+        segments
+            .join('\n')
+            .split('\n')
+            .find((line) => line.trim().length > 0) ?? ''
     ).trim();
 
     return trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;

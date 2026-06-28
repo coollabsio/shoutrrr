@@ -38,7 +38,9 @@ describe('buildXPreview', () => {
     it('resolves X mention handles and auto-splits draft text into thread items', () => {
         const preview = buildXPreview({
             account,
-            text: 'Launch with @Person\nSecond short paragraph\nThird short paragraph',
+            segments: [
+                'Launch with @Person\nSecond short paragraph\nThird short paragraph',
+            ],
             mentions,
             media: [image],
             excludedMediaIds: new Set(),
@@ -59,7 +61,7 @@ describe('buildXPreview', () => {
     it('keeps one item when auto-split is disabled and filters media excluded for the account', () => {
         const preview = buildXPreview({
             account,
-            text: 'One paragraph\nAnother paragraph',
+            segments: ['One paragraph\nAnother paragraph'],
             mentions: [],
             media: [image],
             excludedMediaIds: new Set(['media-1']),
@@ -79,10 +81,10 @@ describe('buildXPreview', () => {
     });
 });
 
-it('does not render manual split markers as X post text', () => {
+it('treats a literal --- as post text, not a thread boundary', () => {
     const preview = buildXPreview({
         account,
-        text: 'First post\n---\nSecond post',
+        segments: ['First post\n---\nSecond post'],
         mentions: [],
         media: [],
         excludedMediaIds: new Set(),
@@ -91,7 +93,6 @@ it('does not render manual split markers as X post text', () => {
     });
 
     expect(preview.items.map((item) => item.text)).toEqual([
-        'First post',
-        'Second post',
+        'First post\n---\nSecond post',
     ]);
 });

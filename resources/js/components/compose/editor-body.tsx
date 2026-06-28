@@ -21,8 +21,8 @@ import {
     usesPlatformMention,
 } from '@/lib/compose/mentions';
 import {
-    baseTextToDoc,
-    docToBaseText,
+    docToSegments,
+    segmentsToDoc,
     type DocNode,
 } from '@/lib/compose/tiptap-doc';
 import { composerExtensions } from '@/lib/compose/tiptap/setup';
@@ -34,8 +34,8 @@ import type {
 } from '@/types/compose';
 
 type EditorBodyProps = {
-    value: string;
-    onChange: (text: string) => void;
+    value: string[];
+    onChange: (segments: string[]) => void;
     onBlur: () => void;
     placeholder?: string;
     /** When false, the post is read-only (e.g. already published/scheduled). */
@@ -134,7 +134,7 @@ export default function EditorBody({
     onPasteFilesRef.current = onPasteFiles;
     const editor = useEditor({
         extensions: composerExtensions({ placeholder }),
-        content: baseTextToDoc(value) as object,
+        content: segmentsToDoc(value) as object,
         editable,
         editorProps: {
             handlePaste: (_view, event) => {
@@ -149,7 +149,7 @@ export default function EditorBody({
             },
         },
         onUpdate: ({ editor }) =>
-            onChange(docToBaseText(editor.getJSON() as DocNode)),
+            onChange(docToSegments(editor.getJSON() as DocNode)),
         onBlur,
     });
 
@@ -176,9 +176,9 @@ export default function EditorBody({
         if (!editor) {
             return;
         }
-        const current = docToBaseText(editor.getJSON() as DocNode);
-        if (current !== value) {
-            editor.commands.setContent(baseTextToDoc(value) as object, {
+        const current = docToSegments(editor.getJSON() as DocNode);
+        if (JSON.stringify(current) !== JSON.stringify(value)) {
+            editor.commands.setContent(segmentsToDoc(value) as object, {
                 emitUpdate: false,
             });
         }

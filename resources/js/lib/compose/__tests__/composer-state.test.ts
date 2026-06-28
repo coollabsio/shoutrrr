@@ -29,6 +29,7 @@ function hydrated(): ReturnType<typeof composerReducer> {
     const post: PostView = {
         id: 'post-1',
         base_text: 'hello',
+        segments: ['hello'],
         status: 'draft',
         published_at: null,
         updated_at: '2026-06-12T10:00:00+00:00',
@@ -131,39 +132,39 @@ describe('composerReducer', () => {
         });
     });
 
-    it('hydrates base text, destination, baseline, and per-account maps', () => {
+    it('hydrates segments, destination, baseline, and per-account maps', () => {
         const state = hydrated();
         expect(state.postId).toBe('post-1');
-        expect(state.baseText).toBe('hello');
+        expect(state.segments).toEqual(['hello']);
         expect(state.baselineUpdatedAt).toBe('2026-06-12T10:00:00+00:00');
         expect(state.autoSplitByAccount).toEqual({ a1: true, a2: true });
         expect(state.saveState).toBe('saved');
     });
 
-    it('marks dirty when base text changes', () => {
+    it('marks dirty when segments change', () => {
         const state = composerReducer(hydrated(), {
-            type: 'updateBaseText',
-            text: 'new',
+            type: 'updateSegments',
+            segments: ['new'],
         });
-        expect(state.baseText).toBe('new');
+        expect(state.segments).toEqual(['new']);
         expect(state.saveState).toBe('dirty');
     });
 
     it('stores a per-account override and marks dirty', () => {
         const state = composerReducer(hydrated(), {
-            type: 'setOverrideText',
+            type: 'setOverrideSegments',
             accountId: 'a1',
-            text: 'just for x',
+            segments: ['just for x'],
         });
-        expect(state.overrideByAccount.a1).toBe('just for x');
+        expect(state.overrideByAccount.a1).toEqual(['just for x']);
         expect(state.saveState).toBe('dirty');
     });
 
     it('discards a per-account override', () => {
         let state = composerReducer(hydrated(), {
-            type: 'setOverrideText',
+            type: 'setOverrideSegments',
             accountId: 'a1',
-            text: 'x',
+            segments: ['x'],
         });
         state = composerReducer(state, {
             type: 'discardOverride',
@@ -192,8 +193,8 @@ describe('composerReducer', () => {
 
     it('transitions through a successful save', () => {
         let state = composerReducer(hydrated(), {
-            type: 'updateBaseText',
-            text: 'new',
+            type: 'updateSegments',
+            segments: ['new'],
         });
         state = composerReducer(state, { type: 'saveStarted' });
         expect(state.saveState).toBe('saving');
@@ -201,6 +202,7 @@ describe('composerReducer', () => {
         const view: PostView = {
             id: 'post-1',
             base_text: 'new',
+            segments: ['new'],
             status: 'draft',
             published_at: null,
             updated_at: '2026-06-12T11:00:00+00:00',
@@ -218,14 +220,15 @@ describe('composerReducer', () => {
         let state = composerReducer(hydrated(), { type: 'saveStarted' });
         // user types while the save is in flight
         state = composerReducer(state, {
-            type: 'updateBaseText',
-            text: 'typed during save',
+            type: 'updateSegments',
+            segments: ['typed during save'],
         });
         expect(state.saveState).toBe('dirty');
 
         const view: PostView = {
             id: 'post-1',
             base_text: 'hello',
+            segments: ['hello'],
             status: 'draft',
             published_at: null,
             updated_at: '2026-06-12T11:30:00+00:00',
@@ -359,12 +362,13 @@ describe('composerReducer', () => {
 
     it('enters conflict on a stale save and resolves use-server', () => {
         let state = composerReducer(hydrated(), {
-            type: 'updateBaseText',
-            text: 'mine',
+            type: 'updateSegments',
+            segments: ['mine'],
         });
         const server: PostView = {
             id: 'post-1',
             base_text: 'theirs',
+            segments: ['theirs'],
             status: 'draft',
             published_at: null,
             updated_at: '2026-06-12T12:00:00+00:00',
@@ -378,10 +382,10 @@ describe('composerReducer', () => {
             post: server,
         });
         expect(state.saveState).toBe('conflict');
-        expect(state.conflict?.base_text).toBe('theirs');
+        expect(state.conflict?.segments).toEqual(['theirs']);
 
         state = composerReducer(state, { type: 'resolveConflictUseServer' });
-        expect(state.baseText).toBe('theirs');
+        expect(state.segments).toEqual(['theirs']);
         expect(state.saveState).toBe('saved');
         expect(state.conflict).toBeNull();
     });
@@ -396,6 +400,7 @@ describe('composerReducer', () => {
         const server: PostView = {
             id: 'post-1',
             base_text: 'hello',
+            segments: ['hello'],
             status: 'scheduled',
             published_at: null,
             updated_at: '2026-06-12T13:00:00+00:00',
@@ -417,6 +422,7 @@ describe('composerReducer', () => {
         const same: PostView = {
             id: 'post-1',
             base_text: 'hello',
+            segments: ['hello'],
             status: 'draft',
             published_at: null,
             updated_at: '2026-06-12T10:00:00+00:00',
@@ -434,12 +440,13 @@ describe('composerReducer', () => {
 
     it('syncServerPost preserves local edits when the composer is dirty', () => {
         const dirty = composerReducer(hydrated(), {
-            type: 'updateBaseText',
-            text: 'my unsaved edit',
+            type: 'updateSegments',
+            segments: ['my unsaved edit'],
         });
         const server: PostView = {
             id: 'post-1',
             base_text: 'hello',
+            segments: ['hello'],
             status: 'scheduled',
             published_at: null,
             updated_at: '2026-06-12T13:00:00+00:00',
@@ -453,7 +460,7 @@ describe('composerReducer', () => {
             post: server,
         });
         expect(next).toBe(dirty);
-        expect(next.baseText).toBe('my unsaved edit');
+        expect(next.segments).toEqual(['my unsaved edit']);
         expect(next.saveState).toBe('dirty');
     });
 
@@ -462,6 +469,7 @@ describe('composerReducer', () => {
         const other: PostView = {
             id: 'post-2',
             base_text: 'a different draft',
+            segments: ['a different draft'],
             status: 'draft',
             published_at: null,
             updated_at: '2026-06-12T14:00:00+00:00',
@@ -475,7 +483,7 @@ describe('composerReducer', () => {
             post: other,
         });
         expect(next.postId).toBe('post-2');
-        expect(next.baseText).toBe('a different draft');
+        expect(next.segments).toEqual(['a different draft']);
         expect(next.baselineUpdatedAt).toBe('2026-06-12T14:00:00+00:00');
     });
 
@@ -483,10 +491,11 @@ describe('composerReducer', () => {
         // The user typed "test", it saved, then updated_at moved out-of-band
         // (e.g. a schedule/publish). A retry 409s, but the server text matches —
         // no dialog should appear; the baseline just advances.
-        const saved = hydrated(); // base_text 'hello', no overrides/media
+        const saved = hydrated(); // segments ['hello'], no overrides/media
         const server: PostView = {
             id: 'post-1',
             base_text: 'hello',
+            segments: ['hello'],
             status: 'draft',
             published_at: null,
             updated_at: '2026-06-12T15:00:00+00:00',
@@ -509,6 +518,7 @@ describe('composerReducer', () => {
         const server: PostView = {
             id: 'post-1',
             base_text: 'a real concurrent edit',
+            segments: ['a real concurrent edit'],
             status: 'draft',
             published_at: null,
             updated_at: '2026-06-12T15:00:00+00:00',
@@ -522,7 +532,7 @@ describe('composerReducer', () => {
             post: server,
         });
         expect(next.saveState).toBe('conflict');
-        expect(next.conflict?.base_text).toBe('a real concurrent edit');
+        expect(next.conflict?.segments).toEqual(['a real concurrent edit']);
     });
 
     it('drops dirty back to idle on saveSkippedEmpty (empty composer, no draft)', () => {
@@ -589,14 +599,15 @@ describe('composerReducer', () => {
         expect(next.saveState).toBe(state.saveState);
     });
 
-    it('resolves keep-mine by adopting the server baseline but keeping my text', () => {
+    it('resolves keep-mine by adopting the server baseline but keeping my segments', () => {
         let state = composerReducer(hydrated(), {
-            type: 'updateBaseText',
-            text: 'mine',
+            type: 'updateSegments',
+            segments: ['mine'],
         });
         const server: PostView = {
             id: 'post-1',
             base_text: 'theirs',
+            segments: ['theirs'],
             status: 'draft',
             published_at: null,
             updated_at: '2026-06-12T12:00:00+00:00',
@@ -610,7 +621,7 @@ describe('composerReducer', () => {
             post: server,
         });
         state = composerReducer(state, { type: 'resolveConflictKeepMine' });
-        expect(state.baseText).toBe('mine');
+        expect(state.segments).toEqual(['mine']);
         expect(state.baselineUpdatedAt).toBe('2026-06-12T12:00:00+00:00');
         expect(state.saveState).toBe('dirty');
     });
@@ -630,22 +641,22 @@ describe('buildPutBody', () => {
 
     it('includes content_override only for overridden accounts and clears the rest', () => {
         const state = composerReducer(hydrated(), {
-            type: 'setOverrideText',
+            type: 'setOverrideSegments',
             accountId: 'a1',
-            text: 'x only',
+            segments: ['x only'],
         });
         const body = buildPutBody(state, ['a1', 'a2']);
         expect(body.targets[0].content_override).toEqual({
-            text: 'x only',
+            segments: ['x only'],
             media_ids: [],
         });
         expect(body.targets[1].content_override).toBeNull();
     });
 
-    it('carries base_text, destination, media, and the baseline', () => {
+    it('carries segments, destination, media, and the baseline', () => {
         const state = hydrated();
         const body = buildPutBody(state, ['a1', 'a2']);
-        expect(body.base_text).toBe('hello');
+        expect(body.segments).toEqual(['hello']);
         expect(body.destination).toEqual({ kind: 'all' });
         expect(body.expected_updated_at).toBe('2026-06-12T10:00:00+00:00');
     });
@@ -706,23 +717,23 @@ describe('composerHasContent', () => {
         expect(composerHasContent(state)).toBe(false);
     });
 
-    it('is false when base text is only whitespace', () => {
+    it('is false when segments are only whitespace', () => {
         const state = composerReducer(initialComposerState(), {
-            type: 'updateBaseText',
-            text: '   \n  ',
+            type: 'updateSegments',
+            segments: ['   \n  '],
         });
         expect(composerHasContent(state)).toBe(false);
     });
 
-    it('is true once base text has non-whitespace', () => {
+    it('is true once segments have non-whitespace', () => {
         const state = composerReducer(initialComposerState(), {
-            type: 'updateBaseText',
-            text: 'hi',
+            type: 'updateSegments',
+            segments: ['hi'],
         });
         expect(composerHasContent(state)).toBe(true);
     });
 
-    it('is true when media is attached, even with empty text', () => {
+    it('is true when media is attached, even with empty segments', () => {
         const state = composerReducer(initialComposerState(), {
             type: 'addMedia',
             media: {
@@ -740,20 +751,20 @@ describe('composerHasContent', () => {
         expect(composerHasContent(state)).toBe(true);
     });
 
-    it('is true when a per-account override has text but base text is empty', () => {
+    it('is true when a per-account override has text but base segments are empty', () => {
         const state = composerReducer(initialComposerState(), {
-            type: 'setOverrideText',
+            type: 'setOverrideSegments',
             accountId: 'a1',
-            text: 'just for x',
+            segments: ['just for x'],
         });
         expect(composerHasContent(state)).toBe(true);
     });
 
     it('ignores a whitespace-only override', () => {
         const state = composerReducer(initialComposerState(), {
-            type: 'setOverrideText',
+            type: 'setOverrideSegments',
             accountId: 'a1',
-            text: '   ',
+            segments: ['   '],
         });
         expect(composerHasContent(state)).toBe(false);
     });
@@ -798,29 +809,29 @@ describe('initialComposerState with a destination', () => {
 });
 
 describe('firstLineTitle', () => {
-    it('returns an empty string for empty text', () => {
-        expect(firstLineTitle('')).toBe('');
+    it('returns an empty string for empty segments', () => {
+        expect(firstLineTitle([''])).toBe('');
     });
 
     it('returns an empty string when there is no non-empty line', () => {
-        expect(firstLineTitle('   \n\n  \n')).toBe('');
+        expect(firstLineTitle(['   \n\n  \n'])).toBe('');
     });
 
-    it('picks the first non-empty line, trimmed', () => {
-        expect(firstLineTitle('\n  \n  hello world  \nsecond')).toBe(
+    it('picks the first non-empty line across segments, trimmed', () => {
+        expect(firstLineTitle(['\n  \n  hello world  \nsecond'])).toBe(
             'hello world',
         );
     });
 
     it('truncates lines longer than 80 chars with an ellipsis', () => {
         const long = 'a'.repeat(120);
-        const title = firstLineTitle(long);
+        const title = firstLineTitle([long]);
         expect(title).toBe(`${'a'.repeat(80)}…`);
         expect(title.length).toBe(81);
     });
 
     it('keeps lines of exactly 80 chars untouched', () => {
         const exact = 'b'.repeat(80);
-        expect(firstLineTitle(exact)).toBe(exact);
+        expect(firstLineTitle([exact])).toBe(exact);
     });
 });

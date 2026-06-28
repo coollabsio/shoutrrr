@@ -57,7 +57,7 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
      */
     async function createPost(): Promise<string> {
         http.transform(() => ({
-            base_text: state.baseText,
+            segments: state.segments,
             mentions: state.mentions,
             destination: state.destination,
         }));
@@ -231,7 +231,7 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
         // oxlint-disable-next-line react-hooks/exhaustive-deps
     }, [
         state.saveState,
-        state.baseText,
+        state.segments,
         state.mentions,
         state.destination,
         state.overrideByAccount,

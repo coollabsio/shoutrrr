@@ -100,7 +100,7 @@ export type TargetView = {
     display_name: string | null;
     avatar_url: string | null;
     sections: string[];
-    content_override: { text?: string | null; media_ids?: string[] } | null;
+    content_override: { segments?: string[]; media_ids?: string[] } | null;
     auto_split: boolean;
     issues: string[];
     status: TargetStatus;
@@ -113,6 +113,7 @@ export type TargetView = {
 export type PostView = {
     id: string;
     base_text: string;
+    segments: string[];
     mentions?: MentionPlaceholder[];
     status: PostStatus;
     published_at: string | null;

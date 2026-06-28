@@ -38,24 +38,30 @@ describe('section boundaries match the server splitter fixture', () => {
         );
 
         expect(
-            previewSections(text, testCase.platform, testCase.limit),
+            previewSections([text], testCase.platform, testCase.limit),
         ).toEqual(expected);
     });
 });
 
-it('treats manual split markers as section boundaries, not post text', () => {
-    expect(previewSections('first post\n---\nsecond post', 'x', 280)).toEqual([
+it('emits one section per non-empty segment', () => {
+    expect(previewSections(['first post', 'second post'], 'x', 280)).toEqual([
         'first post',
         'second post',
     ]);
 });
 
-it('auto-splits each manually split segment independently', () => {
+it('auto-splits each segment independently', () => {
     const long = 'a'.repeat(200);
 
-    expect(previewSections(`${long}\n${long}\n---\nthird`, 'x', 280)).toEqual([
+    expect(previewSections([`${long}\n${long}`, 'third'], 'x', 280)).toEqual([
         long,
         long,
         'third',
+    ]);
+});
+
+it('treats a literal --- as section text, not a boundary', () => {
+    expect(previewSections(['before\n---\nafter'], 'x', 280)).toEqual([
+        'before\n---\nafter',
     ]);
 });
