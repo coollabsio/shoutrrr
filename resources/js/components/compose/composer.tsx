@@ -23,6 +23,7 @@ import {
     syncMentionsFromText,
 } from '@/lib/compose/mentions';
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
+import { readVideoMetadata } from '@/lib/compose/video';
 import {
     defaultSettings,
     normalizeSettings,
@@ -66,7 +67,8 @@ type Editing =
       }
     | { kind: 'reedit'; url: string; settings: EditSettings; mediaId: string }
     | { kind: 'raw'; url: string; mediaId: string }
-    | { kind: 'video'; url: string; durationSeconds: number; mediaId: string };
+    | { kind: 'video'; url: string; durationSeconds: number; mediaId: string }
+    | { kind: 'video-new'; url: string; durationSeconds: number; file: File };
 
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
 const DEFAULT_EDIT_SETTINGS = defaultSettings();
@@ -212,9 +214,11 @@ export default function Composer({
 
     const videoEditor = useVideoEditor({
         onEnsurePost: ensurePost,
-        onReplace: (oldMediaId, media) => {
+        onComplete: (oldMediaId, media) => {
             dispatch({ type: 'addMedia', media });
-            dispatch({ type: 'removeMedia', mediaId: oldMediaId });
+            if (oldMediaId) {
+                dispatch({ type: 'removeMedia', mediaId: oldMediaId });
+            }
         },
     });
 
@@ -235,6 +239,8 @@ export default function Composer({
                 for (const it of e.items) {
                     URL.revokeObjectURL(it.url);
                 }
+            } else if (e?.kind === 'video-new') {
+                URL.revokeObjectURL(e.url);
             }
         },
         [],
@@ -280,7 +286,18 @@ export default function Composer({
         }
 
         if (videos.length > 0) {
-            void mediaUploads.handleFiles(videos);
+            const file = videos[0];
+            try {
+                const meta = await readVideoMetadata(file);
+                setEditing({
+                    kind: 'video-new',
+                    url: URL.createObjectURL(file),
+                    durationSeconds: meta.durationSeconds,
+                    file,
+                });
+            } catch {
+                toast.error('That video could not be read.');
+            }
 
             return;
         }
@@ -295,6 +312,14 @@ export default function Composer({
             })),
             index: 0,
         });
+    }
+
+    // Revoke the object URL for a video-new session and close the editor.
+    function closeVideoEditing() {
+        if (editing?.kind === 'video-new') {
+            URL.revokeObjectURL(editing.url);
+        }
+        setEditing(null);
     }
 
     // Open an attached video in the video editor.
@@ -854,7 +879,11 @@ export default function Composer({
 
                 {!readOnly && (
                     <ImageEditor
-                        open={editing !== null && editing.kind !== 'video'}
+                        open={
+                            editing !== null &&
+                            editing.kind !== 'video' &&
+                            editing.kind !== 'video-new'
+                        }
                         sourceUrl={editorSourceUrl}
                         initialSettings={editorSettings}
                         onApply={applyEditing}
@@ -868,34 +897,61 @@ export default function Composer({
 
                 {!readOnly && (
                     <VideoEditor
-                        open={editing?.kind === 'video'}
+                        open={
+                            editing?.kind === 'video' ||
+                            editing?.kind === 'video-new'
+                        }
+                        variant={
+                            editing?.kind === 'video-new' ? 'new' : 'existing'
+                        }
                         sourceUrl={
-                            editing?.kind === 'video' ? editing.url : null
+                            editing?.kind === 'video' ||
+                            editing?.kind === 'video-new'
+                                ? editing.url
+                                : null
                         }
                         durationSeconds={
-                            editing?.kind === 'video'
+                            editing?.kind === 'video' ||
+                            editing?.kind === 'video-new'
                                 ? editing.durationSeconds
                                 : 0
                         }
                         phase={videoEditor.phase}
                         progress={videoEditor.progress}
-                        onCancel={() => setEditing(null)}
+                        onCancel={closeVideoEditing}
+                        onSkip={() => {
+                            if (editing?.kind !== 'video-new') {
+                                return;
+                            }
+                            void mediaUploads.handleFiles([editing.file]);
+                            closeVideoEditing();
+                        }}
                         onApply={async (settings) => {
-                            if (editing?.kind !== 'video') {
+                            if (
+                                editing?.kind !== 'video' &&
+                                editing?.kind !== 'video-new'
+                            ) {
                                 return;
                             }
                             try {
-                                const source = await fetch(editing.url).then(
-                                    (r) => r.blob(),
-                                );
+                                const source =
+                                    editing.kind === 'video-new'
+                                        ? editing.file
+                                        : await fetch(editing.url).then((r) =>
+                                              r.blob(),
+                                          );
+                                const oldMediaId =
+                                    editing.kind === 'video'
+                                        ? editing.mediaId
+                                        : null;
                                 const ok = await videoEditor.apply({
                                     source,
-                                    oldMediaId: editing.mediaId,
+                                    oldMediaId,
                                     settings,
                                     limits: selectedVideoLimits,
                                 });
                                 if (ok) {
-                                    setEditing(null);
+                                    closeVideoEditing();
                                 }
                             } catch {
                                 toast.error(

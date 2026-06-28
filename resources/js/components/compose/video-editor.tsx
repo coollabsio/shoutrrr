@@ -29,6 +29,10 @@ type Props = {
     durationSeconds: number;
     onApply: (settings: VideoEditSettings) => Promise<void> | void;
     onCancel: () => void;
+    /** 'new' = a just-added video (offer "Upload without editing"); 'existing' = re-editing an uploaded video. */
+    variant?: 'new' | 'existing';
+    /** Called when the user chooses to upload without editing (only relevant for 'new' variant). */
+    onSkip?: () => void;
     phase: 'idle' | 'rendering' | 'uploading';
     /** 0..1 — shown as a progress bar while phase !== 'idle'. */
     progress: number;
@@ -53,6 +57,8 @@ export function VideoEditor({
     durationSeconds,
     onApply,
     onCancel,
+    variant = 'existing',
+    onSkip,
     phase,
     progress,
 }: Props) {
@@ -503,14 +509,25 @@ export function VideoEditor({
                     )}
 
                     <div className="ml-auto flex items-center gap-2">
-                        <button
-                            type="button"
-                            disabled={busy}
-                            onClick={onCancel}
-                            className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 md:py-2"
-                        >
-                            Cancel
-                        </button>
+                        {variant === 'new' ? (
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={onSkip}
+                                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 md:py-2"
+                            >
+                                Upload without editing
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={onCancel}
+                                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 md:py-2"
+                            >
+                                Cancel
+                            </button>
+                        )}
                         <button
                             type="button"
                             disabled={busy}

@@ -13,17 +13,17 @@ import type { MediaView, PlatformLimits } from '@/types/compose';
 
 type ApplyInput = {
     source: Blob;
-    oldMediaId: string;
+    oldMediaId: string | null;
     settings: VideoEditSettings;
     limits: PlatformLimits[];
 };
 
 type Args = {
     onEnsurePost: () => Promise<string>;
-    onReplace: (oldMediaId: string, media: MediaView) => void;
+    onComplete: (oldMediaId: string | null, media: MediaView) => void;
 };
 
-export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
+export function useVideoEditor({ onEnsurePost, onComplete }: Args) {
     const [phase, setPhase] = useState<'idle' | 'rendering' | 'uploading'>(
         'idle',
     );
@@ -109,7 +109,7 @@ export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
                 },
             );
 
-            onReplace(oldMediaId, media);
+            onComplete(oldMediaId, media);
 
             return true;
         } catch (error) {
