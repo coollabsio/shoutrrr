@@ -303,6 +303,68 @@ export function VideoEditor({
                                     )}
                                 </div>
                             )}
+
+                            {/* Preview volume — native-player chrome over the video; affects
+                                playback only, never the exported clip (audio is always kept). */}
+                            {sourceUrl && (
+                                <div
+                                    className={cn(
+                                        'absolute right-2 bottom-2 z-30 flex items-center gap-1 rounded-full bg-black/55 py-1 pr-2.5 pl-1 text-white backdrop-blur-sm transition-opacity',
+                                        busy && 'pointer-events-none opacity-0',
+                                    )}
+                                >
+                                    <button
+                                        type="button"
+                                        aria-label={
+                                            muted || volume === 0
+                                                ? 'Unmute preview'
+                                                : 'Mute preview'
+                                        }
+                                        onClick={() => {
+                                            if (muted) {
+                                                setMuted(false);
+                                                if (volume === 0) {
+                                                    setVolume(1);
+                                                }
+                                            } else {
+                                                setMuted(true);
+                                            }
+                                        }}
+                                        className="grid size-7 shrink-0 place-items-center rounded-full text-white/90 transition-colors hover:text-white"
+                                    >
+                                        {muted || volume === 0 ? (
+                                            <VolumeX
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        ) : volume < 0.5 ? (
+                                            <Volume1
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        ) : (
+                                            <Volume2
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        )}
+                                    </button>
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={1}
+                                        step={0.05}
+                                        value={muted ? 0 : volume}
+                                        aria-label="Preview volume"
+                                        onChange={(e) => {
+                                            const v = Number(e.target.value);
+                                            setVolume(v);
+                                            setMuted(v === 0);
+                                        }}
+                                        className="h-1 w-16 cursor-pointer accent-white"
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         {/* ── Timeline trim strip ───────────────────────── */}
@@ -611,62 +673,6 @@ export function VideoEditor({
                                             {fmtMmSs(settings.trim.end)}
                                         </span>
                                     </div>
-                                </div>
-
-                                {/* Preview volume — affects playback only, never the exported clip */}
-                                <div className="flex shrink-0 items-center gap-1.5">
-                                    <button
-                                        type="button"
-                                        aria-label={
-                                            muted || volume === 0
-                                                ? 'Unmute preview'
-                                                : 'Mute preview'
-                                        }
-                                        disabled={busy || !sourceUrl}
-                                        onClick={() => {
-                                            if (muted) {
-                                                setMuted(false);
-                                                if (volume === 0) {
-                                                    setVolume(1);
-                                                }
-                                            } else {
-                                                setMuted(true);
-                                            }
-                                        }}
-                                        className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-                                    >
-                                        {muted || volume === 0 ? (
-                                            <VolumeX
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                        ) : volume < 0.5 ? (
-                                            <Volume1
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                        ) : (
-                                            <Volume2
-                                                className="size-4"
-                                                aria-hidden="true"
-                                            />
-                                        )}
-                                    </button>
-                                    <input
-                                        type="range"
-                                        min={0}
-                                        max={1}
-                                        step={0.05}
-                                        value={muted ? 0 : volume}
-                                        aria-label="Preview volume"
-                                        disabled={busy || !sourceUrl}
-                                        onChange={(e) => {
-                                            const v = Number(e.target.value);
-                                            setVolume(v);
-                                            setMuted(v === 0);
-                                        }}
-                                        className="hidden h-1 w-16 cursor-pointer accent-foreground sm:block"
-                                    />
                                 </div>
                             </div>
                         </div>
