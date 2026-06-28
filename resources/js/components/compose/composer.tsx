@@ -884,17 +884,23 @@ export default function Composer({
                             if (editing?.kind !== 'video') {
                                 return;
                             }
-                            const source = await fetch(editing.url).then((r) =>
-                                r.blob(),
-                            );
-                            const ok = await videoEditor.apply({
-                                source,
-                                oldMediaId: editing.mediaId,
-                                settings,
-                                limits: selectedVideoLimits,
-                            });
-                            if (ok) {
-                                setEditing(null);
+                            try {
+                                const source = await fetch(editing.url).then(
+                                    (r) => r.blob(),
+                                );
+                                const ok = await videoEditor.apply({
+                                    source,
+                                    oldMediaId: editing.mediaId,
+                                    settings,
+                                    limits: selectedVideoLimits,
+                                });
+                                if (ok) {
+                                    setEditing(null);
+                                }
+                            } catch {
+                                toast.error(
+                                    'Could not load the video to edit. Please try again.',
+                                );
                             }
                         }}
                     />
