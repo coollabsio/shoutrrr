@@ -91,11 +91,8 @@ export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
                 },
             );
 
-            await putWithProgress(
-                signed.url,
-                signed.headers,
-                file,
-                (pct) => setProgress(pct / 100),
+            await putWithProgress(signed.url, signed.headers, file, (pct) =>
+                setProgress(pct / 100),
             );
 
             confirmHttp.setData({
