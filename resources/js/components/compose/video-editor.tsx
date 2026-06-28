@@ -1,4 +1,4 @@
-import { Crop, Pause, Play, X } from 'lucide-react';
+import { Crop, Pause, Play, Volume1, Volume2, VolumeX, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -78,6 +78,8 @@ export function VideoEditor({
     const [box, setBox] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
     const [playing, setPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
+    const [volume, setVolume] = useState(1);
+    const [muted, setMuted] = useState(false);
 
     const busy = phase !== 'idle';
     // Guard against divide-by-zero when duration hasn't been resolved yet.
@@ -124,6 +126,16 @@ export function VideoEditor({
         ro.observe(previewEl);
         return () => ro.disconnect();
     }, [previewEl]);
+
+    // Keep the preview element's audio in sync with the volume control. Setting
+    // these via the DOM property (not the `muted` attribute, which React applies
+    // unreliably) and re-running when the source mounts ensures it always takes.
+    useEffect(() => {
+        if (videoRef.current) {
+            videoRef.current.volume = volume;
+            videoRef.current.muted = muted;
+        }
+    }, [volume, muted, sourceUrl]);
 
     /** Apply a new aspect preset, seeding or clearing the crop rect as needed. */
     function selectAspect(aspect: VideoAspectPreset) {
@@ -234,7 +246,6 @@ export function VideoEditor({
                                     <video
                                         ref={videoRef}
                                         src={sourceUrl}
-                                        muted
                                         playsInline
                                         preload="metadata"
                                         className={
@@ -592,6 +603,63 @@ export function VideoEditor({
                                         </Segment>
                                     ),
                                 )}
+                            </div>
+                        </Field>
+
+                        <Field label="Sound">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    aria-label={
+                                        muted || volume === 0
+                                            ? 'Unmute'
+                                            : 'Mute'
+                                    }
+                                    disabled={busy || !sourceUrl}
+                                    onClick={() => {
+                                        if (muted) {
+                                            setMuted(false);
+                                            if (volume === 0) {
+                                                setVolume(1);
+                                            }
+                                        } else {
+                                            setMuted(true);
+                                        }
+                                    }}
+                                    className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                >
+                                    {muted || volume === 0 ? (
+                                        <VolumeX
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                    ) : volume < 0.5 ? (
+                                        <Volume1
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                    ) : (
+                                        <Volume2
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                    )}
+                                </button>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={1}
+                                    step={0.05}
+                                    value={muted ? 0 : volume}
+                                    aria-label="Volume"
+                                    disabled={busy || !sourceUrl}
+                                    onChange={(e) => {
+                                        const v = Number(e.target.value);
+                                        setVolume(v);
+                                        setMuted(v === 0);
+                                    }}
+                                    className="h-1 flex-1 cursor-pointer accent-foreground disabled:opacity-50"
+                                />
                             </div>
                         </Field>
 
