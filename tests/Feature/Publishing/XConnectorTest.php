@@ -248,8 +248,8 @@ test('x compresses oversized images via the compressor before upload', function 
     $compressor = Mockery::mock(ImageCompressor::class);
     $compressor->shouldReceive('compressToFit')
         ->once()
-        ->with('image-bytes', Platform::X->maxMediaBytes(), 'image/jpeg')
-        ->andReturn(CompressionResult::compressed('small-bytes'));
+        ->with('image-bytes', Platform::X->maxMediaBytes(), 'image/jpeg', Platform::X->allowedMime())
+        ->andReturn(CompressionResult::compressed('small-bytes', 'image/webp'));
     app()->instance(ImageCompressor::class, $compressor);
 
     $media = PostMedia::factory()->create([

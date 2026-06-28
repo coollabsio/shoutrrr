@@ -307,7 +307,7 @@ class BlueskyPublishConnector implements PublishConnector
 
         foreach ($media as $item) {
             $bytes = (string) Storage::disk($item->disk)->get($item->path);
-            $compressed = $this->imageCompressor->compressToFit($bytes, Platform::Bluesky->maxMediaBytes(), $item->mime);
+            $compressed = $this->imageCompressor->compressToFit($bytes, Platform::Bluesky->maxMediaBytes(), $item->mime, Platform::Bluesky->allowedMime());
 
             $response = $this->http
                 ->withToken($jwt)

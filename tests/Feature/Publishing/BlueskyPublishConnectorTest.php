@@ -202,8 +202,8 @@ test('bluesky compresses oversized images via the compressor before upload', fun
     $compressor = Mockery::mock(ImageCompressor::class);
     $compressor->shouldReceive('compressToFit')
         ->once()
-        ->with('image-bytes', Platform::Bluesky->maxMediaBytes(), 'image/jpeg')
-        ->andReturn(CompressionResult::compressed('small-bytes'));
+        ->with('image-bytes', Platform::Bluesky->maxMediaBytes(), 'image/jpeg', Platform::Bluesky->allowedMime())
+        ->andReturn(CompressionResult::compressed('small-bytes', 'image/webp'));
     app()->instance(ImageCompressor::class, $compressor);
 
     $media = PostMedia::factory()->create([
@@ -221,5 +221,5 @@ test('bluesky compresses oversized images via the compressor before upload', fun
 
     Http::assertSent(fn ($request) => str_contains($request->url(), 'com.atproto.repo.uploadBlob')
         && $request->body() === 'small-bytes'
-        && $request->hasHeader('Content-Type', 'image/jpeg'));
+        && $request->hasHeader('Content-Type', 'image/webp'));
 });

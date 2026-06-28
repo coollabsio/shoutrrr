@@ -210,8 +210,8 @@ test('linkedin compresses oversized images via the compressor before upload', fu
     $compressor = Mockery::mock(ImageCompressor::class);
     $compressor->shouldReceive('compressToFit')
         ->once()
-        ->with('image-bytes', Platform::LinkedIn->maxMediaBytes(), 'image/jpeg')
-        ->andReturn(CompressionResult::compressed('small-bytes'));
+        ->with('image-bytes', Platform::LinkedIn->maxMediaBytes(), 'image/jpeg', Platform::LinkedIn->allowedMime())
+        ->andReturn(CompressionResult::compressed('small-bytes', 'image/jpeg'));
     app()->instance(ImageCompressor::class, $compressor);
 
     $media = PostMedia::factory()->create([

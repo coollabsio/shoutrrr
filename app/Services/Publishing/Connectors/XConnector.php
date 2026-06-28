@@ -229,7 +229,7 @@ class XConnector implements PublishConnector
 
         foreach ($media as $item) {
             $bytes = (string) Storage::disk($item->disk)->get($item->path);
-            $compressed = $this->imageCompressor->compressToFit($bytes, Platform::X->maxMediaBytes(), $item->mime);
+            $compressed = $this->imageCompressor->compressToFit($bytes, Platform::X->maxMediaBytes(), $item->mime, Platform::X->allowedMime());
             $response = $this->http
                 ->withToken($token)
                 ->asMultipart()

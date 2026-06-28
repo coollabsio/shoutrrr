@@ -329,7 +329,7 @@ class LinkedInConnector implements PublishConnector
             $urn = (string) $register->json('value.image');
 
             $bytes = (string) Storage::disk($item->disk)->get($item->path);
-            $compressed = $this->imageCompressor->compressToFit($bytes, Platform::LinkedIn->maxMediaBytes(), $item->mime);
+            $compressed = $this->imageCompressor->compressToFit($bytes, Platform::LinkedIn->maxMediaBytes(), $item->mime, Platform::LinkedIn->allowedMime());
 
             $upload = $this->http
                 ->withToken($token)

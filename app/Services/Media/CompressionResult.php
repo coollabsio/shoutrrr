@@ -17,8 +17,8 @@ final class CompressionResult
         return new self($bytes, $mime, false);
     }
 
-    public static function compressed(string $bytes): self
+    public static function compressed(string $bytes, string $mime): self
     {
-        return new self($bytes, 'image/jpeg', true);
+        return new self($bytes, $mime, true);
     }
 }
