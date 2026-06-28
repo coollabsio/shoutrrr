@@ -31,6 +31,8 @@ type Props = {
     dismissPending: (tempId: string) => void;
     /** Click an attached image to (re)open it in the editor. */
     onImageClick?: (mediaId: string) => void;
+    /** Click a video chip's Edit button to open the video editor. */
+    onVideoClick?: (mediaId: string) => void;
 };
 
 export function ComposerToolbar({
@@ -50,6 +52,7 @@ export function ComposerToolbar({
     handleFiles,
     dismissPending,
     onImageClick,
+    onVideoClick,
 }: Props) {
     const input = useRef<HTMLInputElement | null>(null);
 
@@ -121,6 +124,7 @@ export function ComposerToolbar({
                 onDismissPending={dismissPending}
                 readOnly={readOnly}
                 onImageClick={onImageClick}
+                onVideoClick={onVideoClick}
             />
 
             <div className="ml-auto sm:flex-1" />

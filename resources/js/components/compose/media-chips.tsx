@@ -1,4 +1,4 @@
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Eye, EyeOff, Scissors, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
 
@@ -7,6 +7,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { isVideoEditingSupported } from '@/lib/video-editor/render';
 import { cn } from '@/lib/utils';
 import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
 
@@ -34,7 +35,7 @@ function MediaThumb({ media }: { media: MediaView }) {
                     className="size-full object-cover"
                 />
                 {label && (
-                    <span className="absolute right-0.5 bottom-0.5 rounded bg-black/70 px-1 font-mono text-[8px] leading-tight text-white tabular-nums">
+                    <span className="absolute left-0.5 bottom-0.5 rounded bg-black/70 px-1 font-mono text-[8px] leading-tight text-white tabular-nums">
                         {label}
                     </span>
                 )}
@@ -66,6 +67,8 @@ type Props = {
     readOnly?: boolean;
     /** Click an image to (re)open it in the editor. */
     onImageClick?: (mediaId: string) => void;
+    /** Click a video chip's Edit button to open the video editor. */
+    onVideoClick?: (mediaId: string) => void;
 };
 
 /** A square overlay button that protrudes past the chip's top-right corner. */
@@ -114,6 +117,7 @@ export function MediaChips({
     onDismissPending,
     readOnly = false,
     onImageClick,
+    onVideoClick,
 }: Props) {
     const [dragIdx, setDragIdx] = useState<number | null>(null);
     // True only once a real drag (reorder) has started, so the click that ends a
@@ -264,6 +268,26 @@ export function MediaChips({
                                         )}
                                     </button>
                                 )}
+                                {/* Video edit — bottom-right; duration label moved to
+                                    bottom-left inside the chip to avoid collision. */}
+                                {m.kind === 'video' &&
+                                    onVideoClick &&
+                                    isVideoEditingSupported() && (
+                                        <button
+                                            type="button"
+                                            aria-label="Edit video"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onVideoClick(m.id);
+                                            }}
+                                            className="absolute right-0.5 bottom-0.5 grid size-5 place-items-center rounded bg-black/70 text-white transition-colors hover:bg-black/85"
+                                        >
+                                            <Scissors
+                                                className="size-3"
+                                                aria-hidden="true"
+                                            />
+                                        </button>
+                                    )}
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[11px]">
