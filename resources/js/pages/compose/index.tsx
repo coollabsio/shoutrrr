@@ -3,7 +3,7 @@ import { ArrowLeft, PenLine } from 'lucide-react';
 
 import Composer from '@/components/compose/composer';
 import { PostPageActions } from '@/components/posts/post-page-actions';
-import { PostStatsCard } from '@/components/posts/post-stats-card';
+import { PublishedPostView } from '@/components/posts/published-post-view';
 import { Button } from '@/components/ui/button';
 import { firstLineTitle } from '@/lib/compose/composer-state';
 import { dashboard } from '@/routes';
@@ -19,10 +19,13 @@ export default function ComposePage({
 }: ComposePageProps) {
     const { features } = usePage().props;
     const title = firstLineTitle(post?.base_text ?? '');
+    const isPublished = Boolean(
+        post && post.targets.some((t) => t.status === 'published'),
+    );
 
     return (
         <>
-            <Head title="Compose" />
+            <Head title={title || 'Compose'} />
             <div className="mx-auto w-full max-w-7xl px-4 pt-6 pb-16 sm:px-6">
                 <div className="sticky top-0 z-10 mb-5 flex items-center gap-2 border-b border-border bg-background/85 px-2 py-2 backdrop-blur-md">
                     <Button
@@ -49,19 +52,20 @@ export default function ComposePage({
                     {post && <PostPageActions post={post} />}
                 </div>
 
-                <Composer
-                    post={post}
-                    accounts={accounts}
-                    sets={sets}
-                    limits={limits}
-                    initialSavedMentions={savedMentions}
-                />
-
-                {features?.analytics &&
-                    post &&
-                    post.targets.some((t) => t.status === 'published') && (
-                        <PostStatsCard post={post} />
-                    )}
+                {post && isPublished ? (
+                    <PublishedPostView
+                        post={post}
+                        showMetrics={Boolean(features?.analytics)}
+                    />
+                ) : (
+                    <Composer
+                        post={post}
+                        accounts={accounts}
+                        sets={sets}
+                        limits={limits}
+                        initialSavedMentions={savedMentions}
+                    />
+                )}
             </div>
         </>
     );
