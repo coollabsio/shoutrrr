@@ -1,0 +1,476 @@
+import { Crop, X } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { centeredCropForRatio } from '@/lib/image-editor/layout';
+import type { CropRect } from '@/lib/image-editor/settings';
+import { cn } from '@/lib/utils';
+import {
+    VIDEO_ASPECT_PRESETS,
+    type VideoAspectPreset,
+    videoAspectToRatio,
+} from '@/lib/video-editor/aspects';
+import {
+    defaultSettings,
+    type VideoEditSettings,
+} from '@/lib/video-editor/settings';
+
+import { VideoCropOverlay } from './video-crop-overlay';
+
+type Props = {
+    open: boolean;
+    sourceUrl: string | null;
+    durationSeconds: number;
+    onApply: (settings: VideoEditSettings) => Promise<void> | void;
+    onCancel: () => void;
+    phase: 'idle' | 'rendering' | 'uploading';
+    /** 0..1 — shown as a progress bar while phase !== 'idle'. */
+    progress: number;
+};
+
+/** Minimum gap enforced between the in and out trim handles (seconds). */
+const MIN_TRIM_GAP = 0.1;
+
+/** Format a duration as MM:SS, truncating to whole seconds. */
+function fmtMmSs(totalSeconds: number): string {
+    const s = Math.max(0, Math.floor(totalSeconds));
+    const m = Math.floor(s / 60);
+    return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+export function VideoEditor({
+    open,
+    sourceUrl,
+    durationSeconds,
+    onApply,
+    onCancel,
+    phase,
+    progress,
+}: Props) {
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const trackRef = useRef<HTMLDivElement | null>(null);
+    const [previewEl, setPreviewEl] = useState<HTMLDivElement | null>(null);
+    const [settings, setSettings] = useState<VideoEditSettings>(() =>
+        defaultSettings(durationSeconds),
+    );
+    const [sourceSize, setSourceSize] = useState<{
+        width: number;
+        height: number;
+    } | null>(null);
+    const [box, setBox] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+
+    const busy = phase !== 'idle';
+    // Guard against divide-by-zero when duration hasn't been resolved yet.
+    const safeD = durationSeconds > 0 ? durationSeconds : 1;
+
+    // Reset settings and clear any previously loaded source size whenever the
+    // modal opens or the video source changes (new upload, different clip).
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+        setSettings(defaultSettings(durationSeconds));
+        setSourceSize(null);
+    }, [open, durationSeconds]);
+
+    // Observe the preview canvas so the crop overlay can fit within it.
+    useEffect(() => {
+        if (!previewEl) {
+            return;
+        }
+        const ro = new ResizeObserver((entries) => {
+            const rect = entries[0]?.contentRect;
+            if (rect) {
+                setBox({ w: rect.width, h: rect.height });
+            }
+        });
+        ro.observe(previewEl);
+        return () => ro.disconnect();
+    }, [previewEl]);
+
+    /** Apply a new aspect preset, seeding or clearing the crop rect as needed. */
+    function selectAspect(aspect: VideoAspectPreset) {
+        const ratio = videoAspectToRatio(aspect);
+        setSettings((s) => {
+            let crop: CropRect | null = s.crop;
+            if (aspect === 'auto') {
+                // No crop at all — clear it.
+                crop = null;
+            } else if (aspect !== 'freeform' && ratio !== null && sourceSize) {
+                // Seed a centred crop rect that matches the selected ratio.
+                crop = centeredCropForRatio(
+                    sourceSize.width,
+                    sourceSize.height,
+                    ratio,
+                );
+            } else if (aspect === 'freeform' && !s.crop && sourceSize) {
+                // Entering freeform with no existing crop — default to the full frame.
+                crop = {
+                    x: 0,
+                    y: 0,
+                    width: sourceSize.width,
+                    height: sourceSize.height,
+                };
+            }
+            return { ...s, aspect, crop };
+        });
+    }
+
+    /**
+     * Translate a pointer event's clientX into a time within [0, durationSeconds]
+     * by measuring against the timeline track element.
+     */
+    function seekFromPointer(e: React.PointerEvent): number {
+        if (!trackRef.current) {
+            return 0;
+        }
+        const rect = trackRef.current.getBoundingClientRect();
+        const fraction = Math.max(
+            0,
+            Math.min(1, (e.clientX - rect.left) / rect.width),
+        );
+        return fraction * safeD;
+    }
+
+    // The crop overlay is shown only once the natural video size is known, so
+    // the VideoCropOverlay can scale correctly. Until then the plain <video>
+    // renders and fires onLoadedMetadata to supply the size.
+    const showOverlay =
+        settings.aspect !== 'auto' && sourceSize !== null && sourceUrl !== null;
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                if (!next) {
+                    onCancel();
+                }
+            }}
+        >
+            <DialogContent
+                showCloseButton={false}
+                className="flex h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[85vh] sm:max-h-[760px] sm:w-[min(1080px,95vw)] sm:max-w-none sm:rounded-[min(var(--radius-4xl),24px)]"
+            >
+                {/* ── Header ────────────────────────────────────────────── */}
+                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+                    <DialogTitle className="text-sm font-semibold">
+                        Edit video
+                    </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Trim and crop the video before attaching it to your
+                        post.
+                    </DialogDescription>
+                    <button
+                        type="button"
+                        aria-label="Close"
+                        onClick={onCancel}
+                        className="-mr-1 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                        <X className="size-4" aria-hidden="true" />
+                    </button>
+                </header>
+
+                {/* ── Body: canvas + inspector (stacked → side-by-side) ── */}
+                <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+                    {/* Canvas: preview above, timeline strip below */}
+                    <section className="flex h-[50dvh] min-h-0 shrink-0 flex-col md:h-auto md:flex-1">
+                        {/* Video preview */}
+                        <div
+                            ref={setPreviewEl}
+                            className="relative grid flex-1 place-items-center overflow-hidden bg-black"
+                        >
+                            {!sourceUrl ? (
+                                /* No source yet — show a spinner */
+                                <div className="size-7 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
+                            ) : showOverlay ? (
+                                /* Crop mode: interactive overlay with drag handles */
+                                <VideoCropOverlay
+                                    videoSrc={sourceUrl}
+                                    sourceSize={sourceSize!}
+                                    rect={
+                                        settings.crop ?? {
+                                            x: 0,
+                                            y: 0,
+                                            width: sourceSize!.width,
+                                            height: sourceSize!.height,
+                                        }
+                                    }
+                                    ratio={videoAspectToRatio(settings.aspect)}
+                                    maxW={box.w || undefined}
+                                    maxH={box.h || undefined}
+                                    onChange={(crop) =>
+                                        setSettings((s) => ({ ...s, crop }))
+                                    }
+                                />
+                            ) : (
+                                /* Plain preview — also the metadata source for sourceSize */
+                                <video
+                                    ref={videoRef}
+                                    src={sourceUrl}
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                    className="max-h-full max-w-full object-contain"
+                                    onLoadedMetadata={(e) => {
+                                        const v = e.currentTarget;
+                                        setSourceSize({
+                                            width: v.videoWidth,
+                                            height: v.videoHeight,
+                                        });
+                                    }}
+                                />
+                            )}
+                        </div>
+
+                        {/* ── Timeline trim strip ───────────────────────── */}
+                        <div
+                            className={cn(
+                                'shrink-0 border-t border-border bg-muted/20 px-4 pt-3 pb-4',
+                                busy && 'pointer-events-none opacity-50',
+                            )}
+                        >
+                            {/* Track */}
+                            <div
+                                ref={trackRef}
+                                className="relative h-8 touch-none rounded-lg bg-foreground/[0.07] select-none"
+                            >
+                                {/* Selected-range highlight */}
+                                <div
+                                    className="pointer-events-none absolute inset-y-0 rounded-lg bg-foreground/[0.16]"
+                                    style={{
+                                        left: `${(settings.trim.start / safeD) * 100}%`,
+                                        right: `${(1 - settings.trim.end / safeD) * 100}%`,
+                                    }}
+                                />
+
+                                {/* In-point (start) handle */}
+                                <div
+                                    className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
+                                    style={{
+                                        left: `${(settings.trim.start / safeD) * 100}%`,
+                                    }}
+                                    onPointerDown={(e) => {
+                                        if (busy) {
+                                            return;
+                                        }
+                                        e.preventDefault();
+                                        e.currentTarget.setPointerCapture(
+                                            e.pointerId,
+                                        );
+                                    }}
+                                    onPointerMove={(e) => {
+                                        if (
+                                            !(
+                                                e.currentTarget as Element
+                                            ).hasPointerCapture(e.pointerId)
+                                        ) {
+                                            return;
+                                        }
+                                        const time = seekFromPointer(e);
+                                        const start = Math.min(
+                                            time,
+                                            settings.trim.end - MIN_TRIM_GAP,
+                                        );
+                                        setSettings((s) => ({
+                                            ...s,
+                                            trim: { ...s.trim, start },
+                                        }));
+                                        if (videoRef.current) {
+                                            videoRef.current.currentTime =
+                                                start;
+                                        }
+                                    }}
+                                >
+                                    {/* Circular grip — larger touch target */}
+                                    <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
+                                </div>
+
+                                {/* Out-point (end) handle */}
+                                <div
+                                    className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
+                                    style={{
+                                        left: `${(settings.trim.end / safeD) * 100}%`,
+                                    }}
+                                    onPointerDown={(e) => {
+                                        if (busy) {
+                                            return;
+                                        }
+                                        e.preventDefault();
+                                        e.currentTarget.setPointerCapture(
+                                            e.pointerId,
+                                        );
+                                    }}
+                                    onPointerMove={(e) => {
+                                        if (
+                                            !(
+                                                e.currentTarget as Element
+                                            ).hasPointerCapture(e.pointerId)
+                                        ) {
+                                            return;
+                                        }
+                                        const time = seekFromPointer(e);
+                                        const end = Math.max(
+                                            time,
+                                            settings.trim.start + MIN_TRIM_GAP,
+                                        );
+                                        setSettings((s) => ({
+                                            ...s,
+                                            trim: { ...s.trim, end },
+                                        }));
+                                        if (videoRef.current) {
+                                            videoRef.current.currentTime = end;
+                                        }
+                                    }}
+                                >
+                                    {/* Circular grip */}
+                                    <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
+                                </div>
+                            </div>
+
+                            {/* Time labels: start · selected duration · end */}
+                            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground tabular-nums">
+                                <span>{fmtMmSs(settings.trim.start)}</span>
+                                <span className="font-medium text-foreground">
+                                    {fmtMmSs(
+                                        settings.trim.end - settings.trim.start,
+                                    )}
+                                </span>
+                                <span>{fmtMmSs(settings.trim.end)}</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* ── Inspector rail ──────────────────────────────────── */}
+                    <aside className="flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto border-t border-border p-5 md:w-[288px] md:flex-none md:border-t-0 md:border-l">
+                        <Field label="Aspect ratio">
+                            <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted/60 p-1">
+                                {VIDEO_ASPECT_PRESETS.map(
+                                    ({ value, label }) => (
+                                        <Segment
+                                            key={value}
+                                            active={settings.aspect === value}
+                                            disabled={busy}
+                                            onClick={() => selectAspect(value)}
+                                        >
+                                            {label}
+                                        </Segment>
+                                    ),
+                                )}
+                            </div>
+                        </Field>
+
+                        {/* Shortcut to exit crop mode without touching the segmented control */}
+                        {settings.aspect !== 'auto' && (
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => selectAspect('auto')}
+                                className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                                <Crop
+                                    className="size-4 text-muted-foreground"
+                                    aria-hidden="true"
+                                />
+                                Clear crop
+                            </button>
+                        )}
+                    </aside>
+                </div>
+
+                {/* ── Footer ────────────────────────────────────────────── */}
+                <footer className="relative flex shrink-0 items-center gap-2 border-t border-border px-4 py-3 sm:px-5">
+                    {/* Thin progress bar runs across the very top edge of the footer */}
+                    {busy && (
+                        <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden bg-muted">
+                            <div
+                                className="h-full bg-foreground transition-[width] duration-200 ease-linear"
+                                style={{
+                                    width: `${Math.max(0, Math.min(1, progress)) * 100}%`,
+                                }}
+                            />
+                        </div>
+                    )}
+
+                    {/* Phase label — only visible while processing */}
+                    {busy && (
+                        <span className="text-sm text-muted-foreground">
+                            {phase === 'rendering'
+                                ? 'Rendering…'
+                                : 'Uploading…'}
+                        </span>
+                    )}
+
+                    <div className="ml-auto flex items-center gap-2">
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={onCancel}
+                            className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 md:py-2"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                                void onApply(settings);
+                            }}
+                            className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50 md:py-2"
+                        >
+                            Apply
+                        </button>
+                    </div>
+                </footer>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/* ── Small reusable sub-components ─────────────────────────────────────── */
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground">
+                {label}
+            </div>
+            {children}
+        </div>
+    );
+}
+
+function Segment({
+    active,
+    onClick,
+    children,
+    disabled,
+}: {
+    active: boolean;
+    onClick: () => void;
+    children: ReactNode;
+    disabled?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            aria-pressed={active}
+            disabled={disabled}
+            onClick={onClick}
+            className={cn(
+                'rounded-md py-2 text-center text-sm font-medium transition-colors md:py-1.5 md:text-xs',
+                active
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                disabled && 'pointer-events-none opacity-50',
+            )}
+        >
+            {children}
+        </button>
+    );
+}
