@@ -354,86 +354,130 @@ export function VideoEditor({
                                     )}
                                 </button>
 
-                                {/* Track */}
-                                <div
-                                    ref={trackRef}
-                                    className="relative h-8 flex-1 touch-none rounded-lg bg-foreground/[0.07] select-none"
-                                    onPointerDown={(e) => {
-                                        // Click-to-seek: handles stop propagation so this only
-                                        // fires when clicking the track background or range fill.
-                                        const time = seekFromPointer(e);
-                                        if (videoRef.current) {
-                                            videoRef.current.currentTime = time;
-                                        }
-                                        setCurrentTime(time);
-                                    }}
-                                >
-                                    {/* Selected-range highlight */}
+                                {/* Track + time labels share a column so the labels stay aligned with the track */}
+                                <div className="min-w-0 flex-1">
+                                    {/* Track */}
                                     <div
-                                        className="pointer-events-none absolute inset-y-0 rounded-lg bg-foreground/[0.16]"
-                                        style={{
-                                            left: `${(settings.trim.start / safeD) * 100}%`,
-                                            right: `${(1 - settings.trim.end / safeD) * 100}%`,
-                                        }}
-                                    />
-
-                                    {/* Playhead */}
-                                    <div
-                                        className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-foreground/80"
-                                        style={{
-                                            left: `${Math.max(0, Math.min(100, (currentTime / safeD) * 100))}%`,
-                                        }}
-                                    />
-
-                                    {/* In-point (start) handle */}
-                                    <div
-                                        role="slider"
-                                        aria-label="Trim start"
-                                        aria-valuemin={0}
-                                        aria-valuemax={safeD}
-                                        aria-valuenow={settings.trim.start}
-                                        aria-valuetext={fmtMmSs(
-                                            settings.trim.start,
-                                        )}
-                                        tabIndex={0}
-                                        className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
-                                        style={{
-                                            left: `${(settings.trim.start / safeD) * 100}%`,
-                                        }}
-                                        onKeyDown={(e) => {
-                                            const step = e.shiftKey ? 1 : STEP;
-                                            let next: number | null = null;
-                                            if (
-                                                e.key === 'ArrowLeft' ||
-                                                e.key === 'ArrowDown'
-                                            ) {
-                                                e.preventDefault();
-                                                next =
-                                                    settings.trim.start - step;
-                                            } else if (
-                                                e.key === 'ArrowRight' ||
-                                                e.key === 'ArrowUp'
-                                            ) {
-                                                e.preventDefault();
-                                                next =
-                                                    settings.trim.start + step;
-                                            } else if (e.key === 'Home') {
-                                                e.preventDefault();
-                                                next = 0;
-                                            } else if (e.key === 'End') {
-                                                e.preventDefault();
-                                                next =
-                                                    settings.trim.end -
-                                                    MIN_TRIM_GAP;
+                                        ref={trackRef}
+                                        className="relative h-8 w-full touch-none rounded-lg bg-foreground/[0.07] select-none"
+                                        onPointerDown={(e) => {
+                                            // Click-to-seek: handles stop propagation so this only
+                                            // fires when clicking the track background or range fill.
+                                            const time = seekFromPointer(e);
+                                            if (videoRef.current) {
+                                                videoRef.current.currentTime =
+                                                    time;
                                             }
-                                            if (next !== null) {
-                                                const start = Math.max(
-                                                    0,
-                                                    Math.min(
+                                            setCurrentTime(time);
+                                        }}
+                                    >
+                                        {/* Selected-range highlight */}
+                                        <div
+                                            className="pointer-events-none absolute inset-y-0 rounded-lg bg-foreground/[0.16]"
+                                            style={{
+                                                left: `${(settings.trim.start / safeD) * 100}%`,
+                                                right: `${(1 - settings.trim.end / safeD) * 100}%`,
+                                            }}
+                                        />
+
+                                        {/* Playhead */}
+                                        <div
+                                            className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-foreground/80"
+                                            style={{
+                                                left: `${Math.max(0, Math.min(100, (currentTime / safeD) * 100))}%`,
+                                            }}
+                                        />
+
+                                        {/* In-point (start) handle */}
+                                        <div
+                                            role="slider"
+                                            aria-label="Trim start"
+                                            aria-valuemin={0}
+                                            aria-valuemax={safeD}
+                                            aria-valuenow={settings.trim.start}
+                                            aria-valuetext={fmtMmSs(
+                                                settings.trim.start,
+                                            )}
+                                            tabIndex={0}
+                                            className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
+                                            style={{
+                                                left: `${(settings.trim.start / safeD) * 100}%`,
+                                            }}
+                                            onKeyDown={(e) => {
+                                                const step = e.shiftKey
+                                                    ? 1
+                                                    : STEP;
+                                                let next: number | null = null;
+                                                if (
+                                                    e.key === 'ArrowLeft' ||
+                                                    e.key === 'ArrowDown'
+                                                ) {
+                                                    e.preventDefault();
+                                                    next =
+                                                        settings.trim.start -
+                                                        step;
+                                                } else if (
+                                                    e.key === 'ArrowRight' ||
+                                                    e.key === 'ArrowUp'
+                                                ) {
+                                                    e.preventDefault();
+                                                    next =
+                                                        settings.trim.start +
+                                                        step;
+                                                } else if (e.key === 'Home') {
+                                                    e.preventDefault();
+                                                    next = 0;
+                                                } else if (e.key === 'End') {
+                                                    e.preventDefault();
+                                                    next =
                                                         settings.trim.end -
-                                                            MIN_TRIM_GAP,
-                                                        next,
-                                                    ),
+                                                        MIN_TRIM_GAP;
+                                                }
+                                                if (next !== null) {
+                                                    const start = Math.max(
+                                                        0,
+                                                        Math.min(
+                                                            settings.trim.end -
+                                                                MIN_TRIM_GAP,
+                                                            next,
+                                                        ),
+                                                    );
+                                                    setSettings((s) => ({
+                                                        ...s,
+                                                        trim: {
+                                                            ...s.trim,
+                                                            start,
+                                                        },
+                                                    }));
+                                                    if (videoRef.current) {
+                                                        videoRef.current.currentTime =
+                                                            start;
+                                                    }
+                                                }
+                                            }}
+                                            onPointerDown={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                e.currentTarget.setPointerCapture(
+                                                    e.pointerId,
+                                                );
+                                                videoRef.current?.pause();
+                                            }}
+                                            onPointerMove={(e) => {
+                                                if (
+                                                    !(
+                                                        e.currentTarget as Element
+                                                    ).hasPointerCapture(
+                                                        e.pointerId,
+                                                    )
+                                                ) {
+                                                    return;
+                                                }
+                                                const time = seekFromPointer(e);
+                                                const start = Math.min(
+                                                    time,
+                                                    settings.trim.end -
+                                                        MIN_TRIM_GAP,
                                                 );
                                                 setSettings((s) => ({
                                                     ...s,
@@ -443,88 +487,99 @@ export function VideoEditor({
                                                     videoRef.current.currentTime =
                                                         start;
                                                 }
-                                            }
-                                        }}
-                                        onPointerDown={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            e.currentTarget.setPointerCapture(
-                                                e.pointerId,
-                                            );
-                                            videoRef.current?.pause();
-                                        }}
-                                        onPointerMove={(e) => {
-                                            if (
-                                                !(
-                                                    e.currentTarget as Element
-                                                ).hasPointerCapture(e.pointerId)
-                                            ) {
-                                                return;
-                                            }
-                                            const time = seekFromPointer(e);
-                                            const start = Math.min(
-                                                time,
-                                                settings.trim.end -
-                                                    MIN_TRIM_GAP,
-                                            );
-                                            setSettings((s) => ({
-                                                ...s,
-                                                trim: { ...s.trim, start },
-                                            }));
-                                            if (videoRef.current) {
-                                                videoRef.current.currentTime =
-                                                    start;
-                                            }
-                                        }}
-                                    >
-                                        {/* Circular grip — larger touch target */}
-                                        <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
-                                    </div>
+                                            }}
+                                        >
+                                            {/* Circular grip — larger touch target */}
+                                            <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
+                                        </div>
 
-                                    {/* Out-point (end) handle */}
-                                    <div
-                                        role="slider"
-                                        aria-label="Trim end"
-                                        aria-valuemin={0}
-                                        aria-valuemax={safeD}
-                                        aria-valuenow={settings.trim.end}
-                                        aria-valuetext={fmtMmSs(
-                                            settings.trim.end,
-                                        )}
-                                        tabIndex={0}
-                                        className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
-                                        style={{
-                                            left: `${(settings.trim.end / safeD) * 100}%`,
-                                        }}
-                                        onKeyDown={(e) => {
-                                            const step = e.shiftKey ? 1 : STEP;
-                                            let next: number | null = null;
-                                            if (
-                                                e.key === 'ArrowLeft' ||
-                                                e.key === 'ArrowDown'
-                                            ) {
+                                        {/* Out-point (end) handle */}
+                                        <div
+                                            role="slider"
+                                            aria-label="Trim end"
+                                            aria-valuemin={0}
+                                            aria-valuemax={safeD}
+                                            aria-valuenow={settings.trim.end}
+                                            aria-valuetext={fmtMmSs(
+                                                settings.trim.end,
+                                            )}
+                                            tabIndex={0}
+                                            className="absolute inset-y-0 z-10 w-1 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm bg-foreground shadow-sm"
+                                            style={{
+                                                left: `${(settings.trim.end / safeD) * 100}%`,
+                                            }}
+                                            onKeyDown={(e) => {
+                                                const step = e.shiftKey
+                                                    ? 1
+                                                    : STEP;
+                                                let next: number | null = null;
+                                                if (
+                                                    e.key === 'ArrowLeft' ||
+                                                    e.key === 'ArrowDown'
+                                                ) {
+                                                    e.preventDefault();
+                                                    next =
+                                                        settings.trim.end -
+                                                        step;
+                                                } else if (
+                                                    e.key === 'ArrowRight' ||
+                                                    e.key === 'ArrowUp'
+                                                ) {
+                                                    e.preventDefault();
+                                                    next =
+                                                        settings.trim.end +
+                                                        step;
+                                                } else if (e.key === 'Home') {
+                                                    e.preventDefault();
+                                                    next =
+                                                        settings.trim.start +
+                                                        MIN_TRIM_GAP;
+                                                } else if (e.key === 'End') {
+                                                    e.preventDefault();
+                                                    next = safeD;
+                                                }
+                                                if (next !== null) {
+                                                    const end = Math.max(
+                                                        settings.trim.start +
+                                                            MIN_TRIM_GAP,
+                                                        Math.min(safeD, next),
+                                                    );
+                                                    setSettings((s) => ({
+                                                        ...s,
+                                                        trim: {
+                                                            ...s.trim,
+                                                            end,
+                                                        },
+                                                    }));
+                                                    if (videoRef.current) {
+                                                        videoRef.current.currentTime =
+                                                            end;
+                                                    }
+                                                }
+                                            }}
+                                            onPointerDown={(e) => {
                                                 e.preventDefault();
-                                                next = settings.trim.end - step;
-                                            } else if (
-                                                e.key === 'ArrowRight' ||
-                                                e.key === 'ArrowUp'
-                                            ) {
-                                                e.preventDefault();
-                                                next = settings.trim.end + step;
-                                            } else if (e.key === 'Home') {
-                                                e.preventDefault();
-                                                next =
-                                                    settings.trim.start +
-                                                    MIN_TRIM_GAP;
-                                            } else if (e.key === 'End') {
-                                                e.preventDefault();
-                                                next = safeD;
-                                            }
-                                            if (next !== null) {
+                                                e.stopPropagation();
+                                                e.currentTarget.setPointerCapture(
+                                                    e.pointerId,
+                                                );
+                                                videoRef.current?.pause();
+                                            }}
+                                            onPointerMove={(e) => {
+                                                if (
+                                                    !(
+                                                        e.currentTarget as Element
+                                                    ).hasPointerCapture(
+                                                        e.pointerId,
+                                                    )
+                                                ) {
+                                                    return;
+                                                }
+                                                const time = seekFromPointer(e);
                                                 const end = Math.max(
+                                                    time,
                                                     settings.trim.start +
                                                         MIN_TRIM_GAP,
-                                                    Math.min(safeD, next),
                                                 );
                                                 setSettings((s) => ({
                                                     ...s,
@@ -534,55 +589,85 @@ export function VideoEditor({
                                                     videoRef.current.currentTime =
                                                         end;
                                                 }
-                                            }
-                                        }}
-                                        onPointerDown={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            e.currentTarget.setPointerCapture(
-                                                e.pointerId,
-                                            );
-                                            videoRef.current?.pause();
-                                        }}
-                                        onPointerMove={(e) => {
-                                            if (
-                                                !(
-                                                    e.currentTarget as Element
-                                                ).hasPointerCapture(e.pointerId)
-                                            ) {
-                                                return;
-                                            }
-                                            const time = seekFromPointer(e);
-                                            const end = Math.max(
-                                                time,
-                                                settings.trim.start +
-                                                    MIN_TRIM_GAP,
-                                            );
-                                            setSettings((s) => ({
-                                                ...s,
-                                                trim: { ...s.trim, end },
-                                            }));
-                                            if (videoRef.current) {
-                                                videoRef.current.currentTime =
-                                                    end;
-                                            }
-                                        }}
-                                    >
-                                        {/* Circular grip */}
-                                        <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
+                                            }}
+                                        >
+                                            {/* Circular grip */}
+                                            <div className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow" />
+                                        </div>
+                                    </div>
+
+                                    {/* Time labels: start · selected duration · end */}
+                                    <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground tabular-nums">
+                                        <span>
+                                            {fmtMmSs(settings.trim.start)}
+                                        </span>
+                                        <span className="font-medium text-foreground">
+                                            {fmtMmSs(
+                                                settings.trim.end -
+                                                    settings.trim.start,
+                                            )}
+                                        </span>
+                                        <span>
+                                            {fmtMmSs(settings.trim.end)}
+                                        </span>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Time labels: start · selected duration · end */}
-                            <div className="mt-2 flex items-center justify-between pl-11 text-xs text-muted-foreground tabular-nums">
-                                <span>{fmtMmSs(settings.trim.start)}</span>
-                                <span className="font-medium text-foreground">
-                                    {fmtMmSs(
-                                        settings.trim.end - settings.trim.start,
-                                    )}
-                                </span>
-                                <span>{fmtMmSs(settings.trim.end)}</span>
+                                {/* Preview volume — affects playback only, never the exported clip */}
+                                <div className="flex shrink-0 items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        aria-label={
+                                            muted || volume === 0
+                                                ? 'Unmute preview'
+                                                : 'Mute preview'
+                                        }
+                                        disabled={busy || !sourceUrl}
+                                        onClick={() => {
+                                            if (muted) {
+                                                setMuted(false);
+                                                if (volume === 0) {
+                                                    setVolume(1);
+                                                }
+                                            } else {
+                                                setMuted(true);
+                                            }
+                                        }}
+                                        className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                    >
+                                        {muted || volume === 0 ? (
+                                            <VolumeX
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        ) : volume < 0.5 ? (
+                                            <Volume1
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        ) : (
+                                            <Volume2
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        )}
+                                    </button>
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={1}
+                                        step={0.05}
+                                        value={muted ? 0 : volume}
+                                        aria-label="Preview volume"
+                                        disabled={busy || !sourceUrl}
+                                        onChange={(e) => {
+                                            const v = Number(e.target.value);
+                                            setVolume(v);
+                                            setMuted(v === 0);
+                                        }}
+                                        className="hidden h-1 w-16 cursor-pointer accent-foreground sm:block"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -603,63 +688,6 @@ export function VideoEditor({
                                         </Segment>
                                     ),
                                 )}
-                            </div>
-                        </Field>
-
-                        <Field label="Sound">
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    aria-label={
-                                        muted || volume === 0
-                                            ? 'Unmute'
-                                            : 'Mute'
-                                    }
-                                    disabled={busy || !sourceUrl}
-                                    onClick={() => {
-                                        if (muted) {
-                                            setMuted(false);
-                                            if (volume === 0) {
-                                                setVolume(1);
-                                            }
-                                        } else {
-                                            setMuted(true);
-                                        }
-                                    }}
-                                    className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-                                >
-                                    {muted || volume === 0 ? (
-                                        <VolumeX
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    ) : volume < 0.5 ? (
-                                        <Volume1
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    ) : (
-                                        <Volume2
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    )}
-                                </button>
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={1}
-                                    step={0.05}
-                                    value={muted ? 0 : volume}
-                                    aria-label="Volume"
-                                    disabled={busy || !sourceUrl}
-                                    onChange={(e) => {
-                                        const v = Number(e.target.value);
-                                        setVolume(v);
-                                        setMuted(v === 0);
-                                    }}
-                                    className="h-1 flex-1 cursor-pointer accent-foreground disabled:opacity-50"
-                                />
                             </div>
                         </Field>
 
