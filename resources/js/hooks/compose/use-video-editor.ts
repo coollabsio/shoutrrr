@@ -8,7 +8,6 @@ import {
     readVideoMetadata,
     validateVideo,
 } from '@/lib/compose/video';
-import { renderVideo } from '@/lib/video-editor/render';
 import type { VideoEditSettings } from '@/lib/video-editor/settings';
 import type { MediaView, PlatformLimits } from '@/types/compose';
 
@@ -55,6 +54,7 @@ export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
         try {
             setPhase('rendering');
             setProgress(0);
+            const { renderVideo } = await import('@/lib/video-editor/render');
             const blob = await renderVideo(source, settings, setProgress);
 
             const file = new File([blob], 'edited-video.mp4', {

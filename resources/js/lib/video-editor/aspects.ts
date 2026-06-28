@@ -1,6 +1,15 @@
-export type VideoAspectPreset = 'auto' | '1:1' | '4:5' | '16:9' | '9:16' | 'freeform';
+export type VideoAspectPreset =
+    | 'auto'
+    | '1:1'
+    | '4:5'
+    | '16:9'
+    | '9:16'
+    | 'freeform';
 
-export const VIDEO_ASPECT_PRESETS: readonly { value: VideoAspectPreset; label: string }[] = [
+export const VIDEO_ASPECT_PRESETS: readonly {
+    value: VideoAspectPreset;
+    label: string;
+}[] = [
     { value: 'auto', label: 'Auto' },
     { value: '1:1', label: '1:1' },
     { value: '4:5', label: '4:5' },

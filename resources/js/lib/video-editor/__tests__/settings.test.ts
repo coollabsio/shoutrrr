@@ -24,7 +24,12 @@ describe('normalizeSettings', () => {
 
     it('clamps trim within [0, duration] and enforces start < end', () => {
         const result = normalizeSettings(
-            { version: 1, trim: { start: -3, end: 999 }, crop: null, aspect: 'auto' },
+            {
+                version: 1,
+                trim: { start: -3, end: 999 },
+                crop: null,
+                aspect: 'auto',
+            },
             10,
         );
         expect(result.trim).toEqual({ start: 0, end: 10 });
@@ -32,7 +37,12 @@ describe('normalizeSettings', () => {
 
     it('swaps reversed trim points', () => {
         const result = normalizeSettings(
-            { version: 1, trim: { start: 7, end: 2 }, crop: null, aspect: '1:1' },
+            {
+                version: 1,
+                trim: { start: 7, end: 2 },
+                crop: null,
+                aspect: '1:1',
+            },
             10,
         );
         expect(result.trim).toEqual({ start: 2, end: 7 });
@@ -41,7 +51,12 @@ describe('normalizeSettings', () => {
 
     it('drops an invalid aspect to auto', () => {
         const result = normalizeSettings(
-            { version: 1, trim: { start: 0, end: 5 }, crop: null, aspect: 'banana' },
+            {
+                version: 1,
+                trim: { start: 0, end: 5 },
+                crop: null,
+                aspect: 'banana',
+            },
             5,
         );
         expect(result.aspect).toBe('auto');

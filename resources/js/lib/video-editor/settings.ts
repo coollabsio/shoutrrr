@@ -10,7 +10,9 @@ export type VideoEditSettings = {
 };
 
 function safeDuration(durationSeconds: number): number {
-    return Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : 0;
+    return Number.isFinite(durationSeconds) && durationSeconds > 0
+        ? durationSeconds
+        : 0;
 }
 
 export function defaultSettings(durationSeconds: number): VideoEditSettings {
@@ -33,7 +35,13 @@ function normalizeCrop(raw: unknown): CropRect | null {
     }
     const candidate = raw as Record<string, unknown>;
     const keys = ['x', 'y', 'width', 'height'] as const;
-    if (!keys.every((key) => typeof candidate[key] === 'number' && Number.isFinite(candidate[key]))) {
+    if (
+        !keys.every(
+            (key) =>
+                typeof candidate[key] === 'number' &&
+                Number.isFinite(candidate[key]),
+        )
+    ) {
         return null;
     }
     return {
@@ -44,7 +52,10 @@ function normalizeCrop(raw: unknown): CropRect | null {
     };
 }
 
-export function normalizeSettings(raw: unknown, durationSeconds: number): VideoEditSettings {
+export function normalizeSettings(
+    raw: unknown,
+    durationSeconds: number,
+): VideoEditSettings {
     const fallback = defaultSettings(durationSeconds);
     if (raw === null || typeof raw !== 'object') {
         return fallback;

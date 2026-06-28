@@ -11,10 +11,7 @@ import {
 } from 'mediabunny';
 
 import type { VideoEditSettings } from './settings';
-
-export function isVideoEditingSupported(): boolean {
-    return typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoDecoder' in window;
-}
+import { isVideoEditingSupported } from './support';
 
 export async function renderVideo(
     source: Blob,
@@ -25,14 +22,23 @@ export async function renderVideo(
         throw new Error('Video editing is not supported in this browser.');
     }
 
-    const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(source) });
+    const input = new Input({
+        formats: ALL_FORMATS,
+        source: new BlobSource(source),
+    });
 
     try {
-        const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
+        const output = new Output({
+            format: new Mp4OutputFormat(),
+            target: new BufferTarget(),
+        });
 
         // Re-encode to H.264 mp4; only add a crop rect when one is set. Audio is
         // kept automatically because we don't pass `audio: { discard: true }`.
-        const video: ConversionVideoOptions = { codec: 'avc', bitrate: QUALITY_HIGH };
+        const video: ConversionVideoOptions = {
+            codec: 'avc',
+            bitrate: QUALITY_HIGH,
+        };
         if (settings.crop) {
             video.crop = {
                 left: Math.round(settings.crop.x),

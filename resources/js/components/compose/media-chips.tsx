@@ -7,8 +7,8 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { isVideoEditingSupported } from '@/lib/video-editor/render';
 import { cn } from '@/lib/utils';
+import { isVideoEditingSupported } from '@/lib/video-editor/support';
 import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
 
 function formatDuration(seconds: number | null): string | null {
@@ -35,7 +35,7 @@ function MediaThumb({ media }: { media: MediaView }) {
                     className="size-full object-cover"
                 />
                 {label && (
-                    <span className="absolute left-0.5 bottom-0.5 rounded bg-black/70 px-1 font-mono text-[8px] leading-tight text-white tabular-nums">
+                    <span className="absolute bottom-0.5 left-0.5 rounded bg-black/70 px-1 font-mono text-[8px] leading-tight text-white tabular-nums">
                         {label}
                     </span>
                 )}
