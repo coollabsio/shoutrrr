@@ -75,6 +75,44 @@ test('PUT /posts/{post} autosaves edits and returns the new baseline', function 
     $response->assertOk()->assertJsonPath('post.base_text', 'edited');
 });
 
+test('POST /posts accepts the real client payload with segments and no base_text', function () {
+    [$user, $workspace, $accounts] = actingMember(2);
+
+    // Mirrors use-autosave.ts createPost(): {segments, mentions, destination} — no base_text.
+    $response = test()->postJson('/posts', [
+        'destination' => ['kind' => 'all'],
+        'segments' => ['first post', 'second post'],
+        'mentions' => [],
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('post.segments', ['first post', 'second post'])
+        ->assertJsonPath('post.base_text', "first post\nsecond post");
+});
+
+test('PUT /posts/{post} accepts the real buildPutBody payload with no base_text', function () {
+    [$user, $workspace, $accounts] = actingMember(1);
+    $created = test()->postJson('/posts', [
+        'destination' => ['kind' => 'all'],
+        'segments' => ['a'],
+        'mentions' => [],
+    ])->json('post');
+
+    // Mirrors composer-state.ts buildPutBody(): no base_text key.
+    $response = test()->putJson("/posts/{$created['id']}", [
+        'segments' => ['edited'],
+        'destination' => ['kind' => 'all'],
+        'targets' => [['connected_account_id' => $accounts[0]->id, 'auto_split' => true, 'content_override' => null]],
+        'media_ids' => [],
+        'mentions' => [],
+        'expected_updated_at' => $created['updated_at'],
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('post.segments', ['edited'])
+        ->assertJsonPath('post.base_text', 'edited');
+});
+
 test('PUT with a stale expected_updated_at returns 409 with the latest view', function () {
     [$user, $workspace, $accounts] = actingMember(1);
     $created = test()->postJson('/posts', ['base_text' => 'a', 'segments' => ['a'], 'destination' => ['kind' => 'all']])->json('post');

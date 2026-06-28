@@ -20,7 +20,7 @@ class UpdatePostRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'base_text' => ['present', 'nullable', 'string'],
+            'base_text' => ['sometimes', 'nullable', 'string'],
             'segments' => ['present', 'array'],
             'segments.*' => ['nullable', 'string'],
             'mentions' => ['array'],
