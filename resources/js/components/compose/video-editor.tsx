@@ -374,8 +374,9 @@ export function VideoEditor({
                                 busy && 'pointer-events-none opacity-50',
                             )}
                         >
-                            {/* Play/Pause button + Track */}
-                            <div className="flex items-center gap-3">
+                            {/* Play/Pause button + Track. Align to the top so the play
+                                button lines up with the track, not the track+labels column. */}
+                            <div className="flex items-start gap-3">
                                 {/* Play/Pause button */}
                                 <button
                                     type="button"
