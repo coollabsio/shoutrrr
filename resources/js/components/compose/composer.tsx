@@ -9,6 +9,7 @@ import { useImageEditor } from '@/hooks/compose/use-image-editor';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
 import { usePublishStatus } from '@/hooks/compose/use-publish-status';
+import { useVideoEditor } from '@/hooks/compose/use-video-editor';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import {
     composerReducer,
@@ -54,6 +55,7 @@ import SaveIndicator from './save-indicator';
 import { ScheduleTray } from './schedule-tray';
 import { SubmitBar } from './submit-bar';
 import { TargetStatusChips } from './target-status-chips';
+import { VideoEditor } from './video-editor';
 
 /** What the image editor is currently working on. */
 type Editing =
@@ -63,7 +65,8 @@ type Editing =
           index: number;
       }
     | { kind: 'reedit'; url: string; settings: EditSettings; mediaId: string }
-    | { kind: 'raw'; url: string; mediaId: string };
+    | { kind: 'raw'; url: string; mediaId: string }
+    | { kind: 'video'; url: string; durationSeconds: number; mediaId: string };
 
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
 const DEFAULT_EDIT_SETTINGS = defaultSettings();
@@ -207,6 +210,14 @@ export default function Composer({
         onReplaceMedia: (m) => dispatch({ type: 'replaceMedia', media: m }),
     });
 
+    const videoEditor = useVideoEditor({
+        onEnsurePost: ensurePost,
+        onReplace: (oldMediaId, media) => {
+            dispatch({ type: 'addMedia', media });
+            dispatch({ type: 'removeMedia', mediaId: oldMediaId });
+        },
+    });
+
     // The editor opens automatically when image(s) are added and when an attached
     // image is clicked. A multi-image add becomes a `batch` edited one item at a
     // time; the editor shows the batch as a thumbnail strip.
@@ -283,6 +294,20 @@ export default function Composer({
                 url: URL.createObjectURL(f),
             })),
             index: 0,
+        });
+    }
+
+    // Open an attached video in the video editor.
+    function openVideo(mediaId: string) {
+        const m = state.media.find((x) => x.id === mediaId);
+        if (!m || m.kind !== 'video') {
+            return;
+        }
+        setEditing({
+            kind: 'video',
+            url: m.url,
+            durationSeconds: m.duration_seconds ?? 0,
+            mediaId: m.id,
         });
     }
 
@@ -823,12 +848,13 @@ export default function Composer({
                         handleFiles={handleAddedFiles}
                         dismissPending={mediaUploads.dismissPending}
                         onImageClick={openImage}
+                        onVideoClick={openVideo}
                     />
                 )}
 
                 {!readOnly && (
                     <ImageEditor
-                        open={editing !== null}
+                        open={editing !== null && editing.kind !== 'video'}
                         sourceUrl={editorSourceUrl}
                         initialSettings={editorSettings}
                         onApply={applyEditing}
@@ -837,6 +863,40 @@ export default function Composer({
                         variant={editing?.kind === 'batch' ? 'new' : 'existing'}
                         isSaving={imageEditor.isSaving}
                         queue={editorQueue}
+                    />
+                )}
+
+                {!readOnly && (
+                    <VideoEditor
+                        open={editing?.kind === 'video'}
+                        sourceUrl={
+                            editing?.kind === 'video' ? editing.url : null
+                        }
+                        durationSeconds={
+                            editing?.kind === 'video'
+                                ? editing.durationSeconds
+                                : 0
+                        }
+                        phase={videoEditor.phase}
+                        progress={videoEditor.progress}
+                        onCancel={() => setEditing(null)}
+                        onApply={async (settings) => {
+                            if (editing?.kind !== 'video') {
+                                return;
+                            }
+                            const source = await fetch(editing.url).then((r) =>
+                                r.blob(),
+                            );
+                            const ok = await videoEditor.apply({
+                                source,
+                                oldMediaId: editing.mediaId,
+                                settings,
+                                limits: selectedVideoLimits,
+                            });
+                            if (ok) {
+                                setEditing(null);
+                            }
+                        }}
                     />
                 )}
 
