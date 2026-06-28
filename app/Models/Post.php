@@ -24,6 +24,7 @@ use Override;
  * @property string|null $account_set_id
  * @property string $author_id
  * @property string $base_text
+ * @property list<string> $segments
  * @property list<array{id: string, label: string, handles: array<string, string>}>|null $mentions
  * @property PostStatus $status
  * @property CarbonImmutable|null $scheduled_at
@@ -36,6 +37,7 @@ use Override;
     'account_set_id',
     'author_id',
     'base_text',
+    'segments',
     'mentions',
     'status',
     'scheduled_at',
@@ -53,6 +55,7 @@ class Post extends Model
         return [
             'status' => PostStatus::class,
             'mentions' => 'array',
+            'segments' => 'array',
             'scheduled_at' => 'datetime',
             'published_at' => 'datetime',
             'deleted_at' => 'datetime',

@@ -51,6 +51,7 @@ class DummyPublishedPostSeeder extends Seeder
             'account_set_id' => null,
             'author_id' => $author?->id,
             'base_text' => self::BASE_TEXT,
+            'segments' => [self::BASE_TEXT],
             'mentions' => null,
             'status' => PostStatus::Published->value,
             'published_at' => now()->subDays(2),
