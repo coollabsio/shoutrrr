@@ -71,7 +71,9 @@ export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
 
             // 1. Sign → 2. PUT direct to storage → 3. confirm.
             signHttp.setData({ content_type: 'video/mp4' });
-            const signed = await signHttp.post(PostVideoUploadController.url(id).url);
+            const signed = await signHttp.post(PostVideoUploadController.url(id).url, {
+                onNetworkError: () => undefined,
+            });
 
             await putWithProgress(signed.url, signed.headers, file, setProgress);
 
@@ -82,7 +84,9 @@ export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
                 height: meta.height,
                 alt_text: null,
             });
-            const { media } = await confirmHttp.post(PostVideoUploadController.store(id).url);
+            const { media } = await confirmHttp.post(PostVideoUploadController.store(id).url, {
+                onNetworkError: () => undefined,
+            });
 
             onReplace(oldMediaId, media);
 
