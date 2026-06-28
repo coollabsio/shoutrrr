@@ -24,6 +24,7 @@ final class PostView
         return [
             'id' => $post->id,
             'base_text' => $post->base_text,
+            'segments' => $post->segments,
             'mentions' => $post->mentions ?? [],
             'status' => $post->status->value,
             'scheduled_at' => $post->scheduled_at?->toIso8601String(),

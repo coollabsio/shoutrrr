@@ -22,7 +22,7 @@ function memberWithVideoPost(): array
     $user->forceFill(['current_workspace_id' => $workspace->id])->save();
     test()->actingAs($user);
     ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
-    $postData = test()->postJson('/posts', ['base_text' => '', 'destination' => ['kind' => 'all']])->json('post');
+    $postData = test()->postJson('/posts', ['base_text' => '', 'segments' => [''], 'destination' => ['kind' => 'all']])->json('post');
     $post = Post::findOrFail($postData['id']);
 
     return [$user, $workspace, $post];

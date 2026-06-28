@@ -29,6 +29,8 @@ class UpdatePostTool extends WorkspaceTool
         $validated = $request->validate([
             'post_id' => ['required', 'string'],
             'base_text' => ['present', 'nullable', 'string'],
+            'segments' => ['array'],
+            'segments.*' => ['string'],
             'mentions' => ['array'],
             'mentions.*.id' => ['required', 'string'],
             'mentions.*.label' => ['required', 'string'],

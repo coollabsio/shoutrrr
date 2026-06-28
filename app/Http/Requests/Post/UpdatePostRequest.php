@@ -21,6 +21,8 @@ class UpdatePostRequest extends FormRequest
     {
         return [
             'base_text' => ['present', 'nullable', 'string'],
+            'segments' => ['present', 'array'],
+            'segments.*' => ['nullable', 'string'],
             'mentions' => ['array'],
             'mentions.*.id' => ['required', 'string'],
             'mentions.*.label' => ['required', 'string'],
@@ -38,6 +40,8 @@ class UpdatePostRequest extends FormRequest
             'targets.*.auto_split' => ['boolean'],
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
+            'targets.*.content_override.segments' => ['array'],
+            'targets.*.content_override.segments.*' => ['string'],
             'targets.*.content_override.media_ids' => ['array'],
             'targets.*.content_override.media_ids.*' => ['string'],
             'media_ids' => ['array'],

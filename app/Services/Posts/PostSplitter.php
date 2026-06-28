@@ -9,25 +9,33 @@ use App\Enums\Platform;
 class PostSplitter
 {
     /**
-     * A line containing exactly three hyphens marks a manual thread break.
+     * Split author segments into platform sections and collect advisory issues.
+     *
+     * Manual thread breaks are the array boundaries between `$segments` (the
+     * structured author body) — there is no longer any in-text marker. Each
+     * segment is trimmed; empty segments are dropped. For thread-capped
+     * platforms (LinkedIn) all segments collapse into a single section.
+     *
+     * @param  list<string>  $segments
      */
-    private const MANUAL_BREAK = '/^\s*---\s*$/m';
-
-    /**
-     * Split text into platform sections and collect advisory validation issues.
-     */
-    public function split(string $text, Platform $platform, bool $autoSplit, ?int $maxLength = null): SplitResult
+    public function split(array $segments, Platform $platform, bool $autoSplit, ?int $maxLength = null): SplitResult
     {
+        $clean = array_values(array_filter(
+            array_map(static fn (string $s): string => trim($s), $segments),
+            static fn (string $s): bool => $s !== '',
+        ));
+        if ($clean === []) {
+            $clean = [''];
+        }
+
         if ($platform->threadMax() !== null) {
-            $sections = [implode("\n", $this->manualSegments($text))];
+            $sections = [implode("\n", $clean)];
 
             return new SplitResult($sections, $this->validateSections($sections, $platform, 0, $maxLength));
         }
 
-        $segments = $this->manualSegments($text);
-
         $sections = [];
-        foreach ($segments as $segment) {
+        foreach ($clean as $segment) {
             if ($autoSplit) {
                 foreach ($this->chunk($segment, $platform, $maxLength) as $chunk) {
                     $sections[] = $chunk;
@@ -82,19 +90,6 @@ class PostSplitter
         }
 
         return array_values(array_unique($issues));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function manualSegments(string $text): array
-    {
-        $parts = preg_split(self::MANUAL_BREAK, $text) ?: [$text];
-
-        return array_values(array_filter(
-            array_map(static fn (string $p): string => trim($p), $parts),
-            static fn (string $p): bool => $p !== '',
-        )) ?: [''];
     }
 
     /**

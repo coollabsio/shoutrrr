@@ -32,6 +32,8 @@ class CreatePostTool extends WorkspaceTool
 
         $validated = $request->validate([
             'base_text' => ['present', 'nullable', 'string'],
+            'segments' => ['array'],
+            'segments.*' => ['string'],
             'mentions' => ['array'],
             'mentions.*.id' => ['required', 'string'],
             'mentions.*.label' => ['required', 'string'],
@@ -47,11 +49,15 @@ class CreatePostTool extends WorkspaceTool
         /** @var User $user */
         $user = $request->user();
 
+        $segments = isset($validated['segments']) && $validated['segments'] !== []
+            ? array_values($validated['segments'])
+            : [(string) ($validated['base_text'] ?? '')];
+
         $post = $drafts->createDraft(
             $workspaceId,
             $user,
             $validated['destination'],
-            (string) ($validated['base_text'] ?? ''),
+            $segments,
             $validated['mentions'] ?? [],
         );
 

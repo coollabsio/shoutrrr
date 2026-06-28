@@ -28,7 +28,7 @@ function workspaceWithAccounts(int $count = 2): array
 test('createDraft with the all destination seeds one target per active account', function () {
     [$user, $workspace, $accounts] = workspaceWithAccounts(3);
 
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], 'hello');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['hello']);
 
     expect($post->status)->toBe(PostStatus::Draft)
         ->and($post->author_id)->toBe($user->id)
@@ -42,7 +42,7 @@ test('createDraft with a single-account destination seeds exactly one target', f
     [$user, $workspace, $accounts] = workspaceWithAccounts(3);
     $only = $accounts->first();
 
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'account', 'id' => $only->id], '');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'account', 'id' => $only->id], ['']);
 
     expect($post->targets()->count())->toBe(1)
         ->and($post->targets->first()->connected_account_id)->toBe($only->id);
@@ -53,7 +53,7 @@ test('createDraft orders the workspace default account first for all destination
     $default = $accounts[2];
     $workspace->forceFill(['default_connected_account_id' => $default->id])->save();
 
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], 'hello');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['hello']);
 
     $view = PostView::make($post->fresh(['targets.account', 'media']));
 
@@ -67,7 +67,7 @@ test('createDraft orders the workspace default account first inside sets', funct
     $set = AccountSet::factory()->create(['workspace_id' => $workspace->id]);
     $set->accounts()->attach([$accounts[0]->id, $default->id]);
 
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'set', 'id' => $set->id], 'hello');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'set', 'id' => $set->id], ['hello']);
 
     $view = PostView::make($post->fresh(['targets.account', 'media']));
 
@@ -86,7 +86,7 @@ test('createDraft keeps long X text together for premium accounts', function () 
     ])->save();
 
     $text = str_repeat('a', 400);
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'account', 'id' => $account->id], $text);
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'account', 'id' => $account->id], [$text]);
 
     expect($post->targets()->first()->sections)->toBe([$text]);
 });
@@ -96,7 +96,7 @@ test('createDraft with a set destination snapshots that set membership', functio
     $set = AccountSet::factory()->create(['workspace_id' => $workspace->id]);
     $set->accounts()->attach([$accounts[0]->id, $accounts[1]->id]);
 
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'set', 'id' => $set->id], '');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'set', 'id' => $set->id], ['']);
 
     expect($post->account_set_id)->toBe($set->id)
         ->and($post->targets()->count())->toBe(2);
@@ -108,7 +108,7 @@ test('createDraft with a custom accounts destination seeds the selected targets'
     $post = app(DraftService::class)->createDraft($workspace->id, $user, [
         'kind' => 'accounts',
         'ids' => [$accounts[0]->id, $accounts[2]->id],
-    ], '');
+    ], ['']);
 
     expect($post->account_set_id)->toBeNull()
         ->and($post->targets()->count())->toBe(2)

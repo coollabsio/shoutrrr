@@ -25,22 +25,24 @@ class DraftService
      * Create a draft and snapshot the destination's accounts into targets.
      *
      * @param  array{kind: string, id?: string|null, ids?: list<string>}  $destination
+     * @param  list<string>  $segments
      * @param  list<array{id?: mixed, label?: mixed, handles?: array<string, mixed>}>  $mentions
      */
-    public function createDraft(string $workspaceId, User $author, array $destination, string $baseText, array $mentions = []): Post
+    public function createDraft(string $workspaceId, User $author, array $destination, array $segments, array $mentions = []): Post
     {
-        return DB::transaction(function () use ($workspaceId, $author, $destination, $baseText, $mentions): Post {
+        return DB::transaction(function () use ($workspaceId, $author, $destination, $segments, $mentions): Post {
             $post = Post::create([
                 'workspace_id' => $workspaceId,
                 'account_set_id' => $this->scopedAccountSetId($workspaceId, $destination),
                 'author_id' => $author->id,
-                'base_text' => $baseText,
+                'segments' => $segments,
+                'base_text' => implode("\n", $segments),
                 'mentions' => $this->normalizeMentions($mentions),
                 'status' => PostStatus::Draft->value,
             ]);
 
             $accountIds = $this->resolveDestinationAccountIds($workspaceId, $destination);
-            $this->syncTargets($post, $accountIds, $baseText, [], [], $post->mentions ?? []);
+            $this->syncTargets($post, $accountIds, $segments, [], [], $post->mentions ?? []);
 
             return $post->load('targets');
         });
@@ -107,11 +109,12 @@ class DraftService
      * surviving/new target from its effective text.
      *
      * @param  list<string>  $accountIds
+     * @param  list<string>  $segments
      * @param  array<string, bool>  $autoSplitByAccount
-     * @param  array<string, array{text?: string|null, media_ids?: list<string>}|null>  $overrideByAccount
+     * @param  array<string, array{segments: list<string>, media_ids: list<string>}|null>  $overrideByAccount
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
      */
-    public function syncTargets(Post $post, array $accountIds, string $baseText, array $autoSplitByAccount, array $overrideByAccount, array $mentions = []): void
+    public function syncTargets(Post $post, array $accountIds, array $segments, array $autoSplitByAccount, array $overrideByAccount, array $mentions = []): void
     {
         $accounts = ConnectedAccount::withoutGlobalScopes()
             ->whereIn('id', $accountIds)
@@ -140,9 +143,13 @@ class DraftService
                 ? $overrideByAccount[$accountId]
                 : $currentOverride;
 
-            $effectiveText = $this->resolveMentionTokens($override['text'] ?? $baseText, $mentions, $account->platform->value);
+            $effectiveSegments = $override['segments'] ?? $segments;
+            $resolvedSegments = array_map(
+                fn (string $segment): string => $this->resolveMentionTokens($segment, $mentions, $account->platform->value),
+                $effectiveSegments,
+            );
             $sections = $this->splitter->split(
-                $effectiveText,
+                $resolvedSegments,
                 $account->platform,
                 $autoSplit,
                 $account->maxTextLength(),
@@ -197,12 +204,13 @@ class DraftService
             }
 
             $post->forceFill([
-                'base_text' => $data->baseText,
+                'segments' => $data->segments,
+                'base_text' => implode("\n", $data->segments),
                 'mentions' => $this->normalizeMentions($data->mentions),
                 'account_set_id' => $this->scopedAccountSetId($post->workspace_id, $destination),
             ])->save();
 
-            $this->syncTargets($post, $accountIds, $data->baseText, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? []);
+            $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? []);
             $this->attachMedia($post, $data->mediaIds);
 
             $post->touch();

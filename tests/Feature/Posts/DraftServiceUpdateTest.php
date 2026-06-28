@@ -26,7 +26,7 @@ function draftSetup(int $count = 2): array
 
 test('updateDraft re-splits base text into every target', function () {
     [$user, $workspace, $accounts] = draftSetup(2);
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], 'old');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['old']);
 
     $data = DraftData::fromArray([
         'base_text' => 'brand new body',
@@ -43,7 +43,7 @@ test('updateDraft re-splits base text into every target', function () {
 
 test('updateDraft applies a per-account override and re-splits only that target', function () {
     [$user, $workspace, $accounts] = draftSetup(2);
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], 'shared');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['shared']);
     $first = $accounts->first();
 
     $data = DraftData::fromArray([
@@ -60,12 +60,12 @@ test('updateDraft applies a per-account override and re-splits only that target'
     $target = $updated->targets->firstWhere('connected_account_id', $first->id);
 
     expect($target->sections)->toBe(['custom for x'])
-        ->and($target->content_override)->toBe(['text' => 'custom for x']);
+        ->and($target->content_override)->toBe(['segments' => ['custom for x'], 'media_ids' => []]);
 });
 
 test('switching destination preserves surviving accounts edits (smart merge)', function () {
     [$user, $workspace, $accounts] = draftSetup(3);
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], 'base');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['base']);
     $keep = $accounts[0];
 
     // First, give $keep an override.
@@ -85,12 +85,12 @@ test('switching destination preserves surviving accounts edits (smart merge)', f
     ]));
 
     expect($narrowed->targets)->toHaveCount(1)
-        ->and($narrowed->targets->first()->content_override)->toBe(['text' => 'kept text']);
+        ->and($narrowed->targets->first()->content_override)->toBe(['segments' => ['kept text'], 'media_ids' => []]);
 });
 
 test('switching to a custom accounts destination preserves selected account edits', function () {
     [$user, $workspace, $accounts] = draftSetup(3);
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], 'base');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['base']);
     $keep = $accounts[0];
     $add = $accounts[2];
 
@@ -110,12 +110,12 @@ test('switching to a custom accounts destination preserves selected account edit
 
     expect($updated->account_set_id)->toBeNull()
         ->and($updated->targets)->toHaveCount(2)
-        ->and($updated->targets->firstWhere('connected_account_id', $keep->id)->content_override)->toBe(['text' => 'kept text']);
+        ->and($updated->targets->firstWhere('connected_account_id', $keep->id)->content_override)->toBe(['segments' => ['kept text'], 'media_ids' => []]);
 });
 
 test('updateDraft attaches and orders media', function () {
     [$user, $workspace, $accounts] = draftSetup(1);
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], '');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['']);
     $m1 = PostMedia::factory()->create(['workspace_id' => $workspace->id, 'post_id' => null]);
     $m2 = PostMedia::factory()->create(['workspace_id' => $workspace->id, 'post_id' => null]);
 
@@ -132,7 +132,7 @@ test('updateDraft attaches and orders media', function () {
 
 test('a stale expected_updated_at throws', function () {
     [$user, $workspace, $accounts] = draftSetup(1);
-    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], '');
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['']);
 
     $stale = DraftData::fromArray([
         'base_text' => 'x',
@@ -158,7 +158,7 @@ test('updateDraft resolves mention placeholders per target platform before split
         $workspace->id,
         $user,
         ['kind' => 'all'],
-        'Hello {{mention:guest}}',
+        ['Hello {{mention:guest}}'],
     );
 
     $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
@@ -209,7 +209,7 @@ test('updateDraft resolves typed at-mention placeholders per target platform bef
         $workspace->id,
         $user,
         ['kind' => 'all'],
-        'Hello @guest',
+        ['Hello @guest'],
     );
 
     $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([

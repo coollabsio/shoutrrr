@@ -9,21 +9,21 @@ function splitter(): PostSplitter
 }
 
 test('short text yields a single section with no issues', function () {
-    $result = splitter()->split('hello world', Platform::X, true);
+    $result = splitter()->split(['hello world'], Platform::X, true);
 
     expect($result->sections)->toBe(['hello world'])
         ->and($result->issues)->toBe([]);
 });
 
-test('manual breaks split into multiple sections', function () {
-    $result = splitter()->split("first part\n---\nsecond part", Platform::X, true);
+test('each segment becomes its own section', function () {
+    $result = splitter()->split(['first part', 'second part'], Platform::X, true);
 
     expect($result->sections)->toBe(['first part', 'second part']);
 });
 
 test('auto split chunks an over-limit segment on word boundaries', function () {
     $text = str_repeat('word ', 80); // 400 chars, over X's 280
-    $result = splitter()->split(trim($text), Platform::X, true);
+    $result = splitter()->split([trim($text)], Platform::X, true);
 
     expect(count($result->sections))->toBeGreaterThan(1)
         ->and(collect($result->sections)->every(fn (string $s) => Platform::X->measure($s) <= 280))->toBeTrue()
@@ -36,7 +36,7 @@ test('auto split never merges a later paragraph into an earlier section', functi
     // word-packer would pull leading words of paragraph two into section one.
     $first = str_repeat('a', 200);
     $second = str_repeat('b', 200);
-    $result = splitter()->split("{$first}\n{$second}", Platform::X, true);
+    $result = splitter()->split(["{$first}\n{$second}"], Platform::X, true);
 
     expect($result->sections)->toBe([$first, $second])
         ->and($result->issues)->toBe([]);
@@ -48,7 +48,7 @@ test('auto split packs whole paragraphs greedily up to the limit', function () {
     $p1 = str_repeat('a', 120);
     $p2 = str_repeat('b', 120);
     $p3 = str_repeat('c', 120);
-    $result = splitter()->split("{$p1}\n{$p2}\n{$p3}", Platform::X, true);
+    $result = splitter()->split(["{$p1}\n{$p2}\n{$p3}"], Platform::X, true);
 
     expect($result->sections)->toBe(["{$p1}\n{$p2}", $p3])
         ->and(collect($result->sections)->every(fn (string $s) => Platform::X->measure($s) <= 280))->toBeTrue();
@@ -57,7 +57,7 @@ test('auto split packs whole paragraphs greedily up to the limit', function () {
 test('auto split breaks a single over-limit paragraph on word boundaries', function () {
     $first = str_repeat('a', 100);
     $long = trim(str_repeat('word ', 80)); // 399 chars, over X's 280
-    $result = splitter()->split("{$first}\n{$long}", Platform::X, true);
+    $result = splitter()->split(["{$first}\n{$long}"], Platform::X, true);
 
     expect($result->sections[0])->toBe($first)
         ->and(count($result->sections))->toBeGreaterThan(2)
@@ -66,7 +66,7 @@ test('auto split breaks a single over-limit paragraph on word boundaries', funct
 
 test('without auto split an over-limit segment stays whole and is flagged', function () {
     $text = str_repeat('a', 400);
-    $result = splitter()->split($text, Platform::X, false);
+    $result = splitter()->split([$text], Platform::X, false);
 
     expect($result->sections)->toHaveCount(1)
         ->and($result->issues)->toContain('section_too_long');
@@ -74,14 +74,14 @@ test('without auto split an over-limit segment stays whole and is flagged', func
 
 test('x can use a premium account length budget', function () {
     $text = str_repeat('a', 400);
-    $result = splitter()->split($text, Platform::X, true, maxLength: 25_000);
+    $result = splitter()->split([$text], Platform::X, true, maxLength: 25_000);
 
     expect($result->sections)->toBe([$text])
         ->and($result->issues)->toBe([]);
 });
 
-test('linkedin ignores manual split markers and publishes one section', function () {
-    $result = splitter()->split("one\n---\ntwo\n---\nthree", Platform::LinkedIn, true);
+test('linkedin joins all segments into one section', function () {
+    $result = splitter()->split(['one', 'two', 'three'], Platform::LinkedIn, true);
 
     expect($result->sections)->toBe(["one\ntwo\nthree"])
         ->and($result->issues)->not->toContain('too_many_sections');
@@ -90,17 +90,23 @@ test('linkedin ignores manual split markers and publishes one section', function
 test('bluesky flags a section that fits graphemes but blows the byte budget', function () {
     // 1500 multibyte chars: under 300 graphemes? No — choose 200 emoji-free multibyte.
     $text = str_repeat('é', 200); // 200 graphemes (ok < 300) but 400 bytes (ok < 3000)
-    $result = splitter()->split($text, Platform::Bluesky, false);
+    $result = splitter()->split([$text], Platform::Bluesky, false);
     expect($result->issues)->toBe([]);
 
     $big = str_repeat('é', 1600); // 1600 graphemes > 300 -> section_too_long
-    $result2 = splitter()->split($big, Platform::Bluesky, false);
+    $result2 = splitter()->split([$big], Platform::Bluesky, false);
     expect($result2->issues)->toContain('section_too_long');
 });
 
 test('validateSections flags too many media for the platform', function () {
     $issues = splitter()->validateSections(['hi'], Platform::X, mediaCount: 5);
     expect($issues)->toContain('too_many_media');
+});
+
+test('a literal --- inside a segment is content, not a break', function () {
+    $result = splitter()->split(["before\n---\nafter"], Platform::X, false);
+
+    expect($result->sections)->toBe(["before\n---\nafter"]);
 });
 
 /**
@@ -140,7 +146,7 @@ test('section boundaries match the composer preview fixture', function (array $c
         $case['expected'],
     );
 
-    expect(splitter()->split($text, $platform, true)->sections)->toBe($expected);
+    expect(splitter()->split([$text], $platform, true)->sections)->toBe($expected);
 })->with(static fn (): array => collect(parityCases())->mapWithKeys(
     static fn (array $case): array => [$case['name'] => [$case]],
 )->all());

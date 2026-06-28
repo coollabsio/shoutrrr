@@ -35,6 +35,7 @@ test('POST /posts lazily creates a draft and returns its view as JSON', function
 
     $response = test()->postJson('/posts', [
         'base_text' => 'first draft',
+        'segments' => ['first draft'],
         'destination' => ['kind' => 'all'],
     ]);
 
@@ -51,6 +52,7 @@ test('POST /posts accepts a custom accounts destination', function () {
 
     test()->postJson('/posts', [
         'base_text' => 'custom draft',
+        'segments' => ['custom draft'],
         'destination' => ['kind' => 'accounts', 'ids' => [$accounts[0]->id, $accounts[2]->id]],
     ])->assertCreated()
         ->assertJsonPath('post.destination.kind', 'accounts')
@@ -60,10 +62,11 @@ test('POST /posts accepts a custom accounts destination', function () {
 
 test('PUT /posts/{post} autosaves edits and returns the new baseline', function () {
     [$user, $workspace, $accounts] = actingMember(1);
-    $created = test()->postJson('/posts', ['base_text' => 'a', 'destination' => ['kind' => 'all']])->json('post');
+    $created = test()->postJson('/posts', ['base_text' => 'a', 'segments' => ['a'], 'destination' => ['kind' => 'all']])->json('post');
 
     $response = test()->putJson("/posts/{$created['id']}", [
         'base_text' => 'edited',
+        'segments' => ['edited'],
         'destination' => ['kind' => 'all'],
         'targets' => [['connected_account_id' => $accounts[0]->id, 'auto_split' => true]],
         'expected_updated_at' => $created['updated_at'],
@@ -74,10 +77,11 @@ test('PUT /posts/{post} autosaves edits and returns the new baseline', function 
 
 test('PUT with a stale expected_updated_at returns 409 with the latest view', function () {
     [$user, $workspace, $accounts] = actingMember(1);
-    $created = test()->postJson('/posts', ['base_text' => 'a', 'destination' => ['kind' => 'all']])->json('post');
+    $created = test()->postJson('/posts', ['base_text' => 'a', 'segments' => ['a'], 'destination' => ['kind' => 'all']])->json('post');
 
     test()->putJson("/posts/{$created['id']}", [
         'base_text' => 'edited',
+        'segments' => ['edited'],
         'destination' => ['kind' => 'all'],
         'expected_updated_at' => '2000-01-01T00:00:00+00:00',
     ])->assertStatus(409)->assertJsonPath('post.id', $created['id']);
@@ -89,6 +93,7 @@ test('a user cannot autosave a post in another workspace', function () {
 
     test()->putJson("/posts/{$foreign->id}", [
         'base_text' => 'x',
+        'segments' => ['x'],
         'destination' => ['kind' => 'all'],
     ])->assertNotFound();
 });
@@ -136,7 +141,7 @@ test('the old /compose/{post} URL no longer exists', function () {
 
 test('DELETE /posts/{post} removes the draft and its targets', function () {
     [$user, $workspace, $accounts] = actingMember(2);
-    $created = test()->postJson('/posts', ['base_text' => 'a', 'destination' => ['kind' => 'all']])->json('post');
+    $created = test()->postJson('/posts', ['base_text' => 'a', 'segments' => ['a'], 'destination' => ['kind' => 'all']])->json('post');
 
     test()->delete("/posts/{$created['id']}")->assertRedirect();
 

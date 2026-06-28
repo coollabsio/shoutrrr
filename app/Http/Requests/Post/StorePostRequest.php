@@ -22,6 +22,8 @@ class StorePostRequest extends FormRequest
     {
         return [
             'base_text' => ['present', 'nullable', 'string'],
+            'segments' => ['present', 'array'],
+            'segments.*' => ['nullable', 'string'],
             'mentions' => ['array'],
             'mentions.*.id' => ['required', 'string'],
             'mentions.*.label' => ['required', 'string'],

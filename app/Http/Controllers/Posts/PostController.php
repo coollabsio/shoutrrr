@@ -91,7 +91,7 @@ class PostController extends Controller
             $request->user()->current_workspace_id,
             $request->user(),
             $request->validated('destination'),
-            (string) $request->validated('base_text'),
+            array_values(array_map(static fn (mixed $s): string => (string) ($s ?? ''), $request->validated('segments', []))),
             array_values($request->validated('mentions', [])),
         );
 

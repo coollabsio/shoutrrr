@@ -12,13 +12,15 @@ final class DraftData
      * "set this override to null" from "leave the existing override untouched"
      * (the smart-merge that preserves edits across a destination switch).
      *
+     * @param  list<string>  $segments
      * @param  list<string>  $destinationIds
      * @param  list<string>  $mediaIds
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
-     * @param  array<string, array{auto_split?: bool, content_override?: array{text?: string|null, media_ids?: list<string>}|null}>  $targetsByAccount
+     * @param  array<string, array{auto_split?: bool, content_override?: array{segments: list<string>, media_ids: list<string>}|null}>  $targetsByAccount
      */
     public function __construct(
-        public readonly string $baseText,
+        /** @var list<string> */
+        public readonly array $segments,
         public readonly string $destinationKind,
         public readonly ?string $destinationId,
         public readonly array $destinationIds,
@@ -42,13 +44,13 @@ final class DraftData
                 $entry['auto_split'] = (bool) $target['auto_split'];
             }
             if (array_key_exists('content_override', $target)) {
-                $entry['content_override'] = $target['content_override'];
+                $entry['content_override'] = self::readOverride($target['content_override']);
             }
             $targetsByAccount[$target['connected_account_id']] = $entry;
         }
 
         return new self(
-            baseText: (string) ($payload['base_text'] ?? ''),
+            segments: self::readSegments($payload),
             destinationKind: (string) $destination['kind'],
             destinationId: $destination['id'] ?? null,
             destinationIds: array_values($destination['ids'] ?? []),
@@ -75,10 +77,43 @@ final class DraftData
     }
 
     /**
-     * @return array{text?: string|null, media_ids?: list<string>}|null
+     * @return array{segments: list<string>, media_ids: list<string>}|null
      */
     public function overrideFor(string $accountId): ?array
     {
         return $this->targetsByAccount[$accountId]['content_override'] ?? null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return list<string>
+     */
+    private static function readSegments(array $payload): array
+    {
+        if (isset($payload['segments']) && is_array($payload['segments'])) {
+            return array_values(array_map(static fn (mixed $s): string => (string) $s, $payload['segments']));
+        }
+
+        // Back-compat: a plain `base_text` string becomes one segment.
+        return [(string) ($payload['base_text'] ?? '')];
+    }
+
+    /**
+     * @return array{segments: list<string>, media_ids: list<string>}|null
+     */
+    private static function readOverride(mixed $override): ?array
+    {
+        if (! is_array($override)) {
+            return null;
+        }
+
+        $segments = isset($override['segments']) && is_array($override['segments'])
+            ? array_values(array_map(static fn (mixed $s): string => (string) $s, $override['segments']))
+            : [(string) ($override['text'] ?? '')];
+
+        return [
+            'segments' => $segments,
+            'media_ids' => array_values($override['media_ids'] ?? []),
+        ];
     }
 }
