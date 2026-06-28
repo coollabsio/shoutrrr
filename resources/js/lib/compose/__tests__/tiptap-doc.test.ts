@@ -45,6 +45,10 @@ describe('docToSegments / segmentsToDoc', () => {
         expect(docToSegments(segmentsToDoc(segments))).toEqual(segments);
     });
 
+    it('preserves an empty paragraph (blank line) within a segment on round-trip', () => {
+        expect(docToSegments(segmentsToDoc(['a\n\nb']))).toEqual(['a\n\nb']);
+    });
+
     it('empty segments produce a single empty paragraph doc', () => {
         expect(segmentsToDoc([''])).toEqual({
             type: 'doc',
