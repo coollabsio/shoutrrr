@@ -6,6 +6,8 @@ use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\CompressionResult;
+use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\LinkedInConnector;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -199,4 +201,33 @@ test('linkedin maps 401 to AuthExpired', function () {
 
     expect(app(LinkedInConnector::class)->publish(liContext(['hi']))->errorKind)
         ->toBe(ErrorKind::AuthExpired);
+});
+
+test('linkedin compresses oversized images via the compressor before upload', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/big.jpg', 'image-bytes');
+
+    $compressor = Mockery::mock(ImageCompressor::class);
+    $compressor->shouldReceive('compressToFit')
+        ->once()
+        ->with('image-bytes', Platform::LinkedIn->maxMediaBytes(), 'image/jpeg')
+        ->andReturn(CompressionResult::compressed('small-bytes'));
+    app()->instance(ImageCompressor::class, $compressor);
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public', 'path' => 'media/big.jpg', 'mime' => 'image/jpeg',
+    ]);
+
+    Http::fake([
+        'https://api.linkedin.com/rest/images?action=initializeUpload' => Http::response([
+            'value' => ['uploadUrl' => 'https://upload.example/abc', 'image' => 'urn:li:image:1'],
+        ]),
+        'https://upload.example/abc' => Http::response('', 201),
+        'https://api.linkedin.com/rest/posts' => Http::response('', 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    app(LinkedInConnector::class)->publish(liContext(['look'], [$media]));
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://upload.example/abc'
+        && $request->body() === 'small-bytes');
 });

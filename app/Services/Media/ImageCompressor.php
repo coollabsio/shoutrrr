@@ -14,7 +14,7 @@ use Throwable;
  * Images already within the limit (or GIFs, or undecodable bytes) are
  * returned untouched.
  */
-final class ImageCompressor
+class ImageCompressor
 {
     private const int QUALITY_START = 82;
 

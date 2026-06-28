@@ -6,6 +6,8 @@ use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\CompressionResult;
+use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\XConnector;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -237,4 +239,30 @@ test('x omits an empty text field for a media-only post', function () {
     Http::assertSent(fn ($request) => $request->url() === 'https://api.twitter.com/2/tweets'
         && ! array_key_exists('text', $request->data())
         && ($request['media']['media_ids'] ?? null) === ['99001']);
+});
+
+test('x compresses oversized images via the compressor before upload', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/big.jpg', 'image-bytes');
+
+    $compressor = Mockery::mock(ImageCompressor::class);
+    $compressor->shouldReceive('compressToFit')
+        ->once()
+        ->with('image-bytes', Platform::X->maxMediaBytes(), 'image/jpeg')
+        ->andReturn(CompressionResult::compressed('small-bytes'));
+    app()->instance(ImageCompressor::class, $compressor);
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public', 'path' => 'media/big.jpg', 'mime' => 'image/jpeg',
+    ]);
+
+    Http::fake([
+        'https://api.x.com/2/media/upload' => Http::response(['data' => ['id' => '123']]),
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => 'tweet1']]),
+    ]);
+
+    app(XConnector::class)->publish(xContext(['look'], [$media]));
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'media/upload')
+        && str_contains((string) $request->body(), 'small-bytes'));
 });

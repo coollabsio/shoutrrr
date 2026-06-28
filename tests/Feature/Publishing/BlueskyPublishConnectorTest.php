@@ -6,6 +6,8 @@ use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\CompressionResult;
+use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\BlueskyPublishConnector;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -191,4 +193,32 @@ test('bluesky maps 401 to AuthExpired', function () {
 
     expect(app(BlueskyPublishConnector::class)->publish(bskyContext(['hi']))->errorKind)
         ->toBe(ErrorKind::AuthExpired);
+});
+
+test('bluesky compresses oversized images via the compressor before upload', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/big.jpg', 'image-bytes');
+
+    $compressor = Mockery::mock(ImageCompressor::class);
+    $compressor->shouldReceive('compressToFit')
+        ->once()
+        ->with('image-bytes', Platform::Bluesky->maxMediaBytes(), 'image/jpeg')
+        ->andReturn(CompressionResult::compressed('small-bytes'));
+    app()->instance(ImageCompressor::class, $compressor);
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public', 'path' => 'media/big.jpg', 'mime' => 'image/jpeg', 'alt_text' => 'big',
+    ]);
+
+    Http::fake([
+        '*com.atproto.repo.uploadBlob' => Http::response([
+            'blob' => ['$type' => 'blob', 'ref' => ['$link' => 'bafblob'], 'mimeType' => 'image/jpeg', 'size' => 11],
+        ]),
+        '*com.atproto.repo.createRecord' => Http::response(['uri' => 'at://r/1', 'cid' => 'cid1']),
+    ]);
+
+    app(BlueskyPublishConnector::class)->publish(bskyContext(['look'], [$media]));
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'com.atproto.repo.uploadBlob')
+        && $request->body() === 'small-bytes');
 });
