@@ -46,6 +46,21 @@ test('it rejects a non-image upload', function () {
     ], ['Accept' => 'application/json'])->assertStatus(422);
 });
 
+test('it rejects an image whose resolution exceeds the pixel ceiling', function () {
+    Storage::fake('public');
+    [$user, $workspace, $post] = memberWithDraft();
+
+    // Lower the ceiling so a normal fake image trips it without allocating a
+    // genuine 50-megapixel canvas; the rule reads the header only.
+    config(['media.max_image_pixels' => 100]);
+
+    test()->post("/posts/{$post['id']}/media", [
+        'file' => UploadedFile::fake()->image('huge.jpg', 800, 600)->size(300),
+    ], ['Accept' => 'application/json'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('file');
+});
+
 test('it rejects an upload to a post that is no longer editable', function () {
     Storage::fake('public');
     [$user, $workspace, $post] = memberWithDraft();

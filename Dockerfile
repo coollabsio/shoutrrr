@@ -95,7 +95,8 @@ RUN docker-php-serversideup-set-id www-data ${USER_ID}:${GROUP_ID} \
     && docker-php-serversideup-set-file-permissions --owner ${USER_ID}:${GROUP_ID}
 
 # Redis extension for optional Redis cache/queue (pdo_pgsql ships in the image)
-RUN install-php-extensions redis
+# gd + exif: required by intervention/image for runtime image compression
+RUN install-php-extensions redis gd exif
 
 # System packages + Bun (needed when SSR is toggled on: inertia:start-ssr --runtime=bun)
 RUN apt-get update && apt-get install -y --no-install-recommends \

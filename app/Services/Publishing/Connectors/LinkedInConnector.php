@@ -11,6 +11,7 @@ use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use Illuminate\Http\Client\ConnectionException;
@@ -41,7 +42,10 @@ class LinkedInConnector implements PublishConnector
      */
     public const string DEFAULT_VERSION = '202605';
 
-    public function __construct(private readonly HttpFactory $http) {}
+    public function __construct(
+        private readonly HttpFactory $http,
+        private readonly ImageCompressor $imageCompressor,
+    ) {}
 
     private function apiVersion(): string
     {
@@ -325,10 +329,11 @@ class LinkedInConnector implements PublishConnector
             $urn = (string) $register->json('value.image');
 
             $bytes = (string) Storage::disk($item->disk)->get($item->path);
+            $compressed = $this->imageCompressor->compressToFit($bytes, Platform::LinkedIn->maxMediaBytes(), $item->mime, Platform::LinkedIn->allowedMime());
 
             $upload = $this->http
                 ->withToken($token)
-                ->withBody($bytes, $item->mime)
+                ->withBody($compressed->bytes, $compressed->mime)
                 ->put($uploadUrl);
 
             if ($upload->failed()) {

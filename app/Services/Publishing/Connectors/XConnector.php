@@ -8,8 +8,10 @@ use App\Dto\Publishing\MediaUploadState;
 use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
+use App\Enums\Platform;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use Illuminate\Http\Client\ConnectionException;
@@ -32,7 +34,10 @@ class XConnector implements PublishConnector
 
     private const int APPEND_CHUNK = 4 * 1024 * 1024;
 
-    public function __construct(private readonly HttpFactory $http) {}
+    public function __construct(
+        private readonly HttpFactory $http,
+        private readonly ImageCompressor $imageCompressor,
+    ) {}
 
     public function publish(PublishContext $context): PublishResult
     {
@@ -223,11 +228,12 @@ class XConnector implements PublishConnector
         $ids = [];
 
         foreach ($media as $item) {
-            $bytes = Storage::disk($item->disk)->get($item->path);
+            $bytes = (string) Storage::disk($item->disk)->get($item->path);
+            $compressed = $this->imageCompressor->compressToFit($bytes, Platform::X->maxMediaBytes(), $item->mime, Platform::X->allowedMime());
             $response = $this->http
                 ->withToken($token)
                 ->asMultipart()
-                ->attach('media', (string) $bytes, 'upload')
+                ->attach('media', $compressed->bytes, 'upload')
                 ->post(self::MEDIA_URL, ['media_category' => 'tweet_image']);
 
             if ($response->failed()) {

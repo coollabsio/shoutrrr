@@ -11,6 +11,7 @@ use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use GuzzleHttp\Psr7\Utils;
@@ -28,7 +29,10 @@ class BlueskyPublishConnector implements PublishConnector
 
     private const string VIDEO_SERVICE = 'https://video.bsky.app';
 
-    public function __construct(private readonly HttpFactory $http) {}
+    public function __construct(
+        private readonly HttpFactory $http,
+        private readonly ImageCompressor $imageCompressor,
+    ) {}
 
     public function publish(PublishContext $context): PublishResult
     {
@@ -303,10 +307,11 @@ class BlueskyPublishConnector implements PublishConnector
 
         foreach ($media as $item) {
             $bytes = (string) Storage::disk($item->disk)->get($item->path);
+            $compressed = $this->imageCompressor->compressToFit($bytes, Platform::Bluesky->maxMediaBytes(), $item->mime, Platform::Bluesky->allowedMime());
 
             $response = $this->http
                 ->withToken($jwt)
-                ->withBody($bytes, $item->mime)
+                ->withBody($compressed->bytes, $compressed->mime)
                 ->post($pds.'/xrpc/com.atproto.repo.uploadBlob');
 
             if ($response->failed()) {
