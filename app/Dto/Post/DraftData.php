@@ -107,6 +107,10 @@ final class DraftData
             return null;
         }
 
+        if ($override === []) {
+            return null;
+        }
+
         $segments = isset($override['segments']) && is_array($override['segments'])
             ? array_values(array_map(static fn (mixed $s): string => (string) $s, $override['segments']))
             : [(string) ($override['text'] ?? '')];

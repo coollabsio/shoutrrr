@@ -46,3 +46,19 @@ test('it defaults missing pieces sensibly', function () {
         ->and($data->hasOverrideFor('whatever'))->toBeFalse()
         ->and($data->overrideFor('whatever'))->toBeNull();
 });
+
+test('an empty or null content_override yields no override, not an empty segment', function () {
+    $data = DraftData::fromArray([
+        'base_text' => 'body',
+        'destination' => ['kind' => 'all'],
+        'targets' => [
+            ['connected_account_id' => 'acc-empty', 'content_override' => []],
+            ['connected_account_id' => 'acc-null', 'content_override' => null],
+        ],
+    ]);
+
+    expect($data->hasOverrideFor('acc-empty'))->toBeTrue()
+        ->and($data->overrideFor('acc-empty'))->toBeNull()
+        ->and($data->hasOverrideFor('acc-null'))->toBeTrue()
+        ->and($data->overrideFor('acc-null'))->toBeNull();
+});

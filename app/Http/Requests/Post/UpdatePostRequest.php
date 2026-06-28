@@ -41,7 +41,7 @@ class UpdatePostRequest extends FormRequest
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.segments' => ['array'],
-            'targets.*.content_override.segments.*' => ['string'],
+            'targets.*.content_override.segments.*' => ['nullable', 'string'],
             'targets.*.content_override.media_ids' => ['array'],
             'targets.*.content_override.media_ids.*' => ['string'],
             'media_ids' => ['array'],
