@@ -3,7 +3,11 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import PostVideoUploadController from '@/actions/App/Http/Controllers/Posts/PostVideoUploadController';
-import { putWithProgress, readVideoMetadata, validateVideo } from '@/lib/compose/video';
+import {
+    putWithProgress,
+    readVideoMetadata,
+    validateVideo,
+} from '@/lib/compose/video';
 import { renderVideo } from '@/lib/video-editor/render';
 import type { VideoEditSettings } from '@/lib/video-editor/settings';
 import type { MediaView, PlatformLimits } from '@/types/compose';
@@ -21,7 +25,9 @@ type Args = {
 };
 
 export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
-    const [phase, setPhase] = useState<'idle' | 'rendering' | 'uploading'>('idle');
+    const [phase, setPhase] = useState<'idle' | 'rendering' | 'uploading'>(
+        'idle',
+    );
     const [progress, setProgress] = useState(0);
 
     const signHttp = useHttp<
@@ -40,13 +46,20 @@ export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
         { media: MediaView }
     >({ key: '', duration_seconds: 0, width: 0, height: 0, alt_text: null });
 
-    async function apply({ source, oldMediaId, settings, limits }: ApplyInput): Promise<boolean> {
+    async function apply({
+        source,
+        oldMediaId,
+        settings,
+        limits,
+    }: ApplyInput): Promise<boolean> {
         try {
             setPhase('rendering');
             setProgress(0);
             const blob = await renderVideo(source, settings, setProgress);
 
-            const file = new File([blob], 'edited-video.mp4', { type: 'video/mp4' });
+            const file = new File([blob], 'edited-video.mp4', {
+                type: 'video/mp4',
+            });
             const meta = await readVideoMetadata(file);
 
             const verdict = validateVideo(
@@ -71,11 +84,19 @@ export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
 
             // 1. Sign → 2. PUT direct to storage → 3. confirm.
             signHttp.setData({ content_type: 'video/mp4' });
-            const signed = await signHttp.post(PostVideoUploadController.url(id).url, {
-                onNetworkError: () => undefined,
-            });
+            const signed = await signHttp.post(
+                PostVideoUploadController.url(id).url,
+                {
+                    onNetworkError: () => undefined,
+                },
+            );
 
-            await putWithProgress(signed.url, signed.headers, file, setProgress);
+            await putWithProgress(
+                signed.url,
+                signed.headers,
+                file,
+                (pct) => setProgress(pct / 100),
+            );
 
             confirmHttp.setData({
                 key: signed.key,
@@ -84,16 +105,21 @@ export function useVideoEditor({ onEnsurePost, onReplace }: Args) {
                 height: meta.height,
                 alt_text: null,
             });
-            const { media } = await confirmHttp.post(PostVideoUploadController.store(id).url, {
-                onNetworkError: () => undefined,
-            });
+            const { media } = await confirmHttp.post(
+                PostVideoUploadController.store(id).url,
+                {
+                    onNetworkError: () => undefined,
+                },
+            );
 
             onReplace(oldMediaId, media);
 
             return true;
         } catch (error) {
             toast.error(
-                error instanceof Error ? error.message : 'Could not save the edited video.',
+                error instanceof Error
+                    ? error.message
+                    : 'Could not save the edited video.',
             );
 
             return false;
