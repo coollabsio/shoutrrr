@@ -26,43 +26,44 @@ export async function renderVideo(
     }
 
     const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(source) });
-    const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
-
-    // Re-encode to H.264 mp4; only add a crop rect when one is set. Audio is
-    // kept automatically because we don't pass `audio: { discard: true }`.
-    const video: ConversionVideoOptions = { codec: 'avc', bitrate: QUALITY_HIGH };
-    if (settings.crop) {
-        video.crop = {
-            left: Math.round(settings.crop.x),
-            top: Math.round(settings.crop.y),
-            width: Math.round(settings.crop.width),
-            height: Math.round(settings.crop.height),
-        };
-    }
-
-    const conversion = await Conversion.init({
-        input,
-        output,
-        trim: { start: settings.trim.start, end: settings.trim.end },
-        video,
-    });
-
-    if (!conversion.isValid) {
-        throw new Error('This video cannot be edited in the browser.');
-    }
-
-    conversion.onProgress = (progress) => onProgress(progress);
 
     try {
+        const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
+
+        // Re-encode to H.264 mp4; only add a crop rect when one is set. Audio is
+        // kept automatically because we don't pass `audio: { discard: true }`.
+        const video: ConversionVideoOptions = { codec: 'avc', bitrate: QUALITY_HIGH };
+        if (settings.crop) {
+            video.crop = {
+                left: Math.round(settings.crop.x),
+                top: Math.round(settings.crop.y),
+                width: Math.round(settings.crop.width),
+                height: Math.round(settings.crop.height),
+            };
+        }
+
+        const conversion = await Conversion.init({
+            input,
+            output,
+            trim: { start: settings.trim.start, end: settings.trim.end },
+            video,
+        });
+
+        if (!conversion.isValid) {
+            throw new Error('This video cannot be edited in the browser.');
+        }
+
+        conversion.onProgress = (progress) => onProgress(progress);
+
         await conversion.execute();
+
+        const buffer = output.target.buffer;
+        if (buffer === null) {
+            throw new Error('Rendering produced no output.');
+        }
+
+        return new Blob([buffer], { type: 'video/mp4' });
     } finally {
         input.dispose();
     }
-
-    const buffer = output.target.buffer;
-    if (buffer === null) {
-        throw new Error('Rendering produced no output.');
-    }
-
-    return new Blob([buffer], { type: 'video/mp4' });
 }
