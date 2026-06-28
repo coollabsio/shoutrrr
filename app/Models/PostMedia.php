@@ -104,7 +104,7 @@ class PostMedia extends Model
 
     public function url(): string
     {
-        return Storage::disk($this->disk)->url($this->path);
+        return $this->resolveUrl($this->disk, $this->path);
     }
 
     public function source_url(): ?string
@@ -113,7 +113,23 @@ class PostMedia extends Model
             return null;
         }
 
-        return Storage::disk($this->source_disk ?? $this->disk)->url($this->source_path);
+        return $this->resolveUrl($this->source_disk ?? $this->disk, $this->source_path);
+    }
+
+    /**
+     * Resolve a browser-loadable URL for a stored file. Public-visibility disks
+     * (images) get a permanent public URL; private disks (videos live on the
+     * default disk — local-serve in dev, a private S3 bucket in production) need
+     * a signed, expiring URL, otherwise the serve route / bucket rejects a
+     * direct GET with 403.
+     */
+    private function resolveUrl(string $disk, string $path): string
+    {
+        if (config("filesystems.disks.{$disk}.visibility") === 'public') {
+            return Storage::disk($disk)->url($path);
+        }
+
+        return Storage::disk($disk)->temporaryUrl($path, now()->addHours(6));
     }
 
     /**
