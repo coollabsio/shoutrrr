@@ -69,6 +69,7 @@ class HandleInertiaRequests extends Middleware
             'features' => [
                 'analytics' => (bool) config('metrics.enabled'),
                 'engagement' => (bool) config('engagement.enabled'),
+                'ai' => app(InstanceSettings::class)->aiConfigured(),
             ],
             'instance' => [
                 'isOwner' => $request->user()?->isInstanceOwner() ?? false,

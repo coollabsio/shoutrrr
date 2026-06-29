@@ -26,7 +26,7 @@ declare module '@inertiajs/core' {
                 unreadReplies: number;
             };
             notifications: NotificationsData;
-            features?: { analytics: boolean; engagement?: boolean };
+            features?: { analytics: boolean; engagement?: boolean; ai: boolean };
             instance: { isOwner: boolean };
             [key: string]: unknown;
         };
