@@ -14,8 +14,18 @@ describe('instance settings layout', () => {
             "import InstanceSettingsLayout from '@/layouts/settings/instance-layout';",
         );
         expect(app).toContain("case name === 'settings/instance' ||");
-        expect(app).toContain("name === 'settings/instance-admins':");
+        expect(app).toContain("name === 'settings/instance-admins' ||");
+        expect(app).toContain("name === 'settings/instance-ai':");
         expect(app).toContain('return [AppLayout, InstanceSettingsLayout];');
+    });
+
+    it('includes an AI sub navigation item', () => {
+        const layout = readSource(
+            'resources/js/layouts/settings/instance-layout.tsx',
+        );
+
+        expect(layout).toContain("title: 'AI'");
+        expect(layout).toContain('InstanceSettingsController.editAi()');
     });
 
     it('does not appear in the workspace settings sub navigation', () => {

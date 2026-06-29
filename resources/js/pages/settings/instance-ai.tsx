@@ -6,6 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 type AiSettings = {
     ai_enabled: boolean;
@@ -13,6 +20,20 @@ type AiSettings = {
     ai_model: string;
     ai_api_key_set: boolean;
 };
+
+/** Text-capable providers Prism is configured for (see config/prism.php). */
+const AI_PROVIDERS = [
+    { value: 'anthropic', label: 'Anthropic (Claude)' },
+    { value: 'openai', label: 'OpenAI' },
+    { value: 'gemini', label: 'Google Gemini' },
+    { value: 'ollama', label: 'Ollama (self-hosted)' },
+    { value: 'mistral', label: 'Mistral' },
+    { value: 'groq', label: 'Groq' },
+    { value: 'deepseek', label: 'DeepSeek' },
+    { value: 'xai', label: 'xAI (Grok)' },
+    { value: 'openrouter', label: 'OpenRouter' },
+    { value: 'perplexity', label: 'Perplexity' },
+] as const;
 
 type PageProps = { settings: AiSettings };
 
@@ -61,14 +82,29 @@ export default function InstanceAi({ settings }: PageProps) {
 
                     <div className="space-y-2">
                         <Label htmlFor="ai_provider">Provider</Label>
-                        <Input
-                            id="ai_provider"
+                        <Select
                             value={data.ai_provider}
-                            onChange={(e) => setData('ai_provider', e.target.value)}
-                            placeholder="anthropic"
-                        />
+                            onValueChange={(value) =>
+                                setData('ai_provider', value)
+                            }
+                        >
+                            <SelectTrigger id="ai_provider" className="w-full">
+                                <SelectValue placeholder="Select a provider" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {AI_PROVIDERS.map((provider) => (
+                                    <SelectItem
+                                        key={provider.value}
+                                        value={provider.value}
+                                    >
+                                        {provider.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <p className="text-sm text-muted-foreground">
-                            Any provider supported by Prism (e.g. anthropic, openai, ollama).
+                            The LLM provider that powers AI features. Set the
+                            matching API key below.
                         </p>
                     </div>
 
