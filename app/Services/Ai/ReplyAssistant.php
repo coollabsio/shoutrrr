@@ -6,6 +6,7 @@ namespace App\Services\Ai;
 
 use App\Models\PostTargetReply;
 use Generator;
+use Prism\Prism\Streaming\Events\ErrorEvent;
 use Prism\Prism\Streaming\Events\TextDeltaEvent;
 
 class ReplyAssistant
@@ -28,6 +29,12 @@ class ReplyAssistant
             ->withPrompt($context);
 
         foreach ($request->asStream() as $chunk) {
+            if ($chunk instanceof ErrorEvent) {
+                throw new AiStreamException(
+                    $chunk->message !== '' ? $chunk->message : 'The AI provider returned an error.'
+                );
+            }
+
             if ($chunk instanceof TextDeltaEvent && $chunk->delta !== '') {
                 yield $chunk->delta;
             }

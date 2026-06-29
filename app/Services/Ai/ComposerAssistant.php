@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Ai;
 
 use Generator;
+use Prism\Prism\Streaming\Events\ErrorEvent;
 use Prism\Prism\Streaming\Events\TextDeltaEvent;
 
 class ComposerAssistant
@@ -41,6 +42,12 @@ class ComposerAssistant
             ->withPrompt($prompt);
 
         foreach ($request->asStream() as $chunk) {
+            if ($chunk instanceof ErrorEvent) {
+                throw new AiStreamException(
+                    $chunk->message !== '' ? $chunk->message : 'The AI provider returned an error.'
+                );
+            }
+
             if ($chunk instanceof TextDeltaEvent && $chunk->delta !== '') {
                 yield $chunk->delta;
             }

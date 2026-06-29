@@ -24,8 +24,17 @@ class ReplyAssistantController extends Controller
         $generator = $this->assistant->suggest($reply, $excerpt, $tone, $limit);
 
         return StreamEnvelope::response(function (callable $emit) use ($generator): void {
+            $produced = false;
+
             foreach ($generator as $delta) {
+                $produced = true;
                 $emit('delta', ['text' => $delta]);
+            }
+
+            if (! $produced) {
+                $emit('error', [
+                    'message' => 'The model returned no text. Check the model name and API key in settings.',
+                ]);
             }
         });
     }
