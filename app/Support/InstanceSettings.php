@@ -8,6 +8,7 @@ use App\Enums\InstanceRole;
 use App\Models\InstanceSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 
 class InstanceSettings
 {
@@ -76,7 +77,83 @@ class InstanceSettings
         Cache::forget(self::CacheKey);
     }
 
+    public function aiEnabled(): bool
+    {
+        return $this->boolean('ai_enabled');
+    }
+
+    public function aiProvider(): string
+    {
+        $value = $this->value('ai_provider');
+
+        return is_string($value) && $value !== '' ? $value : (string) config('ai.provider');
+    }
+
+    public function aiModel(): string
+    {
+        $value = $this->value('ai_model');
+
+        return is_string($value) && $value !== '' ? $value : (string) config('ai.model');
+    }
+
+    public function aiApiKey(): ?string
+    {
+        $stored = $this->value('ai_api_key');
+
+        if (! is_string($stored) || $stored === '') {
+            return null;
+        }
+
+        try {
+            return Crypt::decryptString($stored);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public function aiConfigured(): bool
+    {
+        return $this->aiEnabled() && $this->aiApiKey() !== null;
+    }
+
+    /**
+     * @return array{ai_enabled: bool, ai_provider: string, ai_model: string, ai_api_key_set: bool}
+     */
+    public function aiSettings(): array
+    {
+        return [
+            'ai_enabled' => $this->aiEnabled(),
+            'ai_provider' => $this->aiProvider(),
+            'ai_model' => $this->aiModel(),
+            'ai_api_key_set' => $this->aiApiKey() !== null,
+        ];
+    }
+
+    /**
+     * @param  array{ai_enabled: bool, ai_provider: string, ai_model: string}  $values
+     */
+    public function updateAi(array $values, ?string $apiKey): void
+    {
+        foreach ($values as $key => $value) {
+            InstanceSetting::query()->updateOrCreate(['key' => $key], ['value' => $value]);
+        }
+
+        if ($apiKey !== null) {
+            InstanceSetting::query()->updateOrCreate(
+                ['key' => 'ai_api_key'],
+                ['value' => $apiKey === '' ? '' : Crypt::encryptString($apiKey)],
+            );
+        }
+
+        Cache::forget(self::CacheKey);
+    }
+
     private function boolean(string $key): bool
+    {
+        return (bool) $this->value($key);
+    }
+
+    private function value(string $key): mixed
     {
         /** @var array<string, mixed> $settings */
         $settings = Cache::rememberForever(self::CacheKey, fn (): array => InstanceSetting::query()
@@ -84,6 +161,6 @@ class InstanceSettings
             ->mapWithKeys(fn (InstanceSetting $setting): array => [$setting->key => $setting->value])
             ->all());
 
-        return (bool) ($settings[$key] ?? config("instance.defaults.{$key}"));
+        return $settings[$key] ?? config("instance.defaults.{$key}");
     }
 }
