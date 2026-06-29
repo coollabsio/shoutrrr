@@ -23,6 +23,13 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+    Sheet,
+    SheetContent,
+    SheetTitle,
+    SheetTrigger,
+} from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import type { AiSuggestion } from '@/lib/compose/composer-state';
 import { cn } from '@/lib/utils';
 import type { PlatformName } from '@/types/compose';
@@ -59,6 +66,12 @@ const PLATFORM_LABELS: Partial<Record<PlatformName, string>> = {
     linkedin: 'LinkedIn',
 };
 
+const TRIGGER_CLASS = cn(
+    'group inline-flex h-8 items-center gap-1.5 rounded-md border border-primary/25 bg-primary/[0.06] px-2.5 text-[12px] font-medium text-primary transition-colors sm:h-7',
+    'hover:border-primary/40 hover:bg-primary/10',
+    'data-[state=open]:border-primary/50 data-[state=open]:bg-primary/12',
+);
+
 export function ShoutAiPopover({
     open,
     onOpenChange,
@@ -70,6 +83,93 @@ export function ShoutAiPopover({
     onAccept,
     onReset,
 }: Props) {
+    const isMobile = useIsMobile();
+
+    // Once a result is streaming or ready, an accidental click/tap outside must
+    // NOT throw the work away — only the explicit close, Accept, or Discard does.
+    const hasResult = suggestion.status !== 'idle';
+    const keepOpenOnOutside = (event: Event) => {
+        if (hasResult) {
+            event.preventDefault();
+        }
+    };
+
+    const trigger = (
+        <button type="button" title="ShoutAI" className={TRIGGER_CLASS}>
+            <Sparkles
+                className="size-3.5 transition-transform group-hover:scale-110 motion-reduce:transition-none"
+                aria-hidden="true"
+            />
+            <span>ShoutAI</span>
+        </button>
+    );
+
+    const surface = (showClose: boolean) => (
+        <Surface
+            suggestion={suggestion}
+            platform={platform}
+            currentText={currentText}
+            onRun={onRun}
+            onRedo={onRedo}
+            onAccept={onAccept}
+            onReset={onReset}
+            onClose={() => onOpenChange(false)}
+            showClose={showClose}
+        />
+    );
+
+    if (isMobile) {
+        return (
+            <Sheet open={open} onOpenChange={onOpenChange}>
+                <SheetTrigger asChild>{trigger}</SheetTrigger>
+                <SheetContent
+                    side="bottom"
+                    onInteractOutside={keepOpenOnOutside}
+                    className="max-h-[85vh] gap-0 rounded-t-2xl p-0"
+                >
+                    <SheetTitle className="sr-only">ShoutAI</SheetTitle>
+                    {surface(false)}
+                </SheetContent>
+            </Sheet>
+        );
+    }
+
+    return (
+        <Popover open={open} onOpenChange={onOpenChange}>
+            <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+            <PopoverContent
+                align="end"
+                sideOffset={6}
+                onInteractOutside={keepOpenOnOutside}
+                className="max-h-[min(75vh,560px)] w-[min(360px,calc(100vw-1.5rem))] overflow-hidden rounded-xl p-0"
+            >
+                {surface(true)}
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function Surface({
+    suggestion,
+    platform,
+    currentText,
+    onRun,
+    onRedo,
+    onAccept,
+    onReset,
+    onClose,
+    showClose,
+}: {
+    suggestion: AiSuggestion;
+    platform?: PlatformName;
+    currentText: string;
+    onRun: Props['onRun'];
+    onRedo: () => void;
+    onAccept: (text: string) => void;
+    onReset: () => void;
+    onClose: () => void;
+    showClose: boolean;
+}) {
     const [instruction, setInstruction] = useState('');
 
     const streaming = suggestion.status === 'streaming';
@@ -86,162 +186,134 @@ export function ShoutAiPopover({
     }
 
     return (
-        <Popover open={open} onOpenChange={onOpenChange}>
-            <PopoverTrigger asChild>
-                <button
-                    type="button"
-                    title="ShoutAI"
-                    className={cn(
-                        'group inline-flex h-8 items-center gap-1.5 rounded-md border border-primary/25 bg-primary/[0.06] px-2.5 text-[12px] font-medium text-primary transition-colors sm:h-7',
-                        'hover:border-primary/40 hover:bg-primary/10',
-                        'data-[state=open]:border-primary/50 data-[state=open]:bg-primary/12',
-                    )}
-                >
-                    <Sparkles
-                        className="size-3.5 transition-transform group-hover:scale-110 motion-reduce:transition-none"
-                        aria-hidden="true"
-                    />
-                    <span>ShoutAI</span>
-                </button>
-            </PopoverTrigger>
-
-            <PopoverContent
-                align="end"
-                sideOffset={6}
-                className="w-[min(360px,calc(100vw-1.5rem))] overflow-hidden rounded-xl p-0"
-            >
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-                    <span className="flex items-center gap-2 text-[12px] font-semibold tracking-tight text-foreground">
-                        <span className="grid size-5 place-items-center rounded-md bg-primary/10 text-primary ring-1 ring-primary/15">
-                            <Sparkles className="size-3" aria-hidden="true" />
-                        </span>
-                        ShoutAI
-                        {showResult ? (
-                            <span className="font-normal text-muted-foreground">
-                                ·{' '}
-                                {streaming
-                                    ? 'Writing…'
-                                    : ready
-                                      ? 'Review'
-                                      : 'Error'}
-                            </span>
-                        ) : null}
+        <div className="flex max-h-[inherit] flex-col">
+            {/* Header */}
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5">
+                <span className="flex items-center gap-2 text-[12px] font-semibold tracking-tight text-foreground">
+                    <span className="grid size-5 place-items-center rounded-md bg-primary/10 text-primary ring-1 ring-primary/15">
+                        <Sparkles className="size-3" aria-hidden="true" />
                     </span>
+                    ShoutAI
+                    {showResult ? (
+                        <span className="font-normal text-muted-foreground">
+                            ·{' '}
+                            {streaming ? 'Writing…' : ready ? 'Review' : 'Error'}
+                        </span>
+                    ) : null}
+                </span>
+                {showClose ? (
                     <button
                         type="button"
-                        onClick={() => onOpenChange(false)}
+                        onClick={onClose}
                         aria-label="Close ShoutAI"
                         className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
                     >
                         <X className="size-3.5" />
                     </button>
-                </div>
+                ) : null}
+            </div>
 
-                {showResult ? (
-                    <Result
-                        suggestion={suggestion}
-                        streaming={streaming}
-                        ready={ready}
-                        isError={isError}
-                        onAccept={onAccept}
-                        onRedo={onRedo}
-                        onReset={onReset}
-                    />
-                ) : (
-                    <div className="p-2.5">
-                        {/* Generate — the input-first hero */}
-                        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-2 py-1.5 transition-[border-color,box-shadow] focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10">
-                            <Sparkles
-                                className="size-3.5 shrink-0 text-primary/70"
-                                aria-hidden="true"
-                            />
-                            <input
-                                aria-label="Describe a post for ShoutAI to write"
-                                value={instruction}
-                                onChange={(e) => setInstruction(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        generate();
-                                    }
-                                }}
-                                placeholder="Describe a post to write…"
-                                className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
-                            />
-                            <button
-                                type="button"
-                                onClick={generate}
-                                disabled={instruction.trim() === ''}
-                                aria-label="Generate post"
-                                className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
-                            >
-                                <ArrowUp className="size-3.5" />
-                            </button>
-                        </div>
-
-                        {/* One-tap actions over the current draft */}
-                        <GroupLabel>Improve</GroupLabel>
-                        <ActionRow
-                            icon={Wand2}
-                            label="Rewrite"
-                            accent
-                            disabled={!hasText}
-                            onClick={() => onRun('rewrite', {})}
+            {showResult ? (
+                <Result
+                    suggestion={suggestion}
+                    streaming={streaming}
+                    ready={ready}
+                    isError={isError}
+                    onAccept={onAccept}
+                    onRedo={onRedo}
+                    onReset={onReset}
+                />
+            ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
+                    {/* Generate — the input-first hero */}
+                    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-2 py-1.5 transition-[border-color,box-shadow] focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10">
+                        <Sparkles
+                            className="size-3.5 shrink-0 text-primary/70"
+                            aria-hidden="true"
                         />
-                        <ActionRow
-                            icon={SpellCheck}
-                            label="Fix grammar"
-                            disabled={!hasText}
-                            onClick={() =>
-                                onRun('preset', { action: 'fix_grammar' })
-                            }
+                        <input
+                            aria-label="Describe a post for ShoutAI to write"
+                            value={instruction}
+                            onChange={(e) => setInstruction(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    generate();
+                                }
+                            }}
+                            placeholder="Describe a post to write…"
+                            className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
                         />
-
-                        <GroupLabel>Tone</GroupLabel>
-                        {TONE.map(({ action, label, icon }) => (
-                            <ActionRow
-                                key={action}
-                                icon={icon}
-                                label={label}
-                                disabled={!hasText}
-                                onClick={() => onRun('preset', { action })}
-                            />
-                        ))}
-
-                        <GroupLabel>Length</GroupLabel>
-                        {LENGTH.map(({ action, label, icon }) => (
-                            <ActionRow
-                                key={action}
-                                icon={icon}
-                                label={label}
-                                disabled={!hasText}
-                                onClick={() => onRun('preset', { action })}
-                            />
-                        ))}
-
-                        {platform ? (
-                            <>
-                                <GroupLabel>Platform</GroupLabel>
-                                <ActionRow
-                                    icon={Languages}
-                                    label={`Adapt for ${PLATFORM_LABELS[platform] ?? platform}`}
-                                    accent
-                                    disabled={!hasText}
-                                    onClick={() => onRun('adapt', {})}
-                                />
-                            </>
-                        ) : null}
-
-                        {!hasText ? (
-                            <p className="px-2 pt-2 text-[11px] text-muted-foreground">
-                                Write a draft to rewrite, adjust, or adapt it.
-                            </p>
-                        ) : null}
+                        <button
+                            type="button"
+                            onClick={generate}
+                            disabled={instruction.trim() === ''}
+                            aria-label="Generate post"
+                            className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+                        >
+                            <ArrowUp className="size-3.5" />
+                        </button>
                     </div>
-                )}
-            </PopoverContent>
-        </Popover>
+
+                    {/* One-tap actions over the current draft */}
+                    <GroupLabel>Improve</GroupLabel>
+                    <ActionRow
+                        icon={Wand2}
+                        label="Rewrite"
+                        accent
+                        disabled={!hasText}
+                        onClick={() => onRun('rewrite', {})}
+                    />
+                    <ActionRow
+                        icon={SpellCheck}
+                        label="Fix grammar"
+                        disabled={!hasText}
+                        onClick={() => onRun('preset', { action: 'fix_grammar' })}
+                    />
+
+                    <GroupLabel>Tone</GroupLabel>
+                    {TONE.map(({ action, label, icon }) => (
+                        <ActionRow
+                            key={action}
+                            icon={icon}
+                            label={label}
+                            disabled={!hasText}
+                            onClick={() => onRun('preset', { action })}
+                        />
+                    ))}
+
+                    <GroupLabel>Length</GroupLabel>
+                    {LENGTH.map(({ action, label, icon }) => (
+                        <ActionRow
+                            key={action}
+                            icon={icon}
+                            label={label}
+                            disabled={!hasText}
+                            onClick={() => onRun('preset', { action })}
+                        />
+                    ))}
+
+                    {platform ? (
+                        <>
+                            <GroupLabel>Platform</GroupLabel>
+                            <ActionRow
+                                icon={Languages}
+                                label={`Adapt for ${PLATFORM_LABELS[platform] ?? platform}`}
+                                accent
+                                disabled={!hasText}
+                                onClick={() => onRun('adapt', {})}
+                            />
+                        </>
+                    ) : null}
+
+                    {!hasText ? (
+                        <p className="px-2 pt-2 text-[11px] text-muted-foreground">
+                            Write a draft to rewrite, adjust, or adapt it.
+                        </p>
+                    ) : null}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -303,10 +375,10 @@ function Result({
     onReset: () => void;
 }) {
     return (
-        <div className="space-y-2.5 p-2.5">
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5">
             <div
                 className={cn(
-                    'max-h-60 overflow-y-auto rounded-lg border p-3 text-[13px] leading-relaxed whitespace-pre-wrap',
+                    'rounded-lg border p-3 text-[13px] leading-relaxed whitespace-pre-wrap',
                     isError
                         ? 'border-destructive/30 bg-destructive/[0.03] text-destructive'
                         : 'border-border bg-background text-foreground',
