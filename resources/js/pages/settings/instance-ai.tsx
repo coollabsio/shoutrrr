@@ -110,20 +110,6 @@ export default function InstanceAi({ settings }: PageProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="ai_model">Model</Label>
-                        <AiModelCombobox
-                            provider={data.ai_provider}
-                            apiKey={data.ai_api_key}
-                            value={data.ai_model}
-                            onChange={(m) => setData('ai_model', m)}
-                            disabled={!data.ai_provider}
-                        />
-                        <p className="text-sm text-muted-foreground">
-                            Pick from the provider's available models, or type a custom id.
-                        </p>
-                    </div>
-
-                    <div className="space-y-2">
                         <Label htmlFor="ai_api_key">API key</Label>
                         <Input
                             id="ai_api_key"
@@ -149,6 +135,22 @@ export default function InstanceAi({ settings }: PageProps) {
                                 Remove stored key
                             </label>
                         ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="ai_model">Model</Label>
+                        <AiModelCombobox
+                            provider={data.ai_provider}
+                            apiKey={data.ai_api_key}
+                            value={data.ai_model}
+                            onChange={(m) => setData('ai_model', m)}
+                            disabled={!data.ai_provider}
+                        />
+                        <p className="text-sm text-muted-foreground">
+                            Pick from the provider's available models, or type a
+                            custom id. Enter the API key above first so the list
+                            can load.
+                        </p>
                     </div>
 
                     <div className="flex gap-2">
