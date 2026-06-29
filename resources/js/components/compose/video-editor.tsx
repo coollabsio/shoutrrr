@@ -285,8 +285,11 @@ export function VideoEditor({
 
                 {/* ── Body: canvas + inspector (stacked → side-by-side) ── */}
                 <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-                    {/* Canvas: preview above, timeline strip below */}
-                    <section className="flex h-[50dvh] min-h-0 shrink-0 flex-col md:h-auto md:flex-1">
+                    {/* Canvas: preview above, timeline strip below. md:min-w-0 +
+                        md:shrink let the pane yield width when the crop sidebar
+                        mounts after its async capability probe — without them the
+                        sidebar spills past the dialog's clipped edge. */}
+                    <section className="flex h-[50dvh] min-h-0 shrink-0 flex-col md:h-auto md:min-w-0 md:flex-1 md:shrink">
                         {/* Video preview */}
                         <div
                             ref={setPreviewEl}
