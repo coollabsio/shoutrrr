@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Ai;
 
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -65,12 +66,7 @@ final class ProviderModelCatalog
             );
         }
 
-        return collect($response->json('data', []))
-            ->pluck('id')
-            ->filter()
-            ->sort()
-            ->values()
-            ->all();
+        return $this->parseDataIds($response);
     }
 
     /** @return list<string> */
@@ -86,14 +82,28 @@ final class ProviderModelCatalog
             );
         }
 
-        return collect($response->json('models', []))
-            ->filter(fn (array $m) => in_array('generateContent', $m['supportedGenerationMethods'] ?? [], true))
-            ->pluck('name')
-            ->map(fn (string $name) => str_replace('models/', '', $name))
-            ->filter()
-            ->sort()
-            ->values()
-            ->all();
+        $models = $response->json('models');
+        $names = [];
+
+        if (is_array($models)) {
+            foreach ($models as $model) {
+                if (! is_array($model)) {
+                    continue;
+                }
+
+                $methods = $model['supportedGenerationMethods'] ?? [];
+                if (! is_array($methods) || ! in_array('generateContent', $methods, true)) {
+                    continue;
+                }
+
+                $name = $model['name'] ?? null;
+                if (is_string($name) && $name !== '') {
+                    $names[] = str_replace('models/', '', $name);
+                }
+            }
+        }
+
+        return $this->normalize($names);
     }
 
     /** @return list<string> */
@@ -109,12 +119,18 @@ final class ProviderModelCatalog
             );
         }
 
-        return collect($response->json('models', []))
-            ->pluck('name')
-            ->filter()
-            ->sort()
-            ->values()
-            ->all();
+        $models = $response->json('models');
+        $names = [];
+
+        if (is_array($models)) {
+            foreach ($models as $model) {
+                if (is_array($model) && isset($model['name']) && is_string($model['name']) && $model['name'] !== '') {
+                    $names[] = $model['name'];
+                }
+            }
+        }
+
+        return $this->normalize($names);
     }
 
     /** @return list<string> */
@@ -132,11 +148,41 @@ final class ProviderModelCatalog
             );
         }
 
-        return collect($response->json('data', []))
-            ->pluck('id')
-            ->filter()
-            ->sort()
-            ->values()
-            ->all();
+        return $this->parseDataIds($response);
+    }
+
+    /**
+     * Extract model ids from an OpenAI-style `{ data: [ { id }, ... ] }` body.
+     *
+     * @return list<string>
+     */
+    private function parseDataIds(Response $response): array
+    {
+        $data = $response->json('data');
+        $ids = [];
+
+        if (is_array($data)) {
+            foreach ($data as $item) {
+                if (is_array($item) && isset($item['id']) && is_string($item['id']) && $item['id'] !== '') {
+                    $ids[] = $item['id'];
+                }
+            }
+        }
+
+        return $this->normalize($ids);
+    }
+
+    /**
+     * Sort, de-duplicate, and re-key into a clean list.
+     *
+     * @param  list<string>  $models
+     * @return list<string>
+     */
+    private function normalize(array $models): array
+    {
+        $models = array_values(array_unique($models));
+        sort($models);
+
+        return $models;
     }
 }
