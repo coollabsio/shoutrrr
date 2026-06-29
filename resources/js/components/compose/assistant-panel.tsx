@@ -1,4 +1,17 @@
-import { Check, RotateCcw, Sparkles, X } from 'lucide-react';
+import {
+    Briefcase,
+    Check,
+    type LucideIcon,
+    Maximize2,
+    Minimize2,
+    RotateCcw,
+    Smile,
+    Sparkles,
+    SpellCheck,
+    Wand2,
+    X,
+    Zap,
+} from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -23,14 +36,13 @@ type Props = {
     onCancel: () => void;
 };
 
-const PRESETS: { action: string; label: string }[] = [
-    { action: '', label: 'Rewrite' },
-    { action: 'shorten', label: 'Shorten' },
-    { action: 'expand', label: 'Expand' },
-    { action: 'professional', label: 'Professional' },
-    { action: 'casual', label: 'Casual' },
-    { action: 'punchy', label: 'Punchy' },
-    { action: 'fix_grammar', label: 'Fix grammar' },
+const QUICK_ACTIONS: { action: string; label: string; icon: LucideIcon }[] = [
+    { action: 'shorten', label: 'Shorten', icon: Minimize2 },
+    { action: 'expand', label: 'Expand', icon: Maximize2 },
+    { action: 'professional', label: 'Professional', icon: Briefcase },
+    { action: 'casual', label: 'Casual', icon: Smile },
+    { action: 'punchy', label: 'Punchy', icon: Zap },
+    { action: 'fix_grammar', label: 'Fix grammar', icon: SpellCheck },
 ];
 
 const PLATFORM_LABELS: Partial<Record<PlatformName, string>> = {
@@ -82,32 +94,54 @@ export function AssistantPanel({
                 </button>
             </div>
 
-            {/* Preset chips */}
-            <div className="flex flex-wrap gap-1.5">
-                {PRESETS.map((preset) => (
-                    <button
-                        key={preset.label}
-                        type="button"
-                        disabled={streaming || !hasText}
-                        onClick={() =>
-                            onRun(preset.action === '' ? 'rewrite' : 'preset', {
-                                action: preset.action || undefined,
-                            })
-                        }
-                        className="rounded-full border border-border bg-background px-2.5 py-1 text-[12px] text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:pointer-events-none disabled:opacity-40"
-                    >
-                        {preset.label}
-                    </button>
-                ))}
+            {/* Quick actions over the current draft */}
+            <div className="space-y-1.5">
+                {/* Primary improve action */}
+                <button
+                    type="button"
+                    disabled={streaming || !hasText}
+                    onClick={() => onRun('rewrite', {})}
+                    className="flex w-full items-center gap-2.5 rounded-lg border border-primary/25 bg-primary/[0.06] px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-40"
+                >
+                    <Wand2
+                        className="size-4 shrink-0 text-primary"
+                        aria-hidden="true"
+                    />
+                    <span className="flex flex-col leading-tight">
+                        <span className="text-[12px] font-medium text-foreground">
+                            Rewrite
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                            Improve clarity &amp; impact
+                        </span>
+                    </span>
+                </button>
 
-                {/* Adapt chip — only shown when a platform tab is active */}
+                {/* Transform grid — distinct, scannable actions */}
+                <div className="grid grid-cols-3 gap-1.5">
+                    {QUICK_ACTIONS.map(({ action, label, icon: Icon }) => (
+                        <button
+                            key={action}
+                            type="button"
+                            disabled={streaming || !hasText}
+                            onClick={() => onRun('preset', { action })}
+                            className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-background px-1.5 py-2 text-[11px] text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+                        >
+                            <Icon className="size-4" aria-hidden="true" />
+                            <span className="leading-none">{label}</span>
+                        </button>
+                    ))}
+                </div>
+
+                {/* Adapt — only shown when a platform tab is active */}
                 {platform && (
                     <button
                         type="button"
                         disabled={streaming || !hasText}
                         onClick={() => onRun('adapt', {})}
-                        className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[12px] text-primary/80 transition-colors hover:border-primary/50 hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-40"
+                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/25 bg-primary/[0.04] px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:border-primary/40 hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-40"
                     >
+                        <Sparkles className="size-3.5" aria-hidden="true" />
                         Adapt for {PLATFORM_LABELS[platform] ?? platform}
                     </button>
                 )}
