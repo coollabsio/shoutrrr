@@ -40,6 +40,9 @@ export function useAiStream() {
             const response = await fetch(url, {
                 method: 'POST',
                 signal: controller.signal,
+                // Never silently follow a redirect: a 302 to the login page would
+                // otherwise be read as an empty "stream" and hang on "Writing…".
+                redirect: 'error',
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'text/event-stream',
