@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Shuffle, Split } from 'lucide-react';
+import { Image as ImageIcon, Shuffle, Sparkles, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 
@@ -33,6 +33,10 @@ type Props = {
     onImageClick?: (mediaId: string) => void;
     /** Click a video chip's Edit button to open the video editor. */
     onVideoClick?: (mediaId: string) => void;
+    /** Show the AI assistant button (only when feature flag is on). */
+    aiEnabled?: boolean;
+    /** Open the assistant panel. */
+    onOpenAssistant?: () => void;
 };
 
 export function ComposerToolbar({
@@ -53,6 +57,8 @@ export function ComposerToolbar({
     dismissPending,
     onImageClick,
     onVideoClick,
+    aiEnabled = false,
+    onOpenAssistant,
 }: Props) {
     const input = useRef<HTMLInputElement | null>(null);
 
@@ -128,6 +134,13 @@ export function ComposerToolbar({
             />
 
             <div className="ml-auto sm:flex-1" />
+
+            {aiEnabled && !readOnly && (
+                <EToolButton title="AI assistant" onClick={onOpenAssistant}>
+                    <Sparkles className="size-3.5" aria-hidden="true" />
+                    <span>Assistant</span>
+                </EToolButton>
+            )}
 
             {showSplitControls && !readOnly && (
                 <>

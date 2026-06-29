@@ -1,9 +1,11 @@
-import { Link, useHttp } from '@inertiajs/react';
+import { Link, useHttp, usePage } from '@inertiajs/react';
 import { Eye, Plug } from 'lucide-react';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import ComposerAssistantController from '@/actions/App/Http/Controllers/Ai/ComposerAssistantController';
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
+import { useAiStream } from '@/hooks/use-ai-stream';
 import { useAutosave } from '@/hooks/compose/use-autosave';
 import { useImageEditor } from '@/hooks/compose/use-image-editor';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
@@ -44,6 +46,7 @@ import {
     type WorkspaceMention,
 } from '@/types/compose';
 
+import { AssistantPanel } from './assistant-panel';
 import CharCounter from './char-counter';
 import { ComposerToolbar } from './composer-toolbar';
 import { ConflictDialog } from './conflict-dialog';
@@ -451,6 +454,12 @@ export default function Composer({
     // status, but no editing, media changes, or re-publishing.
     const readOnly = post !== null && !postCapabilities(post).canEdit;
 
+    const aiEnabled = Boolean(
+        (usePage().props as { features?: { ai?: boolean } }).features?.ai,
+    );
+    const [assistantOpen, setAssistantOpen] = useState(false);
+    const aiStream = useAiStream();
+
     const activeAccount = pickActiveAccount(tabAccounts, state.activeTab);
     const showConnectAccountPrompt = shouldShowConnectAccountPrompt(
         accounts,
@@ -501,6 +510,45 @@ export default function Composer({
             (t) => t.connected_account_id === accountId,
         );
         return String(target?.sections.length ?? 1);
+    }
+
+    function runAssistant(
+        kind: 'rewrite' | 'preset' | 'generate' | 'adapt',
+        payload: { action?: string; instruction?: string },
+    ) {
+        const platform = activeAccount?.platform;
+        const limit = activeAccount ? limitForAccount(activeAccount) : 0;
+        let url: string;
+        let body: Record<string, unknown>;
+
+        if (kind === 'generate') {
+            url = ComposerAssistantController.generate().url;
+            body = { instruction: payload.instruction, platform, limit };
+        } else if (kind === 'adapt') {
+            url = ComposerAssistantController.adapt().url;
+            body = { text: activeSegments.join('\n'), platform, limit };
+        } else {
+            url = ComposerAssistantController.rewrite().url;
+            body = {
+                text: activeSegments.join('\n'),
+                action: payload.action,
+                platform,
+                limit,
+            };
+        }
+
+        dispatch({ type: 'aiStart', action: payload.action ?? '' });
+        void aiStream.run(url, body, {
+            onDelta: (text) => dispatch({ type: 'aiDelta', text }),
+            onDone: () => dispatch({ type: 'aiDone' }),
+            onError: (message) => dispatch({ type: 'aiError', message }),
+        });
+    }
+
+    function acceptAssistant(text: string) {
+        handleSegments([text]);
+        dispatch({ type: 'aiDiscard' });
+        setAssistantOpen(false);
     }
 
     function syncMentions(
@@ -874,6 +922,29 @@ export default function Composer({
                         dismissPending={mediaUploads.dismissPending}
                         onImageClick={openImage}
                         onVideoClick={openVideo}
+                        aiEnabled={aiEnabled}
+                        onOpenAssistant={() => setAssistantOpen(true)}
+                    />
+                )}
+
+                {aiEnabled && !readOnly && (
+                    <AssistantPanel
+                        open={assistantOpen}
+                        onClose={() => {
+                            aiStream.cancel();
+                            dispatch({ type: 'aiDiscard' });
+                            setAssistantOpen(false);
+                        }}
+                        suggestion={state.aiSuggestion}
+                        platform={activeAccount?.platform}
+                        limit={activeAccount ? limitForAccount(activeAccount) : 0}
+                        currentText={activeSegments.join('\n')}
+                        onRun={runAssistant}
+                        onAccept={acceptAssistant}
+                        onCancel={() => {
+                            aiStream.cancel();
+                            dispatch({ type: 'aiDiscard' });
+                        }}
                     />
                 )}
 
