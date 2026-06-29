@@ -46,7 +46,7 @@ import {
     type WorkspaceMention,
 } from '@/types/compose';
 
-import { AssistantPanel } from './assistant-panel';
+import { ShoutAiPopover } from './shout-ai-popover';
 import CharCounter from './char-counter';
 import { ComposerToolbar } from './composer-toolbar';
 import { ConflictDialog } from './conflict-dialog';
@@ -935,30 +935,30 @@ export default function Composer({
                         dismissPending={mediaUploads.dismissPending}
                         onImageClick={openImage}
                         onVideoClick={openVideo}
-                        aiEnabled={aiEnabled}
-                        onOpenAssistant={() => setAssistantOpen(true)}
-                    />
-                )}
-
-                {aiEnabled && !readOnly && (
-                    <AssistantPanel
-                        open={assistantOpen}
-                        onClose={() => {
-                            aiStream.cancel();
-                            dispatch({ type: 'aiDiscard' });
-                            setAssistantOpen(false);
-                        }}
-                        suggestion={state.aiSuggestion}
-                        platform={activeAccount?.platform}
-                        limit={activeAccount ? limitForAccount(activeAccount) : 0}
-                        currentText={activeSegments.join('\n')}
-                        onRun={runAssistant}
-                        onRedo={redoAssistant}
-                        onAccept={acceptAssistant}
-                        onCancel={() => {
-                            aiStream.cancel();
-                            dispatch({ type: 'aiDiscard' });
-                        }}
+                        aiControl={
+                            aiEnabled && !readOnly ? (
+                                <ShoutAiPopover
+                                    open={assistantOpen}
+                                    onOpenChange={(next) => {
+                                        setAssistantOpen(next);
+                                        if (!next) {
+                                            aiStream.cancel();
+                                            dispatch({ type: 'aiDiscard' });
+                                        }
+                                    }}
+                                    suggestion={state.aiSuggestion}
+                                    platform={activeAccount?.platform}
+                                    currentText={activeSegments.join('\n')}
+                                    onRun={runAssistant}
+                                    onRedo={redoAssistant}
+                                    onAccept={acceptAssistant}
+                                    onReset={() => {
+                                        aiStream.cancel();
+                                        dispatch({ type: 'aiDiscard' });
+                                    }}
+                                />
+                            ) : undefined
+                        }
                     />
                 )}
 

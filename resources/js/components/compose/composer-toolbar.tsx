@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Shuffle, Sparkles, Split } from 'lucide-react';
+import { Image as ImageIcon, Shuffle, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 
@@ -33,10 +33,9 @@ type Props = {
     onImageClick?: (mediaId: string) => void;
     /** Click a video chip's Edit button to open the video editor. */
     onVideoClick?: (mediaId: string) => void;
-    /** Show the AI assistant button (only when feature flag is on). */
-    aiEnabled?: boolean;
-    /** Open the assistant panel. */
-    onOpenAssistant?: () => void;
+    /** ShoutAI control (popover trigger + surface); rendered in the toolbar's
+     *  right-side controls. Omitted when AI is disabled or the post is read-only. */
+    aiControl?: ReactNode;
 };
 
 export function ComposerToolbar({
@@ -57,8 +56,7 @@ export function ComposerToolbar({
     dismissPending,
     onImageClick,
     onVideoClick,
-    aiEnabled = false,
-    onOpenAssistant,
+    aiControl,
 }: Props) {
     const input = useRef<HTMLInputElement | null>(null);
 
@@ -135,23 +133,7 @@ export function ComposerToolbar({
 
             <div className="ml-auto sm:flex-1" />
 
-            {aiEnabled && !readOnly && (
-                <button
-                    type="button"
-                    title="ShoutAI"
-                    onClick={onOpenAssistant}
-                    className={cn(
-                        'group inline-flex h-8 items-center gap-1.5 rounded-md border border-primary/25 bg-primary/[0.06] px-2.5 text-[12px] font-medium text-primary transition-colors sm:h-7',
-                        'hover:border-primary/40 hover:bg-primary/10',
-                    )}
-                >
-                    <Sparkles
-                        className="size-3.5 transition-transform group-hover:scale-110"
-                        aria-hidden="true"
-                    />
-                    <span>ShoutAI</span>
-                </button>
-            )}
+            {!readOnly && aiControl}
 
             {showSplitControls && !readOnly && (
                 <>
