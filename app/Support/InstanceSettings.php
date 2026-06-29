@@ -121,10 +121,15 @@ class InstanceSettings
      */
     public function aiSettings(): array
     {
+        $storedModel = $this->value('ai_model');
+
         return [
             'ai_enabled' => $this->aiEnabled(),
             'ai_provider' => $this->aiProvider(),
-            'ai_model' => $this->aiModel(),
+            // The settings form must reflect the SAVED model (empty when unset),
+            // not the runtime config fallback, so the field isn't pre-filled with
+            // a provider-specific default the admin never chose.
+            'ai_model' => is_string($storedModel) ? $storedModel : '',
             'ai_api_key_set' => $this->aiApiKey() !== null,
         ];
     }
