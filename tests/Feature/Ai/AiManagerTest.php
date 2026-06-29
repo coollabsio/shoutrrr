@@ -7,8 +7,12 @@ use Prism\Prism\Testing\TextResponseFake;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 it('aborts when ai is not configured', function () {
-    expect(fn () => app(AiManager::class)->textRequest())
-        ->toThrow(HttpException::class);
+    try {
+        app(AiManager::class)->textRequest();
+        $this->fail('Expected HttpException was not thrown');
+    } catch (HttpException $e) {
+        expect($e->getStatusCode())->toBe(404);
+    }
 });
 
 it('builds a working prism request when configured', function () {

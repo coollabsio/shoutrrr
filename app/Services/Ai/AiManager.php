@@ -16,12 +16,10 @@ class AiManager
     {
         abort_unless($this->settings->aiConfigured(), 404);
 
-        $provider = $this->settings->aiProvider();
-
-        // The active key lives in instance settings (DB), not env, so inject it
-        // into Prism's provider config for this request.
-        config(['prism.providers.'.$provider.'.api_key' => $this->settings->aiApiKey()]);
-
-        return Prism::text()->using($provider, $this->settings->aiModel());
+        return Prism::text()->using(
+            $this->settings->aiProvider(),
+            $this->settings->aiModel(),
+            ['api_key' => $this->settings->aiApiKey()],
+        );
     }
 }
