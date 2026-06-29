@@ -835,3 +835,32 @@ describe('firstLineTitle', () => {
         expect(firstLineTitle([exact])).toBe(exact);
     });
 });
+
+describe('aiSuggestion', () => {
+    it('accumulates deltas then marks ready', () => {
+        let state = initialComposerState();
+        state = composerReducer(state, { type: 'aiStart', action: 'rewrite' });
+        expect(state.aiSuggestion.status).toBe('streaming');
+
+        state = composerReducer(state, { type: 'aiDelta', text: 'Hello' });
+        state = composerReducer(state, { type: 'aiDelta', text: ' world' });
+        expect(state.aiSuggestion.output).toBe('Hello world');
+
+        state = composerReducer(state, { type: 'aiDone' });
+        expect(state.aiSuggestion.status).toBe('ready');
+    });
+
+    it('records errors and discards back to idle', () => {
+        let state = initialComposerState();
+        state = composerReducer(state, { type: 'aiStart', action: 'shorten' });
+        state = composerReducer(state, { type: 'aiError', message: 'boom' });
+        expect(state.aiSuggestion).toMatchObject({
+            status: 'error',
+            error: 'boom',
+        });
+
+        state = composerReducer(state, { type: 'aiDiscard' });
+        expect(state.aiSuggestion.status).toBe('idle');
+        expect(state.aiSuggestion.output).toBe('');
+    });
+});

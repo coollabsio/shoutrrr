@@ -15,6 +15,17 @@ export type SaveState =
     | 'offline'
     | 'conflict';
 
+export type AiSuggestion = {
+    status: 'idle' | 'streaming' | 'ready' | 'error';
+    action: string | null;
+    output: string;
+    error: string | null;
+};
+
+export function initialAiSuggestion(): AiSuggestion {
+    return { status: 'idle', action: null, output: '', error: null };
+}
+
 export type ScheduleMode = 'now' | 'queue' | 'pick';
 
 export type ScheduleTray = {
@@ -36,6 +47,7 @@ export type ComposerState = {
     media: MediaView[];
     scheduleTray: ScheduleTray;
     conflict: PostView | null;
+    aiSuggestion: AiSuggestion;
 };
 
 export type ComposerAction =
@@ -62,7 +74,12 @@ export type ComposerAction =
     | { type: 'saveFailedOffline' }
     | { type: 'saveFailedStale'; post: PostView }
     | { type: 'resolveConflictUseServer' }
-    | { type: 'resolveConflictKeepMine' };
+    | { type: 'resolveConflictKeepMine' }
+    | { type: 'aiStart'; action: string }
+    | { type: 'aiDelta'; text: string }
+    | { type: 'aiDone' }
+    | { type: 'aiError'; message: string }
+    | { type: 'aiDiscard' };
 
 /**
  * Resolve which account the editor surfaces. `activeTab` is seeded from the
@@ -117,6 +134,7 @@ export function initialComposerState(
             ? { mode: 'pick', pickedAt: scheduleAt }
             : { mode: 'now', pickedAt: null },
         conflict: null,
+        aiSuggestion: initialAiSuggestion(),
     };
 }
 
@@ -184,6 +202,7 @@ function hydrate(post: PostView): ComposerState {
             pickedAt: post.scheduled_at ?? null,
         },
         conflict: null,
+        aiSuggestion: initialAiSuggestion(),
     };
 }
 
@@ -413,6 +432,45 @@ export function composerReducer(
                       saveState: 'dirty',
                   }
                 : state;
+
+        case 'aiStart':
+            return {
+                ...state,
+                aiSuggestion: {
+                    status: 'streaming',
+                    action: action.action,
+                    output: '',
+                    error: null,
+                },
+            };
+
+        case 'aiDelta':
+            return {
+                ...state,
+                aiSuggestion: {
+                    ...state.aiSuggestion,
+                    output: state.aiSuggestion.output + action.text,
+                },
+            };
+
+        case 'aiDone':
+            return {
+                ...state,
+                aiSuggestion: { ...state.aiSuggestion, status: 'ready' },
+            };
+
+        case 'aiError':
+            return {
+                ...state,
+                aiSuggestion: {
+                    ...state.aiSuggestion,
+                    status: 'error',
+                    error: action.message,
+                },
+            };
+
+        case 'aiDiscard':
+            return { ...state, aiSuggestion: initialAiSuggestion() };
 
         default:
             return state;
