@@ -22,7 +22,8 @@
         "laravel/passport": "^13.7",
         "laravel/socialite": "^5.27",
         "laravel/tinker": "^3.0",
-        "laravel/wayfinder": "^0.1.14"
+        "laravel/wayfinder": "^0.1.14",
+        "prism-php/prism": "^0.100.1"
     },
     "require-dev": {
         "driftingly/rector-laravel": "^2.5",

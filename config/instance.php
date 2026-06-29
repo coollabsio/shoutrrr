@@ -11,5 +11,8 @@ return [
             'INSTANCE_WORKSPACE_CREATION_ENABLED',
             env('WORKSPACES_CAN_CREATE_WORKSPACE', true),
         ),
+        'ai_enabled' => env('AI_ENABLED', false),
+        'ai_provider' => env('AI_PROVIDER', 'anthropic'),
+        'ai_model' => env('AI_MODEL', ''),
     ],
 ];
