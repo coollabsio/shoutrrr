@@ -10,6 +10,7 @@ import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
 import { usePublishStatus } from '@/hooks/compose/use-publish-status';
 import { useVideoEditor } from '@/hooks/compose/use-video-editor';
+import { useVideoEncodingSupported } from '@/hooks/compose/use-video-encoding-supported';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import {
     composerReducer,
@@ -221,6 +222,11 @@ export default function Composer({
             }
         },
     });
+
+    // Cropping re-encodes the clip; trimming only copies the track. So the
+    // editor always opens for trimming, but its crop tools appear only when the
+    // browser can actually encode video.
+    const canCropVideo = useVideoEncodingSupported();
 
     // The editor opens automatically when image(s) are added and when an attached
     // image is clicked. A multi-image add becomes a `batch` edited one item at a
@@ -904,6 +910,7 @@ export default function Composer({
                         variant={
                             editing?.kind === 'video-new' ? 'new' : 'existing'
                         }
+                        canCrop={canCropVideo}
                         sourceUrl={
                             editing?.kind === 'video' ||
                             editing?.kind === 'video-new'

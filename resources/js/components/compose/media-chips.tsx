@@ -8,7 +8,6 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { isVideoEditingSupported } from '@/lib/video-editor/support';
 import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
 
 function formatDuration(seconds: number | null): string | null {
@@ -162,11 +161,12 @@ export function MediaChips({
         <div className="ml-0.5 flex items-center gap-2">
             {media.map((m, idx) => {
                 const excluded = isExcluded(m.id);
-                // Both kinds open an editor on click; videos only when the
-                // browser can actually edit them.
+                // Both kinds open an editor on click. Videos are always
+                // editable (trim works without an encoder); the editor hides the
+                // crop tools when the browser can't re-encode.
                 const canEdit =
                     m.kind === 'video'
-                        ? Boolean(onVideoClick) && isVideoEditingSupported()
+                        ? Boolean(onVideoClick)
                         : Boolean(onImageClick);
 
                 return (

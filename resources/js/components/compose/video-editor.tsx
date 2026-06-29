@@ -36,6 +36,9 @@ type Props = {
     phase: 'idle' | 'rendering' | 'uploading';
     /** 0..1 — shown as a progress bar while phase !== 'idle'. */
     progress: number;
+    /** Whether the browser can re-encode video. When false the crop tools are
+     *  hidden and only trimming is offered (trimming copies the track). */
+    canCrop?: boolean;
 };
 
 /** Minimum gap enforced between the in and out trim handles (seconds). */
@@ -64,6 +67,7 @@ export function VideoEditor({
     onSkip,
     phase,
     progress,
+    canCrop = true,
 }: Props) {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const trackRef = useRef<HTMLDivElement | null>(null);
@@ -220,7 +224,10 @@ export function VideoEditor({
     // the VideoCropOverlay can scale correctly. Until then the plain <video>
     // renders and fires onLoadedMetadata to supply the size.
     const showOverlay =
-        settings.aspect !== 'auto' && sourceSize !== null && sourceUrl !== null;
+        canCrop &&
+        settings.aspect !== 'auto' &&
+        sourceSize !== null &&
+        sourceUrl !== null;
 
     return (
         <Dialog
@@ -748,40 +755,48 @@ export function VideoEditor({
                     </section>
 
                     {/* ── Inspector rail ──────────────────────────────────── */}
-                    <aside className="flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto border-t border-border p-5 md:w-[288px] md:flex-none md:border-t-0 md:border-l">
-                        <Field label="Aspect ratio">
-                            <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted/60 p-1">
-                                {VIDEO_ASPECT_PRESETS.map(
-                                    ({ value, label }) => (
-                                        <Segment
-                                            key={value}
-                                            active={settings.aspect === value}
-                                            disabled={busy}
-                                            onClick={() => selectAspect(value)}
-                                        >
-                                            {label}
-                                        </Segment>
-                                    ),
-                                )}
-                            </div>
-                        </Field>
+                    {/* Crop tools — hidden when the browser can't re-encode, so
+                        only trimming (a no-encode track copy) is offered. */}
+                    {canCrop && (
+                        <aside className="flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto border-t border-border p-5 md:w-[288px] md:flex-none md:border-t-0 md:border-l">
+                            <Field label="Aspect ratio">
+                                <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted/60 p-1">
+                                    {VIDEO_ASPECT_PRESETS.map(
+                                        ({ value, label }) => (
+                                            <Segment
+                                                key={value}
+                                                active={
+                                                    settings.aspect === value
+                                                }
+                                                disabled={busy}
+                                                onClick={() =>
+                                                    selectAspect(value)
+                                                }
+                                            >
+                                                {label}
+                                            </Segment>
+                                        ),
+                                    )}
+                                </div>
+                            </Field>
 
-                        {/* Shortcut to exit crop mode without touching the segmented control */}
-                        {settings.aspect !== 'auto' && (
-                            <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() => selectAspect('auto')}
-                                className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
-                            >
-                                <Crop
-                                    className="size-4 text-muted-foreground"
-                                    aria-hidden="true"
-                                />
-                                Clear crop
-                            </button>
-                        )}
-                    </aside>
+                            {/* Shortcut to exit crop mode without touching the segmented control */}
+                            {settings.aspect !== 'auto' && (
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => selectAspect('auto')}
+                                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+                                >
+                                    <Crop
+                                        className="size-4 text-muted-foreground"
+                                        aria-hidden="true"
+                                    />
+                                    Clear crop
+                                </button>
+                            )}
+                        </aside>
+                    )}
                 </div>
 
                 {/* ── Footer ────────────────────────────────────────────── */}

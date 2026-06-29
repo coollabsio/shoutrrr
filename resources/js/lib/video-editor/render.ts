@@ -3,6 +3,7 @@ import {
     BlobSource,
     BufferTarget,
     Conversion,
+    getFirstEncodableVideoCodec,
     Input,
     Mp4OutputFormat,
     Output,
@@ -11,35 +12,43 @@ import {
 } from 'mediabunny';
 
 import type { VideoEditSettings } from './settings';
-import { isVideoEditingSupported } from './support';
 
 export async function renderVideo(
     source: Blob,
     settings: VideoEditSettings,
     onProgress: (fraction: number) => void,
 ): Promise<Blob> {
-    if (!isVideoEditingSupported()) {
-        throw new Error('Video editing is not supported in this browser.');
-    }
-
     const input = new Input({
         formats: ALL_FORMATS,
         source: new BlobSource(source),
     });
 
     try {
+        const format = new Mp4OutputFormat();
         const output = new Output({
-            format: new Mp4OutputFormat(),
+            format,
             target: new BufferTarget(),
         });
 
-        // Re-encode to H.264 mp4; only add a crop rect when one is set. Audio is
-        // kept automatically because we don't pass `audio: { discard: true }`.
-        const video: ConversionVideoOptions = {
-            codec: 'avc',
-            bitrate: QUALITY_HIGH,
-        };
+        // Trim-only conversions copy the compressed video track (no encoder
+        // needed), so leave the video options empty. Cropping needs a pixel
+        // transform, which forces a decode → re-encode and therefore a working
+        // encoder. Some environments (notably Chromium on Linux built without
+        // proprietary codecs) expose the WebCodecs API but can't encode
+        // anything — bail with a clear message in that case. Audio is kept
+        // automatically because we don't pass `audio: { discard: true }`.
+        const video: ConversionVideoOptions = {};
         if (settings.crop) {
+            const codec = await getFirstEncodableVideoCodec(
+                format.getSupportedVideoCodecs(),
+            );
+            if (!codec) {
+                throw new Error(
+                    'Your browser can’t encode video, so cropping isn’t available here. Trim without cropping, or upload without editing.',
+                );
+            }
+            video.codec = codec;
+            video.bitrate = QUALITY_HIGH;
             video.crop = {
                 left: Math.round(settings.crop.x),
                 top: Math.round(settings.crop.y),
@@ -56,7 +65,9 @@ export async function renderVideo(
         });
 
         if (!conversion.isValid) {
-            throw new Error('This video cannot be edited in the browser.');
+            throw new Error(
+                'This video can’t be edited in the browser. Use “Upload without editing” instead.',
+            );
         }
 
         conversion.onProgress = (progress) => onProgress(progress);
