@@ -23,6 +23,8 @@ import { firstEncodableVideoCodec } from './support';
 const MAX_ATTEMPTS = 3;
 /** Aim comfortably under the cap on the corrective pass so a near-miss doesn't loop. */
 const RETRY_HEADROOM = 0.9;
+/** Fraction of the remaining progress bar each encode pass fills (keeps it monotonic). */
+const PROGRESS_BAND = 0.9;
 
 type EncodeParams = {
     codec: VideoCodec;
@@ -55,6 +57,11 @@ export async function compressVideoToFit(
     let { width, height, videoBitrate } = plan;
     const audioBitrate = plan.audioBitrate;
 
+    // mediabunny reports 0..1 per pass, so each corrective retry would restart at
+    // 0. Map every pass into a shrinking band above the previous one (0→.9,
+    // .9→.99, …) so the chip's percentage only ever climbs.
+    let progressFloor = 0;
+
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
         // Confirm an encoder that actually works at this exact output size —
         // the same probe gating the crop UI, so they can't disagree.
@@ -63,10 +70,13 @@ export async function compressVideoToFit(
             return null;
         }
 
+        const base = progressFloor;
+        const span = (1 - base) * PROGRESS_BAND;
+        progressFloor = base + span;
         const blob = await encodeOnce(
             source,
             { codec, width, height, videoBitrate, audioBitrate },
-            onProgress,
+            (fraction) => onProgress(base + fraction * span),
         );
         if (blob === null) {
             return null;

@@ -86,7 +86,11 @@ export function useMediaUploads({
         [],
     );
 
-    const isUploading = pending.some((p) => p.status === 'uploading');
+    // Compression ('processing') counts as in flight too — the publish/send gates
+    // hang off this, so a post must not ship while a video is still being encoded.
+    const isUploading = pending.some(
+        (p) => p.status === 'uploading' || p.status === 'processing',
+    );
 
     function mintPreview(file: File): string | undefined {
         try {
@@ -106,12 +110,13 @@ export function useMediaUploads({
 
     function beginUpload(
         file: File,
+        kind: PendingUpload['kind'],
         status: PendingUpload['status'] = 'uploading',
     ): { tempId: string; previewUrl?: string } {
         tempSeq.current += 1;
         const tempId = `up_${tempSeq.current}`;
         const previewUrl = mintPreview(file);
-        setPending((cur) => [...cur, { tempId, previewUrl, status }]);
+        setPending((cur) => [...cur, { tempId, kind, previewUrl, status }]);
 
         return { tempId, previewUrl };
     }
@@ -160,7 +165,7 @@ export function useMediaUploads({
     // --- Upload flows -------------------------------------------------------
 
     async function uploadImage(file: File): Promise<void> {
-        const { tempId, previewUrl } = beginUpload(file);
+        const { tempId, previewUrl } = beginUpload(file, 'image');
 
         const id = await onEnsurePost();
         if (!id) {
@@ -189,64 +194,70 @@ export function useMediaUploads({
             return;
         }
 
-        // Only compress an over-cap clip whose duration is still publishable —
-        // re-encoding can't shorten a clip, so a too-long video is rejected
-        // outright rather than wasting an encode.
+        // Re-encoding can only shrink an over-cap clip's bytes — it can't fix a
+        // wrong codec or a too-long runtime. So we compress only when an
+        // oversized file is otherwise valid, detected by re-running the gate as
+        // if the file already fit (sizeBytes 0). Anything else gets the cheap
+        // up-front rejection, so a doomed file never flashes a ghost chip.
         const maxBytes = minVideoBytes(videoLimits);
-        const maxDuration = Math.min(
-            ...videoLimits.map((l) => l.maxVideoDurationSeconds),
-            Number.POSITIVE_INFINITY,
-        );
+        const verdict = validateVideo(meta, videoLimits);
         const willCompress =
+            !verdict.ok &&
             Number.isFinite(maxBytes) &&
             file.size > maxBytes &&
-            meta.durationSeconds <= maxDuration;
+            validateVideo({ ...meta, sizeBytes: 0 }, videoLimits).ok;
 
-        // Cases we won't try to compress get the cheap up-front gate, so a doomed
-        // file (wrong type, too long) never flashes a ghost chip.
-        if (!willCompress) {
-            const verdict = validateVideo(meta, videoLimits);
-            if (!verdict.ok) {
-                toast.error(verdict.reason);
+        if (!verdict.ok && !willCompress) {
+            toast.error(verdict.reason);
 
-                return;
-            }
+            return;
         }
 
         const { tempId, previewUrl } = beginUpload(
             file,
+            'video',
             willCompress ? 'processing' : 'uploading',
         );
 
         let finalFile = file;
         if (willCompress) {
+            let compressed: Blob | null = null;
             try {
                 const { compressVideoToFit } =
                     await import('@/lib/video-editor/compress');
-                const compressed = await compressVideoToFit(
+                compressed = await compressVideoToFit(
                     file,
                     maxBytes,
                     (fraction) =>
                         setProgress(tempId, Math.round(fraction * 100)),
                 );
-                if (compressed) {
-                    finalFile = new File([compressed], file.name, {
-                        type: 'video/mp4',
-                    });
+            } catch {
+                // Encode threw outright; fall through to the gate, which rejects
+                // the still-over-cap original.
+            }
+
+            if (compressed) {
+                finalFile = new File([compressed], file.name, {
+                    type: 'video/mp4',
+                });
+                try {
                     // Downscaling changes width/height/size — re-read so the
                     // final gate and confirm payload reflect the real output.
                     meta = await readVideoMetadata(finalFile);
+                } catch {
+                    // compressVideoToFit already guarantees the blob fits; if the
+                    // re-read fails, trust that size over the stale original
+                    // rather than dropping an otherwise-valid upload.
+                    meta = { ...meta, sizeBytes: finalFile.size };
                 }
-            } catch {
-                // Fall through: the gate below rejects if it's still over cap.
             }
 
             setStatus(tempId, 'uploading');
             setProgress(tempId, 0);
 
-            const verdict = validateVideo(meta, videoLimits);
-            if (!verdict.ok) {
-                toast.error(verdict.reason);
+            const finalVerdict = validateVideo(meta, videoLimits);
+            if (!finalVerdict.ok) {
+                toast.error(finalVerdict.reason);
                 dismissPending(tempId);
 
                 return;

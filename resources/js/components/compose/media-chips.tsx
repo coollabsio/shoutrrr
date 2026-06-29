@@ -311,15 +311,28 @@ export function MediaChips({
                                     )}
                                 >
                                     {p.previewUrl ? (
-                                        <img
-                                            src={p.previewUrl}
-                                            alt=""
-                                            draggable={false}
-                                            className={cn(
-                                                'size-full object-cover',
-                                                inFlight && 'opacity-50',
-                                            )}
-                                        />
+                                        p.kind === 'video' ? (
+                                            <video
+                                                src={p.previewUrl}
+                                                muted
+                                                playsInline
+                                                preload="metadata"
+                                                className={cn(
+                                                    'size-full object-cover',
+                                                    inFlight && 'opacity-50',
+                                                )}
+                                            />
+                                        ) : (
+                                            <img
+                                                src={p.previewUrl}
+                                                alt=""
+                                                draggable={false}
+                                                className={cn(
+                                                    'size-full object-cover',
+                                                    inFlight && 'opacity-50',
+                                                )}
+                                            />
+                                        )
                                     ) : (
                                         <div className="size-full bg-muted" />
                                     )}
