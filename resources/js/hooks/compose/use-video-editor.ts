@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import PostVideoUploadController from '@/actions/App/Http/Controllers/Posts/PostVideoUploadController';
 import {
+    minVideoBytes,
     putWithProgress,
     readVideoMetadata,
     validateVideo,
@@ -24,9 +25,9 @@ type Args = {
 };
 
 export function useVideoEditor({ onEnsurePost, onComplete }: Args) {
-    const [phase, setPhase] = useState<'idle' | 'rendering' | 'uploading'>(
-        'idle',
-    );
+    const [phase, setPhase] = useState<
+        'idle' | 'rendering' | 'compressing' | 'uploading'
+    >('idle');
     const [progress, setProgress] = useState(0);
 
     const signHttp = useHttp<
@@ -57,21 +58,32 @@ export function useVideoEditor({ onEnsurePost, onComplete }: Args) {
             const { renderVideo } = await import('@/lib/video-editor/render');
             const blob = await renderVideo(source, settings, setProgress);
 
-            const file = new File([blob], 'edited-video.mp4', {
+            let file = new File([blob], 'edited-video.mp4', {
                 type: 'video/mp4',
             });
-            const meta = await readVideoMetadata(file);
+            let meta = await readVideoMetadata(file);
 
-            const verdict = validateVideo(
-                {
-                    sizeBytes: file.size,
-                    mime: file.type,
-                    durationSeconds: meta.durationSeconds,
-                    width: meta.width,
-                    height: meta.height,
-                },
-                limits,
-            );
+            // Keep the edited output within the selected platforms' caps too.
+            const maxBytes = minVideoBytes(limits);
+            if (Number.isFinite(maxBytes) && file.size > maxBytes) {
+                setPhase('compressing');
+                setProgress(0);
+                const { compressVideoToFit } =
+                    await import('@/lib/video-editor/compress');
+                const compressed = await compressVideoToFit(
+                    file,
+                    maxBytes,
+                    setProgress,
+                );
+                if (compressed) {
+                    file = new File([compressed], 'edited-video.mp4', {
+                        type: 'video/mp4',
+                    });
+                    meta = await readVideoMetadata(file);
+                }
+            }
+
+            const verdict = validateVideo(meta, limits);
             if (!verdict.ok) {
                 toast.error(verdict.reason);
 

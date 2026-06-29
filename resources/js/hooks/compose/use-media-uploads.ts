@@ -5,9 +5,11 @@ import { toast } from 'sonner';
 import PostMediaController from '@/actions/App/Http/Controllers/Posts/PostMediaController';
 import PostVideoUploadController from '@/actions/App/Http/Controllers/Posts/PostVideoUploadController';
 import {
+    minVideoBytes,
     putWithProgress,
     readVideoMetadata,
     validateVideo,
+    type VideoMeta,
 } from '@/lib/compose/video';
 import type { MediaView, PendingUpload, PlatformLimits } from '@/types/compose';
 
@@ -102,14 +104,14 @@ export function useMediaUploads({
 
     // --- Pending-chip lifecycle (shared by both upload flows) ---------------
 
-    function beginUpload(file: File): { tempId: string; previewUrl?: string } {
+    function beginUpload(
+        file: File,
+        status: PendingUpload['status'] = 'uploading',
+    ): { tempId: string; previewUrl?: string } {
         tempSeq.current += 1;
         const tempId = `up_${tempSeq.current}`;
         const previewUrl = mintPreview(file);
-        setPending((cur) => [
-            ...cur,
-            { tempId, previewUrl, status: 'uploading' },
-        ]);
+        setPending((cur) => [...cur, { tempId, previewUrl, status }]);
 
         return { tempId, previewUrl };
     }
@@ -119,6 +121,12 @@ export function useMediaUploads({
             cur.map((p) =>
                 p.tempId === tempId ? { ...p, status: 'error' } : p,
             ),
+        );
+    }
+
+    function setStatus(tempId: string, status: PendingUpload['status']): void {
+        setPending((cur) =>
+            cur.map((p) => (p.tempId === tempId ? { ...p, status } : p)),
         );
     }
 
@@ -172,7 +180,7 @@ export function useMediaUploads({
     }
 
     async function uploadVideo(file: File): Promise<void> {
-        let meta;
+        let meta: VideoMeta;
         try {
             meta = await readVideoMetadata(file);
         } catch {
@@ -181,23 +189,69 @@ export function useMediaUploads({
             return;
         }
 
-        const verdict = validateVideo(
-            {
-                sizeBytes: file.size,
-                mime: file.type,
-                durationSeconds: meta.durationSeconds,
-                width: meta.width,
-                height: meta.height,
-            },
-            videoLimits,
+        // Only compress an over-cap clip whose duration is still publishable —
+        // re-encoding can't shorten a clip, so a too-long video is rejected
+        // outright rather than wasting an encode.
+        const maxBytes = minVideoBytes(videoLimits);
+        const maxDuration = Math.min(
+            ...videoLimits.map((l) => l.maxVideoDurationSeconds),
+            Number.POSITIVE_INFINITY,
         );
-        if (!verdict.ok) {
-            toast.error(verdict.reason);
+        const willCompress =
+            Number.isFinite(maxBytes) &&
+            file.size > maxBytes &&
+            meta.durationSeconds <= maxDuration;
 
-            return;
+        // Cases we won't try to compress get the cheap up-front gate, so a doomed
+        // file (wrong type, too long) never flashes a ghost chip.
+        if (!willCompress) {
+            const verdict = validateVideo(meta, videoLimits);
+            if (!verdict.ok) {
+                toast.error(verdict.reason);
+
+                return;
+            }
         }
 
-        const { tempId, previewUrl } = beginUpload(file);
+        const { tempId, previewUrl } = beginUpload(
+            file,
+            willCompress ? 'processing' : 'uploading',
+        );
+
+        let finalFile = file;
+        if (willCompress) {
+            try {
+                const { compressVideoToFit } =
+                    await import('@/lib/video-editor/compress');
+                const compressed = await compressVideoToFit(
+                    file,
+                    maxBytes,
+                    (fraction) =>
+                        setProgress(tempId, Math.round(fraction * 100)),
+                );
+                if (compressed) {
+                    finalFile = new File([compressed], file.name, {
+                        type: 'video/mp4',
+                    });
+                    // Downscaling changes width/height/size — re-read so the
+                    // final gate and confirm payload reflect the real output.
+                    meta = await readVideoMetadata(finalFile);
+                }
+            } catch {
+                // Fall through: the gate below rejects if it's still over cap.
+            }
+
+            setStatus(tempId, 'uploading');
+            setProgress(tempId, 0);
+
+            const verdict = validateVideo(meta, videoLimits);
+            if (!verdict.ok) {
+                toast.error(verdict.reason);
+                dismissPending(tempId);
+
+                return;
+            }
+        }
 
         const id = await onEnsurePost();
         if (!id) {
@@ -211,8 +265,11 @@ export function useMediaUploads({
                 onNetworkError: () => undefined,
             });
 
-            await putWithProgress(signed.url, signed.headers, file, (pct) =>
-                setProgress(tempId, pct),
+            await putWithProgress(
+                signed.url,
+                signed.headers,
+                finalFile,
+                (pct) => setProgress(tempId, pct),
             );
 
             confirmHttp.setData({

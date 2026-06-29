@@ -60,6 +60,90 @@ export function validateVideo(
     return { ok: true };
 }
 
+// --- Compression budget helpers ----------------------------------------
+// Pure math shared by the compose/edit gates and the mediabunny encoder, so the
+// "what size do we aim for" decision lives in exactly one place.
+
+/** Audio is re-encoded at a fixed cap so the bitrate budget is predictable. */
+const AUDIO_BITRATE = 128_000;
+/** Headroom for container overhead + VBR drift, so we land under the cap. */
+const SIZE_SAFETY = 0.9;
+/** Never starve the video track below this, however tight the budget. */
+const MIN_VIDEO_BITRATE = 300_000;
+/** Cap the longest edge of a compressed video before bitrate even comes in. */
+const RESOLUTION_CEILING = 1920;
+/** Stop downscaling once the longest edge would drop below this. */
+const DOWNSCALE_FLOOR = 480;
+/** Each downscale step shrinks the longest edge by this factor. */
+const DOWNSCALE_STEP = 0.8;
+
+/** Re-export for the encoder's retry clamp (keep the floor in one place). */
+export const VIDEO_MIN_BITRATE = MIN_VIDEO_BITRATE;
+
+export type EncodePlan = {
+    videoBitrate: number;
+    audioBitrate: number;
+    width: number;
+    height: number;
+};
+
+/** Even and ≥ 2 — encoders reject odd dimensions. */
+function toEven(value: number): number {
+    return Math.max(2, Math.floor(value / 2) * 2);
+}
+
+/** Smallest video byte cap across the selected platforms (∞ when none selected). */
+export function minVideoBytes(limits: PlatformLimits[]): number {
+    return Math.min(
+        ...limits.map((l) => l.maxVideoBytes),
+        Number.POSITIVE_INFINITY,
+    );
+}
+
+/**
+ * Bitrate + dimension budget to re-encode `meta` under `maxBytes`. Pure: the
+ * actual encode and its corrective retries live in the mediabunny chunk.
+ */
+export function planVideoEncode(meta: VideoMeta, maxBytes: number): EncodePlan {
+    // Guard against a zero/garbage duration blowing up the division.
+    const duration = Math.max(meta.durationSeconds, 1);
+    const targetBits = maxBytes * 8 * SIZE_SAFETY;
+    const videoBitrate = Math.max(
+        Math.floor(targetBits / duration) - AUDIO_BITRATE,
+        MIN_VIDEO_BITRATE,
+    );
+
+    const longest = Math.max(meta.width, meta.height);
+    const scale =
+        longest > RESOLUTION_CEILING ? RESOLUTION_CEILING / longest : 1;
+
+    return {
+        videoBitrate,
+        audioBitrate: AUDIO_BITRATE,
+        width: toEven(meta.width * scale),
+        height: toEven(meta.height * scale),
+    };
+}
+
+/**
+ * Next smaller even dimensions (longest edge −20%), or `null` once the longest
+ * edge would fall below the floor — the signal to stop retrying. Mirrors
+ * `ImageCompressor`'s quality-then-downscale fallback.
+ */
+export function nextDownscale(
+    width: number,
+    height: number,
+): { width: number; height: number } | null {
+    if (Math.max(width, height) * DOWNSCALE_STEP < DOWNSCALE_FLOOR) {
+        return null;
+    }
+
+    return {
+        width: toEven(width * DOWNSCALE_STEP),
+        height: toEven(height * DOWNSCALE_STEP),
+    };
+}
+
 export function readVideoMetadata(file: File): Promise<VideoMeta> {
     return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(file);
