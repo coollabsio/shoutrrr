@@ -863,4 +863,19 @@ describe('aiSuggestion', () => {
         expect(state.aiSuggestion.status).toBe('idle');
         expect(state.aiSuggestion.output).toBe('');
     });
+
+    it('keeps the error when a terminal done arrives after an error', () => {
+        // The stream always sends `done` after an `error` frame; it must not
+        // flip the panel back to an empty "ready".
+        let state = initialComposerState();
+        state = composerReducer(state, { type: 'aiStart', action: 'rewrite' });
+        state = composerReducer(state, {
+            type: 'aiError',
+            message: 'Key limit exceeded',
+        });
+        state = composerReducer(state, { type: 'aiDone' });
+
+        expect(state.aiSuggestion.status).toBe('error');
+        expect(state.aiSuggestion.error).toBe('Key limit exceeded');
+    });
 });

@@ -37,6 +37,7 @@ export function QuickReplyBox({
     const [sending, setSending] = useState(false);
     const [media, setMedia] = useState<MediaView[]>([]);
     const [suggestion, setSuggestion] = useState('');
+    const [suggestError, setSuggestError] = useState<string | null>(null);
     const aiStream = useAiStream();
     const suggesting = aiStream.status === 'streaming';
 
@@ -67,13 +68,17 @@ export function QuickReplyBox({
 
     function suggestReply(tone: string) {
         setSuggestion('');
+        setSuggestError(null);
         void aiStream.run(
             ReplyAssistantController.suggest({ reply: replyId }).url,
             { tone, post_excerpt: postExcerpt ?? undefined, limit },
             {
                 onDelta: (t) => setSuggestion((prev) => prev + t),
                 onDone: () => {},
-                onError: () => setSuggestion(''),
+                onError: (message) => {
+                    setSuggestion('');
+                    setSuggestError(message);
+                },
             },
         );
     }
@@ -84,7 +89,24 @@ export function QuickReplyBox({
 
             {aiEnabled ? (
                 <div className="mb-2">
-                    {suggestion ? (
+                    {suggestError ? (
+                        <div className="animate-in fade-in-0 slide-in-from-top-1 rounded-xl border border-destructive/30 bg-destructive/[0.04] p-2.5 duration-200">
+                            <p className="text-[12px] leading-relaxed text-destructive">
+                                {suggestError}
+                            </p>
+                            <div className="mt-2 flex">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setSuggestError(null)}
+                                    className="ml-auto text-muted-foreground hover:text-foreground"
+                                >
+                                    Dismiss
+                                </Button>
+                            </div>
+                        </div>
+                    ) : suggestion ? (
                         <div className="animate-in fade-in-0 slide-in-from-top-1 rounded-xl border border-primary/20 bg-primary/[0.04] p-2.5 duration-200">
                             <span className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold tracking-wide text-primary/80 uppercase">
                                 <Sparkles className="size-2.5" aria-hidden="true" />

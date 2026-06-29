@@ -454,10 +454,15 @@ export function composerReducer(
             };
 
         case 'aiDone':
-            return {
-                ...state,
-                aiSuggestion: { ...state.aiSuggestion, status: 'ready' },
-            };
+            // The stream always sends a terminal `done` — even right after an
+            // `error` frame. Only a still-streaming suggestion becomes 'ready';
+            // never let `done` clobber an error (which would blank the panel).
+            return state.aiSuggestion.status === 'streaming'
+                ? {
+                      ...state,
+                      aiSuggestion: { ...state.aiSuggestion, status: 'ready' },
+                  }
+                : state;
 
         case 'aiError':
             return {
