@@ -1,4 +1,4 @@
-import { Deferred, Head, Link, router } from '@inertiajs/react';
+import { Deferred, Head, Link, router, usePage } from '@inertiajs/react';
 import {
     Archive,
     ArrowUpRight,
@@ -113,6 +113,9 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
     const [thread, setThread] = useState<ReplyItem[]>([]);
     const [postExcerpt, setPostExcerpt] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const aiEnabled = Boolean(
+        (usePage().props as { features?: { ai?: boolean } }).features?.ai,
+    );
 
     const selectedId = selected.id;
 
@@ -315,6 +318,8 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
                 replyingTo={atHandle(selected.author_handle)}
                 maxLength={selected.account_max_text_length ?? undefined}
                 onSend={send}
+                aiEnabled={aiEnabled}
+                postExcerpt={postExcerpt}
             />
         </div>
     );

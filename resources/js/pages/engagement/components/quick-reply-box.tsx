@@ -1,8 +1,10 @@
-import { CornerDownLeft, Paperclip } from 'lucide-react';
+import { CornerDownLeft, Paperclip, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
+import ReplyAssistantController from '@/actions/App/Http/Controllers/Ai/ReplyAssistantController';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useAiStream } from '@/hooks/use-ai-stream';
 import { cn } from '@/lib/utils';
 import type { MediaView, PlatformName } from '@/types/compose';
 
@@ -17,6 +19,8 @@ type Props = {
     maxLength?: number;
     disabled?: boolean;
     onSend: (text: string, mediaIds: string[]) => Promise<void>;
+    aiEnabled?: boolean;
+    postExcerpt?: string | null;
 };
 
 export function QuickReplyBox({
@@ -26,10 +30,15 @@ export function QuickReplyBox({
     maxLength,
     disabled,
     onSend,
+    aiEnabled,
+    postExcerpt,
 }: Props) {
     const [text, setText] = useState('');
     const [sending, setSending] = useState(false);
     const [media, setMedia] = useState<MediaView[]>([]);
+    const [suggestion, setSuggestion] = useState('');
+    const aiStream = useAiStream();
+    const suggesting = aiStream.status === 'streaming';
 
     const rm = useReplyMedia({ replyId, platform, media, onChange: setMedia });
 
@@ -56,9 +65,77 @@ export function QuickReplyBox({
         }
     }
 
+    function suggestReply(tone: string) {
+        setSuggestion('');
+        void aiStream.run(
+            ReplyAssistantController.suggest({ reply: replyId }).url,
+            { tone, post_excerpt: postExcerpt ?? undefined, limit },
+            {
+                onDelta: (t) => setSuggestion((prev) => prev + t),
+                onDone: () => {},
+                onError: () => setSuggestion(''),
+            },
+        );
+    }
+
     return (
         <div className="border-t bg-background/60 p-3" {...rm.dropHandlers}>
             {rm.fileInput}
+
+            {aiEnabled ? (
+                <div className="mb-2">
+                    {suggestion ? (
+                        <div className="rounded-xl border bg-muted/40 p-2.5">
+                            <p className="whitespace-pre-wrap text-[13px] text-foreground">
+                                {suggestion}
+                            </p>
+                            <div className="mt-2 flex gap-1.5">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={suggesting}
+                                    onClick={() => {
+                                        setText(suggestion);
+                                        setSuggestion('');
+                                    }}
+                                >
+                                    Use
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setSuggestion('')}
+                                >
+                                    Dismiss
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                <Sparkles className="size-3" /> Suggest:
+                            </span>
+                            {(['friendly', 'professional', 'brief'] as const).map((tone) => (
+                                <button
+                                    key={tone}
+                                    type="button"
+                                    disabled={suggesting}
+                                    onClick={() => suggestReply(tone)}
+                                    className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[12px] capitalize text-foreground/70 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-foreground disabled:opacity-50"
+                                >
+                                    {tone}
+                                </button>
+                            ))}
+                            {suggesting ? (
+                                <span className="text-[11px] text-muted-foreground">
+                                    Generating…
+                                </span>
+                            ) : null}
+                        </div>
+                    )}
+                </div>
+            ) : null}
 
             <Textarea
                 value={text}
