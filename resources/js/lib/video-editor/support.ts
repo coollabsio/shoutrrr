@@ -1,64 +1,76 @@
-// MP4-compatible video codecs the editor can output, each with a representative
-// codec string for the native VideoEncoder probe. The editor only needs ONE of
-// these to be encodable.
-const PROBE_CODECS = [
-    'avc1.42001f', // H.264 Baseline 3.1
-    'av01.0.04M.08', // AV1 Main
-    'vp09.00.10.08', // VP9 Profile 0
-    'hvc1.1.6.L93.B0', // HEVC Main
+import type { VideoCodec } from 'mediabunny';
+
+// MP4-compatible codecs the editor can output, in preference order. Each
+// mediabunny codec is paired with a representative WebCodecs codec string used
+// for the native encode probe.
+const PROBE_CODECS: { codec: VideoCodec; config: string }[] = [
+    { codec: 'avc', config: 'avc1.42001f' }, // H.264 Baseline 3.1
+    { codec: 'av1', config: 'av01.0.04M.08' }, // AV1 Main
+    { codec: 'vp9', config: 'vp09.00.10.08' }, // VP9 Profile 0
+    { codec: 'hevc', config: 'hvc1.1.6.L93.B0' }, // HEVC Main
 ];
 
-const PROBE_CONFIG = {
-    width: 320,
-    height: 240,
-    bitrate: 1_000_000,
-    framerate: 30,
-};
-
-let cachedSupport: Promise<boolean> | null = null;
+// Probe results are cached per output resolution for the page's lifetime.
+const cache = new Map<string, Promise<VideoCodec | null>>();
 
 /**
- * Whether this browser can *encode* video via WebCodecs — i.e. whether the
- * editor can crop (cropping forces a re-encode; trimming only copies the track
- * and needs no encoder). The result is cached for the page's lifetime, and the
- * probe uses the native WebCodecs API only, so it stays out of mediabunny's
- * lazy-loaded chunk.
+ * The first MP4-compatible codec this browser can actually *encode* at the given
+ * output resolution, or `null` if none can. Used both to gate the crop UI and to
+ * choose the codec for the real render, so the two can never disagree.
+ *
+ * `VideoEncoder.isConfigSupported` (and mediabunny's codec query, which uses it)
+ * is optimistic on some builds — notably Chromium on Linux without proprietary
+ * codecs, and software encoders that handle small frames but not full-size ones
+ * — so the only reliable check is to actually encode a frame at the real size
+ * and confirm a chunk comes out. Native WebCodecs only, so this stays out of
+ * mediabunny's lazy-loaded chunk.
  */
-export function isVideoEncodingSupported(): Promise<boolean> {
-    cachedSupport ??= probeSupport();
-    return cachedSupport;
+export function firstEncodableVideoCodec(
+    width: number,
+    height: number,
+): Promise<VideoCodec | null> {
+    // Encoders want even dimensions; normalize so odd sizes don't spuriously
+    // fail the probe (mediabunny rounds the real crop the same way).
+    const w = Math.max(2, Math.floor(width / 2) * 2);
+    const h = Math.max(2, Math.floor(height / 2) * 2);
+    const key = `${w}x${h}`;
+    let result = cache.get(key);
+    if (!result) {
+        result = probe(w, h);
+        cache.set(key, result);
+    }
+    return result;
 }
 
-async function probeSupport(): Promise<boolean> {
+async function probe(
+    width: number,
+    height: number,
+): Promise<VideoCodec | null> {
     if (
         typeof window === 'undefined' ||
         !('VideoEncoder' in window) ||
         typeof VideoFrame === 'undefined'
     ) {
-        return false;
+        return null;
     }
-    for (const codec of PROBE_CODECS) {
-        if (await canEncode(codec)) {
-            return true;
+    for (const { codec, config } of PROBE_CODECS) {
+        if (await canEncode(config, width, height)) {
+            return codec;
         }
     }
-    return false;
+    return null;
 }
 
-/**
- * `VideoEncoder.isConfigSupported` is optimistic on some builds (notably
- * Chromium on Linux without proprietary codecs): it reports a codec as supported
- * even though no real encoder exists, so the encode later fails. The only
- * reliable check is to actually encode one frame and confirm a chunk comes out.
- */
-async function canEncode(codec: string): Promise<boolean> {
+async function canEncode(
+    codec: string,
+    width: number,
+    height: number,
+): Promise<boolean> {
+    const config = { codec, width, height, bitrate: 1_000_000, framerate: 30 };
     let encoder: VideoEncoder | null = null;
     let frame: VideoFrame | null = null;
     try {
-        const { supported } = await VideoEncoder.isConfigSupported({
-            codec,
-            ...PROBE_CONFIG,
-        });
+        const { supported } = await VideoEncoder.isConfigSupported(config);
         // A negative here is reliable — skip the (more expensive) real attempt.
         if (!supported) {
             return false;
@@ -70,19 +82,17 @@ async function canEncode(codec: string): Promise<boolean> {
                 output: () => resolve(true),
                 error: () => resolve(false),
             });
-            encoder.configure({ codec, ...PROBE_CONFIG });
+            encoder.configure(config);
 
             const canvas = document.createElement('canvas');
-            canvas.width = PROBE_CONFIG.width;
-            canvas.height = PROBE_CONFIG.height;
-            canvas
-                .getContext('2d')
-                ?.fillRect(0, 0, PROBE_CONFIG.width, PROBE_CONFIG.height);
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d')?.fillRect(0, 0, width, height);
             frame = new VideoFrame(canvas, { timestamp: 0 });
             encoder.encode(frame, { keyFrame: true });
 
-            // If flush settles before any output was produced, treat it as a
-            // failure (an `output` callback would already have resolved true).
+            // If flush settles before any output, treat it as a failure (an
+            // `output` callback would already have resolved true).
             void encoder
                 .flush()
                 .then(() => resolve(false))

@@ -3,7 +3,6 @@ import {
     BlobSource,
     BufferTarget,
     Conversion,
-    getFirstEncodableVideoCodec,
     Input,
     Mp4OutputFormat,
     Output,
@@ -12,6 +11,7 @@ import {
 } from 'mediabunny';
 
 import type { VideoEditSettings } from './settings';
+import { firstEncodableVideoCodec } from './support';
 
 export async function renderVideo(
     source: Blob,
@@ -39,9 +39,11 @@ export async function renderVideo(
         // automatically because we don't pass `audio: { discard: true }`.
         const video: ConversionVideoOptions = {};
         if (settings.crop) {
-            const codec = await getFirstEncodableVideoCodec(
-                format.getSupportedVideoCodecs(),
-            );
+            const width = Math.round(settings.crop.width);
+            const height = Math.round(settings.crop.height);
+            // Pick a codec we've confirmed encodes at this exact output size —
+            // same probe that gates the crop UI, so they can't disagree.
+            const codec = await firstEncodableVideoCodec(width, height);
             if (!codec) {
                 throw new Error(
                     'Your browser can’t encode video, so cropping isn’t available here. Trim without cropping, or upload without editing.',
@@ -52,8 +54,8 @@ export async function renderVideo(
             video.crop = {
                 left: Math.round(settings.crop.x),
                 top: Math.round(settings.crop.y),
-                width: Math.round(settings.crop.width),
-                height: Math.round(settings.crop.height),
+                width,
+                height,
             };
         }
 

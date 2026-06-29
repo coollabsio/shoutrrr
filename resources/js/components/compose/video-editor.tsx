@@ -20,6 +20,7 @@ import {
     defaultSettings,
     type VideoEditSettings,
 } from '@/lib/video-editor/settings';
+import { firstEncodableVideoCodec } from '@/lib/video-editor/support';
 
 import { VideoCropOverlay } from './video-crop-overlay';
 
@@ -36,9 +37,6 @@ type Props = {
     phase: 'idle' | 'rendering' | 'uploading';
     /** 0..1 — shown as a progress bar while phase !== 'idle'. */
     progress: number;
-    /** Whether the browser can re-encode video. When false the crop tools are
-     *  hidden and only trimming is offered (trimming copies the track). */
-    canCrop?: boolean;
 };
 
 /** Minimum gap enforced between the in and out trim handles (seconds). */
@@ -67,7 +65,6 @@ export function VideoEditor({
     onSkip,
     phase,
     progress,
-    canCrop = true,
 }: Props) {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const trackRef = useRef<HTMLDivElement | null>(null);
@@ -84,6 +81,10 @@ export function VideoEditor({
     const [currentTime, setCurrentTime] = useState(0);
     const [volume, setVolume] = useState(1);
     const [muted, setMuted] = useState(false);
+    // Whether the browser can actually re-encode at this clip's resolution.
+    // Cropping forces a re-encode; trimming only copies the track, so the editor
+    // always offers trim but hides the crop tools when encoding isn't possible.
+    const [canCrop, setCanCrop] = useState(false);
     // The duration prop is floored (it doubles as the platform-limit check), so
     // relying on it for the trim range would silently drop the sub-second tail.
     // Once the <video> loads we switch to its precise duration.
@@ -145,6 +146,27 @@ export function VideoEditor({
             videoRef.current.muted = muted;
         }
     }, [volume, muted, sourceUrl]);
+
+    // Probe real encode capability at the clip's actual resolution once it's
+    // known. A real frame is encoded (isConfigSupported lies on some builds), so
+    // the crop tools only appear when cropping will genuinely work.
+    useEffect(() => {
+        setCanCrop(false);
+        if (!open || !sourceSize) {
+            return;
+        }
+        let active = true;
+        void firstEncodableVideoCodec(sourceSize.width, sourceSize.height).then(
+            (codec) => {
+                if (active) {
+                    setCanCrop(codec !== null);
+                }
+            },
+        );
+        return () => {
+            active = false;
+        };
+    }, [open, sourceSize]);
 
     // If an aspect was picked before the natural size was known, selectAspect
     // couldn't seed the crop rect. Seed it once the size arrives so the export
