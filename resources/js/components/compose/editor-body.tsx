@@ -9,6 +9,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import { mentionInputValue, updateMentionName } from '@/lib/compose/mentions';
 import {
     docToSegments,
     segmentsToDoc,
@@ -293,6 +294,23 @@ export default function EditorBody({
         tryFocusMentionLabel(mention.label);
     }
 
+    // Escape in the picker is two-step: the first press clears the typed name
+    // (back to a bare `@`), the second closes the picker. The `@` itself stays
+    // in the editor so a literal `@` can still be typed, and focus returns to
+    // the editor so typing can continue right after it.
+    function handleMentionEscape() {
+        if (!activeMention) {
+            return;
+        }
+        if (mentionInputValue(activeMention.label) !== '') {
+            updateMention(activeMention, updateMentionName(activeMention, ''));
+
+            return;
+        }
+        setActiveMentionId(null);
+        requestAnimationFrame(() => editor?.commands.focus());
+    }
+
     return (
         <div className="relative">
             {overrideBanner && (
@@ -359,6 +377,10 @@ export default function EditorBody({
                             align="start"
                             className="w-80 gap-0 rounded-2xl p-2"
                             onOpenAutoFocus={(event) => event.preventDefault()}
+                            onEscapeKeyDown={(event) => {
+                                event.preventDefault();
+                                handleMentionEscape();
+                            }}
                         >
                             <MentionPicker
                                 activeMention={activeMention}
