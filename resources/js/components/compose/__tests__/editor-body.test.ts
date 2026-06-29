@@ -155,5 +155,6 @@ describe('composer editor text rhythm', () => {
 
         expect(source).toContain('leading-5');
         expect(source).toContain('[&_.ProseMirror_p]:m-0');
+        expect(source).toContain('[&_.ProseMirror_p+p]:mt-0');
     });
 });

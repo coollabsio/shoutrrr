@@ -549,7 +549,7 @@ export default function EditorBody({
             <div className="px-4 pt-[22px] pb-[18px] sm:px-[26px]">
                 <EditorContent
                     editor={editor}
-                    className="max-w-none text-[16px] leading-3 tracking-[-0.005em] text-foreground focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:m-0"
+                    className="max-w-none text-[16px] leading-5 tracking-[-0.005em] text-foreground focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:m-0 [&_.ProseMirror_p+p]:mt-0.5!"
                 />
             </div>
         </div>
