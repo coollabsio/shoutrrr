@@ -383,7 +383,7 @@ export default function Composer({
             if (!ok) {
                 return;
             }
-        } else {
+        } else if (editing.kind === 'raw') {
             // A plain image beautified for the first time: keep the raw image as
             // the source, attach the composed result, drop the raw attachment.
             const rawBlob = await fetch(editing.url).then((r) => r.blob());

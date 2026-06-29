@@ -80,10 +80,14 @@ export function VideoEditor({
     const [currentTime, setCurrentTime] = useState(0);
     const [volume, setVolume] = useState(1);
     const [muted, setMuted] = useState(false);
+    // The duration prop is floored (it doubles as the platform-limit check), so
+    // relying on it for the trim range would silently drop the sub-second tail.
+    // Once the <video> loads we switch to its precise duration.
+    const [mediaDuration, setMediaDuration] = useState(durationSeconds);
 
     const busy = phase !== 'idle';
     // Guard against divide-by-zero when duration hasn't been resolved yet.
-    const safeD = durationSeconds > 0 ? durationSeconds : 1;
+    const safeD = mediaDuration > 0 ? mediaDuration : 1;
 
     // Compute on-screen video dimensions from the measured canvas area.
     const displayScale = sourceSize
@@ -108,6 +112,7 @@ export function VideoEditor({
         }
         setSettings(defaultSettings(durationSeconds));
         setSourceSize(null);
+        setMediaDuration(durationSeconds);
         setPlaying(false);
         setCurrentTime(0);
     }, [open, durationSeconds]);
@@ -136,6 +141,36 @@ export function VideoEditor({
             videoRef.current.muted = muted;
         }
     }, [volume, muted, sourceUrl]);
+
+    // If an aspect was picked before the natural size was known, selectAspect
+    // couldn't seed the crop rect. Seed it once the size arrives so the export
+    // matches the overlay the user sees (otherwise render gets crop: null and
+    // exports the full, uncropped frame).
+    useEffect(() => {
+        if (!sourceSize) {
+            return;
+        }
+        setSettings((s) => {
+            if (s.aspect === 'auto' || s.crop) {
+                return s;
+            }
+            const ratio = videoAspectToRatio(s.aspect);
+            const crop =
+                ratio !== null
+                    ? centeredCropForRatio(
+                          sourceSize.width,
+                          sourceSize.height,
+                          ratio,
+                      )
+                    : {
+                          x: 0,
+                          y: 0,
+                          width: sourceSize.width,
+                          height: sourceSize.height,
+                      };
+            return { ...s, crop };
+        });
+    }, [sourceSize]);
 
     /** Apply a new aspect preset, seeding or clearing the crop rect as needed. */
     function selectAspect(aspect: VideoAspectPreset) {
@@ -259,6 +294,29 @@ export function VideoEditor({
                                                 width: v.videoWidth,
                                                 height: v.videoHeight,
                                             });
+                                            // Adopt the element's precise duration. If the trim
+                                            // is still the untouched full clip, extend its end so
+                                            // an immediate Apply keeps the sub-second tail the
+                                            // floored prop would have dropped.
+                                            if (
+                                                Number.isFinite(v.duration) &&
+                                                v.duration > 0
+                                            ) {
+                                                setMediaDuration(v.duration);
+                                                setSettings((s) =>
+                                                    s.trim.start === 0 &&
+                                                    s.trim.end ===
+                                                        durationSeconds
+                                                        ? {
+                                                              ...s,
+                                                              trim: {
+                                                                  ...s.trim,
+                                                                  end: v.duration,
+                                                              },
+                                                          }
+                                                        : s,
+                                                );
+                                            }
                                         }}
                                         onTimeUpdate={(e) => {
                                             const video = e.currentTarget;
