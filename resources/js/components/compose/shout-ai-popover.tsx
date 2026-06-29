@@ -378,7 +378,7 @@ function Result({
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5">
             <div
                 className={cn(
-                    'rounded-lg border p-3 text-[13px] leading-relaxed whitespace-pre-wrap',
+                    'rounded-lg border p-3 text-[13px] leading-relaxed break-words whitespace-pre-wrap',
                     isError
                         ? 'border-destructive/30 bg-destructive/[0.03] text-destructive'
                         : 'border-border bg-background text-foreground',

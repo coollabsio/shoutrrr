@@ -91,7 +91,7 @@ export function QuickReplyBox({
                 <div className="mb-2">
                     {suggestError ? (
                         <div className="animate-in fade-in-0 slide-in-from-top-1 rounded-xl border border-destructive/30 bg-destructive/[0.04] p-2.5 duration-200">
-                            <p className="text-[12px] leading-relaxed text-destructive">
+                            <p className="text-[12px] leading-relaxed break-words text-destructive">
                                 {suggestError}
                             </p>
                             <div className="mt-2 flex">
