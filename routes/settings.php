@@ -39,6 +39,8 @@ Route::middleware(['auth'])->group(function () {
     Route::put('settings/instance/ai', [InstanceSettingsController::class, 'updateAi'])->name('instance-settings.ai.update');
     Route::post('settings/instance/ai/test', [InstanceSettingsController::class, 'testAi'])
         ->middleware('throttle:6,1')->name('instance-settings.ai.test');
+    Route::post('settings/instance/ai/models', [InstanceSettingsController::class, 'aiModels'])
+        ->middleware('throttle:30,1')->name('instance-settings.ai.models');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {

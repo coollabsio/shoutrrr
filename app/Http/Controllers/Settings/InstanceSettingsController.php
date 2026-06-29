@@ -9,7 +9,10 @@ use App\Http\Requests\Settings\UpdateInstanceAiSettingsRequest;
 use App\Http\Requests\Settings\UpdateInstanceSettingsRequest;
 use App\Models\User;
 use App\Services\Ai\AiManager;
+use App\Services\Ai\ModelCatalogException;
+use App\Services\Ai\ProviderModelCatalog;
 use App\Support\InstanceSettings;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -146,5 +149,30 @@ class InstanceSettingsController extends Controller
         }
 
         return back()->with('success', 'Connection succeeded.');
+    }
+
+    public function aiModels(Request $request, InstanceSettings $settings, ProviderModelCatalog $catalog): JsonResponse
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+        abort_unless($user?->isInstanceOwner(), 403);
+
+        $validated = $request->validate([
+            'provider' => ['required', 'string'],
+            'api_key' => ['nullable', 'string'],
+        ]);
+
+        $provider = $validated['provider'];
+        $apiKey = isset($validated['api_key']) && $validated['api_key'] !== ''
+            ? $validated['api_key']
+            : $settings->aiApiKey();
+
+        try {
+            $models = $catalog->models($provider, $apiKey);
+        } catch (ModelCatalogException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['models' => $models]);
     }
 }
