@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use Illuminate\Support\Facades\Event;
+use Inertia\Support\SessionKey;
 
 function makeOwner(): array
 {
@@ -44,6 +45,24 @@ test('store persists an account, its secret, marks it active, and fires the even
         ->and($account->secret->refresh_token)->toBe('ref');
 
     Event::assertDispatched(ConnectedAccountConnected::class);
+});
+
+test('store clears stale inertia history after connecting an account', function () {
+    [$user, $workspace] = makeOwner();
+
+    $data = new ConnectedAccountData(
+        platform: Platform::LinkedIn,
+        remoteAccountId: 'linkedin-1',
+        handle: 'Ada',
+        displayName: 'Ada',
+        avatarUrl: null,
+        authMethod: 'oauth',
+        accessToken: 'tok',
+    );
+
+    app(AccountConnectionService::class)->store($data, $user, $workspace->id);
+
+    expect(session()->get(SessionKey::CLEAR_HISTORY))->toBeTrue();
 });
 
 test('store upserts an existing remote account, preserving id and clearing needs_attention', function () {

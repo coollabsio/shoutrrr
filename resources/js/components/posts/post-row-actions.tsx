@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { removeById, replaceById } from '@/lib/optimistic';
-import { invalidatePostCaches } from '@/lib/posts/cache';
 import { postCapabilities } from '@/lib/posts/capabilities';
 import { retry as retryRoute } from '@/routes/posts/targets';
 import type { PostView } from '@/types/compose';
@@ -180,12 +179,10 @@ export function PostRowActions({ post }: Props) {
         }
         // The confirm dialog lives at the app root, so this optimistic removal
         // can safely unmount the row without stranding an open modal.
-        invalidatePostCaches();
         router.delete(PostController.destroy(post.id).url, {
             preserveScroll: true,
             optimistic: (props) =>
                 optimisticPosts(props, (list) => removeById(list, post.id)),
-            onSuccess: invalidatePostCaches,
         });
     }
 

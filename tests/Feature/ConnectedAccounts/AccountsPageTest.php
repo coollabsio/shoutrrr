@@ -119,6 +119,26 @@ test('disconnecting the workspace default account clears the default', function 
     expect($workspace->fresh()->default_connected_account_id)->toBeNull();
 });
 
+test('disconnecting an account clears stale inertia history on the next accounts page response', function () {
+    $owner = User::factory()->create(['email_verified_at' => now()]);
+    $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $owner->id,
+    ]);
+    $owner->forceFill(['current_workspace_id' => $workspace->id])->save();
+    $account = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+
+    test()->actingAs($owner)
+        ->delete(route('accounts.destroy', $account))
+        ->assertRedirect(route('accounts.index'));
+
+    test()->actingAs($owner)
+        ->get(route('accounts.index'))
+        ->assertInertia(fn (Assert $page) => expect($page->toArray())
+            ->toHaveKey('clearHistory', true));
+});
+
 test('members see the list but cannot manage', function () {
     $member = viewerInWorkspace(WorkspaceRole::Member);
 

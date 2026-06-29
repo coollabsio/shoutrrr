@@ -10,7 +10,7 @@ import {
 } from '@/lib/compose/composer-state';
 import type { PostView } from '@/types/compose';
 
-const DEBOUNCE_MS = 5000;
+export const AUTOSAVE_DEBOUNCE_MS = 500;
 
 type SaveResponse = { post: PostView };
 
@@ -221,7 +221,7 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
         if (timer.current) {
             clearTimeout(timer.current);
         }
-        timer.current = setTimeout(() => void save(), DEBOUNCE_MS);
+        timer.current = setTimeout(() => void save(), AUTOSAVE_DEBOUNCE_MS);
 
         return () => {
             if (timer.current) {

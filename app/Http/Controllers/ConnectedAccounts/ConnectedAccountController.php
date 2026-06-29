@@ -125,6 +125,7 @@ class ConnectedAccountController extends Controller
 
         $account->secret()->delete();
         $account->delete();
+        Inertia::clearHistory();
 
         return redirect()->route('accounts.index')->with('success', 'Account disconnected.');
     }

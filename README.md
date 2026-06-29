@@ -31,18 +31,18 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 
 ## Supported platforms
 
-| Platform        | Connect with     | Publishing                          | Threads         | Analytics                            |
-| --------------- | ---------------- | ----------------------------------- | --------------- | ------------------------------------ |
-| **X** (Twitter) | OAuth 2.0        | ✅ (≤280 chars, up to 4 media)      | ✅              | likes, reposts, replies, impressions |
-| **Bluesky**     | App password     | ✅ (≤300 graphemes, up to 4 images) | ✅              | likes, reposts, replies              |
-| **LinkedIn**    | OAuth 2.0 (OIDC) | ✅ (≤3000 chars, up to 9 images)    | — (single post) | engagement metrics                   |
+| Platform        | Connect with     | Publishing                                                | Threads         | Analytics                            |
+| --------------- | ---------------- | --------------------------------------------------------- | --------------- | ------------------------------------ |
+| **X** (Twitter) | OAuth 2.0        | ✅ (≤280 chars, ≤25,000 for Premium, up to 4 media)       | ✅              | likes, reposts, replies, impressions |
+| **Bluesky**     | App password     | ✅ (≤300 graphemes, up to 4 images or 1 video)            | ✅              | likes, reposts, replies              |
+| **LinkedIn**    | OAuth 2.0 (OIDC) | ✅ (≤3000 chars, up to 9 images or 1 video)               | — (single post) | not available for personal accounts  |
 
 ## Features
 
-- 📝 **Composer** — draft with media and alt text, see a live character count for each network, and automatically split long posts into threads where the platform supports it.
+- 📝 **Composer** — draft with media and alt text, see a live character count for each network/account (including X Premium limits), and automatically split long posts into threads where the platform supports it.
 - 🚀 **Multi-account publishing** — fan one post out to many accounts at once, with optional per-platform overrides. Each target publishes independently and retries on failure.
 - 🗓️ **Queue & calendar** — set recurring posting slots (in your workspace's timezone), drop drafts into the queue, and review everything on a month calendar. Publish instantly whenever you like.
-- 📊 **Analytics** — follower and post-count trends per account, plus per-post engagement (likes, reposts, replies, impressions).
+- 📊 **Analytics** — follower and post-count trends per account, plus per-post engagement (likes, reposts, replies, impressions) where the provider API supports it.
 - 🔗 **Connected accounts** — link accounts via OAuth (X, LinkedIn) or app password (Bluesky), group them into reusable sets, and get nudged when one needs reconnecting. Tokens are stored encrypted and refreshed automatically.
 - 👥 **Workspaces & team** — multiple workspaces with role-based memberships, email invitations, and ownership transfer. Every bit of data is scoped to its workspace.
 - 🔔 **Notifications** — in-app alerts when a post publishes or fails, or when an account needs attention.
@@ -184,7 +184,7 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI="${APP_URL}/auth/google/callback"
 ```
 
-> **Heads up:** publishing and scheduling rely on a running queue worker and scheduler. The provided Docker setups start both for you. Analytics capture is off until you enable `metrics.enabled` (see `config/metrics.php`).
+> **Heads up:** publishing, scheduling, engagement polling, and analytics capture rely on a running queue worker and scheduler. The provided Docker setups start both for you. Metrics and engagement are enabled by default and can be disabled with `METRICS_ENABLED=false` / `ENGAGEMENT_ENABLED=false` (see `config/metrics.php` and `config/engagement.php`).
 
 ## Development
 
@@ -218,7 +218,7 @@ MAIL_FROM_NAME="${APP_NAME}"
 
 ### How publishing works
 
-A post is composed once, then split into one **target** per connected account. The scheduler dispatches due posts every minute; a queued `PublishPostTarget` job then publishes each target independently, with retries, idempotency, and a per-attempt audit trail. Hourly jobs refresh OAuth tokens before they expire, and (when enabled) metrics are captured every 15 minutes.
+A post is composed once, then split into one **target** per connected account. The scheduler dispatches due posts every minute; a queued `PublishPostTarget` job then publishes each target independently, with retries, idempotency, and a per-attempt audit trail. Scheduled jobs refresh OAuth tokens before they expire, fetch replies, and check for due metrics captures every 15 minutes. Metrics refresh cadence is controlled in `config/metrics.php`.
 
 ### Tooling
 

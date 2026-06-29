@@ -38,6 +38,7 @@ import {
     composeButtonClassName,
     composeIconClassName,
 } from '@/lib/navigation/compose-nav';
+import { appVersion, githubReleaseUrl } from '@/lib/version';
 import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
 import { index as analyticsRoute } from '@/routes/analytics';
@@ -76,14 +77,10 @@ export function AppSidebar() {
     // The mobile sidebar is an off-canvas sheet living in a persistent layout,
     // so it stays open across Inertia visits. Close it the moment a real
     // navigation starts (link click, command palette, programmatic visit).
-    // Prefetch visits also fire `start`; ignore those, otherwise the sheet
-    // self-closes the instant its prefetching nav links mount.
     useEffect(
         () =>
-            router.on('start', (event) => {
-                if (!event.detail.visit.prefetch) {
-                    setOpenMobile(false);
-                }
+            router.on('start', () => {
+                setOpenMobile(false);
             }),
         [setOpenMobile],
     );
@@ -95,16 +92,24 @@ export function AppSidebar() {
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader className="gap-1.5">
                 <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton asChild className="h-8">
-                            <Link
-                                href={composeHref}
-                                prefetch={['mount', 'hover']}
-                                cacheFor={['30s', '1m']}
-                            >
+                    <SidebarMenuItem className="flex items-center gap-1">
+                        <SidebarMenuButton
+                            asChild
+                            className="h-8 min-w-0 flex-1"
+                        >
+                            <Link href={composeHref}>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
+                        <a
+                            href={githubReleaseUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none font-medium text-sidebar-foreground/60 transition-colors group-data-[collapsible=icon]:hidden hover:border-sidebar-accent-foreground/30 hover:text-sidebar-foreground"
+                            aria-label={`View Shoutrrr ${appVersion} release notes on GitHub`}
+                        >
+                            {appVersion}
+                        </a>
                     </SidebarMenuItem>
                 </SidebarMenu>
                 <WorkspaceSelector />
@@ -123,11 +128,7 @@ export function AppSidebar() {
                                         collapsed,
                                     )}
                                 >
-                                    <Link
-                                        href={composeHref}
-                                        prefetch={['mount', 'hover']}
-                                        cacheFor={['30s', '1m']}
-                                    >
+                                    <Link href={composeHref}>
                                         <span className="pointer-events-none flex items-center gap-2">
                                             <span
                                                 className={composeIconClassName()}
@@ -160,45 +161,28 @@ export function AppSidebar() {
                                         item.title !== 'Engagement' ||
                                         features?.engagement,
                                 )
-                                .map((item) => {
-                                    const cacheFor: [string, string] =
-                                        item.title === 'Calendar' ||
-                                        item.title === 'Queue'
-                                            ? ['10s', '30s']
-                                            : ['30s', '1m'];
-                                    return (
-                                        <SidebarMenuItem key={item.title}>
-                                            <SidebarMenuButton
-                                                asChild
-                                                tooltip={item.title}
-                                                isActive={isCurrentUrl(
-                                                    item.href,
-                                                )}
-                                            >
-                                                <Link
-                                                    href={item.href}
-                                                    prefetch={[
-                                                        'mount',
-                                                        'hover',
-                                                    ]}
-                                                    cacheFor={cacheFor}
-                                                >
-                                                    <item.icon aria-hidden="true" />
-                                                    <span>{item.title}</span>
-                                                    {item.title ===
-                                                        'Engagement' &&
-                                                    unreadReplies > 0 ? (
-                                                        <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
-                                                            {unreadReplies > 99
-                                                                ? '99+'
-                                                                : unreadReplies}
-                                                        </span>
-                                                    ) : null}
-                                                </Link>
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    );
-                                })}
+                                .map((item) => (
+                                    <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuButton
+                                            asChild
+                                            tooltip={item.title}
+                                            isActive={isCurrentUrl(item.href)}
+                                        >
+                                            <Link href={item.href}>
+                                                <item.icon aria-hidden="true" />
+                                                <span>{item.title}</span>
+                                                {item.title === 'Engagement' &&
+                                                unreadReplies > 0 ? (
+                                                    <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                        {unreadReplies > 99
+                                                            ? '99+'
+                                                            : unreadReplies}
+                                                    </span>
+                                                ) : null}
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                ))}
                             {features?.analytics && (
                                 <SidebarMenuItem>
                                     <SidebarMenuButton
@@ -208,11 +192,7 @@ export function AppSidebar() {
                                             analyticsRoute(),
                                         )}
                                     >
-                                        <Link
-                                            href={analyticsRoute()}
-                                            prefetch={['mount', 'hover']}
-                                            cacheFor={['30s', '1m']}
-                                        >
+                                        <Link href={analyticsRoute()}>
                                             <ChartColumn aria-hidden="true" />
                                             <span>Analytics</span>
                                         </Link>
@@ -238,8 +218,6 @@ export function AppSidebar() {
                                     >
                                         <Link
                                             href={WorkspaceSettingsController.showOverview()}
-                                            prefetch={['mount', 'hover']}
-                                            cacheFor={['30s', '1m']}
                                         >
                                             <Settings aria-hidden="true" />
                                             <span>
@@ -259,8 +237,6 @@ export function AppSidebar() {
                                         >
                                             <Link
                                                 href={InstanceSettingsController.edit()}
-                                                prefetch={['mount', 'hover']}
-                                                cacheFor={['30s', '1m']}
                                             >
                                                 <Wrench aria-hidden="true" />
                                                 <span>

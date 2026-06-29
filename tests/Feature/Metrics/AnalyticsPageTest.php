@@ -10,7 +10,6 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Date;
 
@@ -106,18 +105,39 @@ test('the follower series is downsampled to one point per day', function (): voi
             ->where('accounts.0.latest_followers', 40));
 });
 
-test('the analytics rollup is cached per workspace and range', function (): void {
+test('the analytics rollup reflects newly captured metrics on the next page load', function (): void {
     $account = ConnectedAccount::factory()->for($this->workspace)->create();
     AccountMetric::factory()->create(['connected_account_id' => $account->id, 'captured_at' => Date::now()->subHours(2), 'followers' => 100]);
 
     $this->actingAs($this->user)->get(route('analytics.index'))->assertOk();
 
-    expect(Cache::has("analytics:{$this->workspace->id}:90"))->toBeTrue();
-
-    // A metric written after the first render is not reflected until the cache expires.
     AccountMetric::factory()->create(['connected_account_id' => $account->id, 'captured_at' => Date::now(), 'followers' => 999]);
 
     $this->actingAs($this->user)
         ->get(route('analytics.index'))
-        ->assertInertia(fn ($page) => $page->where('accounts.0.latest_followers', 100));
+        ->assertInertia(fn ($page) => $page->where('accounts.0.latest_followers', 999));
+});
+
+test('disconnecting an account removes it from cached analytics', function (): void {
+    $keptAccount = ConnectedAccount::factory()->for($this->workspace)->create();
+    $disconnectedAccount = ConnectedAccount::factory()->for($this->workspace)->create();
+
+    AccountMetric::factory()->create(['connected_account_id' => $keptAccount->id, 'captured_at' => Date::now(), 'followers' => 100]);
+    AccountMetric::factory()->create(['connected_account_id' => $disconnectedAccount->id, 'captured_at' => Date::now(), 'followers' => 200]);
+
+    $this->actingAs($this->user)
+        ->get(route('analytics.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('accounts', 2));
+
+    $this->actingAs($this->user)
+        ->delete(route('accounts.destroy', $disconnectedAccount))
+        ->assertRedirect(route('accounts.index'));
+
+    $this->actingAs($this->user)
+        ->get(route('analytics.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('accounts', 1)
+            ->where('accounts.0.id', $keptAccount->id));
 });

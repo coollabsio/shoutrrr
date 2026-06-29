@@ -12,8 +12,6 @@ use App\Models\Post;
 use App\Models\PostTarget;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -26,19 +24,9 @@ class AnalyticsController extends Controller
         abort_unless($request->user()->can('viewAny', Post::class), 403);
 
         $days = max(7, min(365, (int) $request->integer('days', 90)));
-        $workspaceId = (string) Context::get('workspace_id');
-
-        // The rollup only changes when a capture job writes new metrics (a cadence
-        // measured in tens of minutes), so a short TTL avoids recomputing the whole
-        // aggregation on every page view without serving meaningfully stale numbers.
-        $data = Cache::remember(
-            "analytics:{$workspaceId}:{$days}",
-            now()->addMinutes(10),
-            fn (): array => $this->buildPayload($days),
-        );
 
         return Inertia::render('analytics/index', [
-            ...$data,
+            ...$this->buildPayload($days),
             'rangeDays' => $days,
         ]);
     }

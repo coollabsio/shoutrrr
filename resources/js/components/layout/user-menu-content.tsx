@@ -1,4 +1,4 @@
-import { Link, router } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { LogOut, Settings } from 'lucide-react';
 
 import { UserInfo } from '@/components/layout/user-info';
@@ -20,11 +20,6 @@ type Props = {
 export function UserMenuContent({ user }: Props) {
     const cleanup = useMobileNavigation();
 
-    const handleLogout = () => {
-        cleanup();
-        router.flushAll();
-    };
-
     return (
         <>
             <DropdownMenuLabel className="p-0 font-normal">
@@ -38,7 +33,6 @@ export function UserMenuContent({ user }: Props) {
                     <Link
                         className="block w-full cursor-pointer"
                         href={edit()}
-                        prefetch
                         onClick={cleanup}
                     >
                         <Settings className="mr-2" />
@@ -52,7 +46,7 @@ export function UserMenuContent({ user }: Props) {
                     className="block w-full cursor-pointer"
                     href={logout()}
                     as="button"
-                    onClick={handleLogout}
+                    onClick={cleanup}
                     data-test="logout-button"
                 >
                     <LogOut className="mr-2" />

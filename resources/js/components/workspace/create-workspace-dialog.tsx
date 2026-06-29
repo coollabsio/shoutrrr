@@ -1,4 +1,4 @@
-import { Form, router } from '@inertiajs/react';
+import { Form } from '@inertiajs/react';
 import { Loader2 } from 'lucide-react';
 
 import WorkspaceController from '@/actions/App/Http/Controllers/WorkspaceController';
@@ -35,11 +35,7 @@ export function CreateWorkspaceDialog({
                     {...WorkspaceController.store.form()}
                     options={{ preserveState: false }}
                     resetOnSuccess={['name']}
-                    onBefore={() => router.flushAll()}
-                    onSuccess={() => {
-                        router.flushAll();
-                        onOpenChange(false);
-                    }}
+                    onSuccess={() => onOpenChange(false)}
                     className="flex flex-col gap-4"
                 >
                     {({ processing, errors }) => (

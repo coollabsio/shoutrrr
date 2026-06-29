@@ -52,3 +52,35 @@ describe('sidebar nav click targets', () => {
         );
     });
 });
+
+describe('sidebar page cache policy', () => {
+    it('does not prefetch or cache main navigation pages', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/layout/app-sidebar.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).not.toContain('prefetch=');
+        expect(source).not.toContain('cacheFor=');
+    });
+});
+
+describe('sidebar app version link', () => {
+    it('renders a version badge that opens the current GitHub release', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/layout/app-sidebar.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('githubReleaseUrl');
+        expect(source).toContain('appVersion');
+        expect(source).toContain('target="_blank"');
+        expect(source).toContain('rel="noopener noreferrer"');
+    });
+});

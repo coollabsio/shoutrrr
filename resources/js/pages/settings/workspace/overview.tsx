@@ -69,10 +69,8 @@ export default function WorkspaceOverview({
         }
 
         setDeleting(true);
-        router.flushAll();
         router.delete(WorkspaceController.destroy(workspace.id).url, {
             preserveScroll: true,
-            onSuccess: () => router.flushAll(),
             onFinish: () => setDeleting(false),
         });
     }
@@ -91,7 +89,6 @@ export default function WorkspaceOverview({
                 <Form
                     {...WorkspaceSettingsController.update.form()}
                     options={{ preserveScroll: true }}
-                    onSuccess={() => router.flushAll()}
                     className="space-y-6"
                 >
                     {({ processing, errors, recentlySuccessful }) => (
@@ -156,10 +153,7 @@ export default function WorkspaceOverview({
                                     if (!confirm('Leave this workspace?')) {
                                         return false;
                                     }
-
-                                    router.flushAll();
                                 }}
-                                onSuccess={() => router.flushAll()}
                             >
                                 {({ processing }) => (
                                     <Button

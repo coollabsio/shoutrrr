@@ -20,7 +20,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { dayjs } from '@/lib/datetime/dayjs';
-import { invalidatePostCaches } from '@/lib/posts/cache';
 import { postCapabilities } from '@/lib/posts/capabilities';
 import { postLiveStatus } from '@/lib/posts/live-status';
 import { index as engagementRoute } from '@/routes/engagement';
@@ -135,10 +134,8 @@ export function PostPageActions({ post }: Props) {
         if (!ok) {
             return;
         }
-        invalidatePostCaches();
         router.delete(PostController.destroy(post.id).url, {
             onSuccess: () => {
-                invalidatePostCaches();
                 router.visit(postsRoute().url);
             },
         });
