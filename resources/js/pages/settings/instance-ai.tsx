@@ -1,5 +1,4 @@
-import { Head, useForm } from '@inertiajs/react';
-import { router } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 
 import InstanceSettingsController from '@/actions/App/Http/Controllers/Settings/InstanceSettingsController';
 import Heading from '@/components/common/heading';

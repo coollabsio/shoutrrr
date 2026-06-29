@@ -61,6 +61,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     });
 
     Route::post('ai/engagement/{reply}/suggest', [ReplyAssistantController::class, 'suggest'])
-        ->middleware(['ai.enabled', 'throttle:20,1'])
+        ->middleware(['engagement.enabled', 'ai.enabled', 'throttle:20,1'])
         ->name('ai.reply.suggest');
 });

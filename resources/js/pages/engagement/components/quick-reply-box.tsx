@@ -95,6 +95,7 @@ export function QuickReplyBox({
                                     size="sm"
                                     disabled={suggesting}
                                     onClick={() => {
+                                        aiStream.cancel();
                                         setText(suggestion);
                                         setSuggestion('');
                                     }}
@@ -105,7 +106,10 @@ export function QuickReplyBox({
                                     type="button"
                                     size="sm"
                                     variant="ghost"
-                                    onClick={() => setSuggestion('')}
+                                    onClick={() => {
+                                        aiStream.cancel();
+                                        setSuggestion('');
+                                    }}
                                 >
                                     Dismiss
                                 </Button>

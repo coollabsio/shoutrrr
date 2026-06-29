@@ -13,7 +13,7 @@ class StreamEnvelope
     {
         return new StreamedResponse(function () use ($producer): void {
             $emit = function (string $type, array $data = []): void {
-                echo 'data: '.json_encode([...['type' => $type], ...$data]).PHP_EOL.PHP_EOL;
+                echo 'data: '.json_encode([...['type' => $type], ...$data], JSON_THROW_ON_ERROR).PHP_EOL.PHP_EOL;
                 flush();
             };
 
