@@ -286,71 +286,94 @@ export function MediaChips({
                 );
             })}
 
-            {pending.map((p) => (
-                <Tooltip key={p.tempId}>
-                    <TooltipTrigger asChild>
-                        <div
-                            className="group/chip relative"
-                            aria-label={
-                                p.status === 'uploading'
-                                    ? 'Uploading media'
-                                    : 'Failed upload'
-                            }
-                        >
+            {pending.map((p) => {
+                const inFlight =
+                    p.status === 'uploading' || p.status === 'processing';
+
+                return (
+                    <Tooltip key={p.tempId}>
+                        <TooltipTrigger asChild>
                             <div
-                                className={cn(
-                                    'relative size-7 overflow-hidden rounded-md border border-border',
-                                    p.status === 'error' &&
-                                        'ring-1 ring-destructive/60',
-                                )}
+                                className="group/chip relative"
+                                aria-label={
+                                    p.status === 'processing'
+                                        ? 'Compressing media'
+                                        : p.status === 'uploading'
+                                          ? 'Uploading media'
+                                          : 'Failed upload'
+                                }
                             >
-                                {p.previewUrl ? (
-                                    <img
-                                        src={p.previewUrl}
-                                        alt=""
-                                        draggable={false}
-                                        className={cn(
-                                            'size-full object-cover',
-                                            p.status === 'uploading' &&
-                                                'opacity-50',
-                                        )}
-                                    />
-                                ) : (
-                                    <div className="size-full bg-muted" />
-                                )}
-                                {p.status === 'uploading' && (
-                                    <div className="absolute inset-0 grid place-items-center bg-background/30">
-                                        {p.progress !== undefined ? (
-                                            <span className="font-mono text-[7px] leading-none font-semibold text-foreground">
-                                                {p.progress}%
-                                            </span>
+                                <div
+                                    className={cn(
+                                        'relative size-7 overflow-hidden rounded-md border border-border',
+                                        p.status === 'error' &&
+                                            'ring-1 ring-destructive/60',
+                                    )}
+                                >
+                                    {p.previewUrl ? (
+                                        p.kind === 'video' ? (
+                                            <video
+                                                src={p.previewUrl}
+                                                muted
+                                                playsInline
+                                                preload="metadata"
+                                                className={cn(
+                                                    'size-full object-cover',
+                                                    inFlight && 'opacity-50',
+                                                )}
+                                            />
                                         ) : (
-                                            <span className="size-3 animate-spin rounded-full border-2 border-foreground/70 border-t-transparent" />
-                                        )}
-                                    </div>
+                                            <img
+                                                src={p.previewUrl}
+                                                alt=""
+                                                draggable={false}
+                                                className={cn(
+                                                    'size-full object-cover',
+                                                    inFlight && 'opacity-50',
+                                                )}
+                                            />
+                                        )
+                                    ) : (
+                                        <div className="size-full bg-muted" />
+                                    )}
+                                    {inFlight && (
+                                        <div className="absolute inset-0 grid place-items-center bg-background/30">
+                                            {p.progress !== undefined ? (
+                                                <span className="font-mono text-[7px] leading-none font-semibold text-foreground">
+                                                    {p.progress}%
+                                                </span>
+                                            ) : (
+                                                <span className="size-3 animate-spin rounded-full border-2 border-foreground/70 border-t-transparent" />
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                {p.status === 'error' && (
+                                    <CornerButton
+                                        label="Dismiss failed upload"
+                                        onClick={() =>
+                                            onDismissPending(p.tempId)
+                                        }
+                                        always
+                                    >
+                                        <X
+                                            className="size-2.5 text-black"
+                                            aria-hidden="true"
+                                        />
+                                    </CornerButton>
                                 )}
                             </div>
-                            {p.status === 'error' && (
-                                <CornerButton
-                                    label="Dismiss failed upload"
-                                    onClick={() => onDismissPending(p.tempId)}
-                                    always
-                                >
-                                    <X
-                                        className="size-2.5 text-black"
-                                        aria-hidden="true"
-                                    />
-                                </CornerButton>
-                            )}
-                        </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-[11px]">
-                        {p.status === 'uploading'
-                            ? 'Uploading…'
-                            : 'Upload failed — dismiss and retry'}
-                    </TooltipContent>
-                </Tooltip>
-            ))}
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-[11px]">
+                            {p.status === 'processing'
+                                ? 'Compressing…'
+                                : p.status === 'uploading'
+                                  ? 'Uploading…'
+                                  : 'Upload failed — dismiss and retry'}
+                        </TooltipContent>
+                    </Tooltip>
+                );
+            })}
         </div>
     );
 }

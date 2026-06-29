@@ -68,9 +68,13 @@ export function ComposerToolbar({
 
     const hasVideo = media.some((m) => m.kind === 'video');
     // Count confirmed media plus uploads still in flight so the badge bumps the
-    // instant a file is picked, and settles back if an upload fails.
+    // instant a file is picked, and settles back if an upload fails. "processing"
+    // (client-side compression) is in flight too, so it counts.
     const mediaCount =
-        media.length + pending.filter((p) => p.status === 'uploading').length;
+        media.length +
+        pending.filter(
+            (p) => p.status === 'uploading' || p.status === 'processing',
+        ).length;
 
     return (
         <div

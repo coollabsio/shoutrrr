@@ -34,7 +34,7 @@ type Props = {
     variant?: 'new' | 'existing';
     /** Called when the user chooses to upload without editing (only relevant for 'new' variant). */
     onSkip?: () => void;
-    phase: 'idle' | 'rendering' | 'uploading';
+    phase: 'idle' | 'rendering' | 'compressing' | 'uploading';
     /** 0..1 — shown as a progress bar while phase !== 'idle'. */
     progress: number;
 };
@@ -843,7 +843,9 @@ export function VideoEditor({
                         <span className="text-sm text-muted-foreground">
                             {phase === 'rendering'
                                 ? 'Rendering…'
-                                : 'Uploading…'}
+                                : phase === 'compressing'
+                                  ? 'Compressing…'
+                                  : 'Uploading…'}
                         </span>
                     )}
 

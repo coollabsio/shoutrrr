@@ -5,9 +5,11 @@ import { toast } from 'sonner';
 import PostMediaController from '@/actions/App/Http/Controllers/Posts/PostMediaController';
 import PostVideoUploadController from '@/actions/App/Http/Controllers/Posts/PostVideoUploadController';
 import {
+    minVideoBytes,
     putWithProgress,
     readVideoMetadata,
     validateVideo,
+    type VideoMeta,
 } from '@/lib/compose/video';
 import type { MediaView, PendingUpload, PlatformLimits } from '@/types/compose';
 
@@ -84,7 +86,11 @@ export function useMediaUploads({
         [],
     );
 
-    const isUploading = pending.some((p) => p.status === 'uploading');
+    // Compression ('processing') counts as in flight too — the publish/send gates
+    // hang off this, so a post must not ship while a video is still being encoded.
+    const isUploading = pending.some(
+        (p) => p.status === 'uploading' || p.status === 'processing',
+    );
 
     function mintPreview(file: File): string | undefined {
         try {
@@ -102,14 +108,15 @@ export function useMediaUploads({
 
     // --- Pending-chip lifecycle (shared by both upload flows) ---------------
 
-    function beginUpload(file: File): { tempId: string; previewUrl?: string } {
+    function beginUpload(
+        file: File,
+        kind: PendingUpload['kind'],
+        status: PendingUpload['status'] = 'uploading',
+    ): { tempId: string; previewUrl?: string } {
         tempSeq.current += 1;
         const tempId = `up_${tempSeq.current}`;
         const previewUrl = mintPreview(file);
-        setPending((cur) => [
-            ...cur,
-            { tempId, previewUrl, status: 'uploading' },
-        ]);
+        setPending((cur) => [...cur, { tempId, kind, previewUrl, status }]);
 
         return { tempId, previewUrl };
     }
@@ -119,6 +126,12 @@ export function useMediaUploads({
             cur.map((p) =>
                 p.tempId === tempId ? { ...p, status: 'error' } : p,
             ),
+        );
+    }
+
+    function setStatus(tempId: string, status: PendingUpload['status']): void {
+        setPending((cur) =>
+            cur.map((p) => (p.tempId === tempId ? { ...p, status } : p)),
         );
     }
 
@@ -152,7 +165,7 @@ export function useMediaUploads({
     // --- Upload flows -------------------------------------------------------
 
     async function uploadImage(file: File): Promise<void> {
-        const { tempId, previewUrl } = beginUpload(file);
+        const { tempId, previewUrl } = beginUpload(file, 'image');
 
         const id = await onEnsurePost();
         if (!id) {
@@ -172,7 +185,7 @@ export function useMediaUploads({
     }
 
     async function uploadVideo(file: File): Promise<void> {
-        let meta;
+        let meta: VideoMeta;
         try {
             meta = await readVideoMetadata(file);
         } catch {
@@ -181,23 +194,75 @@ export function useMediaUploads({
             return;
         }
 
-        const verdict = validateVideo(
-            {
-                sizeBytes: file.size,
-                mime: file.type,
-                durationSeconds: meta.durationSeconds,
-                width: meta.width,
-                height: meta.height,
-            },
-            videoLimits,
-        );
-        if (!verdict.ok) {
+        // Re-encoding can only shrink an over-cap clip's bytes — it can't fix a
+        // wrong codec or a too-long runtime. So we compress only when an
+        // oversized file is otherwise valid, detected by re-running the gate as
+        // if the file already fit (sizeBytes 0). Anything else gets the cheap
+        // up-front rejection, so a doomed file never flashes a ghost chip.
+        const maxBytes = minVideoBytes(videoLimits);
+        const verdict = validateVideo(meta, videoLimits);
+        const willCompress =
+            !verdict.ok &&
+            Number.isFinite(maxBytes) &&
+            file.size > maxBytes &&
+            validateVideo({ ...meta, sizeBytes: 0 }, videoLimits).ok;
+
+        if (!verdict.ok && !willCompress) {
             toast.error(verdict.reason);
 
             return;
         }
 
-        const { tempId, previewUrl } = beginUpload(file);
+        const { tempId, previewUrl } = beginUpload(
+            file,
+            'video',
+            willCompress ? 'processing' : 'uploading',
+        );
+
+        let finalFile = file;
+        if (willCompress) {
+            let compressed: Blob | null = null;
+            try {
+                const { compressVideoToFit } =
+                    await import('@/lib/video-editor/compress');
+                compressed = await compressVideoToFit(
+                    file,
+                    maxBytes,
+                    (fraction) =>
+                        setProgress(tempId, Math.round(fraction * 100)),
+                );
+            } catch {
+                // Encode threw outright; fall through to the gate, which rejects
+                // the still-over-cap original.
+            }
+
+            if (compressed) {
+                finalFile = new File([compressed], file.name, {
+                    type: 'video/mp4',
+                });
+                try {
+                    // Downscaling changes width/height/size — re-read so the
+                    // final gate and confirm payload reflect the real output.
+                    meta = await readVideoMetadata(finalFile);
+                } catch {
+                    // compressVideoToFit already guarantees the blob fits; if the
+                    // re-read fails, trust that size over the stale original
+                    // rather than dropping an otherwise-valid upload.
+                    meta = { ...meta, sizeBytes: finalFile.size };
+                }
+            }
+
+            setStatus(tempId, 'uploading');
+            setProgress(tempId, 0);
+
+            const finalVerdict = validateVideo(meta, videoLimits);
+            if (!finalVerdict.ok) {
+                toast.error(finalVerdict.reason);
+                dismissPending(tempId);
+
+                return;
+            }
+        }
 
         const id = await onEnsurePost();
         if (!id) {
@@ -211,8 +276,11 @@ export function useMediaUploads({
                 onNetworkError: () => undefined,
             });
 
-            await putWithProgress(signed.url, signed.headers, file, (pct) =>
-                setProgress(tempId, pct),
+            await putWithProgress(
+                signed.url,
+                signed.headers,
+                finalFile,
+                (pct) => setProgress(tempId, pct),
             );
 
             confirmHttp.setData({

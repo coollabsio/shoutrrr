@@ -67,10 +67,12 @@ export type MediaView = {
 /** An upload still in flight (or just failed) — rendered as a ghost chip. */
 export type PendingUpload = {
     tempId: string;
+    /** Image vs video — drives whether the preview chip renders <img> or <video>. */
+    kind: 'image' | 'video';
     /** Local object-URL preview shown immediately; absent where unsupported. */
     previewUrl?: string;
-    status: 'uploading' | 'error';
-    /** Upload progress 0–100; only set during direct-to-storage PUT. */
+    status: 'processing' | 'uploading' | 'error';
+    /** Progress 0–100; set during client-side compression and the storage PUT. */
     progress?: number;
 };
 
