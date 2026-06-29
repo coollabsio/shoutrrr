@@ -196,6 +196,48 @@ export function mentionInputValue(name: string): string {
     return name.replace(/^@/, '');
 }
 
+/**
+ * Replace whole-token occurrences of `fromLabel` with `toLabel`. A label that is
+ * only a substring of a longer handle is left alone — so renaming the in-progress
+ * `@` mention does not rewrite the `@` inside an existing `@handle`.
+ */
+export function replaceMentionLabel(
+    text: string,
+    fromLabel: string,
+    toLabel: string,
+): string {
+    if (fromLabel === '' || fromLabel === toLabel) {
+        return text;
+    }
+
+    let result = '';
+    let cursor = 0;
+    for (
+        let index = text.indexOf(fromLabel);
+        index !== -1;
+        index = text.indexOf(fromLabel, cursor)
+    ) {
+        const before = index === 0 ? '' : text[index - 1];
+        const after = text[index + fromLabel.length] ?? '';
+        result += text.slice(cursor, index);
+        result += isMentionTokenBoundary(before, after) ? toLabel : fromLabel;
+        cursor = index + fromLabel.length;
+    }
+
+    return result + text.slice(cursor);
+}
+
+/**
+ * A mention spans a whole token when it is preceded by the start or whitespace
+ * and followed by the end, whitespace, or the punctuation HANDLE_PATTERN allows.
+ */
+function isMentionTokenBoundary(before: string, after: string): boolean {
+    const startsOk = before === '' || /\s/.test(before);
+    const endsOk = after === '' || /\s/.test(after) || '.,!?;:'.includes(after);
+
+    return startsOk && endsOk;
+}
+
 /** Stable mention id from a workspace library name or label. */
 export function mentionIdFromLabel(label: string): string {
     const id = label

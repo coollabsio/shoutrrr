@@ -4,6 +4,7 @@ import {
     createMention,
     mentionInputValue,
     mentionToken,
+    replaceMentionLabel,
     replaceMentionTokens,
     setPlatformMentionMode,
     updateMentionHandle,
@@ -12,6 +13,44 @@ import {
     usesPlatformMention,
     type MentionPlaceholder,
 } from '../mentions';
+
+describe('replaceMentionLabel', () => {
+    it('renames a whole mention token', () => {
+        expect(
+            replaceMentionLabel('hi @guest there', '@guest', '@guest2'),
+        ).toBe('hi @guest2 there');
+        expect(
+            replaceMentionLabel('@guest and @guest', '@guest', '@member'),
+        ).toBe('@member and @member');
+    });
+
+    it('renames the in-progress "@" without rewriting other handles', () => {
+        // Regression: a naive replaceAll("@", "@member") corrupted "@guest".
+        expect(replaceMentionLabel('@guest @', '@', '@member')).toBe(
+            '@guest @member',
+        );
+    });
+
+    it('leaves the label alone when it is only part of a longer token', () => {
+        expect(replaceMentionLabel('@guest', '@', '@member')).toBe('@guest');
+        expect(replaceMentionLabel('email@guest', '@guest', '@member')).toBe(
+            'email@guest',
+        );
+    });
+
+    it('honors trailing boundary punctuation', () => {
+        expect(replaceMentionLabel('hey @guest!', '@guest', '@member')).toBe(
+            'hey @member!',
+        );
+    });
+
+    it('is a no-op for an empty or unchanged label', () => {
+        expect(replaceMentionLabel('@guest', '', '@member')).toBe('@guest');
+        expect(replaceMentionLabel('@guest', '@guest', '@guest')).toBe(
+            '@guest',
+        );
+    });
+});
 
 describe('mention helpers', () => {
     it('creates mention metadata from a typed handle', () => {

@@ -19,6 +19,7 @@ import {
     type ComposerState,
 } from '@/lib/compose/composer-state';
 import {
+    replaceMentionLabel,
     replaceMentionTokens,
     savedMentionToPlaceholder,
     syncMentionsFromText,
@@ -545,7 +546,9 @@ export default function Composer({
         next: MentionPlaceholder,
     ) {
         const replaceSeg = (segments: string[]): string[] =>
-            segments.map((s) => s.split(mention.label).join(next.label));
+            segments.map((s) =>
+                replaceMentionLabel(s, mention.label, next.label),
+            );
         const overrideByAccount = Object.fromEntries(
             Object.entries(state.overrideByAccount).map(([accountId, segs]) => [
                 accountId,
