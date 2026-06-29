@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Ai\ReplyAssistantController;
 use App\Http\Controllers\Engagement\EngagementController;
 use App\Http\Controllers\Engagement\ReplyImageEditController;
 use App\Http\Controllers\Engagement\ReplyMediaController;
@@ -58,4 +59,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::post('engagement/{reply}/image-edit', [ReplyImageEditController::class, 'store'])->name('engagement.image-edit.store');
         Route::put('engagement/{reply}/image-edit/{media}', [ReplyImageEditController::class, 'update'])->name('engagement.image-edit.update');
     });
+
+    Route::post('ai/engagement/{reply}/suggest', [ReplyAssistantController::class, 'suggest'])
+        ->middleware(['ai.enabled', 'throttle:20,1'])
+        ->name('ai.reply.suggest');
 });
