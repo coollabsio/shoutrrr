@@ -66,14 +66,16 @@ export function AssistantPanel({
         <div className="border-t border-border bg-muted/40 px-3 py-3 sm:px-[14px]">
             {/* Header row */}
             <div className="mb-2.5 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-                    <Sparkles className="size-3.5 text-primary/70" aria-hidden="true" />
-                    AI assistant
+                <span className="flex items-center gap-1.5 text-[12px] font-semibold tracking-tight text-foreground">
+                    <span className="flex size-5 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-primary/15">
+                        <Sparkles className="size-3" aria-hidden="true" />
+                    </span>
+                    ShoutAI
                 </span>
                 <button
                     type="button"
                     onClick={onClose}
-                    aria-label="Close assistant"
+                    aria-label="Close ShoutAI"
                     className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
                 >
                     <X className="size-3.5" />
@@ -139,10 +141,11 @@ export function AssistantPanel({
             {hasOutput && (
                 <div
                     className={cn(
-                        'mt-3 rounded-lg border bg-background p-3 transition-colors',
-                        streaming && 'border-l-2 border-l-primary/40 border-border',
+                        'mt-3 animate-in fade-in-0 slide-in-from-top-1 rounded-lg border bg-background p-3 shadow-[0_1px_2px_0_rgb(0_0_0/0.04)] transition-colors duration-200',
+                        streaming &&
+                            'border-l-2 border-l-primary border-border bg-primary/[0.02]',
                         ready && 'border-border',
-                        isError && 'border-destructive/30',
+                        isError && 'border-destructive/30 bg-destructive/[0.03]',
                     )}
                 >
                     {isError ? (
@@ -163,7 +166,7 @@ export function AssistantPanel({
 
                     {/* Accept / Redo / Discard — only when ready */}
                     {ready && (
-                        <div className="mt-2.5 flex items-center gap-1.5">
+                        <div className="mt-3 flex items-center gap-1.5 border-t border-border/60 pt-2.5">
                             <Button
                                 type="button"
                                 size="sm"
@@ -175,7 +178,7 @@ export function AssistantPanel({
                             <Button
                                 type="button"
                                 size="sm"
-                                variant="ghost"
+                                variant="outline"
                                 onClick={onRedo}
                             >
                                 <RotateCcw className="size-3.5" />
@@ -186,7 +189,7 @@ export function AssistantPanel({
                                 size="sm"
                                 variant="ghost"
                                 onClick={onCancel}
-                                className="text-muted-foreground hover:text-foreground"
+                                className="ml-auto text-muted-foreground hover:text-foreground"
                             >
                                 Discard
                             </Button>

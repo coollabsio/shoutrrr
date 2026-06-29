@@ -54,14 +54,14 @@ export default function InstanceAi({ settings }: PageProps) {
 
     return (
         <>
-            <Head title="AI settings" />
-            <h1 className="sr-only">AI settings</h1>
+            <Head title="ShoutAI" />
+            <h1 className="sr-only">ShoutAI</h1>
 
             <div className="space-y-6">
                 <Heading
                     variant="small"
-                    title="AI assistant"
-                    description="Configure the LLM provider that powers composer rewrites and reply suggestions."
+                    title="ShoutAI"
+                    description="Configure the LLM provider that powers ShoutAI — composer rewrites and reply suggestions."
                 />
 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -74,7 +74,7 @@ export default function InstanceAi({ settings }: PageProps) {
                             }
                         />
                         <div className="space-y-1">
-                            <Label htmlFor="ai_enabled">Enable AI assistant</Label>
+                            <Label htmlFor="ai_enabled">Enable ShoutAI</Label>
                             <p className="text-sm text-muted-foreground">
                                 When disabled, all AI features are hidden across the app.
                             </p>
@@ -181,6 +181,6 @@ export default function InstanceAi({ settings }: PageProps) {
 InstanceAi.layout = {
     breadcrumbs: [
         { title: 'Instance settings', href: InstanceSettingsController.edit().url },
-        { title: 'AI', href: InstanceSettingsController.editAi().url },
+        { title: 'ShoutAI', href: InstanceSettingsController.editAi().url },
     ],
 };

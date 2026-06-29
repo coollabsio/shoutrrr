@@ -26,7 +26,7 @@ export default function InstanceSettingsLayout({
             icon: null,
         },
         {
-            title: 'AI',
+            title: 'ShoutAI',
             href: InstanceSettingsController.editAi(),
             icon: null,
         },

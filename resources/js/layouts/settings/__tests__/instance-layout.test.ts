@@ -24,7 +24,7 @@ describe('instance settings layout', () => {
             'resources/js/layouts/settings/instance-layout.tsx',
         );
 
-        expect(layout).toContain("title: 'AI'");
+        expect(layout).toContain("title: 'ShoutAI'");
         expect(layout).toContain('InstanceSettingsController.editAi()');
     });
 

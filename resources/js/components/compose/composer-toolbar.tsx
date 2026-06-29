@@ -136,10 +136,21 @@ export function ComposerToolbar({
             <div className="ml-auto sm:flex-1" />
 
             {aiEnabled && !readOnly && (
-                <EToolButton title="AI assistant" onClick={onOpenAssistant}>
-                    <Sparkles className="size-3.5" aria-hidden="true" />
-                    <span>Assistant</span>
-                </EToolButton>
+                <button
+                    type="button"
+                    title="ShoutAI"
+                    onClick={onOpenAssistant}
+                    className={cn(
+                        'group inline-flex h-8 items-center gap-1.5 rounded-md border border-primary/25 bg-primary/[0.06] px-2.5 text-[12px] font-medium text-primary transition-colors sm:h-7',
+                        'hover:border-primary/40 hover:bg-primary/10',
+                    )}
+                >
+                    <Sparkles
+                        className="size-3.5 transition-transform group-hover:scale-110"
+                        aria-hidden="true"
+                    />
+                    <span>ShoutAI</span>
+                </button>
             )}
 
             {showSplitControls && !readOnly && (
