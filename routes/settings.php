@@ -35,6 +35,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/instance/admins', [InstanceSettingsController::class, 'admins'])->name('instance-settings.admins');
     Route::post('settings/instance/admins', [InstanceSettingsController::class, 'storeAdmin'])->name('instance-settings.admins.store');
     Route::delete('settings/instance/admins/{owner}', [InstanceSettingsController::class, 'destroyAdmin'])->name('instance-settings.admins.destroy');
+    Route::get('settings/instance/ai', [InstanceSettingsController::class, 'editAi'])->name('instance-settings.ai');
+    Route::put('settings/instance/ai', [InstanceSettingsController::class, 'updateAi'])->name('instance-settings.ai.update');
+    Route::post('settings/instance/ai/test', [InstanceSettingsController::class, 'testAi'])
+        ->middleware('throttle:6,1')->name('instance-settings.ai.test');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {

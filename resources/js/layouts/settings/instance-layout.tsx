@@ -25,6 +25,11 @@ export default function InstanceSettingsLayout({
             href: InstanceSettingsController.admins(),
             icon: null,
         },
+        {
+            title: 'AI',
+            href: InstanceSettingsController.editAi(),
+            icon: null,
+        },
     ];
 
     return (

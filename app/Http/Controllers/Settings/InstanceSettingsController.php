@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Settings;
 use App\Enums\InstanceRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\StoreInstanceOwnerRequest;
+use App\Http\Requests\Settings\UpdateInstanceAiSettingsRequest;
 use App\Http\Requests\Settings\UpdateInstanceSettingsRequest;
 use App\Models\User;
+use App\Services\Ai\AiManager;
 use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -110,5 +112,39 @@ class InstanceSettingsController extends Controller
             ->update(['instance_role' => InstanceRole::Owner->value]);
 
         return back()->with('success', 'Instance owner added.');
+    }
+
+    public function editAi(Request $request, InstanceSettings $settings): Response
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+        abort_unless($user?->isInstanceOwner(), 403);
+
+        return Inertia::render('settings/instance-ai', [
+            'settings' => $settings->aiSettings(),
+        ]);
+    }
+
+    public function updateAi(UpdateInstanceAiSettingsRequest $request, InstanceSettings $settings): RedirectResponse
+    {
+        $payload = $request->aiSettings();
+        $settings->updateAi($payload['values'], $payload['apiKey']);
+
+        return back()->with('success', 'AI settings updated.');
+    }
+
+    public function testAi(Request $request, AiManager $ai): RedirectResponse
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+        abort_unless($user?->isInstanceOwner(), 403);
+
+        try {
+            $ai->textRequest()->withPrompt('Reply with the single word: ok')->asText();
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Connection failed: '.$e->getMessage());
+        }
+
+        return back()->with('success', 'Connection succeeded.');
     }
 }
