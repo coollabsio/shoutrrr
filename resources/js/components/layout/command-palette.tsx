@@ -159,7 +159,6 @@ export function CommandPalette() {
     return (
         <CommandDialog open={open} onOpenChange={onOpenChange}>
             <Command
-                shouldFilter={false}
                 onKeyDown={(e) => {
                     if (
                         e.key === 'Backspace' &&
@@ -331,6 +330,11 @@ export function CommandPalette() {
                                     <CommandGroup heading="Jump to date">
                                         <CommandItem
                                             value={`calendar ${dateJump.yyyymm}`}
+                                            keywords={[
+                                                trimmed,
+                                                dateJump.label,
+                                                dateJump.yyyymm,
+                                            ]}
                                             onSelect={run(() =>
                                                 router.visit(
                                                     calendarMonth({
@@ -354,6 +358,7 @@ export function CommandPalette() {
                                     posts={posts}
                                     loading={loading}
                                     error={error}
+                                    query={trimmed}
                                     go={go}
                                 />
                             )}

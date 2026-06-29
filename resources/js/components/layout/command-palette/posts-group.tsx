@@ -17,26 +17,47 @@ interface PostsGroupProps {
     posts: Post[];
     loading: boolean;
     error: boolean;
+    query: string;
     go: (item: RecentItem) => () => void;
 }
 
-export function PostsGroup({ posts, loading, error, go }: PostsGroupProps) {
+export function PostsGroup({
+    posts,
+    loading,
+    error,
+    query,
+    go,
+}: PostsGroupProps) {
+    const keywords = [query];
+
     return (
         <>
             <CommandSeparator alwaysRender />
             <CommandGroup heading="Posts">
                 {loading && posts.length === 0 && (
-                    <CommandItem disabled value="posts-loading">
+                    <CommandItem
+                        disabled
+                        value="posts-loading"
+                        keywords={keywords}
+                    >
                         Searching…
                     </CommandItem>
                 )}
                 {error && (
-                    <CommandItem disabled value="posts-error">
+                    <CommandItem
+                        disabled
+                        value="posts-error"
+                        keywords={keywords}
+                    >
                         Couldn't load posts
                     </CommandItem>
                 )}
                 {!loading && !error && posts.length === 0 && (
-                    <CommandItem disabled value="posts-empty">
+                    <CommandItem
+                        disabled
+                        value="posts-empty"
+                        keywords={keywords}
+                    >
                         No posts found
                     </CommandItem>
                 )}
@@ -44,6 +65,7 @@ export function PostsGroup({ posts, loading, error, go }: PostsGroupProps) {
                     <CommandItem
                         key={post.id}
                         value={`post ${post.id} ${post.excerpt}`}
+                        keywords={keywords}
                         onSelect={go({
                             id: post.id,
                             kind: 'post',
