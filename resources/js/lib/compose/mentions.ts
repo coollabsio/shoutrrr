@@ -132,11 +132,7 @@ export function syncMentionsFromText(
 
         const savedMention = saved.get(label);
         if (savedMention) {
-            return {
-                id: mentionIdFromLabel(savedMention.name),
-                label: savedMention.name,
-                handles: savedMention.handles,
-            };
+            return savedMentionToPlaceholder(savedMention);
         }
 
         return createMention(label);
@@ -200,11 +196,22 @@ export function mentionInputValue(name: string): string {
     return name.replace(/^@/, '');
 }
 
-function mentionIdFromLabel(label: string): string {
+/** Stable mention id from a workspace library name or label. */
+export function mentionIdFromLabel(label: string): string {
     const id = label
         .replace(/^@/, '')
         .toLowerCase()
         .replace(/[^a-z0-9_-]+/g, '-');
 
     return id || crypto.randomUUID();
+}
+
+export function savedMentionToPlaceholder(
+    saved: WorkspaceMention,
+): MentionPlaceholder {
+    return {
+        id: mentionIdFromLabel(saved.name),
+        label: saved.name,
+        handles: saved.handles,
+    };
 }

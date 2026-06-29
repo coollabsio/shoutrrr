@@ -3,28 +3,21 @@ import { Split } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
-import {
-    InputGroup,
-    InputGroupAddon,
-    InputGroupInput,
-} from '@/components/ui/input-group';
+import MentionPicker from '@/components/compose/mention-picker';
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
 import {
-    mentionInputValue,
-    setPlatformMentionMode,
-    updateMentionHandle,
-    updateMentionName,
-    usesPlatformMention,
-} from '@/lib/compose/mentions';
-import {
     docToSegments,
     segmentsToDoc,
     type DocNode,
 } from '@/lib/compose/tiptap-doc';
+import {
+    editorContainsMentionLabel,
+    focusEditorAfterMentionLabel,
+} from '@/lib/compose/tiptap/mention-focus';
 import { composerExtensions } from '@/lib/compose/tiptap/setup';
 import { cn } from '@/lib/utils';
 import type {
@@ -96,13 +89,6 @@ export function hasPasteableMedia(files: FileList | null | undefined): boolean {
     return !!files && Array.from(files).some(isPasteableMediaFile);
 }
 
-export function shouldSelectMentionNameInput(
-    input: HTMLInputElement | null,
-    activeElement: Element | null,
-): boolean {
-    return !!input && input !== activeElement;
-}
-
 export default function EditorBody({
     value,
     onChange,
@@ -126,7 +112,7 @@ export default function EditorBody({
 }: EditorBodyProps) {
     const [activeMentionId, setActiveMentionId] = useState<string | null>(null);
     const previousMentionCount = useRef(mentions.length);
-    const mentionNameInput = useRef<HTMLInputElement>(null);
+    const pendingFocusLabel = useRef<string | null>(null);
     // editorProps is captured once at editor creation, but onPasteFiles is a
     // fresh closure each render (it reads the current media/limits). Route through
     // a ref so handlePaste always enforces the latest one-video / no-mixing rule.
@@ -182,6 +168,37 @@ export default function EditorBody({
                 emitUpdate: false,
             });
         }
+        // oxlint-disable-next-line react-hooks/exhaustive-deps
+    }, [value, editor]);
+
+    // Focus the editor after `label` once it actually lands in the document.
+    // Completing a mention updates `value` first, so the label may not be present
+    // yet — in that case defer to the value-change effect below. Membership is
+    // boundary-aware so a stale request can't be satisfied by an unrelated token
+    // that merely contains the label as a substring.
+    function tryFocusMentionLabel(label: string) {
+        if (!editor) {
+            return;
+        }
+
+        if (!editorContainsMentionLabel(editor, label)) {
+            pendingFocusLabel.current = label;
+
+            return;
+        }
+
+        pendingFocusLabel.current = null;
+        requestAnimationFrame(() => {
+            focusEditorAfterMentionLabel(editor, label);
+        });
+    }
+
+    useEffect(() => {
+        if (!editor || pendingFocusLabel.current === null) {
+            return;
+        }
+
+        tryFocusMentionLabel(pendingFocusLabel.current);
         // oxlint-disable-next-line react-hooks/exhaustive-deps
     }, [value, editor]);
 
@@ -253,26 +270,6 @@ export default function EditorBody({
             ? mentionPlatforms
             : ([markerPlatform ?? 'x'] as PlatformName[]);
 
-    useEffect(() => {
-        if (!activeMentionId) {
-            return;
-        }
-
-        const frame = window.requestAnimationFrame(() => {
-            mentionNameInput.current?.focus();
-            if (
-                shouldSelectMentionNameInput(
-                    mentionNameInput.current,
-                    document.activeElement,
-                )
-            ) {
-                mentionNameInput.current?.select();
-            }
-        });
-
-        return () => window.cancelAnimationFrame(frame);
-    }, [activeMentionId]);
-
     function updateMention(
         previous: MentionPlaceholder,
         next: MentionPlaceholder,
@@ -289,6 +286,11 @@ export default function EditorBody({
                 mention.id === next.id ? next : mention,
             ),
         );
+    }
+
+    function completeMention(mention: MentionPlaceholder) {
+        setActiveMentionId(null);
+        tryFocusMentionLabel(mention.label);
     }
 
     return (
@@ -355,193 +357,21 @@ export default function EditorBody({
                         </PopoverTrigger>
                         <PopoverContent
                             align="start"
-                            className="w-80 gap-3 rounded-2xl p-3"
+                            className="w-80 gap-0 rounded-2xl p-2"
+                            onOpenAutoFocus={(event) => event.preventDefault()}
                         >
-                            <div>
-                                <div className="text-xs font-medium text-muted-foreground">
-                                    Mention Name
-                                </div>
-                                <InputGroup className="mt-1.5 h-9 rounded-lg border-border bg-background">
-                                    <InputGroupAddon>@</InputGroupAddon>
-                                    <InputGroupInput
-                                        ref={mentionNameInput}
-                                        value={mentionInputValue(
-                                            activeMention.label,
-                                        )}
-                                        placeholder="name"
-                                        aria-label="Mention name shown in the post"
-                                        onChange={(event) =>
-                                            updateMention(
-                                                activeMention,
-                                                updateMentionName(
-                                                    activeMention,
-                                                    event.target.value,
-                                                ),
-                                            )
-                                        }
-                                    />
-                                </InputGroup>
-                            </div>
-                            <div className="text-xs font-medium text-muted-foreground">
-                                Platform handles
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                {activePlatforms.map((platform, index) => {
-                                    const canUseMention =
-                                        platform !== 'linkedin';
-                                    const useMention =
-                                        canUseMention &&
-                                        usesPlatformMention(
-                                            activeMention,
-                                            platform,
-                                        );
-                                    const value =
-                                        activeMention.handles[platform] ??
-                                        activeMention.label;
-
-                                    return (
-                                        <label
-                                            key={platform}
-                                            className="flex flex-col gap-1.5 text-xs"
-                                        >
-                                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                                                <PlatformGlyph
-                                                    platform={platform}
-                                                    size={14}
-                                                    className="text-foreground"
-                                                />
-                                                <span className="capitalize">
-                                                    {platform}
-                                                </span>
-                                            </span>
-                                            <div className="flex gap-2">
-                                                <InputGroup className="h-9 min-w-0 flex-1 rounded-lg border-border bg-background">
-                                                    {useMention && (
-                                                        <InputGroupAddon>
-                                                            @
-                                                        </InputGroupAddon>
-                                                    )}
-                                                    <InputGroupInput
-                                                        value={mentionInputValue(
-                                                            value,
-                                                        )}
-                                                        placeholder={
-                                                            useMention
-                                                                ? 'handle'
-                                                                : 'display name'
-                                                        }
-                                                        aria-label={`${platform} ${
-                                                            useMention
-                                                                ? 'handle'
-                                                                : 'display text'
-                                                        } for ${activeMention.label}`}
-                                                        onChange={(event) =>
-                                                            updateMention(
-                                                                activeMention,
-                                                                updateMentionHandle(
-                                                                    activeMention,
-                                                                    platform,
-                                                                    event.target
-                                                                        .value,
-                                                                    useMention,
-                                                                ),
-                                                            )
-                                                        }
-                                                        autoFocus={index === 0}
-                                                    />
-                                                </InputGroup>
-                                                {canUseMention && (
-                                                    <button
-                                                        type="button"
-                                                        className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                                                        onClick={() =>
-                                                            updateMention(
-                                                                activeMention,
-                                                                setPlatformMentionMode(
-                                                                    activeMention,
-                                                                    platform,
-                                                                    !useMention,
-                                                                ),
-                                                            )
-                                                        }
-                                                    >
-                                                        {useMention
-                                                            ? 'Use text only'
-                                                            : 'Use @ mention'}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </label>
-                                    );
-                                })}
-                            </div>
-                            {onSaveMention && (
-                                <button
-                                    type="button"
-                                    disabled={saveMentionProcessing}
-                                    onClick={() =>
-                                        void onSaveMention(activeMention)
-                                    }
-                                    className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    {saveMentionProcessing
-                                        ? 'Saving…'
-                                        : 'Save to workspace'}
-                                </button>
-                            )}
-                            {savedMentions.length > 0 && (
-                                <div className="flex flex-col gap-2 border-t border-border/70 pt-3">
-                                    <div className="text-xs font-medium text-muted-foreground">
-                                        Saved mentions
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                        {savedMentions.map((saved) => (
-                                            <button
-                                                key={saved.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    onApplySavedMention?.(
-                                                        activeMention,
-                                                        saved,
-                                                    );
-                                                    setActiveMentionId(
-                                                        saved.name
-                                                            .replace(/^@/, '')
-                                                            .toLowerCase()
-                                                            .replace(
-                                                                /[^a-z0-9_-]+/g,
-                                                                '-',
-                                                            ),
-                                                    );
-                                                }}
-                                                className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted"
-                                            >
-                                                <span className="font-medium text-foreground">
-                                                    {saved.name}
-                                                </span>
-                                                <span className="flex items-center gap-1 text-muted-foreground">
-                                                    {activePlatforms
-                                                        .filter(
-                                                            (platform) =>
-                                                                saved.handles[
-                                                                    platform
-                                                                ],
-                                                        )
-                                                        .map((platform) => (
-                                                            <PlatformGlyph
-                                                                key={platform}
-                                                                platform={
-                                                                    platform
-                                                                }
-                                                                size={13}
-                                                            />
-                                                        ))}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            <MentionPicker
+                                activeMention={activeMention}
+                                savedMentions={savedMentions}
+                                activePlatforms={activePlatforms}
+                                onApplySavedMention={(saved) => {
+                                    onApplySavedMention?.(activeMention, saved);
+                                }}
+                                onUpdateMention={updateMention}
+                                onSaveMention={onSaveMention}
+                                saveMentionProcessing={saveMentionProcessing}
+                                onMentionComplete={completeMention}
+                            />
                         </PopoverContent>
                     </Popover>
                 </div>

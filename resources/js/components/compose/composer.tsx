@@ -20,6 +20,7 @@ import {
 } from '@/lib/compose/composer-state';
 import {
     replaceMentionTokens,
+    savedMentionToPlaceholder,
     syncMentionsFromText,
 } from '@/lib/compose/mentions';
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
@@ -577,14 +578,7 @@ export default function Composer({
         mention: MentionPlaceholder,
         saved: WorkspaceMention,
     ) {
-        renameMention(mention, {
-            id: saved.name
-                .replace(/^@/, '')
-                .toLowerCase()
-                .replace(/[^a-z0-9_-]+/g, '-'),
-            label: saved.name,
-            handles: saved.handles,
-        });
+        renameMention(mention, savedMentionToPlaceholder(saved));
     }
 
     async function saveMention(mention: MentionPlaceholder): Promise<void> {

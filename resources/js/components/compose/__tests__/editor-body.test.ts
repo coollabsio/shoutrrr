@@ -11,7 +11,6 @@ import {
 import {
     hasPasteableMedia,
     isPasteableMediaFile,
-    shouldSelectMentionNameInput,
     shouldFocusEditorOnMount,
 } from '../editor-body';
 
@@ -38,15 +37,6 @@ describe('shouldFocusEditorOnMount', () => {
         expect(shouldFocusEditorOnMount(true, true)).toBe(true);
         expect(shouldFocusEditorOnMount(false, true)).toBe(false);
         expect(shouldFocusEditorOnMount(true, false)).toBe(false);
-    });
-});
-
-describe('shouldSelectMentionNameInput', () => {
-    it('does not reselect the mention name while the user is typing in it', () => {
-        const input = {} as HTMLInputElement;
-
-        expect(shouldSelectMentionNameInput(input, input)).toBe(false);
-        expect(shouldSelectMentionNameInput(input, null)).toBe(true);
     });
 });
 
