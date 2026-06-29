@@ -18,6 +18,7 @@ type Props = {
         kind: 'rewrite' | 'preset' | 'generate' | 'adapt',
         payload: { action?: string; instruction?: string },
     ) => void;
+    onRedo: () => void;
     onAccept: (text: string) => void;
     onCancel: () => void;
 };
@@ -45,6 +46,7 @@ export function AssistantPanel({
     platform,
     currentText,
     onRun,
+    onRedo,
     onAccept,
     onCancel,
 }: Props) {
@@ -174,12 +176,7 @@ export function AssistantPanel({
                                 type="button"
                                 size="sm"
                                 variant="ghost"
-                                onClick={() =>
-                                    onRun(
-                                        suggestion.action ? 'preset' : 'rewrite',
-                                        { action: suggestion.action ?? undefined },
-                                    )
-                                }
+                                onClick={onRedo}
                             >
                                 <RotateCcw className="size-3.5" />
                                 Redo

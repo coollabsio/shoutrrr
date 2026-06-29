@@ -512,10 +512,16 @@ export default function Composer({
         return String(target?.sections.length ?? 1);
     }
 
+    const lastAiRunRef = useRef<{
+        kind: 'rewrite' | 'preset' | 'generate' | 'adapt';
+        payload: { action?: string; instruction?: string };
+    } | null>(null);
+
     function runAssistant(
         kind: 'rewrite' | 'preset' | 'generate' | 'adapt',
         payload: { action?: string; instruction?: string },
     ) {
+        lastAiRunRef.current = { kind, payload };
         const platform = activeAccount?.platform;
         const limit = activeAccount ? limitForAccount(activeAccount) : 0;
         let url: string;
@@ -543,6 +549,13 @@ export default function Composer({
             onDone: () => dispatch({ type: 'aiDone' }),
             onError: (message) => dispatch({ type: 'aiError', message }),
         });
+    }
+
+    function redoAssistant() {
+        const last = lastAiRunRef.current;
+        if (last) {
+            runAssistant(last.kind, last.payload);
+        }
     }
 
     function acceptAssistant(text: string) {
@@ -940,6 +953,7 @@ export default function Composer({
                         limit={activeAccount ? limitForAccount(activeAccount) : 0}
                         currentText={activeSegments.join('\n')}
                         onRun={runAssistant}
+                        onRedo={redoAssistant}
                         onAccept={acceptAssistant}
                         onCancel={() => {
                             aiStream.cancel();
