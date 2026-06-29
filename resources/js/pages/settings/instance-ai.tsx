@@ -2,6 +2,7 @@ import { Head, router, useForm } from '@inertiajs/react';
 
 import InstanceSettingsController from '@/actions/App/Http/Controllers/Settings/InstanceSettingsController';
 import Heading from '@/components/common/heading';
+import { AiModelCombobox } from '@/components/settings/ai-model-combobox';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -110,12 +111,16 @@ export default function InstanceAi({ settings }: PageProps) {
 
                     <div className="space-y-2">
                         <Label htmlFor="ai_model">Model</Label>
-                        <Input
-                            id="ai_model"
+                        <AiModelCombobox
+                            provider={data.ai_provider}
+                            apiKey={data.ai_api_key}
                             value={data.ai_model}
-                            onChange={(e) => setData('ai_model', e.target.value)}
-                            placeholder="claude-sonnet-4-5"
+                            onChange={(m) => setData('ai_model', m)}
+                            disabled={!data.ai_provider}
                         />
+                        <p className="text-sm text-muted-foreground">
+                            Pick from the provider's available models, or type a custom id.
+                        </p>
                     </div>
 
                     <div className="space-y-2">
