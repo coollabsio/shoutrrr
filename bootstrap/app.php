@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CaptureMcpWorkspaceSelection;
+use App\Http\Middleware\EnsureAiEnabled;
 use App\Http\Middleware\EnsureEngagementEnabled;
 use App\Http\Middleware\EnsureMetricsEnabled;
 use App\Http\Middleware\HandleAppearance;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->alias([
+            'ai.enabled' => EnsureAiEnabled::class,
             'engagement.enabled' => EnsureEngagementEnabled::class,
             'metrics.enabled' => EnsureMetricsEnabled::class,
         ]);
