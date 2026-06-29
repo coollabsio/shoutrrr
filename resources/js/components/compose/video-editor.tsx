@@ -362,9 +362,19 @@ export function VideoEditor({
                                 </div>
                             )}
 
+                            {/* Loading overlay — covers the blank frame while the source
+                                loads (notably when reopening an uploaded clip whose bytes
+                                are fetched over the network). sourceSize resets to null on
+                                open and is set on loadedmetadata, so this is the load window. */}
+                            {sourceUrl && !sourceSize && (
+                                <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-black">
+                                    <div className="size-7 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
+                                </div>
+                            )}
+
                             {/* Preview volume — native-player chrome over the video; affects
                                 playback only, never the exported clip (audio is always kept). */}
-                            {sourceUrl && (
+                            {sourceUrl && sourceSize && (
                                 <div
                                     className={cn(
                                         'absolute right-2 bottom-2 z-30 flex items-center gap-1 rounded-full bg-black/55 py-1 pr-2.5 pl-1 text-white backdrop-blur-sm transition-opacity',
