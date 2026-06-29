@@ -1,9 +1,9 @@
 import { router } from '@inertiajs/react';
-import { PenLine } from 'lucide-react';
 import { domAnimation, LazyMotion, m, MotionConfig } from 'motion/react';
 import { useState } from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
+import AppLogoIcon from '@/components/layout/app-logo-icon';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -77,7 +77,7 @@ export function WelcomeModal({ welcomed }: { welcomed: boolean }) {
                                         delay: 0.08,
                                     }}
                                 >
-                                    <PenLine className="size-6" />
+                                    <AppLogoIcon className="size-7" />
                                 </m.span>
                             </div>
 
@@ -111,7 +111,7 @@ export function WelcomeModal({ welcomed }: { welcomed: boolean }) {
                     <DialogTitle>
                         Welcome to{' '}
                         <span className="bg-gradient-to-br from-[color-mix(in_oklch,var(--primary)_70%,black)] to-[color-mix(in_oklch,var(--primary)_48%,black)] bg-clip-text text-transparent dark:from-primary dark:to-[color-mix(in_oklch,var(--primary)_65%,white)]">
-                            shoutrrr
+                            Shoutrrr
                         </span>
                     </DialogTitle>
                     <DialogDescription>

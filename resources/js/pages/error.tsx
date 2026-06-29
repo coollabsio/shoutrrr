@@ -55,7 +55,7 @@ export default function ErrorPage({ status }: Props) {
                 <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,color-mix(in_oklch,var(--primary)_28%,transparent),transparent_34rem),radial-gradient(circle_at_bottom_right,color-mix(in_oklch,var(--primary)_18%,transparent),transparent_28rem)]" />
                 <div className="w-full max-w-xl rounded-[2rem] border bg-card/90 p-8 text-center shadow-2xl shadow-primary/5 backdrop-blur sm:p-10">
                     <div className="mx-auto mb-8 flex size-14 items-center justify-center rounded-2xl border bg-background shadow-sm">
-                        <AppLogoIcon className="size-8" />
+                        <AppLogoIcon className="size-8 text-primary" />
                     </div>
 
                     <p className="text-sm font-semibold tracking-[0.35em] text-primary uppercase">

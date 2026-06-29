@@ -49,10 +49,10 @@ it('uses the current source artwork bounds for the app icon', function (): void 
 
     imagedestroy($image);
 
-    expect($left)->toBe(96);
-    expect($right)->toBe(383);
-    expect($top)->toBe(64);
-    expect($bottom)->toBe(447);
+    expect($left)->toBe(51);
+    expect($right)->toBe(460);
+    expect($top)->toBe(50);
+    expect($bottom)->toBe(462);
 });
 
 it('references the generated icons from Laravel HTML entry points', function (): void {
@@ -87,13 +87,13 @@ it('publishes a web app manifest using the generated icons', function (): void {
     ]);
 });
 
-it('uses the generated app icon in the React logo component', function (): void {
+it('renders the app logo as an inline svg that inherits the current color', function (): void {
     $component = file_get_contents(resource_path('js/components/layout/app-logo-icon.tsx'));
 
     expect($component)
-        ->toContain('/shoutrrr.png')
-        ->not->toContain('<svg')
-        ->not->toContain('M17.2 5.63325');
+        ->toContain('<svg')
+        ->toContain('stroke="currentColor"')
+        ->not->toContain('/shoutrrr.png');
 });
 
 it('shows the React app logo without an extra background tile', function (): void {
