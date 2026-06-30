@@ -36,6 +36,7 @@ x-environment: &app-env
     REDIS_PORT: "${REDIS_PORT:-6379}"
     # In-container supervised processes — set to false to run them separately.
     QUEUE_WORKER_ENABLED: "${QUEUE_WORKER_ENABLED:-true}"
+    QUEUE_WORKER_COUNT: "${QUEUE_WORKER_COUNT:-1}"
     SCHEDULER_ENABLED: "${SCHEDULER_ENABLED:-true}"
     # In-container SSR uses localhost; off by default.
     INERTIA_SSR_ENABLED: "${INERTIA_SSR_ENABLED:-false}"

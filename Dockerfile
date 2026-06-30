@@ -130,6 +130,9 @@ ARG AUTORUN_LARAVEL_VIEW_CACHE=true
 ARG AUTORUN_LARAVEL_STORAGE_LINK=true
 ARG PHP_OPCACHE_ENABLE=1
 ARG SSL_MODE=off
+# Number of queue worker processes supervisord runs (numprocs in laravel.conf).
+# Must be a non-empty integer or supervisord fails to start.
+ARG QUEUE_WORKER_COUNT=1
 
 ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
     AUTORUN_ENABLED=${AUTORUN_ENABLED} \
