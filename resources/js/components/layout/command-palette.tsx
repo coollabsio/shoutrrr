@@ -371,6 +371,11 @@ export function CommandPalette() {
                                             <CommandItem
                                                 key={account.id}
                                                 value={`account ${account.handle}`}
+                                                keywords={[
+                                                    trimmed,
+                                                    account.display_name ?? '',
+                                                    account.platform,
+                                                ]}
                                                 onSelect={run(() =>
                                                     router.visit(
                                                         accountsRoute().url,
