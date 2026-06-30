@@ -105,6 +105,7 @@ class HandleInertiaRequests extends Middleware
                 'handle' => $account->handle,
                 'display_name' => $account->display_name,
                 'avatar_url' => $account->avatar_url,
+                'status' => $account->status->value,
                 'max_text_length' => $account->maxTextLength(),
                 'x_premium' => $account->hasXPremium(),
             ])->values()->all();

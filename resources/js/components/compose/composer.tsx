@@ -82,6 +82,7 @@ const PREVIEW_FALLBACK_ACCOUNT: Account = {
     handle: '@yourhandle',
     display_name: 'Your name',
     avatar_url: null,
+    status: 'active',
     max_text_length: 0,
     x_premium: false,
 };
@@ -189,6 +190,9 @@ export default function Composer({
     const destinationAccountIds = accountIdsFor(state, accounts, sets);
     const tabAccounts = accounts.filter((a) =>
         destinationAccountIds.includes(a.id),
+    );
+    const attentionAccounts = tabAccounts.filter(
+        (account) => account.status === 'needs_attention',
     );
     const selectedVideoLimits = limits.filter((l) =>
         tabAccounts.some((a) => a.platform === l.platform),
@@ -1008,6 +1012,9 @@ export default function Composer({
                             tray={state.scheduleTray}
                             postId={state.postId}
                             disabled={accounts.length === 0}
+                            attentionHandles={attentionAccounts.map(
+                                (account) => account.handle,
+                            )}
                             queueDisabled={queueState.status !== 'found'}
                             uploading={mediaUploads.isUploading}
                             onSaveDraft={flush}

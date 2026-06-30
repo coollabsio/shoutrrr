@@ -21,13 +21,14 @@ test('shell props expose accounts, sets, and limits on every page', function () 
     $user->forceFill(['current_workspace_id' => $workspace->id])->save();
     Context::add('workspace_id', $workspace->id);
 
-    ConnectedAccount::factory()->for($workspace)->create();
+    ConnectedAccount::factory()->for($workspace)->needsAttention()->create();
     AccountSet::factory()->for($workspace)->create();
 
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertInertia(fn ($page) => $page
             ->has('shell.accounts', 1)
+            ->where('shell.accounts.0.status', 'needs_attention')
             ->has('shell.sets', 1)
             ->has('shell.limits')
         );

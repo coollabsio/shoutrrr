@@ -22,12 +22,15 @@ export type Destination =
     | { kind: 'account'; id: string }
     | { kind: 'accounts'; ids: string[] };
 
+export type AccountStatus = 'active' | 'needs_attention';
+
 export type Account = {
     id: string;
     platform: PlatformName;
     handle: string;
     display_name: string | null;
     avatar_url: string | null;
+    status?: AccountStatus;
     max_text_length: number;
     x_premium: boolean;
 };

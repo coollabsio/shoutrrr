@@ -72,7 +72,7 @@
     ],
     "mail": [
         "Composer\\Config::disableProcessTimeout",
-        "docker compose -f docker-compose.yml -f docker-compose.dev.yml up mailpit"
+        "docker rm -f shoutrrr-mail; docker compose -f docker-compose.yml -f docker-compose.dev.yml up mailpit"
     ],
     "lint": [
         "pint --parallel"

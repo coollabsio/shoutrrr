@@ -18,4 +18,23 @@ describe('composer platform tabs', () => {
         );
         expect(source).not.toContain("account.platform === 'linkedin'");
     });
+
+    it('shows an account-attention icon that opens accounts', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/compose/platform-tabs.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain(
+            "const needsAttention = account.status === 'needs_attention';",
+        );
+        expect(source).toContain(
+            '{needsAttention && <NeedsAttentionIcon account={account} />}',
+        );
+        expect(source).toContain('router.visit(accountsRoute().url);');
+        expect(source).toContain('Reconnect {account.handle} before posting.');
+    });
 });

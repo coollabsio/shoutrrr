@@ -28,6 +28,8 @@ type Props = {
     disabled?: boolean;
     /** True while a media attachment is still uploading — blocks publishing. */
     uploading?: boolean;
+    /** Selected destination accounts that cannot publish until reconnected. */
+    attentionHandles?: string[];
     /**
      * Flush the autosave and resolve once the draft (incl. media) is persisted.
      * Awaited before publishing so the publish never races the save that
@@ -55,6 +57,7 @@ type ShortcutEvent = Pick<
 type SubmitGuard = {
     disabled?: boolean;
     uploading: boolean;
+    attentionBlocked?: boolean;
     processing: boolean;
     trayMode: ScheduleTray['mode'];
     queueDisabled?: boolean;
@@ -72,6 +75,7 @@ export function isSubmitShortcut(event: ShortcutEvent): boolean {
 export function shouldAllowSubmit({
     disabled,
     uploading,
+    attentionBlocked,
     processing,
     trayMode,
     queueDisabled,
@@ -79,6 +83,7 @@ export function shouldAllowSubmit({
     return !(
         disabled ||
         uploading ||
+        attentionBlocked ||
         processing ||
         (trayMode === 'queue' && Boolean(queueDisabled))
     );
@@ -89,6 +94,7 @@ export function SubmitBar({
     postId,
     disabled,
     uploading = false,
+    attentionHandles = [],
     onSaveDraft,
     onEnsurePost,
     queueDisabled,
@@ -102,6 +108,7 @@ export function SubmitBar({
     );
     const [noSlot, setNoSlot] = useState(false);
     const [pastTime, setPastTime] = useState(false);
+    const attentionBlocked = attentionHandles.length > 0;
 
     const submitLabel =
         tray.mode === 'now'
@@ -115,6 +122,7 @@ export function SubmitBar({
             !shouldAllowSubmit({
                 disabled,
                 uploading,
+                attentionBlocked,
                 processing: http.processing,
                 trayMode: tray.mode,
                 queueDisabled,
@@ -199,6 +207,7 @@ export function SubmitBar({
                 !shouldAllowSubmit({
                     disabled,
                     uploading,
+                    attentionBlocked,
                     processing: http.processing,
                     trayMode: tray.mode,
                     queueDisabled,
@@ -219,6 +228,7 @@ export function SubmitBar({
     const canSubmit = shouldAllowSubmit({
         disabled,
         uploading,
+        attentionBlocked,
         processing: http.processing,
         trayMode: tray.mode,
         queueDisabled,

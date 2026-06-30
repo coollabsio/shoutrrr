@@ -143,6 +143,8 @@ class PublishPostTarget implements ShouldQueue
         ])->save();
 
         app(PostStatusRollup::class)->recompute($target->post()->firstOrFail());
+
+        $this->notifyFailed($target, ErrorKind::Unknown);
     }
 
     /**

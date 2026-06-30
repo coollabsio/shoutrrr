@@ -48,6 +48,16 @@ describe('shouldAllowSubmit', () => {
         ).toBe(false);
         expect(
             shouldAllowSubmit({
+                attentionBlocked: true,
+                disabled: false,
+                processing: false,
+                queueDisabled: false,
+                trayMode: 'now',
+                uploading: false,
+            }),
+        ).toBe(false);
+        expect(
+            shouldAllowSubmit({
                 disabled: false,
                 processing: false,
                 queueDisabled: true,

@@ -37,6 +37,17 @@ test('terminal non-auth failure notifies the author of publish failure', functio
     Notification::assertNotSentTo($user, AccountNeedsAttentionNotification::class);
 });
 
+test('uncaught publish job failure notifies the author of publish failure', function () {
+    Notification::fake();
+    $user = User::factory()->create();
+    $post = Post::factory()->for($user, 'author')->create();
+    $target = PostTarget::factory()->for($post)->create(['status' => PostTargetStatus::Publishing]);
+
+    (new PublishPostTarget($target))->failed(new RuntimeException('Unexpected publisher crash'));
+
+    Notification::assertSentTo($user, PublishFailedNotification::class);
+});
+
 test('terminal auth-expired failure notifies account-needs-attention instead', function () {
     Notification::fake();
     $user = User::factory()->create();
