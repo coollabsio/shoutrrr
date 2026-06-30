@@ -103,7 +103,31 @@ describe('buildPlatformPreview', () => {
                 media: [],
                 count: 42,
                 overLimit: false,
+                linkExclusions: ['Actual Person'],
             },
         ]);
+    });
+
+    it('marks LinkedIn mention display domains as link exclusions', () => {
+        const preview = buildPlatformPreview({
+            account: account('linkedin'),
+            segments: ['hello shoutrrr.com @Person'],
+            mentions: [
+                {
+                    id: 'person',
+                    label: '@Person',
+                    handles: { linkedin: 'heyandras.dev' },
+                },
+            ],
+            media: [],
+            excludedMediaIds: new Set(),
+            limit: 3000,
+            autoSplit: true,
+        });
+
+        expect(preview.items[0]).toMatchObject({
+            text: 'hello shoutrrr.com heyandras.dev',
+            linkExclusions: ['heyandras.dev'],
+        });
     });
 });

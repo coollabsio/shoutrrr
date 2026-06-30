@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { formatCompact, formatFull } from '@/lib/format';
+import { LinkedText } from '@/lib/linked-text';
 import {
     type EngagementKey,
     engagementItems,
@@ -312,7 +313,10 @@ function PublishedCard({
                                     </span>
                                 </div>
                                 <p className="mt-0.5 text-[14px] leading-6 wrap-anywhere whitespace-pre-wrap text-foreground">
-                                    {section}
+                                    <LinkedText
+                                        text={section}
+                                        platform={target.platform}
+                                    />
                                 </p>
                                 {index === 0 && cardMedia.length > 0 && (
                                     <MediaGrid media={cardMedia} />

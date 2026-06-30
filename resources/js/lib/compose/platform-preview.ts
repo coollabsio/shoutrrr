@@ -1,4 +1,7 @@
-import { replaceMentionTokens } from '@/lib/compose/mentions';
+import {
+    mentionInputValue,
+    replaceMentionTokens,
+} from '@/lib/compose/mentions';
 import { measure, previewSections } from '@/lib/compose/section-split';
 import type {
     Account,
@@ -13,6 +16,7 @@ export type PlatformPreviewItem = {
     media: MediaView[];
     count: number;
     overLimit: boolean;
+    linkExclusions: string[];
 };
 
 export type PlatformPreview = {
@@ -59,6 +63,13 @@ export function buildPlatformPreview({
               ? previewSections(resolvedSegments, account.platform, limit)
               : resolvedSegments;
     const visibleMedia = media.filter((item) => !excludedMediaIds.has(item.id));
+    const linkExclusions =
+        account.platform === 'linkedin'
+            ? mentions
+                  .map((mention) => mention.handles.linkedin ?? mention.label)
+                  .map(mentionInputValue)
+                  .filter((mention) => mention !== '')
+            : [];
 
     return {
         platform: account.platform,
@@ -73,6 +84,7 @@ export function buildPlatformPreview({
             media: index === 0 ? visibleMedia : [],
             count: measure(section, account.platform),
             overLimit: limit > 0 && measure(section, account.platform) > limit,
+            linkExclusions,
         })),
     };
 }

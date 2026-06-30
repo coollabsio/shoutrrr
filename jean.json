@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "setup": "cp $JEAN_ROOT_PATH/.env .",
+    "setup": "cp $JEAN_ROOT_PATH/.env . && composer setup",
     "teardown": null,
-    "run": "docker rm -f shoutrrr shoutrrr-vite shoutrrr-mail; spin up; spin down"
+    "run": "composer dev"
   },
   "ports": [
     {

@@ -63,6 +63,48 @@ test('bluesky resolves handles and sends mention facets', function () {
     });
 });
 
+test('bluesky sends link facets for bare domains', function () {
+    Http::fake([
+        '*com.atproto.repo.createRecord' => Http::response(['uri' => 'at://did:plc:me/app.bsky.feed.post/1', 'cid' => 'cid1']),
+    ]);
+
+    $result = app(BlueskyPublishConnector::class)->publish(bskyContext(['Read shoutrrr.com now']));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'com.atproto.repo.createRecord')) {
+            return false;
+        }
+
+        return ($request['record']['facets'][0] ?? null) === [
+            'index' => ['byteStart' => 5, 'byteEnd' => 17],
+            'features' => [['$type' => 'app.bsky.richtext.facet#link', 'uri' => 'https://shoutrrr.com']],
+        ];
+    });
+});
+
+test('bluesky excludes trailing punctuation from link facets', function () {
+    Http::fake([
+        '*com.atproto.repo.createRecord' => Http::response(['uri' => 'at://did:plc:me/app.bsky.feed.post/1', 'cid' => 'cid1']),
+    ]);
+
+    $result = app(BlueskyPublishConnector::class)->publish(bskyContext(['Read shoutrrr.com.']));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'com.atproto.repo.createRecord')) {
+            return false;
+        }
+
+        return ($request['record']['facets'][0] ?? null) === [
+            'index' => ['byteStart' => 5, 'byteEnd' => 17],
+            'features' => [['$type' => 'app.bsky.richtext.facet#link', 'uri' => 'https://shoutrrr.com']],
+        ];
+    });
+});
+
 test('bluesky uploads media blobs and embeds them on the post', function () {
     Storage::fake('public');
     Storage::disk('public')->put('media/cat.jpg', 'image-bytes');

@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -97,6 +97,10 @@ export function mentionFilter(
     return 0;
 }
 
+export function editSavedMention(saved: WorkspaceMention): MentionPlaceholder {
+    return savedMentionToPlaceholder(saved);
+}
+
 export default function MentionPicker({
     activeMention,
     savedMentions,
@@ -162,6 +166,11 @@ export default function MentionPicker({
     function selectSaved(saved: WorkspaceMention) {
         onApplySavedMention(saved);
         onMentionComplete?.(savedMentionToPlaceholder(saved));
+    }
+
+    function editSaved(saved: WorkspaceMention) {
+        onUpdateMention(activeMention, editSavedMention(saved));
+        setMode('edit');
     }
 
     async function saveAndComplete(mention: MentionPlaceholder) {
@@ -241,7 +250,7 @@ export default function MentionPicker({
                                 value={saved.name}
                                 keywords={savedMentionKeywords.get(saved.id)}
                                 onSelect={() => selectSaved(saved)}
-                                className="flex items-center justify-between gap-3"
+                                className="relative flex items-center gap-3 pr-9"
                             >
                                 <span className="font-medium">
                                     {saved.name}
@@ -260,6 +269,20 @@ export default function MentionPicker({
                                             />
                                         ))}
                                 </span>
+                                <button
+                                    type="button"
+                                    aria-label={`Edit ${saved.name}`}
+                                    onPointerDown={(event) =>
+                                        event.stopPropagation()
+                                    }
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        editSaved(saved);
+                                    }}
+                                    className="absolute right-2 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                >
+                                    <Pencil className="size-3.5" aria-hidden />
+                                </button>
                             </CommandItem>
                         ))}
                     </CommandGroup>

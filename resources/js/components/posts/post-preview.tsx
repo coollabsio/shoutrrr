@@ -1,4 +1,5 @@
 import { PlatformGlyph } from '@/components/common/platform-glyph';
+import { LinkedText } from '@/lib/linked-text';
 import { cn } from '@/lib/utils';
 import type { PublicMedia, PublicPostView, PublicTarget } from '@/types/share';
 
@@ -201,11 +202,15 @@ function PlatformCard({
                             )}
                         >
                             <p className="text-[14.5px] leading-relaxed whitespace-pre-wrap text-foreground">
-                                {section || (
-                                    <span className="text-muted-foreground italic">
-                                        No content.
-                                    </span>
-                                )}
+                                <LinkedText
+                                    text={section}
+                                    platform={target.platform}
+                                    emptyFallback={
+                                        <span className="text-muted-foreground italic">
+                                            No content.
+                                        </span>
+                                    }
+                                />
                             </p>
                         </div>
                     </div>
@@ -239,11 +244,14 @@ export function PostPreview({
             {post.targets.length === 0 && (
                 <div className="rounded-3xl border border-dashed border-border bg-card/60 px-6 py-10 text-center">
                     <p className="text-[14.5px] leading-relaxed whitespace-pre-wrap text-foreground">
-                        {post.base_text || (
-                            <span className="text-muted-foreground italic">
-                                No content.
-                            </span>
-                        )}
+                        <LinkedText
+                            text={post.base_text}
+                            emptyFallback={
+                                <span className="text-muted-foreground italic">
+                                    No content.
+                                </span>
+                            }
+                        />
                     </p>
                 </div>
             )}

@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
+    editSavedMention,
     mentionFilter,
     savedMentionSearchKeywords,
     shouldFocusMentionPickerSearch,
@@ -42,5 +46,44 @@ describe('mention picker focus helpers', () => {
 
         expect(shouldFocusMentionPickerSearch(input, input)).toBe(false);
         expect(shouldFocusMentionPickerSearch(input, null)).toBe(true);
+    });
+});
+
+describe('saved mention editing', () => {
+    it('loads the saved mention into the editable placeholder shape', () => {
+        expect(
+            editSavedMention({
+                id: 'workspace-mention',
+                name: '@saved',
+                handles: {
+                    x: '@saved_x',
+                    bluesky: '@saved.bsky.social',
+                    linkedin: 'Saved Name',
+                },
+            }),
+        ).toEqual({
+            id: 'saved',
+            label: '@saved',
+            handles: {
+                x: '@saved_x',
+                bluesky: '@saved.bsky.social',
+                linkedin: 'Saved Name',
+            },
+        });
+    });
+
+    it('renders a dedicated edit action for each saved mention', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/compose/mention-picker.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('aria-label={`Edit ${saved.name}`}');
+        expect(source).toContain('pr-9');
+        expect(source).toContain('absolute right-2');
+        expect(source).toContain('editSaved(saved)');
     });
 });

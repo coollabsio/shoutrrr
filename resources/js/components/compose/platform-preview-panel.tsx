@@ -13,6 +13,7 @@ import type {
     PlatformPreview,
     PlatformPreviewItem,
 } from '@/lib/compose/platform-preview';
+import { LinkedText } from '@/lib/linked-text';
 import { cn } from '@/lib/utils';
 import type { PlatformName } from '@/types/compose';
 
@@ -145,8 +146,12 @@ function PlatformPreviewPost({
                         item.overLimit && 'text-destructive',
                     )}
                 >
-                    {item.text ||
-                        `Start writing to preview your ${label} post.`}
+                    <LinkedText
+                        text={item.text}
+                        platform={preview.platform}
+                        linkExclusions={item.linkExclusions}
+                        emptyFallback={`Start writing to preview your ${label} post.`}
+                    />
                 </p>
                 <PlatformPreviewMedia item={item} />
                 <div className="mt-3 flex items-center gap-4 text-muted-foreground">

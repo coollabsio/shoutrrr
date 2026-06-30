@@ -76,6 +76,7 @@ describe('buildXPreview', () => {
                 media: [],
                 count: 31,
                 overLimit: true,
+                linkExclusions: [],
             },
         ]);
     });

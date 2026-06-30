@@ -369,14 +369,16 @@ class BlueskyPublishConnector implements PublishConnector
     {
         $facets = [];
 
-        if (preg_match_all('#https?://\S+#', $text, $matches, PREG_OFFSET_CAPTURE) === false) {
+        if (preg_match_all('#(?<![@A-Za-z0-9._-])((?:https?://)?(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}(?:/[^\s<]*)?)(?![A-Za-z0-9_-])#i', $text, $matches, PREG_OFFSET_CAPTURE) === false) {
             return $facets;
         }
 
-        foreach ($matches[0] as [$url, $offset]) {
+        foreach ($matches[1] as [$url, $offset]) {
+            $url = rtrim($url, '.,!?;:');
+
             $facets[] = [
                 'index' => ['byteStart' => $offset, 'byteEnd' => $offset + strlen($url)],
-                'features' => [['$type' => 'app.bsky.richtext.facet#link', 'uri' => $url]],
+                'features' => [['$type' => 'app.bsky.richtext.facet#link', 'uri' => preg_match('#^https?://#i', $url) === 1 ? $url : 'https://'.$url]],
             ];
         }
 
