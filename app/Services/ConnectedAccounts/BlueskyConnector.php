@@ -18,6 +18,7 @@ class BlueskyConnector
 
     public function connect(string $identifier, string $appPassword, ?string $pdsUrl = null): ConnectedAccountData
     {
+        $identifier = $this->normalizeIdentifier($identifier);
         $pds = $this->resolvePds($identifier, $pdsUrl);
 
         // Guard the resolved endpoint too (not just a user override) before sending
@@ -74,6 +75,8 @@ class BlueskyConnector
 
     public function resolvePds(string $identifier, ?string $override): string
     {
+        $identifier = $this->normalizeIdentifier($identifier);
+
         if ($override !== null && trim($override) !== '') {
             $pds = rtrim(trim($override), '/');
             $this->assertSafePds($pds);
@@ -136,6 +139,11 @@ class BlueskyConnector
             ->get(self::DEFAULT_PDS.'/xrpc/com.atproto.identity.resolveHandle', ['handle' => $handle]);
 
         return $response->successful() ? $response->json('did') : null;
+    }
+
+    private function normalizeIdentifier(string $identifier): string
+    {
+        return ltrim(trim($identifier), '@');
     }
 
     private function resolveDidToPds(string $did): ?string
