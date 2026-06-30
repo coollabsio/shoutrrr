@@ -264,7 +264,7 @@ export function PickTimePopover({ value, onChange, tz }: Props) {
                     <span className="font-medium text-foreground">{tz}</span>.{' '}
                     {showBrowserTz && (
                         <>
-                            <br/>
+                            <br />
                             Your timezone looks like{' '}
                             <span className="font-medium text-foreground">
                                 {browserTz}
@@ -272,7 +272,7 @@ export function PickTimePopover({ value, onChange, tz }: Props) {
                             .{' '}
                         </>
                     )}
-                    <br/>
+                    <br />
                     You can change it in{' '}
                     <Link
                         href={workspaceSettings().url}
