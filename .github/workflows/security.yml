@@ -1,0 +1,57 @@
+name: security
+
+on:
+  push:
+    branches:
+      - develop
+      - dev
+      - main
+      - master
+      - workos
+  pull_request:
+    branches:
+      - develop
+      - dev
+      - main
+      - master
+      - workos
+
+permissions:
+  contents: read
+
+jobs:
+  composer-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+
+      - name: Install Dependencies
+        run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      - name: Security Audit (malware + advisories)
+        run: composer audit --abandoned=report
+
+  malicious-package-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: latest
+
+      # Scans every package against Socket via the native Bun security-provider
+      # API configured in bunfig.toml; a flagged package fails the install.
+      - name: Install + scan dependencies
+        run: bun install
