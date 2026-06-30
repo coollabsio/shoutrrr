@@ -1,6 +1,6 @@
 import { Link, router, useHttp } from '@inertiajs/react';
 import { Send } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
@@ -47,6 +47,43 @@ type Props = {
     onServerPost: (post: PostView) => void;
 };
 
+type ShortcutEvent = Pick<
+    KeyboardEvent,
+    'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'
+>;
+
+type SubmitGuard = {
+    disabled?: boolean;
+    uploading: boolean;
+    processing: boolean;
+    trayMode: ScheduleTray['mode'];
+    queueDisabled?: boolean;
+};
+
+export function isSubmitShortcut(event: ShortcutEvent): boolean {
+    return (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key === 'Enter'
+    );
+}
+
+export function shouldAllowSubmit({
+    disabled,
+    uploading,
+    processing,
+    trayMode,
+    queueDisabled,
+}: SubmitGuard): boolean {
+    return !(
+        disabled ||
+        uploading ||
+        processing ||
+        (trayMode === 'queue' && Boolean(queueDisabled))
+    );
+}
+
 export function SubmitBar({
     tray,
     postId,
@@ -74,6 +111,18 @@ export function SubmitBar({
               : 'Schedule';
 
     async function handleSubmit() {
+        if (
+            !shouldAllowSubmit({
+                disabled,
+                uploading,
+                processing: http.processing,
+                trayMode: tray.mode,
+                queueDisabled,
+            })
+        ) {
+            return;
+        }
+
         setNoSlot(false);
         setPastTime(false);
         // Flush pending edits AND wait for them to persist before publishing —
@@ -143,15 +192,42 @@ export function SubmitBar({
         });
     }
 
+    useEffect(() => {
+        function onKeyDown(event: KeyboardEvent) {
+            if (
+                !isSubmitShortcut(event) ||
+                !shouldAllowSubmit({
+                    disabled,
+                    uploading,
+                    processing: http.processing,
+                    trayMode: tray.mode,
+                    queueDisabled,
+                })
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+            void handleSubmit();
+        }
+
+        document.addEventListener('keydown', onKeyDown);
+
+        return () => document.removeEventListener('keydown', onKeyDown);
+    });
+
+    const canSubmit = shouldAllowSubmit({
+        disabled,
+        uploading,
+        processing: http.processing,
+        trayMode: tray.mode,
+        queueDisabled,
+    });
+
     const submitButton = (
         <TrayButton
             variant="primary"
-            disabled={
-                disabled ||
-                uploading ||
-                http.processing ||
-                (tray.mode === 'queue' && Boolean(queueDisabled))
-            }
+            disabled={!canSubmit}
             onClick={() => void handleSubmit()}
             className="flex-1 sm:flex-none"
         >
