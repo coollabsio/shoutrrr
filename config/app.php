@@ -56,6 +56,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trusted Proxies
+    |--------------------------------------------------------------------------
+    |
+    | Reverse proxies (Coolify/Traefik, load balancers) whose forwarding
+    | headers (X-Forwarded-Proto/-Host/-Port) the application should trust, so
+    | redirects, asset URLs, and OAuth redirect_uri values use the public HTTPS
+    | scheme. Set `*` when the container is only reachable through the internal
+    | proxy, a comma-separated IP/CIDR list to trust specific proxies, or leave
+    | unset to trust none.
+    |
+    */
+
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

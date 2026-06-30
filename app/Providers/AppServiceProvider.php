@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +45,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureErrorPages();
+        $this->configureTrustedProxies();
 
         // OAuth tokens issued for the MCP/API integration. Without explicit
         // lifetimes Passport defaults to ~1 year, so a leaked bearer is
@@ -86,6 +88,23 @@ class AppServiceProvider extends ServiceProvider
             }
         );
 
+    }
+
+    /**
+     * Trust reverse-proxy forwarding headers (X-Forwarded-Proto/-Host/-Port) so
+     * redirects, asset URLs, and OAuth redirect_uri values use the public HTTPS
+     * scheme when the app is served behind a TLS-terminating proxy (Coolify/
+     * Traefik). Off unless TRUSTED_PROXIES is configured. Set here rather than in
+     * bootstrap/app.php because the config repository is not yet bound while the
+     * middleware closure runs.
+     */
+    protected function configureTrustedProxies(): void
+    {
+        $trustedProxies = config('app.trusted_proxies');
+
+        if (is_string($trustedProxies) && $trustedProxies !== '') {
+            TrustProxies::at($trustedProxies);
+        }
     }
 
     /**
