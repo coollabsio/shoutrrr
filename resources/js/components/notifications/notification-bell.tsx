@@ -288,18 +288,20 @@ function NotificationRow({
         notification.actions !== undefined && notification.actions.length > 0;
 
     const content = (
-        <div className="flex min-w-0 flex-1 gap-2.5 text-left">
-            <span
-                aria-hidden
-                className={cn(
-                    'mt-4 size-1.5 shrink-0 rounded-full',
-                    notification.read ? 'bg-transparent' : 'bg-primary',
-                )}
-            />
-            <div className="min-w-0 flex-1 py-2.5">
-                <p className="truncate text-[13px] font-medium text-foreground">
+        <div className="min-w-0 flex-1 py-2.5 text-left">
+            <div className="flex items-center gap-2.5">
+                <span
+                    aria-hidden
+                    className={cn(
+                        'size-1.5 shrink-0 rounded-full',
+                        notification.read ? 'bg-transparent' : 'bg-primary',
+                    )}
+                />
+                <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
                     {notification.title}
                 </p>
+            </div>
+            <div className="pl-4">
                 {notification.body && (
                     <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
                         {notification.body}
