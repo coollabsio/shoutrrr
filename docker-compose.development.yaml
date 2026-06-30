@@ -23,6 +23,13 @@ x-environment: &app-env
     # Force https on generated URLs (redirects, route()) when behind a
     # TLS-terminating proxy/tunnel. Set OCTANE_HTTPS=true in that case.
     OCTANE_HTTPS: "${OCTANE_HTTPS:-false}"
+    # Trust reverse-proxy forwarding headers (X-Forwarded-Proto/-Host/-Port) so
+    # redirects and OAuth callback URLs use the public https scheme and rate
+    # limits see the real client IP. Set `*` when only reachable via the proxy,
+    # or a comma-separated IP/CIDR list. Unset trusts no proxies.
+    TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
+    # Optional CDN/base URL for built assets. Leave unset to serve from APP_URL.
+    ASSET_URL: "${ASSET_URL:-}"
     DB_CONNECTION: "${DB_CONNECTION:-sqlite}"
     # NOTE: for Postgres set DB_CONNECTION=pgsql AND override DB_DATABASE=laravel (the
     # sqlite-path default below is invalid for pgsql).
