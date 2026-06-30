@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -35,5 +38,24 @@ describe('pick-time tz helpers', () => {
             hour: 14,
             minute: 30,
         });
+    });
+
+    it('shows where to change the workspace timezone', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/compose/pick-time-popover.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('Using workspace timezone');
+        expect(source).toContain('{tz}');
+        expect(source).toContain('const browserTz = userTz();');
+        expect(source).toContain('const showBrowserTz = browserTz !== tz;');
+        expect(source).toContain('{showBrowserTz && (');
+        expect(source).toContain('Your browser is');
+        expect(source).toContain('workspace settings');
+        expect(source).toContain('href={workspaceSettings().url}');
     });
 });

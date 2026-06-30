@@ -1,6 +1,8 @@
+import { Link } from '@inertiajs/react';
 import { CalendarClock } from 'lucide-react';
 import { useState } from 'react';
 
+import { showOverview as workspaceSettings } from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -16,7 +18,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { dayjs } from '@/lib/datetime/dayjs';
+import { dayjs, userTz } from '@/lib/datetime/dayjs';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -115,6 +117,8 @@ export function PickTimePopover({ value, onChange, tz }: Props) {
         .tz(tz)
         .format('MMM D, h:mm A');
     const { hour12, meridiem } = to12h(hour);
+    const browserTz = userTz();
+    const showBrowserTz = browserTz !== tz;
 
     function commit(iso: string, h: number, m: number) {
         setDayIso(iso);
@@ -252,6 +256,32 @@ export function PickTimePopover({ value, onChange, tz }: Props) {
                         </div>
                     </div>
                 </div>
+
+                <Separator />
+
+                <p className="max-w-[300px] px-3 py-2.5 text-[11.5px] leading-4 text-muted-foreground">
+                    Using workspace timezone{' '}
+                    <span className="font-medium text-foreground">{tz}</span>.{' '}
+                    {showBrowserTz && (
+                        <>
+                            <br/>
+                            Your timezone looks like{' '}
+                            <span className="font-medium text-foreground">
+                                {browserTz}
+                            </span>
+                            .{' '}
+                        </>
+                    )}
+                    <br/>
+                    You can change it in{' '}
+                    <Link
+                        href={workspaceSettings().url}
+                        className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                    >
+                        workspace settings
+                    </Link>
+                    .
+                </p>
             </PopoverContent>
         </Popover>
     );
