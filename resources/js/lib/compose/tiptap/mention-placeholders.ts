@@ -2,8 +2,35 @@ import { Extension } from '@tiptap/core';
 import { Plugin } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 
+/**
+ * Matches serialized mention tokens (`{{mention:id}}`) and standalone `@handle`s.
+ * The `@handle` branch requires a leading boundary (start of text or whitespace)
+ * via the `(?<!\S)` lookbehind, so the `@domain` part of an email such as
+ * `raulp@hey.com` is not mistaken for a handle and highlighted.
+ */
 const TOKEN_PATTERN =
-    /\{\{mention:[a-zA-Z0-9_-]+\}\}|@[a-zA-Z0-9_.-]{0,50}(?=\s|$|[.,!?;:])/g;
+    /\{\{mention:[a-zA-Z0-9_-]+\}\}|(?<!\S)@[a-zA-Z0-9_.-]{0,50}(?=\s|$|[.,!?;:])/g;
+
+export type MentionDecoration = { start: number; end: number; id: string };
+
+/**
+ * Yields the mention tokens to decorate within a text run — each match's absolute
+ * range (offset by `base`) and its derived `data-mention-id`. Lazy, so callers
+ * decorate in a single pass with no intermediate array.
+ */
+export function* mentionDecorations(
+    text: string,
+    base = 0,
+): Generator<MentionDecoration> {
+    for (const match of text.matchAll(TOKEN_PATTERN)) {
+        const start = base + (match.index ?? 0);
+        yield {
+            start,
+            end: start + match[0].length,
+            id: match[0].replace(/^@/, '').replace(/[^a-zA-Z0-9_-]+/g, '-'),
+        };
+    }
+}
 
 export const MentionPlaceholders = Extension.create({
     name: 'mentionPlaceholders',
@@ -41,18 +68,14 @@ export const MentionPlaceholders = Extension.create({
                                 return;
                             }
 
-                            for (const match of node.text.matchAll(
-                                TOKEN_PATTERN,
+                            for (const { start, end, id } of mentionDecorations(
+                                node.text,
+                                position,
                             )) {
-                                const start = position + (match.index ?? 0);
-                                const end = start + match[0].length;
                                 decorations.push(
                                     Decoration.inline(start, end, {
                                         class: 'cursor-pointer rounded-md bg-primary/10 px-1 py-0.5 font-medium text-primary ring-1 ring-primary/20',
-                                        'data-mention-id': (
-                                            match[1] ??
-                                            match[0].replace(/^@/, '')
-                                        ).replace(/[^a-zA-Z0-9_-]+/g, '-'),
+                                        'data-mention-id': id,
                                     }),
                                 );
                             }
