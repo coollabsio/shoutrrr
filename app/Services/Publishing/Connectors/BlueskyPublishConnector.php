@@ -11,12 +11,14 @@ use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Atproto\DPoP;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Storage;
@@ -32,6 +34,7 @@ class BlueskyPublishConnector implements PublishConnector
     public function __construct(
         private readonly HttpFactory $http,
         private readonly ImageCompressor $imageCompressor,
+        private readonly DPoP $dpop,
     ) {}
 
     public function publish(PublishContext $context): PublishResult
@@ -52,22 +55,22 @@ class BlueskyPublishConnector implements PublishConnector
             $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
 
             if ($rootUri === null && $videoMedia !== []) {
-                $ready = $this->ensureVideoReady($context, $videoMedia[0], $pds, $jwt, $did);
+                $ready = $this->ensureVideoReady($context, $videoMedia[0], $pds, $jwt, $did, $session);
                 if (! $ready->isSuccessful()) {
                     return $ready;
                 }
                 $embed = $this->videoEmbed($context, $videoMedia[0]);
             } else {
                 // Media rides on the root post only; uploaded once, then embedded below.
-                $embed = $rootUri === null ? $this->uploadImages($context->media, $pds, $jwt) : null;
+                $embed = $rootUri === null ? $this->uploadImages($context->media, $pds, $jwt, $session) : null;
             }
 
             // Resume: remote_ids stores only AT-URIs, so recover the root and parent CIDs
             // (needed for threading) from the already-posted records before continuing.
             if ($rootUri !== null) {
-                $rootCid = $this->recordCid($pds, $jwt, $did, $rootUri);
+                $rootCid = $this->recordCid($pds, $jwt, $did, $rootUri, $session);
                 $parentUri = (string) end($remoteIds);
-                $parentCid = $this->recordCid($pds, $jwt, $did, $parentUri);
+                $parentCid = $this->recordCid($pds, $jwt, $did, $parentUri, $session);
             }
 
             foreach ($context->segments as $index => $text) {
@@ -93,14 +96,11 @@ class BlueskyPublishConnector implements PublishConnector
                     ];
                 }
 
-                $response = $this->http
-                    ->withToken($jwt)
-                    ->acceptJson()
-                    ->post($pds.'/xrpc/com.atproto.repo.createRecord', [
-                        'repo' => $did,
-                        'collection' => 'app.bsky.feed.post',
-                        'record' => $record,
-                    ]);
+                $response = $this->postJsonAuthorized($pds.'/xrpc/com.atproto.repo.createRecord', $jwt, $session, [
+                    'repo' => $did,
+                    'collection' => 'app.bsky.feed.post',
+                    'record' => $record,
+                ]);
 
                 if ($response->failed()) {
                     return $this->mapFailure($response);
@@ -144,7 +144,7 @@ class BlueskyPublishConnector implements PublishConnector
         foreach ($target->remote_ids ?? array_filter([$target->remote_id]) as $uri) {
             $rkey = (string) (explode('/', (string) $uri)[4] ?? '');
 
-            $response = $this->http->withToken($jwt)->post($pds.'/xrpc/com.atproto.repo.deleteRecord', [
+            $response = $this->postJsonAuthorized($pds.'/xrpc/com.atproto.repo.deleteRecord', $jwt, $session, [
                 'repo' => $did,
                 'collection' => 'app.bsky.feed.post',
                 'rkey' => $rkey,
@@ -157,19 +157,18 @@ class BlueskyPublishConnector implements PublishConnector
     /**
      * Fetch the CID of an already-posted record so a resumed thread can reference it.
      * The rkey is the 5th `/`-split segment of the at-uri (same extraction as delete()).
+     *
+     * @param  array<string, mixed>  $session
      */
-    private function recordCid(string $pds, string $jwt, string $did, string $uri): string
+    private function recordCid(string $pds, string $jwt, string $did, string $uri, array $session): string
     {
         $rkey = (string) (explode('/', $uri)[4] ?? '');
 
-        $response = $this->http
-            ->withToken($jwt)
-            ->acceptJson()
-            ->get($pds.'/xrpc/com.atproto.repo.getRecord', [
-                'repo' => $did,
-                'collection' => 'app.bsky.feed.post',
-                'rkey' => $rkey,
-            ]);
+        $response = $this->getAuthorized($pds.'/xrpc/com.atproto.repo.getRecord', $jwt, $session, [
+            'repo' => $did,
+            'collection' => 'app.bsky.feed.post',
+            'rkey' => $rkey,
+        ]);
 
         if ($response->failed()) {
             throw new BlueskyRequestFailed($response);
@@ -182,15 +181,17 @@ class BlueskyPublishConnector implements PublishConnector
      * Ensure the video job is running or completed. On first call, mints a service-auth token
      * and uploads the video, persisting the jobId. On subsequent calls, polls getJobStatus.
      * Returns a successful PublishResult only when the job has completed.
+     *
+     * @param  array<string, mixed>  $session
      */
-    private function ensureVideoReady(PublishContext $context, PostMedia $media, string $pds, string $jwt, string $did): PublishResult
+    private function ensureVideoReady(PublishContext $context, PostMedia $media, string $pds, string $jwt, string $did, array $session): PublishResult
     {
         $state = new MediaUploadState($context->target->media_upload_state);
         $jobId = $state->remoteRef($media->id);
 
         try {
             if ($jobId === null) {
-                $jobId = $this->uploadVideo($media, $pds, $jwt, $did);
+                $jobId = $this->uploadVideo($media, $pds, $jwt, $did, $session);
                 $state->markUploaded($media->id, $jobId);
                 $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
             }
@@ -238,17 +239,18 @@ class BlueskyPublishConnector implements PublishConnector
     /**
      * Mint a service-auth token scoped to the user's PDS for blob upload, then push raw
      * bytes to the video service (which cannot be PDS-proxied).
+     *
+     * @param  array<string, mixed>  $session
      */
-    private function uploadVideo(PostMedia $media, string $pds, string $jwt, string $did): string
+    private function uploadVideo(PostMedia $media, string $pds, string $jwt, string $did, array $session): string
     {
         $pdsHost = (string) parse_url($pds, PHP_URL_HOST);
 
-        $auth = $this->http->withToken($jwt)->acceptJson()
-            ->get($pds.'/xrpc/com.atproto.server.getServiceAuth', [
-                'aud' => 'did:web:'.$pdsHost,
-                'lxm' => 'com.atproto.repo.uploadBlob',
-                'exp' => time() + 1800,
-            ]);
+        $auth = $this->getAuthorized($pds.'/xrpc/com.atproto.server.getServiceAuth', $jwt, $session, [
+            'aud' => 'did:web:'.$pdsHost,
+            'lxm' => 'com.atproto.repo.uploadBlob',
+            'exp' => time() + 1800,
+        ]);
 
         if ($auth->failed()) {
             throw new BlueskyRequestFailed($auth);
@@ -293,9 +295,10 @@ class BlueskyPublishConnector implements PublishConnector
      * Upload each media item as a blob and build an `app.bsky.embed.images` embed.
      *
      * @param  list<PostMedia>  $media
+     * @param  array<string, mixed>  $session
      * @return array{'$type': string, images: list<array{alt: string, image: array<string, mixed>}>}|null
      */
-    private function uploadImages(array $media, string $pds, string $jwt): ?array
+    private function uploadImages(array $media, string $pds, string $jwt, array $session): ?array
     {
         $media = array_slice($media, 0, Platform::Bluesky->maxMedia());
 
@@ -309,10 +312,7 @@ class BlueskyPublishConnector implements PublishConnector
             $bytes = (string) Storage::disk($item->disk)->get($item->path);
             $compressed = $this->imageCompressor->compressToFit($bytes, Platform::Bluesky->maxMediaBytes(), $item->mime, Platform::Bluesky->allowedMime());
 
-            $response = $this->http
-                ->withToken($jwt)
-                ->withBody($compressed->bytes, $compressed->mime)
-                ->post($pds.'/xrpc/com.atproto.repo.uploadBlob');
+            $response = $this->postBodyAuthorized($pds.'/xrpc/com.atproto.repo.uploadBlob', $jwt, $session, $compressed->bytes, $compressed->mime);
 
             if ($response->failed()) {
                 throw new BlueskyRequestFailed($response);
@@ -325,6 +325,71 @@ class BlueskyPublishConnector implements PublishConnector
         }
 
         return ['$type' => 'app.bsky.embed.images', 'images' => $images];
+    }
+
+    /**
+     * @param  array<string, mixed>  $session
+     * @param  array<string, mixed>  $payload
+     */
+    private function postJsonAuthorized(string $url, string $jwt, array $session, array $payload): Response
+    {
+        $response = $this->authorized('POST', $url, $jwt, $session)->acceptJson()->post($url, $payload);
+        $nonce = $this->responseNonce($response);
+
+        return $response->failed() && $nonce !== null
+            ? $this->authorized('POST', $url, $jwt, $session, $nonce)->acceptJson()->post($url, $payload)
+            : $response;
+    }
+
+    /**
+     * @param  array<string, mixed>  $session
+     * @param  array<string, mixed>  $query
+     */
+    private function getAuthorized(string $url, string $jwt, array $session, array $query): Response
+    {
+        $response = $this->authorized('GET', $url, $jwt, $session)->acceptJson()->get($url, $query);
+        $nonce = $this->responseNonce($response);
+
+        return $response->failed() && $nonce !== null
+            ? $this->authorized('GET', $url, $jwt, $session, $nonce)->acceptJson()->get($url, $query)
+            : $response;
+    }
+
+    /**
+     * @param  array<string, mixed>  $session
+     */
+    private function postBodyAuthorized(string $url, string $jwt, array $session, string $body, string $mime): Response
+    {
+        $response = $this->authorized('POST', $url, $jwt, $session)->withBody($body, $mime)->post($url);
+        $nonce = $this->responseNonce($response);
+
+        return $response->failed() && $nonce !== null
+            ? $this->authorized('POST', $url, $jwt, $session, $nonce)->withBody($body, $mime)->post($url)
+            : $response;
+    }
+
+    private function responseNonce(Response $response): ?string
+    {
+        $nonce = $response->header('DPoP-Nonce');
+
+        return $nonce !== '' ? $nonce : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $session
+     */
+    private function authorized(string $method, string $url, string $jwt, array $session, ?string $nonce = null): PendingRequest
+    {
+        $key = $session['dpop_private_jwk'] ?? null;
+
+        if (is_array($key)) {
+            return $this->http->withHeaders([
+                'Authorization' => 'DPoP '.$jwt,
+                'DPoP' => $this->dpop->proof($method, $url, $key, $jwt, $nonce ?? $session['dpop_nonce'] ?? null),
+            ]);
+        }
+
+        return $this->http->withToken($jwt);
     }
 
     /**

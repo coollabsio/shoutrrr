@@ -4,6 +4,7 @@ use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
+use App\Services\Atproto\DPoP;
 use Illuminate\Support\Facades\Http;
 
 test('it proactively refreshes accounts expiring within six hours', function () {
@@ -59,6 +60,45 @@ test('it skips accounts that expire outside the proactive refresh window', funct
     $this->artisan('accounts:refresh-tokens')->assertExitCode(0);
 
     Http::assertNothingSent();
+});
+
+test('it proactively refreshes expiring bluesky oauth accounts', function () {
+    $key = app(DPoP::class)->generateKey();
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Bluesky->value,
+        'auth_method' => 'oauth',
+        'token_expires_at' => now()->addHours(5),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'old-access',
+        'refresh_token' => 'old-refresh',
+        'session' => [
+            'token_endpoint' => 'https://auth.bsky.test/oauth/token',
+            'client_id' => 'https://app.test/oauth/bluesky/client-metadata.json',
+            'dpop_private_jwk' => $key,
+        ],
+    ]);
+
+    Http::fake([
+        'https://auth.bsky.test/oauth/token' => Http::response([
+            'access_token' => 'fresh-access',
+            'refresh_token' => 'fresh-refresh',
+            'expires_in' => 3600,
+        ], 200, ['DPoP-Nonce' => 'fresh-nonce']),
+    ]);
+
+    $this->artisan('accounts:refresh-tokens')->assertExitCode(0);
+
+    $account->refresh();
+    expect($account->secret->access_token)->toBe('fresh-access')
+        ->and($account->secret->refresh_token)->toBe('fresh-refresh')
+        ->and($account->secret->session['dpop_nonce'])->toBe('fresh-nonce')
+        ->and($account->refresh_failed_at)->toBeNull();
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://auth.bsky.test/oauth/token'
+        && $request->hasHeader('DPoP')
+        && $request['grant_type'] === 'refresh_token');
 });
 
 test('token refresh health check is scheduled every fifteen minutes', function () {

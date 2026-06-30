@@ -22,7 +22,13 @@ class RefreshExpiringTokens extends Command
     {
         ConnectedAccount::query()
             ->withoutGlobalScopes()
-            ->where('platform', '!=', Platform::Bluesky->value)
+            ->where(function ($query): void {
+                $query->where('platform', '!=', Platform::Bluesky->value)
+                    ->orWhere(function ($query): void {
+                        $query->where('platform', Platform::Bluesky->value)
+                            ->where('auth_method', 'oauth');
+                    });
+            })
             ->where('status', ConnectedAccountStatus::Active->value)
             ->whereNotNull('token_expires_at')
             ->where('token_expires_at', '<=', Date::now()->addHours(6))

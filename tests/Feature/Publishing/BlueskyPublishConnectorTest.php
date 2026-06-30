@@ -6,6 +6,7 @@ use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Atproto\DPoP;
 use App\Services\Media\CompressionResult;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\BlueskyPublishConnector;
@@ -39,6 +40,33 @@ test('bluesky creates a single post and returns its uri', function () {
 
     expect($result->isSuccessful())->toBeTrue()
         ->and($result->remoteIds)->toBe(['at://did:plc:me/app.bsky.feed.post/1']);
+});
+
+test('bluesky oauth publish uses dpop authorization', function () {
+    Http::fake([
+        '*com.atproto.repo.createRecord' => Http::response(['uri' => 'at://did:plc:me/app.bsky.feed.post/1', 'cid' => 'cid1']),
+    ]);
+
+    $context = bskyContext(['oauth post']);
+    $context = new PublishContext(
+        target: $context->target,
+        segments: $context->segments,
+        media: $context->media,
+        account: $context->account,
+        credentials: ['session' => [
+            'accessJwt' => 'oauth-token',
+            'pds' => 'https://bsky.social',
+            'dpop_private_jwk' => app(DPoP::class)->generateKey(),
+            'dpop_nonce' => 'nonce-1',
+        ]],
+    );
+
+    $result = app(BlueskyPublishConnector::class)->publish($context);
+
+    expect($result->isSuccessful())->toBeTrue();
+    Http::assertSent(fn ($request): bool => str_contains($request->url(), 'com.atproto.repo.createRecord')
+        && $request->hasHeader('Authorization', 'DPoP oauth-token')
+        && $request->hasHeader('DPoP'));
 });
 
 test('bluesky resolves handles and sends mention facets', function () {

@@ -9,6 +9,7 @@ use App\Enums\Platform;
 use App\Exceptions\TokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
+use App\Services\Atproto\DPoP;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -20,7 +21,10 @@ class TokenManager
 
     private const string BLUESKY_DEFAULT_PDS = 'https://bsky.social';
 
-    public function __construct(private readonly HttpFactory $http) {}
+    public function __construct(
+        private readonly HttpFactory $http,
+        private readonly DPoP $dpop,
+    ) {}
 
     /**
      * Resolve usable credentials for an account, refreshing the OAuth token when it
@@ -33,8 +37,12 @@ class TokenManager
     {
         $secret = $account->secret()->firstOrFail();
 
-        if ($account->platform === Platform::Bluesky) {
+        if ($account->platform === Platform::Bluesky && $account->auth_method === 'app_password') {
             return $this->blueskyCredentials($account, $secret);
+        }
+
+        if ($account->platform === Platform::Bluesky && $account->auth_method === 'oauth') {
+            return $this->blueskyOAuthCredentials($account, $secret, $force);
         }
 
         if (! $force && ! $this->needsRefresh($account)) {
@@ -61,6 +69,18 @@ class TokenManager
         }
 
         return $account->token_expires_at->lte(Date::now()->addSeconds(self::SKEW_SECONDS));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function blueskyOAuthCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret, bool $force): array
+    {
+        if (! $force && ! $this->needsRefresh($account)) {
+            return $this->blueskyOAuthPayload($secret);
+        }
+
+        return $this->refreshOAuth($account, $secret);
     }
 
     /**
@@ -167,14 +187,18 @@ class TokenManager
      */
     private function refreshOAuth(ConnectedAccount $account, ConnectedAccountSecret $secret): array
     {
-        $endpoint = match ($account->platform) {
-            Platform::X => 'https://api.twitter.com/2/oauth2/token',
-            Platform::LinkedIn => 'https://www.linkedin.com/oauth/v2/accessToken',
-            default => null,
-        };
+        if ($account->platform === Platform::Bluesky) {
+            $endpoint = (string) ($secret->session['token_endpoint'] ?? '');
+        } elseif ($account->platform === Platform::X) {
+            $endpoint = 'https://api.twitter.com/2/oauth2/token';
+        } else {
+            $endpoint = 'https://www.linkedin.com/oauth/v2/accessToken';
+        }
 
         $configKey = $account->platform->configKey();
-        $clientId = (string) config($configKey.'.client_id');
+        $clientId = $account->platform === Platform::Bluesky
+            ? (string) ($secret->session['client_id'] ?? route('oauth.bluesky.metadata'))
+            : (string) config($configKey.'.client_id');
         $clientSecret = (string) config($configKey.'.client_secret');
 
         $request = $this->http->asForm();
@@ -190,6 +214,13 @@ class TokenManager
         // with "Missing valid authorization header". LinkedIn expects them in the body.
         if ($account->platform === Platform::X) {
             $request = $request->withBasicAuth($clientId, $clientSecret);
+        } elseif ($account->platform === Platform::Bluesky) {
+            /** @var array<string, string>|null $key */
+            $key = $secret->session['dpop_private_jwk'] ?? null;
+            if (! is_array($key) || $endpoint === '') {
+                throw new TokenRefreshException("Token refresh failed for account {$account->id}.");
+            }
+            $request = $request->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $secret->session['dpop_nonce'] ?? null));
         } else {
             $body['client_secret'] = $clientSecret;
         }
@@ -213,6 +244,9 @@ class TokenManager
         $secret->forceFill([
             'access_token' => $accessToken,
             'refresh_token' => $refreshToken,
+            'session' => $account->platform === Platform::Bluesky
+                ? [...($secret->session ?? []), 'dpop_nonce' => $response->header('DPoP-Nonce')]
+                : $secret->session,
         ])->save();
 
         $account->forceFill([
@@ -223,7 +257,25 @@ class TokenManager
             'refresh_failure_reason' => null,
         ])->save();
 
-        return ['access_token' => $accessToken];
+        return $account->platform === Platform::Bluesky
+            ? $this->blueskyOAuthPayload($secret->refresh())
+            : ['access_token' => $accessToken];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function blueskyOAuthPayload(ConnectedAccountSecret $secret): array
+    {
+        $session = $secret->session ?? [];
+
+        return [
+            'access_token' => $secret->access_token,
+            'session' => [
+                ...$session,
+                'accessJwt' => $secret->access_token,
+            ],
+        ];
     }
 
     private function refreshFailureReason(Response $response): string

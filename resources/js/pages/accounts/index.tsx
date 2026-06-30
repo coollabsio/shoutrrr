@@ -2,6 +2,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { CircleAlert, Plug, X as XIcon } from 'lucide-react';
 import { useState } from 'react';
 
+import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
 import ConnectedAccountController from '@/actions/App/Http/Controllers/ConnectedAccounts/ConnectedAccountController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import { AccountCard } from '@/components/accounts/account-card';
@@ -46,9 +47,12 @@ export default function ConnectedAccounts({
     };
 
     const reconnectOAuth = (account: Account) => {
-        window.location.href = OAuthConnectionController.redirect.url({
-            platform: account.platform,
-        });
+        window.location.href =
+            account.platform === 'bluesky'
+                ? BlueskyOAuthController.redirect.url()
+                : OAuthConnectionController.redirect.url({
+                      platform: account.platform,
+                  });
     };
 
     const { flash } = usePage().props;

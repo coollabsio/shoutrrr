@@ -3,6 +3,7 @@ import { AtSign, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 import BlueskyConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyConnectionController';
+import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import InputError from '@/components/common/input-error';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -69,7 +70,7 @@ function BlueskyConnectDialog() {
                 <DialogHeader>
                     <DialogTitle>Connect a Bluesky account</DialogTitle>
                     <DialogDescription>
-                        Use an{' '}
+                        Use OAuth for the easiest setup, or connect with an{' '}
                         <a
                             href="https://bsky.app/settings/app-passwords"
                             target="_blank"
@@ -78,10 +79,48 @@ function BlueskyConnectDialog() {
                         >
                             app password
                         </a>{' '}
-                        instead of your main password. App passwords bypass 2FA,
-                        and disconnecting here does not revoke them on Bluesky.
+                        if you prefer. App passwords bypass 2FA, and
+                        disconnecting here does not revoke them on Bluesky.
                     </DialogDescription>
                 </DialogHeader>
+                <form
+                    {...BlueskyOAuthController.redirect.form()}
+                    className="space-y-4 py-2"
+                >
+                    <Button type="submit" className="w-full">
+                        Continue with Bluesky OAuth
+                    </Button>
+                    <Collapsible>
+                        <CollapsibleTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className={ADVANCED_SERVICE_URL_TRIGGER_CLASS}
+                            >
+                                Advanced: service URL
+                                <ChevronDown
+                                    aria-hidden="true"
+                                    data-icon="inline-end"
+                                    className="size-4 text-muted-foreground transition-transform"
+                                />
+                            </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="grid gap-2 pt-2">
+                            <Label htmlFor="oauth_pds_url">Service URL</Label>
+                            <Input
+                                id="oauth_pds_url"
+                                name="pds_url"
+                                placeholder="https://bsky.social"
+                            />
+                        </CollapsibleContent>
+                    </Collapsible>
+                </form>
+                <div className="flex items-center gap-3 py-1 text-[11px] tracking-wide text-muted-foreground uppercase">
+                    <span className="h-px flex-1 bg-border" />
+                    App password
+                    <span className="h-px flex-1 bg-border" />
+                </div>
                 <Form
                     {...BlueskyConnectionController.store.form()}
                     options={{ preserveScroll: true }}
