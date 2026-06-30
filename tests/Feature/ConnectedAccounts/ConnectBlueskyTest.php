@@ -61,6 +61,20 @@ test('an owner connects a bluesky account with a sealed app password and session
         ->and($account->secret->session)->toMatchArray(['accessJwt' => 'access-jwt']);
 });
 
+test('a leading at sign is removed from the submitted bluesky handle', function () {
+    blueskyOwner();
+    fakeBlueskySession();
+
+    test()->post('/accounts/connect/bluesky', [
+        'identifier' => '@ada.bsky.social',
+        'app_password' => 'app-pass-1234',
+        'pds_url' => 'https://bsky.social',
+    ])->assertRedirect(route('accounts.index'));
+
+    Http::assertSent(fn ($request): bool => str_contains($request->url(), 'com.atproto.server.createSession')
+        && $request['identifier'] === 'ada.bsky.social');
+});
+
 test('a member cannot connect a bluesky account', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);

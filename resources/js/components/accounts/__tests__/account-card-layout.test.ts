@@ -22,4 +22,18 @@ describe('account card layout', () => {
         expect(source).toContain('https://bsky.app/settings/app-passwords');
         expect(source).toContain('app password');
     });
+
+    it('shows the at sign as a non-submitted Bluesky reconnect handle prefix', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/accounts/account-card.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('InputGroupAddon');
+        expect(source).toContain('<InputGroupAddon>@</InputGroupAddon>');
+        expect(source).toContain('InputGroupInput');
+    });
 });

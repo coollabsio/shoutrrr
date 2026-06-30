@@ -6,6 +6,7 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\WorkspaceInvitation;
 use App\Notifications\AccountNeedsAttentionNotification;
+use App\Notifications\NewRepliesNotification;
 use App\Notifications\PostPublishedNotification;
 use App\Notifications\PublishFailedNotification;
 use App\Notifications\WorkspaceInviteNotification;
@@ -91,4 +92,16 @@ test('account-needs-attention in-app channel cannot be silenced', function () {
     Notification::assertSentTo($user, AccountNeedsAttentionNotification::class, function ($notification) use ($user) {
         return $notification->via($user) === ['database'];
     });
+});
+
+test('new replies notification is internal only even when mail is enabled in preferences', function () {
+    $user = User::factory()->create([
+        'notification_preferences' => NotificationPreferences::fromArray([
+            'new_replies' => ['in_app' => true, 'mail' => true],
+        ]),
+    ]);
+    $post = Post::factory()->for($user, 'author')->create();
+    $target = PostTarget::factory()->for($post)->create();
+
+    expect((new NewRepliesNotification($target, 1))->via($user))->toBe(['database']);
 });

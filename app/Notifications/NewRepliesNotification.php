@@ -26,7 +26,12 @@ class NewRepliesNotification extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return $this->gatedVia($notifiable, NotificationType::NewReplies);
+        return array_values(
+            array_filter(
+                $this->gatedVia($notifiable, NotificationType::NewReplies),
+                fn (string $channel): bool => $channel === 'database',
+            )
+        );
     }
 
     /**

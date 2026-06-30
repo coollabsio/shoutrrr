@@ -1,4 +1,5 @@
-import { Check, ChevronDown, Layers } from 'lucide-react';
+import { router } from '@inertiajs/react';
+import { AlertTriangle, Check, ChevronDown, Layers } from 'lucide-react';
 import type React from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -8,7 +9,13 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { index as accountsRoute } from '@/routes/accounts';
 import type { Account, AccountSet, Destination } from '@/types/compose';
 
 /** Per-platform brand accent for the glyph badge (mirrors the accounts page). */
@@ -242,13 +249,58 @@ export default function DestinationSelector({
                                 onClick={() => toggleAccount(account.id)}
                             >
                                 <AccountVisual account={account} />
-                                {account.handle}
+                                <span className="min-w-0 flex-1 truncate">
+                                    {account.handle}
+                                </span>
+                                {account.status === 'needs_attention' && (
+                                    <NeedsAttentionLabel
+                                        handle={account.handle}
+                                    />
+                                )}
                             </OptionButton>
                         ))}
                     </>
                 )}
             </PopoverContent>
         </Popover>
+    );
+}
+
+function NeedsAttentionLabel({ handle }: { handle?: string }) {
+    function openAccounts(event: React.MouseEvent | React.KeyboardEvent) {
+        event.preventDefault();
+        event.stopPropagation();
+        router.visit(accountsRoute().url);
+    }
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span
+                    role="link"
+                    tabIndex={0}
+                    className="ml-auto inline-grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm text-destructive outline-hidden hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive/40"
+                    aria-label={
+                        handle
+                            ? `${handle} needs attention`
+                            : 'Account needs attention'
+                    }
+                    onClick={openAccounts}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            openAccounts(event);
+                        }
+                    }}
+                >
+                    <AlertTriangle className="size-3.5" aria-hidden />
+                </span>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+                {handle
+                    ? `Reconnect ${handle} before posting.`
+                    : 'Reconnect the account before posting.'}
+            </TooltipContent>
+        </Tooltip>
     );
 }
 
@@ -268,7 +320,7 @@ function OptionButton({
             onClick={onClick}
             className="flex min-h-8 w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-muted focus-visible:bg-muted"
         >
-            <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
+            <span className="flex min-w-0 flex-1 items-center gap-2">
                 {children}
             </span>
             <Check

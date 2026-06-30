@@ -1,4 +1,6 @@
-import { ChevronDown } from 'lucide-react';
+import { router } from '@inertiajs/react';
+import { AlertTriangle, ChevronDown } from 'lucide-react';
+import type React from 'react';
 import { useState } from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -7,7 +9,13 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { index as accountsRoute } from '@/routes/accounts';
 import { BASE_TAB, type Account } from '@/types/compose';
 
 const PLATFORM_BRAND: Record<string, { tile: string; glyph: string }> = {
@@ -243,6 +251,7 @@ function PlatformTabButton({
     const severity = stateFor(account.id);
     const overridden = hasOverride(account.id);
     const brand = PLATFORM_BRAND[account.platform] ?? PLATFORM_FALLBACK;
+    const needsAttention = account.status === 'needs_attention';
 
     return (
         <button
@@ -280,9 +289,42 @@ function PlatformTabButton({
                     title="Override active on this account"
                 />
             )}
+            {needsAttention && <NeedsAttentionIcon account={account} />}
             <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
                 {chipFor(account.id)}
             </span>
         </button>
+    );
+}
+
+function NeedsAttentionIcon({ account }: { account: Account }) {
+    function openAccounts(event: React.MouseEvent | React.KeyboardEvent) {
+        event.preventDefault();
+        event.stopPropagation();
+        router.visit(accountsRoute().url);
+    }
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span
+                    role="link"
+                    tabIndex={0}
+                    aria-label={`${account.handle} needs attention`}
+                    onClick={openAccounts}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            openAccounts(event);
+                        }
+                    }}
+                    className="inline-grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm text-destructive outline-hidden hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive/40"
+                >
+                    <AlertTriangle className="size-3.5" aria-hidden />
+                </span>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+                Reconnect {account.handle} before posting.
+            </TooltipContent>
+        </Tooltip>
     );
 }

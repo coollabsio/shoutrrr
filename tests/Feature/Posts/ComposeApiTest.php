@@ -138,6 +138,7 @@ test('a user cannot autosave a post in another workspace', function () {
 
 test('GET /posts/{post} renders the composer page for an existing post', function () {
     [$user, $workspace, $accounts] = actingMember(1);
+    $accounts[0]->forceFill(['status' => 'needs_attention'])->save();
     $post = Post::factory()->create(['workspace_id' => $workspace->id, 'base_text' => 'hello']);
 
     test()->get("/posts/{$post->id}")
@@ -145,7 +146,8 @@ test('GET /posts/{post} renders the composer page for an existing post', functio
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('compose/index')
             ->where('post.id', $post->id)
-            ->where('post.base_text', 'hello'));
+            ->where('post.base_text', 'hello')
+            ->where('accounts.0.status', 'needs_attention'));
 });
 
 test('GET /posts/{post} includes saved workspace mentions', function () {

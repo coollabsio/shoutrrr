@@ -22,6 +22,11 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+    InputGroup,
+    InputGroupAddon,
+    InputGroupInput,
+} from '@/components/ui/input-group';
 import { Label } from '@/components/ui/label';
 import type { PlatformName } from '@/types/compose';
 
@@ -90,12 +95,20 @@ function BlueskyConnectDialog() {
                                     <Label htmlFor="identifier">
                                         Handle or email
                                     </Label>
-                                    <Input
-                                        id="identifier"
-                                        name="identifier"
-                                        placeholder="you.bsky.social"
-                                        required
-                                    />
+                                    <InputGroup>
+                                        <InputGroupAddon>@</InputGroupAddon>
+                                        <InputGroupInput
+                                            id="identifier"
+                                            name="identifier"
+                                            placeholder="you.bsky.social"
+                                            aria-invalid={
+                                                errors.identifier
+                                                    ? true
+                                                    : undefined
+                                            }
+                                            required
+                                        />
+                                    </InputGroup>
                                     <InputError message={errors.identifier} />
                                 </div>
                                 <div className="grid gap-2">

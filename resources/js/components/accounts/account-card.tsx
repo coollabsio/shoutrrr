@@ -18,6 +18,11 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+    InputGroup,
+    InputGroupAddon,
+    InputGroupInput,
+} from '@/components/ui/input-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import type { PlatformName } from '@/types/compose';
@@ -76,15 +81,23 @@ function ReconnectBlueskyDialog({ account }: { account: Account }) {
                                     <Label htmlFor={`identifier-${account.id}`}>
                                         Handle or email
                                     </Label>
-                                    <Input
-                                        id={`identifier-${account.id}`}
-                                        name="identifier"
-                                        defaultValue={account.handle.replace(
-                                            /^@/,
-                                            '',
-                                        )}
-                                        required
-                                    />
+                                    <InputGroup>
+                                        <InputGroupAddon>@</InputGroupAddon>
+                                        <InputGroupInput
+                                            id={`identifier-${account.id}`}
+                                            name="identifier"
+                                            defaultValue={account.handle.replace(
+                                                /^@/,
+                                                '',
+                                            )}
+                                            aria-invalid={
+                                                errors.identifier
+                                                    ? true
+                                                    : undefined
+                                            }
+                                            required
+                                        />
+                                    </InputGroup>
                                     <InputError message={errors.identifier} />
                                 </div>
                                 <div className="grid gap-2">
