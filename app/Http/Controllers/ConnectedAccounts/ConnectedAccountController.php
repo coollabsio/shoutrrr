@@ -28,7 +28,7 @@ class ConnectedAccountController extends Controller
         $defaultAccountId = $request->user()->currentWorkspace()->value('default_connected_account_id');
 
         $accounts = ConnectedAccount::query()
-            ->with('connectedBy:id,name')
+            ->with(['connectedBy:id,name', 'secret:connected_account_id,session'])
             ->latest()
             ->get()
             ->sortByDesc(fn (ConnectedAccount $account): bool => $account->id === $defaultAccountId)
@@ -47,6 +47,7 @@ class ConnectedAccountController extends Controller
                 'max_text_length' => $account->maxTextLength(),
                 'x_premium' => $account->hasXPremium(),
                 'is_default' => $account->id === $defaultAccountId,
+                'pds_url' => $this->customPdsUrl($account),
             ])
             ->values()
             ->all();
@@ -56,6 +57,26 @@ class ConnectedAccountController extends Controller
             'capabilities' => Platform::capabilities(),
             'canManage' => $request->user()->can('create', ConnectedAccount::class),
         ]);
+    }
+
+    /**
+     * The saved PDS for a Bluesky account, but only when it differs from the
+     * default discovery target — so reconnect can re-run OAuth against a custom
+     * service URL instead of silently falling back to bsky.social.
+     */
+    private function customPdsUrl(ConnectedAccount $account): ?string
+    {
+        if ($account->platform !== Platform::Bluesky) {
+            return null;
+        }
+
+        $pds = $account->secret?->session['pds'] ?? null;
+
+        if (! is_string($pds) || $pds === '' || rtrim($pds, '/') === 'https://bsky.social') {
+            return null;
+        }
+
+        return $pds;
     }
 
     public function reconnect(Request $request, ConnectedAccount $account): RedirectResponse

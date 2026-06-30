@@ -1,7 +1,9 @@
 <?php
 
+use App\Enums\Platform;
 use App\Enums\WorkspaceRole;
 use App\Models\ConnectedAccount;
+use App\Models\ConnectedAccountSecret;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
@@ -44,6 +46,50 @@ test('the accounts page lists accounts and exposes capabilities and canManage to
             ->where('accounts.0.max_text_length', 25_000)
             ->where('accounts.0.is_default', false)
             ->missing('accounts.0.secret'),
+        );
+});
+
+test('the accounts page exposes a saved custom PDS so reconnect can replay it', function () {
+    $owner = User::factory()->create(['email_verified_at' => now()]);
+    $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $owner->id,
+    ]);
+    $owner->forceFill(['current_workspace_id' => $workspace->id])->save();
+
+    $default = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::Bluesky,
+        'handle' => '@default-pds',
+        'auth_method' => 'oauth',
+        'created_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $default->id,
+        'session' => ['pds' => 'https://bsky.social'],
+    ]);
+
+    $custom = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::Bluesky,
+        'handle' => '@custom',
+        'auth_method' => 'oauth',
+        'created_at' => now(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $custom->id,
+        'session' => ['pds' => 'https://pds.example'],
+    ]);
+
+    test()->actingAs($owner)->get('/accounts')
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('accounts/index')
+            ->has('accounts', 2)
+            ->where('accounts.0.handle', '@custom')
+            ->where('accounts.0.pds_url', 'https://pds.example')
+            ->where('accounts.1.handle', '@default-pds')
+            ->where('accounts.1.pds_url', null),
         );
 });
 

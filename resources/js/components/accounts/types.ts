@@ -13,6 +13,7 @@ export type Account = {
     max_text_length: number;
     x_premium: boolean;
     is_default: boolean;
+    pds_url: string | null;
 };
 
 export type Capability = {
