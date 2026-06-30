@@ -51,6 +51,11 @@ services:
                 POSTGRES_VERSION: "${POSTGRES_VERSION:-17}"
         image: "shoutrrr:dev"
         restart: unless-stopped
+        # Put any extra config in your .env (X_*, LINKEDIN_*, AWS_*,
+        # OCTANE_HTTPS, ...) and it's passed straight through to the app.
+        env_file:
+            - path: .env
+              required: false
         environment:
             <<: *app-env
         ports:

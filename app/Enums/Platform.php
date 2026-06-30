@@ -72,9 +72,10 @@ enum Platform: string
 
         $key = $this->configKey();
 
+        // filled() so a blank value in .env isn't treated as configured.
         return $key !== null
-            && config($key.'.client_id') !== null
-            && config($key.'.client_secret') !== null;
+            && filled(config($key.'.client_id'))
+            && filled(config($key.'.client_secret'));
     }
 
     /**

@@ -47,6 +47,11 @@ services:
         image: "ghcr.io/coollabsio/shoutrrr:latest"
         pull_policy: always
         restart: unless-stopped
+        # Put any extra config in your .env (X_*, LINKEDIN_*, AWS_*,
+        # OCTANE_HTTPS, ...) and it's passed straight through to the app.
+        env_file:
+            - path: .env
+              required: false
         environment:
             <<: *app-env
         ports:

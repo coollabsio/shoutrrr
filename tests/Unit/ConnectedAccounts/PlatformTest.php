@@ -38,6 +38,18 @@ test('oauth platform is configured only when client id and secret are present', 
     expect(Platform::X->isConfigured())->toBeTrue();
 });
 
+test('oauth platform with blank credentials is not configured', function () {
+    // env_file passthrough turns an unset var into an empty string, which must
+    // not count as configured.
+    config()->set('services.x.client_id', '');
+    config()->set('services.x.client_secret', '');
+    expect(Platform::X->isConfigured())->toBeFalse();
+
+    config()->set('services.x.client_id', 'cid');
+    config()->set('services.x.client_secret', '');
+    expect(Platform::X->isConfigured())->toBeFalse();
+});
+
 test('app-password platform is always configured', function () {
     expect(Platform::Bluesky->isConfigured())->toBeTrue();
 });
