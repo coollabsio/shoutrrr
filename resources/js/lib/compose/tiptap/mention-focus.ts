@@ -1,7 +1,10 @@
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 
-/** Characters HANDLE_PATTERN allows to immediately follow a mention handle. */
-const MENTION_BOUNDARY_PUNCTUATION = '.,!?;:';
+import {
+    endsMentionBoundary,
+    startsMentionBoundary,
+} from '@/lib/compose/mentions';
 
 /**
  * Move focus to the end of `label` in the editor, inserting a trailing space when
@@ -21,7 +24,7 @@ export function focusEditorAfterMentionLabel(
         return false;
     }
 
-    const end = findMentionLabelEnd(editor, label);
+    const end = findMentionLabelEnd(editor.state.doc, label);
     if (end === null) {
         editor.commands.focus('end');
 
@@ -48,13 +51,72 @@ export function editorContainsMentionLabel(
     editor: Editor,
     label: string,
 ): boolean {
-    return findMentionLabelEnd(editor, label) !== null;
+    return findMentionLabelEnd(editor.state.doc, label) !== null;
 }
 
-function findMentionLabelEnd(editor: Editor, label: string): number | null {
+/**
+ * Delete the `@label` token from the editor and keep focus there — used when the
+ * user backspaces or escapes an empty mention. Returns true when a token was
+ * removed.
+ */
+export function removeMentionLabel(editor: Editor, label: string): boolean {
+    if (editor.isDestroyed) {
+        return false;
+    }
+
+    const range = mentionRemovalRange(editor.state.doc, label);
+    if (range === null) {
+        return false;
+    }
+
+    editor.chain().focus().deleteRange(range).run();
+
+    return true;
+}
+
+/**
+ * The `{ from, to }` document range to delete to remove `label`'s token,
+ * swallowing a single leading space so deleting the `@` in `hi @` leaves `hi`,
+ * not a dangling `hi `. Null when the label is not present as a real token.
+ */
+export function mentionRemovalRange(
+    doc: ProseMirrorNode,
+    label: string,
+): { from: number; to: number } | null {
+    const to = findMentionLabelEnd(doc, label);
+    if (to === null) {
+        return null;
+    }
+
+    let from = to - label.length;
+    if (from > 0 && doc.textBetween(from - 1, from) === ' ') {
+        from -= 1;
+    }
+
+    return { from, to };
+}
+
+/**
+ * Document position of the start of `label`'s boundary-delimited occurrence —
+ * the `@` itself — or null when the label isn't present as a real token. Used to
+ * pin the mention picker beside the `@` so it stays put as the name is typed.
+ */
+export function findMentionLabelStart(
+    editor: Editor,
+    label: string,
+): number | null {
+    const end = findMentionLabelEnd(editor.state.doc, label);
+
+    return end === null ? null : end - label.length;
+}
+
+function findMentionLabelEnd(
+    doc: ProseMirrorNode,
+    label: string,
+): number | null {
     let end: number | null = null;
 
-    editor.state.doc.descendants((node, pos) => {
+    doc.descendants((node, pos) => {
         if (!node.isText || !node.text) {
             return;
         }
@@ -86,18 +148,13 @@ export function findMentionLabelEndInText(
     while (index !== -1) {
         const before = index === 0 ? '' : text[index - 1];
         const after = text[index + label.length] ?? '';
-        if (startsMention(before) && (after === '' || endsMention(after))) {
+        if (startsMentionBoundary(before) && endsMentionBoundary(after)) {
             end = index + label.length;
         }
         index = text.indexOf(label, index + 1);
     }
 
     return end;
-}
-
-/** A char that can precede a mention: the token start or whitespace. */
-function startsMention(char: string): boolean {
-    return char === '' || /\s/.test(char);
 }
 
 /**
@@ -107,9 +164,5 @@ function startsMention(char: string): boolean {
  * mention when the caller positions the caret there.
  */
 export function endsMention(char: string): boolean {
-    return (
-        char === ' ' ||
-        char === '\n' ||
-        (char !== '' && MENTION_BOUNDARY_PUNCTUATION.includes(char))
-    );
+    return char !== '' && endsMentionBoundary(char);
 }

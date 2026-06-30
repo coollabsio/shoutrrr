@@ -63,10 +63,11 @@ function CommandDialog({
   )
 }
 
-const CommandInput = React.forwardRef<
-  React.ElementRef<typeof CommandPrimitive.Input>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(function CommandInput({ className, ...props }, ref) {
+function CommandInput({
+  className,
+  ref,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
       <InputGroup className="h-8! bg-input/50">
@@ -85,7 +86,7 @@ const CommandInput = React.forwardRef<
       </InputGroup>
     </div>
   )
-})
+}
 
 function CommandList({
   className,

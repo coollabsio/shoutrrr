@@ -227,19 +227,36 @@ export function replaceMentionLabel(
     return result + text.slice(cursor);
 }
 
+/** Punctuation HANDLE_PATTERN permits immediately after a mention handle. */
+export const MENTION_BOUNDARY_PUNCTUATION = '.,!?;:';
+
+/** A char that can precede a mention token: the token start ('') or whitespace. */
+export function startsMentionBoundary(char: string): boolean {
+    return char === '' || /\s/.test(char);
+}
+
+/**
+ * A char that can close a mention token: the token end (''), whitespace, or the
+ * punctuation HANDLE_PATTERN permits after a handle.
+ */
+export function endsMentionBoundary(char: string): boolean {
+    return (
+        char === '' ||
+        /\s/.test(char) ||
+        MENTION_BOUNDARY_PUNCTUATION.includes(char)
+    );
+}
+
 /**
  * A mention spans a whole token when it is preceded by the start or whitespace
  * and followed by the end, whitespace, or the punctuation HANDLE_PATTERN allows.
  */
 function isMentionTokenBoundary(before: string, after: string): boolean {
-    const startsOk = before === '' || /\s/.test(before);
-    const endsOk = after === '' || /\s/.test(after) || '.,!?;:'.includes(after);
-
-    return startsOk && endsOk;
+    return startsMentionBoundary(before) && endsMentionBoundary(after);
 }
 
 /** Stable mention id from a workspace library name or label. */
-export function mentionIdFromLabel(label: string): string {
+function mentionIdFromLabel(label: string): string {
     const id = label
         .replace(/^@/, '')
         .toLowerCase()

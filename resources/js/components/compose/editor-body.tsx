@@ -2,12 +2,11 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { Split } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
-import { PlatformGlyph } from '@/components/common/platform-glyph';
 import MentionPicker from '@/components/compose/mention-picker';
 import {
     Popover,
+    PopoverAnchor,
     PopoverContent,
-    PopoverTrigger,
 } from '@/components/ui/popover';
 import { mentionInputValue, updateMentionName } from '@/lib/compose/mentions';
 import {
@@ -17,7 +16,9 @@ import {
 } from '@/lib/compose/tiptap-doc';
 import {
     editorContainsMentionLabel,
+    findMentionLabelStart,
     focusEditorAfterMentionLabel,
+    removeMentionLabel,
 } from '@/lib/compose/tiptap/mention-focus';
 import { composerExtensions } from '@/lib/compose/tiptap/setup';
 import { cn } from '@/lib/utils';
@@ -114,6 +115,14 @@ export default function EditorBody({
     const [activeMentionId, setActiveMentionId] = useState<string | null>(null);
     const previousMentionCount = useRef(mentions.length);
     const pendingFocusLabel = useRef<string | null>(null);
+    // A zero-size element pinned to the active `@`; the picker popover anchors to
+    // it so it floats beside the mention instead of inserting an in-flow bar that
+    // would shove the editor down. `ready` gates the popover open until the anchor
+    // has been positioned, so it never flashes at a stale spot on first open.
+    const containerRef = useRef<HTMLDivElement>(null);
+    const mentionAnchorRef = useRef<HTMLDivElement>(null);
+    const mentionWasActive = useRef(false);
+    const [mentionAnchorReady, setMentionAnchorReady] = useState(false);
     // editorProps is captured once at editor creation, but onPasteFiles is a
     // fresh closure each render (it reads the current media/limits). Route through
     // a ref so handlePaste always enforces the latest one-video / no-mixing rule.
@@ -271,6 +280,40 @@ export default function EditorBody({
             ? mentionPlatforms
             : ([markerPlatform ?? 'x'] as PlatformName[]);
 
+    // Place the floating anchor at the active `@` only on the open transition.
+    // The `@` does not move as the name is typed into the picker, so positioning
+    // once keeps the popover put; re-running on every keystroke would needlessly
+    // churn (and Radix would not re-measure an already-open popover anyway).
+    function positionMentionAnchor(label: string) {
+        const container = containerRef.current;
+        const anchor = mentionAnchorRef.current;
+        if (!editor || !container || !anchor) {
+            return;
+        }
+        const pos =
+            findMentionLabelStart(editor, label) ?? editor.state.selection.from;
+        const caret = editor.view.coordsAtPos(pos);
+        const rect = container.getBoundingClientRect();
+        anchor.style.left = `${caret.left - rect.left}px`;
+        anchor.style.top = `${caret.top - rect.top}px`;
+        anchor.style.height = `${caret.bottom - caret.top}px`;
+    }
+
+    useEffect(() => {
+        if (activeMention) {
+            if (!mentionWasActive.current) {
+                positionMentionAnchor(activeMention.label);
+                setMentionAnchorReady(true);
+            }
+            mentionWasActive.current = true;
+
+            return;
+        }
+        mentionWasActive.current = false;
+        setMentionAnchorReady(false);
+        // oxlint-disable-next-line react-hooks/exhaustive-deps
+    }, [editor, activeMentionId]);
+
     function updateMention(
         previous: MentionPlaceholder,
         next: MentionPlaceholder,
@@ -294,10 +337,19 @@ export default function EditorBody({
         tryFocusMentionLabel(mention.label);
     }
 
+    // Discard an empty mention: drop the bare `@` from the editor and close the
+    // picker. Triggered by Backspace in an empty search field or by Escape once
+    // the typed name has been cleared.
+    function removeActiveMention() {
+        if (!activeMention || !editor) {
+            return;
+        }
+        setActiveMentionId(null);
+        removeMentionLabel(editor, activeMention.label);
+    }
+
     // Escape in the picker is two-step: the first press clears the typed name
-    // (back to a bare `@`), the second closes the picker. The `@` itself stays
-    // in the editor so a literal `@` can still be typed, and focus returns to
-    // the editor so typing can continue right after it.
+    // (back to a bare `@`), the second discards the now-empty mention entirely.
     function handleMentionEscape() {
         if (!activeMention) {
             return;
@@ -307,12 +359,11 @@ export default function EditorBody({
 
             return;
         }
-        setActiveMentionId(null);
-        requestAnimationFrame(() => editor?.commands.focus());
+        removeActiveMention();
     }
 
     return (
-        <div className="relative">
+        <div ref={containerRef} className="relative">
             {overrideBanner && (
                 <output
                     className={cn(
@@ -350,54 +401,52 @@ export default function EditorBody({
                     )}
                 </output>
             )}
-            {editable && onMentionsChange && activeMention && (
-                <div className="flex items-center border-b border-border/70 px-4 py-2 sm:px-[26px]">
-                    <Popover
-                        open
-                        onOpenChange={(open) => {
-                            if (!open) {
-                                setActiveMentionId(null);
-                            }
+            <Popover
+                open={
+                    !!(editable && onMentionsChange && activeMention) &&
+                    mentionAnchorReady
+                }
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setActiveMentionId(null);
+                    }
+                }}
+            >
+                <PopoverAnchor asChild>
+                    <div
+                        ref={mentionAnchorRef}
+                        aria-hidden
+                        className="pointer-events-none absolute w-0"
+                    />
+                </PopoverAnchor>
+                {activeMention && (
+                    <PopoverContent
+                        align="start"
+                        side="bottom"
+                        sideOffset={8}
+                        className="w-80 gap-0 rounded-2xl p-2"
+                        onOpenAutoFocus={(event) => event.preventDefault()}
+                        onEscapeKeyDown={(event) => {
+                            event.preventDefault();
+                            handleMentionEscape();
                         }}
                     >
-                        <PopoverTrigger asChild>
-                            <button
-                                type="button"
-                                className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary shadow-sm"
-                            >
-                                <PlatformGlyph
-                                    platform={activePlatforms[0] ?? 'x'}
-                                    size={12}
-                                    className="shrink-0"
-                                />
-                                {activeMention.label}
-                            </button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                            align="start"
-                            className="w-80 gap-0 rounded-2xl p-2"
-                            onOpenAutoFocus={(event) => event.preventDefault()}
-                            onEscapeKeyDown={(event) => {
-                                event.preventDefault();
-                                handleMentionEscape();
+                        <MentionPicker
+                            activeMention={activeMention}
+                            savedMentions={savedMentions}
+                            activePlatforms={activePlatforms}
+                            onApplySavedMention={(saved) => {
+                                onApplySavedMention?.(activeMention, saved);
                             }}
-                        >
-                            <MentionPicker
-                                activeMention={activeMention}
-                                savedMentions={savedMentions}
-                                activePlatforms={activePlatforms}
-                                onApplySavedMention={(saved) => {
-                                    onApplySavedMention?.(activeMention, saved);
-                                }}
-                                onUpdateMention={updateMention}
-                                onSaveMention={onSaveMention}
-                                saveMentionProcessing={saveMentionProcessing}
-                                onMentionComplete={completeMention}
-                            />
-                        </PopoverContent>
-                    </Popover>
-                </div>
-            )}
+                            onUpdateMention={updateMention}
+                            onSaveMention={onSaveMention}
+                            saveMentionProcessing={saveMentionProcessing}
+                            onMentionComplete={completeMention}
+                            onRemoveMention={removeActiveMention}
+                        />
+                    </PopoverContent>
+                )}
+            </Popover>
             <div className="px-4 pt-[22px] pb-[18px] sm:px-[26px]">
                 <EditorContent
                     editor={editor}

@@ -46,6 +46,8 @@ type MentionPickerProps = {
     onSaveMention?: (mention: MentionPlaceholder) => Promise<void>;
     saveMentionProcessing?: boolean;
     onMentionComplete?: (mention: MentionPlaceholder) => void;
+    /** Discard the in-progress mention (Backspace on an empty search field). */
+    onRemoveMention?: () => void;
 };
 
 export function savedMentionSearchKeywords(
@@ -104,6 +106,7 @@ export default function MentionPicker({
     onSaveMention,
     saveMentionProcessing = false,
     onMentionComplete,
+    onRemoveMention,
 }: MentionPickerProps) {
     const [mode, setMode] = useState<MentionPickerMode>('search');
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -114,11 +117,15 @@ export default function MentionPicker({
     // Focus (and select) whichever field the current mode exposes. Both modes
     // share the same defer-a-frame-then-focus dance, so they live in one effect.
     // It also re-runs when the active mention changes — a different chip clicked
-    // or a brand-new @mention — so focus follows it. The shouldFocus guard skips
-    // select() while the field is already focused, so renaming the current
-    // mention (whose id changes on every keystroke) leaves typing untouched.
+    // or a brand-new @mention — so focus follows it. Renaming the current mention
+    // re-runs this too (its id changes on every keystroke), but the field is
+    // already focused then, so the early return leaves the caret untouched.
     useEffect(() => {
         const ref = mode === 'edit' ? mentionNameInputRef : searchInputRef;
+
+        if (ref.current && ref.current === document.activeElement) {
+            return;
+        }
 
         const frame = window.requestAnimationFrame(() => {
             const input = ref.current;
@@ -215,19 +222,16 @@ export default function MentionPicker({
                         updateMentionName(activeMention, value),
                     )
                 }
+                onKeyDown={(event) => {
+                    if (event.key === 'Backspace' && search === '') {
+                        event.preventDefault();
+                        onRemoveMention?.();
+                    }
+                }}
             />
             <CommandList className="max-h-56">
-                <CommandEmpty className="py-4">
-                    <button
-                        type="button"
-                        onClick={openCreateMode}
-                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                    >
-                        <Plus className="size-3.5" aria-hidden />
-                        {search.trim() === ''
-                            ? 'Create new mention'
-                            : `Create ${createLabel}`}
-                    </button>
+                <CommandEmpty className="py-6 text-center text-xs text-muted-foreground">
+                    Type a name to create a mention
                 </CommandEmpty>
                 {savedMentions.length > 0 && (
                     <CommandGroup heading="Saved mentions">
@@ -260,9 +264,9 @@ export default function MentionPicker({
                         ))}
                     </CommandGroup>
                 )}
-                {savedMentions.length > 0 && search.trim() !== '' && (
+                {search.trim() !== '' && (
                     <>
-                        <CommandSeparator />
+                        {savedMentions.length > 0 && <CommandSeparator />}
                         <CommandGroup>
                             <CommandItem
                                 value={`__create__${createLabel}`}
@@ -276,15 +280,6 @@ export default function MentionPicker({
                     </>
                 )}
             </CommandList>
-            <div className="border-t border-border/70 pt-2">
-                <button
-                    type="button"
-                    onClick={() => setMode('edit')}
-                    className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                    Edit platform handles for {activeMention.label}
-                </button>
-            </div>
         </Command>
     );
 }
