@@ -32,4 +32,18 @@ describe('Bluesky connect dialog layout', () => {
         expect(source).not.toContain('BriefcaseBusiness');
         expect(source).not.toContain('X as XIcon');
     });
+
+    it('shows the at sign as a non-submitted Bluesky handle prefix', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/accounts/connect-buttons.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('InputGroupAddon');
+        expect(source).toContain('<InputGroupAddon>@</InputGroupAddon>');
+        expect(source).toContain('InputGroupInput');
+    });
 });
