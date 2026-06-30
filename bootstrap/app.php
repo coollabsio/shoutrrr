@@ -19,6 +19,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Honor reverse-proxy forwarding headers (X-Forwarded-Proto, -Host, -Port)
+        // so request-derived URLs — redirects, asset URLs, and OAuth redirect_uri —
+        // use the public HTTPS scheme when terminated at a proxy (Coolify/Traefik).
+        // Off by default; opt in by setting TRUSTED_PROXIES (e.g. `*` for a container
+        // only reachable through the internal proxy, or a comma-separated CIDR list).
+        // env() here reads the real process environment, so it survives config caching.
+        $middleware->trustProxies(at: env('TRUSTED_PROXIES'));
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->alias([
