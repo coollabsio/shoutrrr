@@ -20,6 +20,9 @@ x-environment: &app-env
     APP_DEBUG: "${APP_DEBUG:-true}"
     APP_URL: "${APP_URL:-http://localhost:8080}"
     OCTANE_SERVER: "frankenphp"
+    # Force https on generated URLs (redirects, route()) when behind a
+    # TLS-terminating proxy/tunnel. Set OCTANE_HTTPS=true in that case.
+    OCTANE_HTTPS: "${OCTANE_HTTPS:-false}"
     DB_CONNECTION: "${DB_CONNECTION:-sqlite}"
     # NOTE: for Postgres set DB_CONNECTION=pgsql AND override DB_DATABASE=laravel (the
     # sqlite-path default below is invalid for pgsql).
