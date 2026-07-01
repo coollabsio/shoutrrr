@@ -7,9 +7,11 @@ namespace App\Services\ConnectedAccounts;
 use App\Dto\ConnectedAccount\ConnectedAccountData;
 use App\Enums\Platform;
 use App\Services\Atproto\DPoP;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -34,8 +36,17 @@ class BlueskyOAuthConnector
             $pdsUrl !== null && trim($pdsUrl) !== '' => $this->bluesky->resolvePds('bsky.social', $pdsUrl),
             default => 'https://bsky.social',
         };
-        $issuer = $this->authorizationServer($pds);
-        $metadata = $this->authorizationMetadata($issuer);
+        try {
+            $metadata = $this->authorizationMetadata($pds);
+        } catch (RuntimeException $e) {
+            Log::warning('Bluesky OAuth: metadata discovery failed', [
+                'pds' => $pds,
+                'identifier' => $identifier,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+        $issuer = (string) ($metadata['issuer'] ?? $pds);
 
         $state = Str::random(64);
         $verifier = $this->base64Url(random_bytes(64));
@@ -63,6 +74,14 @@ class BlueskyOAuthConnector
         $par = $this->postWithDpopNonce($parEndpoint, $key, $parForm);
 
         if ($par->failed() || ! is_string($par->json('request_uri'))) {
+            Log::warning('Bluesky OAuth: PAR request failed', [
+                'par_endpoint' => $parEndpoint,
+                'status' => $par->status(),
+                'body' => $par->body(),
+                'identifier' => $identifier,
+                'pds' => $pds,
+                'issuer' => $issuer,
+            ]);
             throw new RuntimeException('Bluesky OAuth could not start. Please try the app-password option for now.');
         }
 
@@ -113,6 +132,11 @@ class BlueskyOAuthConnector
         ]);
 
         if ($response->failed()) {
+            Log::warning('Bluesky OAuth: token exchange failed', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+                'issuer' => $issuer,
+            ]);
             throw new RuntimeException('Bluesky OAuth token exchange failed. Please try again. (HTTP '.$response->status().')');
         }
 
@@ -178,35 +202,21 @@ class BlueskyOAuthConnector
         return null;
     }
 
-    private function authorizationServer(string $pds): string
-    {
-        $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
-            ->get($pds.'/.well-known/oauth-protected-resource');
-
-        $server = $response->json('authorization_servers.0');
-
-        if (is_string($server) && $server !== '') {
-            return rtrim($server, '/');
-        }
-
-        $origin = parse_url($pds, PHP_URL_SCHEME).'://'.parse_url($pds, PHP_URL_HOST);
-        $metadata = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
-            ->get($origin.'/.well-known/oauth-authorization-server');
-
-        if ($metadata->successful() && $metadata->json('issuer') === $origin) {
-            return $origin;
-        }
-
-        throw new RuntimeException('Could not discover the Bluesky authorization server.');
-    }
-
     /**
      * @return array<string, mixed>
      */
-    private function authorizationMetadata(string $issuer): array
+    private function authorizationMetadata(string $pds): array
     {
+        $resource = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
+            ->get($pds.'/.well-known/oauth-protected-resource');
+
+        $authServer = $resource->json('authorization_servers.0');
+        $endpoint = is_string($authServer) && $authServer !== ''
+            ? rtrim($authServer, '/')
+            : $pds;
+
         $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
-            ->get($issuer.'/.well-known/oauth-authorization-server');
+            ->get($endpoint.'/.well-known/oauth-authorization-server');
 
         if ($response->failed()) {
             throw new RuntimeException('Could not read Bluesky OAuth metadata.');
@@ -228,17 +238,29 @@ class BlueskyOAuthConnector
      * @param  array<string, string>  $key
      * @param  array<string, string>  $form
      */
-    private function postWithDpopNonce(string $url, array $key, array $form, ?string $nonce = null, int $depth = 0): Response
+    private function postWithDpopNonce(string $url, array $key, array $form, ?string $nonce = null): Response
     {
-        $response = $this->http->asForm()
-            ->withHeader('DPoP', $this->dpop->proof('POST', $url, $key, nonce: $nonce))
-            ->post($url, $form);
+        try {
+            $response = $this->http->asForm()
+                ->withHeader('DPoP', $this->dpop->proof('POST', $url, $key, nonce: $nonce))
+                ->post($url, $form);
+        } catch (ConnectionException $e) {
+            Log::warning('Bluesky OAuth: connection error during POST', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+            throw new RuntimeException('Could not reach the Bluesky authorization server. Please try again.');
+        }
 
-        if ($response->status() === 400 && $depth < 3) {
-            $freshNonce = $response->header('DPoP-Nonce');
-            if ($freshNonce !== '' && $freshNonce !== $nonce) {
-                return $this->postWithDpopNonce($url, $key, $form, $freshNonce, $depth + 1);
-            }
+        $freshNonce = $response->header('DPoP-Nonce');
+        if ($freshNonce === '') {
+            $freshNonce = null;
+        }
+
+        if ($response->status() === 400 && $freshNonce !== null && $freshNonce !== $nonce && str_contains((string) $response->body(), 'use_dpop_nonce')) {
+            return $this->http->asForm()
+                ->withHeader('DPoP', $this->dpop->proof('POST', $url, $key, nonce: $freshNonce))
+                ->post($url, $form);
         }
 
         return $response;

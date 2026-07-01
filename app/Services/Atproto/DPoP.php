@@ -81,7 +81,8 @@ class DPoP
             'jti' => (string) Str::uuid(),
             'htm' => strtoupper($method),
             'htu' => strtok($url, '?') ?: $url,
-            'iat' => time(),
+            'iat' => time() - 30,
+            'exp' => time() + 300,
         ];
 
         if ($accessToken !== null && $accessToken !== '') {
