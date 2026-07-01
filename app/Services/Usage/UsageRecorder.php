@@ -32,11 +32,11 @@ class UsageRecorder
         bool $succeeded = true,
         array $meta = [],
     ): void {
-        if (! $this->settings->usageTrackingEnabled()) {
-            return;
-        }
-
         try {
+            if (! $this->settings->usageTrackingEnabled()) {
+                return;
+            }
+
             DB::transaction(function () use ($category, $operation, $workspaceId, $platform, $quotaWeight, $succeeded, $meta): void {
                 UsageEvent::query()->create([
                     'workspace_id' => $workspaceId,
@@ -55,7 +55,7 @@ class UsageRecorder
             });
         } catch (Throwable $e) {
             // Metering must never break the caller (a publish/fetch). Swallow + log.
-            Log::warning('Usage recording failed.', ['message' => $e->getMessage()]);
+            Log::error('Usage recording failed.', ['message' => $e->getMessage()]);
         }
     }
 
