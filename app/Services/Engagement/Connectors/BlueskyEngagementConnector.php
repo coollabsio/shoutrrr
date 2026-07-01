@@ -193,6 +193,7 @@ class BlueskyEngagementConnector implements EngagementConnector
                 'text' => $text,
                 'createdAt' => Date::now()->toIso8601String(),
                 'reply' => ['root' => $root, 'parent' => $parentRef],
+                'langs' => ['en'],
             ];
 
             if ($embed !== null) {

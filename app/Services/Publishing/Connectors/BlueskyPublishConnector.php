@@ -83,6 +83,7 @@ class BlueskyPublishConnector implements PublishConnector
                     'text' => $text,
                     'facets' => $this->richTextFacets($text),
                     'createdAt' => Date::now()->toIso8601String(),
+                    'langs' => ['en'],
                 ];
 
                 if ($index === 0 && $embed !== null) {
