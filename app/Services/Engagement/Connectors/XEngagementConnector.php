@@ -8,11 +8,14 @@ use App\Dto\Engagement\FetchedReply;
 use App\Dto\Engagement\ReplyActionResult;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
+use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -22,6 +25,8 @@ use Illuminate\Support\Facades\Storage;
 
 class XEngagementConnector implements EngagementConnector
 {
+    use TracksUsage;
+
     private const string BASE = 'https://api.twitter.com/2';
 
     private const string MEDIA_BASE = 'https://api.x.com/2/media/upload';
@@ -62,6 +67,8 @@ class XEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyFetchResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response);
 
         if ($response->failed()) {
             return $this->mapFetchFailure($response);
@@ -117,6 +124,8 @@ class XEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyPostResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $response);
 
         if ($response->failed()) {
             return match (true) {

@@ -6,15 +6,20 @@ namespace App\Services\Metrics\Connectors;
 
 use App\Dto\Metrics\AccountMetricsResult;
 use App\Dto\Metrics\PostMetricsResult;
+use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Services\Metrics\Contracts\MetricsConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 
 class XMetricsConnector implements MetricsConnector
 {
+    use TracksUsage;
+
     private const string BASE = 'https://api.twitter.com/2';
 
     public function __construct(private readonly HttpFactory $http) {}
@@ -38,6 +43,8 @@ class XMetricsConnector implements MetricsConnector
         } catch (ConnectionException $e) {
             return PostMetricsResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::METRICS_FETCH_POST, $account, $response);
 
         if ($response->failed()) {
             return match (true) {
@@ -78,6 +85,8 @@ class XMetricsConnector implements MetricsConnector
         } catch (ConnectionException $e) {
             return AccountMetricsResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::METRICS_FETCH_ACCOUNT, $account, $response);
 
         if ($response->failed()) {
             return match (true) {

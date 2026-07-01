@@ -9,11 +9,14 @@ use App\Dto\Engagement\ReplyActionResult;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
@@ -24,6 +27,8 @@ use Illuminate\Support\Facades\Storage;
 
 class BlueskyEngagementConnector implements EngagementConnector
 {
+    use TracksUsage;
+
     private const string APPVIEW = 'https://public.api.bsky.app';
 
     private const string DEFAULT_PDS = 'https://bsky.social';
@@ -47,6 +52,8 @@ class BlueskyEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyFetchResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response);
 
         if ($response->failed()) {
             return $response->status() === 429
@@ -140,6 +147,8 @@ class BlueskyEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyPostResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $response);
 
         if ($response->failed()) {
             return $this->mapPostFailure($response);
