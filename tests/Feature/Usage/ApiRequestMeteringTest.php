@@ -6,6 +6,7 @@ use App\Models\UsageEvent;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\Request;
+use Laravel\Passport\Token;
 use Symfony\Component\HttpFoundation\Response;
 
 function mcpGrantAttributes(Workspace $workspace, string $tokenId): array
@@ -30,9 +31,12 @@ it('records an mcp_request for a token bound to a workspace', function () {
     {
         public function __construct(private string $id) {}
 
-        public function token(): object
+        public function token(): Token
         {
-            return (object) ['id' => $this->id];
+            $token = new Token;
+            $token->id = $this->id;
+
+            return $token;
         }
     });
 

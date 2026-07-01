@@ -39,6 +39,6 @@ trait TracksUsage
             'rate_limit' => $response->header('x-rate-limit-limit'),
             'rate_remaining' => $response->header('x-rate-limit-remaining'),
             'rate_reset' => $response->header('x-rate-limit-reset'),
-        ], static fn (mixed $value): bool => $value !== null && $value !== '');
+        ], static fn (int|string $value): bool => $value !== '');
     }
 }

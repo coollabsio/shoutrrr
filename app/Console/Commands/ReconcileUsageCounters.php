@@ -33,6 +33,7 @@ class ReconcileUsageCounters extends Command
             ->whereBetween('occurred_at', [$periodStart, $periodEnd->endOfDay()])
             ->selectRaw("workspace_id, category, coalesce(platform, 'none') as platform, operation, count(*) as event_count, sum(quota_weight) as total_quota")
             ->groupBy('workspace_id', 'category', 'platform', 'operation')
+            ->toBase()
             ->get();
 
         foreach ($aggregates as $row) {

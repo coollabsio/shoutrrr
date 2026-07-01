@@ -72,7 +72,7 @@ class UsageRecorder
             'workspace_id' => $workspaceId,
             'period_start' => $now->startOfMonth()->toDateString(),
             'category' => $category->value,
-            'platform' => $platform?->value ?? 'none',
+            'platform' => $platform !== null ? $platform->value : 'none',
             'operation' => $operation,
         ];
 
@@ -90,11 +90,9 @@ class UsageRecorder
         ]);
 
         // Atomic increment: compiles to `SET col = col + ?` on every driver.
-        // $quotaWeight is a typed int, so the interpolation is injection-safe.
-        UsagePeriodCounter::query()->where($keys)->update([
-            'total_quota' => DB::raw('total_quota + '.$quotaWeight),
-            'event_count' => DB::raw('event_count + 1'),
-            'updated_at' => $now,
-        ]);
+        UsagePeriodCounter::query()->where($keys)->incrementEach(
+            ['total_quota' => $quotaWeight, 'event_count' => 1],
+            ['updated_at' => $now],
+        );
     }
 }

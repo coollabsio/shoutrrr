@@ -34,6 +34,7 @@ class UsageReportController extends Controller
             ->whereBetween('occurred_at', [$from, $to])
             ->groupBy($column)
             ->selectRaw("{$column} as label, count(*) as event_count, sum(quota_weight) as total_quota")
+            ->toBase()
             ->get()
             ->map(fn ($row): array => [
                 'label' => $row->label,

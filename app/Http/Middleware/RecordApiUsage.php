@@ -10,6 +10,7 @@ use App\Services\Usage\UsageRecorder;
 use App\Support\UsageOperation;
 use Closure;
 use Illuminate\Http\Request;
+use Laravel\Passport\Token;
 use Symfony\Component\HttpFoundation\Response;
 
 class RecordApiUsage
@@ -27,7 +28,8 @@ class RecordApiUsage
     public function terminate(Request $request, Response $response): void
     {
         $user = $request->user();
-        $tokenId = $user?->token()?->id;
+        $token = $user?->token();
+        $tokenId = $token instanceof Token ? $token->id : null;
 
         if ($tokenId === null) {
             return;
