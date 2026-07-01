@@ -23,6 +23,7 @@ test('only linkedin caps the thread length', function () {
 test('media constraints match each platform', function () {
     expect(Platform::X->maxMedia())->toBe(4)
         ->and(Platform::LinkedIn->maxMedia())->toBe(9)
+        ->and(Platform::Bluesky->maxMediaBytes())->toBe(2_000_000)
         ->and(Platform::Bluesky->allowedMime())->toContain('image/webp')
         ->and(Platform::LinkedIn->allowedMime())->toContain('image/gif');
 });

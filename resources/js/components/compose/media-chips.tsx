@@ -1,4 +1,4 @@
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Eye, EyeOff, Film, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
 
@@ -168,6 +168,8 @@ export function MediaChips({
                     m.kind === 'video'
                         ? Boolean(onVideoClick)
                         : Boolean(onImageClick);
+                const blueskyGif =
+                    activePlatform === 'bluesky' && m.mime === 'image/gif';
 
                 return (
                     <Tooltip key={m.id}>
@@ -277,10 +279,22 @@ export function MediaChips({
                                         )}
                                     </button>
                                 )}
+                                {blueskyGif && (
+                                    <span className="absolute -right-1 -bottom-1 z-10 grid size-4 place-items-center rounded-full border border-background bg-amber-500 text-white shadow-sm">
+                                        <Film
+                                            className="size-2.5"
+                                            aria-hidden="true"
+                                        />
+                                    </span>
+                                )}
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[11px]">
-                            {canEdit ? 'Click to edit' : 'Attached media'}
+                            {blueskyGif
+                                ? 'Bluesky will publish this GIF as video'
+                                : canEdit
+                                  ? 'Click to edit'
+                                  : 'Attached media'}
                         </TooltipContent>
                     </Tooltip>
                 );
