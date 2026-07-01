@@ -4,6 +4,7 @@ use App\Enums\EngagementStatus;
 use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\PostTargetReply;
+use App\Services\Atproto\DPoP;
 use App\Services\Engagement\Connectors\BlueskyEngagementConnector;
 use App\Services\Engagement\Connectors\LinkedInEngagementConnector;
 use App\Services\Engagement\Connectors\XEngagementConnector;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Http;
 
 function blueskyActionConnector(): BlueskyEngagementConnector
 {
-    return new BlueskyEngagementConnector(app(Factory::class));
+    return new BlueskyEngagementConnector(app(Factory::class), app(DPoP::class));
 }
 
 function xActionConnector(): XEngagementConnector

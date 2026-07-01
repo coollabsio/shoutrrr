@@ -86,13 +86,13 @@ class ConnectedAccountController extends Controller
         // OAuth accounts reconnect by re-running the provider flow (which upserts
         // onto this row via the unique constraint); only app-password accounts
         // resubmit credentials here.
-        if (! $account->platform->supportsAppPassword()) {
+        if (! $account->platform->supportsAppPassword() || $account->auth_method === 'oauth') {
             if (! $account->platform->isConfigured()) {
                 return redirect()->route('accounts.index')
                     ->with('error', "{$account->platform->label()} is not configured for reconnection.");
             }
 
-            return redirect()->route('accounts.connect', ['platform' => $account->platform->value]);
+            return redirect()->route('accounts.bluesky.oauth', ['identifier' => ltrim($account->handle, '@')]);
         }
 
         $validated = $request->validate([

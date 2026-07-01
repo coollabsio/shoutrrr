@@ -27,22 +27,24 @@ class BlueskyOAuthConnector
     public function authorizationRedirect(?string $identifier, string $clientId, string $redirectUri, ?string $pdsUrl = null): array
     {
         $identifier = $identifier === null ? null : ltrim(trim($identifier), '@');
+
+        $did = null;
         $pds = match (true) {
-            $identifier !== null && $identifier !== '' => $this->bluesky->resolvePds($identifier, null),
+            $identifier !== null && $identifier !== '' => $this->bluesky->resolvePdsAndDid($identifier, $pdsUrl, $did),
             $pdsUrl !== null && trim($pdsUrl) !== '' => $this->bluesky->resolvePds('bsky.social', $pdsUrl),
             default => 'https://bsky.social',
         };
-        $did = $identifier ? $this->resolveDid($identifier) : null;
         $issuer = $this->authorizationServer($pds);
         $metadata = $this->authorizationMetadata($issuer);
 
         $state = Str::random(64);
         $verifier = $this->base64Url(random_bytes(64));
         $key = $this->dpop->generateKey();
-        $scope = 'atproto transition:generic';
+        $signingKey = $this->dpop->signingKey();
+        $scope = 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/*';
 
         $parEndpoint = (string) $metadata['pushed_authorization_request_endpoint'];
-        $par = $this->postWithDpopNonce($parEndpoint, $key, [
+        $parForm = [
             'client_id' => $clientId,
             'response_type' => 'code',
             'redirect_uri' => $redirectUri,
@@ -50,7 +52,15 @@ class BlueskyOAuthConnector
             'state' => $state,
             'code_challenge' => $this->base64Url(hash('sha256', $verifier, true)),
             'code_challenge_method' => 'S256',
-        ]);
+            'client_assertion_type' => 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion' => $this->dpop->clientAssertion($issuer, $signingKey, $clientId),
+        ];
+
+        if ($identifier !== null && $identifier !== '') {
+            $parForm['login_hint'] = $identifier;
+        }
+
+        $par = $this->postWithDpopNonce($parEndpoint, $key, $parForm);
 
         if ($par->failed() || ! is_string($par->json('request_uri'))) {
             throw new RuntimeException('Bluesky OAuth could not start. Please try the app-password option for now.');
@@ -91,12 +101,15 @@ class BlueskyOAuthConnector
         /** @var array<string, string> $key */
         $key = $context['dpop_private_jwk'];
         $tokenEndpoint = (string) $context['token_endpoint'];
+        $signingKey = $this->dpop->signingKey();
         $response = $this->postWithDpopNonce($tokenEndpoint, $key, [
             'grant_type' => 'authorization_code',
             'code' => $code,
             'client_id' => (string) $context['client_id'],
             'redirect_uri' => (string) $context['redirect_uri'],
             'code_verifier' => (string) $context['code_verifier'],
+            'client_assertion_type' => 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion' => $this->dpop->clientAssertion($issuer, $signingKey, (string) $context['client_id']),
         ]);
 
         if ($response->failed()) {
@@ -129,6 +142,7 @@ class BlueskyOAuthConnector
             session: [
                 'pds' => $pds,
                 'auth_server' => (string) $context['issuer'],
+                'issuer' => (string) $context['issuer'],
                 'token_endpoint' => $tokenEndpoint,
                 'client_id' => (string) $context['client_id'],
                 'dpop_private_jwk' => $key,
@@ -140,19 +154,12 @@ class BlueskyOAuthConnector
 
     private function resolveDid(string $identifier): ?string
     {
-        if (str_starts_with($identifier, 'did:')) {
-            return $identifier;
-        }
-
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
-            ->get('https://bsky.social/xrpc/com.atproto.identity.resolveHandle', ['handle' => $identifier]);
-
-        return $response->successful() ? $response->json('did') : null;
+        return $this->bluesky->resolveDid($identifier);
     }
 
     private function resolveDidToPds(string $did): ?string
     {
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
+        $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
             ->get('https://plc.directory/'.$did);
 
         if ($response->failed()) {
@@ -173,7 +180,7 @@ class BlueskyOAuthConnector
 
     private function authorizationServer(string $pds): string
     {
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
+        $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
             ->get($pds.'/.well-known/oauth-protected-resource');
 
         $server = $response->json('authorization_servers.0');
@@ -183,7 +190,7 @@ class BlueskyOAuthConnector
         }
 
         $origin = parse_url($pds, PHP_URL_SCHEME).'://'.parse_url($pds, PHP_URL_HOST);
-        $metadata = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
+        $metadata = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
             ->get($origin.'/.well-known/oauth-authorization-server');
 
         if ($metadata->successful() && $metadata->json('issuer') === $origin) {
@@ -198,7 +205,7 @@ class BlueskyOAuthConnector
      */
     private function authorizationMetadata(string $issuer): array
     {
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
+        $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
             ->get($issuer.'/.well-known/oauth-authorization-server');
 
         if ($response->failed()) {
@@ -221,14 +228,17 @@ class BlueskyOAuthConnector
      * @param  array<string, string>  $key
      * @param  array<string, string>  $form
      */
-    private function postWithDpopNonce(string $url, array $key, array $form, ?string $nonce = null): Response
+    private function postWithDpopNonce(string $url, array $key, array $form, ?string $nonce = null, int $depth = 0): Response
     {
         $response = $this->http->asForm()
             ->withHeader('DPoP', $this->dpop->proof('POST', $url, $key, nonce: $nonce))
             ->post($url, $form);
 
-        if ($response->status() === 400 && $nonce === null) {
-            return $this->postWithDpopNonce($url, $key, $form, $response->header('DPoP-Nonce'));
+        if ($response->status() === 400 && $depth < 3) {
+            $freshNonce = $response->header('DPoP-Nonce');
+            if ($freshNonce !== '' && $freshNonce !== $nonce) {
+                return $this->postWithDpopNonce($url, $key, $form, $freshNonce, $depth + 1);
+            }
         }
 
         return $response;
@@ -239,7 +249,7 @@ class BlueskyOAuthConnector
      */
     private function profile(string $did): array
     {
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
+        $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
             ->get('https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile', ['actor' => $did]);
 
         return $response->successful() ? (array) $response->json() : [];

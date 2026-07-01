@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Atproto;
 
 use Firebase\JWT\JWT;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use phpseclib3\Crypt\EC;
 use phpseclib3\Crypt\EC\PrivateKey;
@@ -13,6 +14,8 @@ use RuntimeException;
 
 class DPoP
 {
+    private const string SETTING_KEY = 'oauth_signing_key';
+
     /**
      * @return array{kty: string, crv: string, x: string, y: string, d: string}
      */
@@ -62,6 +65,84 @@ class DPoP
         }
 
         return $this->jwt(['typ' => 'dpop+jwt', 'alg' => 'ES256', 'jwk' => $publicJwk], $payload, $jwk);
+    }
+
+    /**
+     * @return array{kty: string, crv: string, x: string, y: string, d: string}
+     */
+    public function signingKey(): array
+    {
+        return DB::transaction(function (): array {
+            $existing = DB::table('instance_settings')->where('key', self::SETTING_KEY)->first();
+
+            if ($existing !== null) {
+                $key = json_decode((string) $existing->value, true, flags: JSON_THROW_ON_ERROR);
+
+                if (is_array($key) && isset($key['x'], $key['y'], $key['d'])) {
+                    return $key;
+                }
+            }
+
+            $key = $this->generateKey();
+            DB::table('instance_settings')->updateOrInsert(
+                ['key' => self::SETTING_KEY],
+                ['value' => json_encode($key, JSON_THROW_ON_ERROR)],
+            );
+
+            return $key;
+        });
+    }
+
+    /**
+     * @param  array<string, string>  $signingKey
+     */
+    public function kid(array $signingKey): string
+    {
+        $json = json_encode(['crv' => 'P-256', 'kty' => 'EC', 'x' => $signingKey['x'], 'y' => $signingKey['y']], JSON_THROW_ON_ERROR);
+
+        return $this->base64Url(hash('sha256', $json, true));
+    }
+
+    /**
+     * @param  array<string, string>  $signingKey
+     */
+    public function clientAssertion(string $issuer, array $signingKey, string $clientId = ''): string
+    {
+        $now = time();
+
+        return $this->jwt(
+            ['alg' => 'ES256', 'kid' => $this->kid($signingKey)],
+            [
+                'iss' => $clientId,
+                'sub' => $clientId,
+                'aud' => $issuer,
+                'iat' => $now - 30,
+                'exp' => $now + 300,
+                'jti' => $this->base64Url(random_bytes(16)),
+            ],
+            $signingKey,
+        );
+    }
+
+    /**
+     * @param  array<string, string>  $signingKey
+     * @return array{keys: list<array<string, mixed>>}
+     */
+    public function publicJwks(array $signingKey): array
+    {
+        return [
+            'keys' => [
+                [
+                    'kty' => 'EC',
+                    'crv' => 'P-256',
+                    'x' => $signingKey['x'],
+                    'y' => $signingKey['y'],
+                    'use' => 'sig',
+                    'alg' => 'ES256',
+                    'kid' => $this->kid($signingKey),
+                ],
+            ],
+        ];
     }
 
     /**

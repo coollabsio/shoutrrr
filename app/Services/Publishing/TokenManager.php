@@ -189,6 +189,7 @@ class TokenManager
     {
         if ($account->platform === Platform::Bluesky) {
             $endpoint = (string) ($secret->session['token_endpoint'] ?? '');
+            $issuer = (string) ($secret->session['issuer'] ?? $secret->session['auth_server'] ?? $endpoint);
         } elseif ($account->platform === Platform::X) {
             $endpoint = 'https://api.twitter.com/2/oauth2/token';
         } else {
@@ -220,12 +221,26 @@ class TokenManager
             if (! is_array($key) || $endpoint === '') {
                 throw new TokenRefreshException("Token refresh failed for account {$account->id}.");
             }
+            $signingKey = $this->dpop->signingKey();
+            $body['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+            $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $signingKey, $clientId);
             $request = $request->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $secret->session['dpop_nonce'] ?? null));
         } else {
             $body['client_secret'] = $clientSecret;
         }
 
         $response = $request->post((string) $endpoint, $body);
+
+        if ($response->failed() && $account->platform === Platform::Bluesky) {
+            $nonce = $response->header('DPoP-Nonce');
+            if ($nonce !== '' && is_array($key)) {
+                $signingKey = $this->dpop->signingKey();
+                $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $signingKey, $clientId);
+                $response = $this->http->asForm()
+                    ->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $nonce))
+                    ->post((string) $endpoint, $body);
+            }
+        }
 
         if ($response->failed()) {
             $account->forceFill([
