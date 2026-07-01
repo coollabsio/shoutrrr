@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Carbon\CarbonImmutable;
 use Database\Factories\UsagePeriodCounterFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -16,8 +15,8 @@ use Override;
 /**
  * @property string $id
  * @property string $workspace_id
- * @property CarbonImmutable $period_start
- * @property CarbonImmutable $period_end
+ * @property string $period_start
+ * @property string $period_end
  * @property string $category
  * @property string $platform
  * @property string $operation
@@ -34,9 +33,12 @@ class UsagePeriodCounter extends Model
     #[Override]
     protected function casts(): array
     {
+        // period_start/period_end are stored and compared as plain 'Y-m-d' strings —
+        // the exact format UsageRecorder writes via insertOrIgnore (which bypasses
+        // casts). A datetime cast would round-trip them as 'Y-m-d 00:00:00' on
+        // model writes, which would never match recorder-written rows and would
+        // spawn duplicate counter rows. So they are intentionally left uncast.
         return [
-            'period_start' => 'immutable_date',
-            'period_end' => 'immutable_date',
             'event_count' => 'integer',
             'total_quota' => 'integer',
         ];
