@@ -52,6 +52,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
     Route::middleware(['engagement.enabled', 'throttle:60,1'])->group(function (): void {
         Route::post('engagement/{reply}/media', [ReplyMediaController::class, 'store'])->name('engagement.media.store');
+        Route::patch('engagement/{reply}/media/{media}/alt', [ReplyMediaController::class, 'updateAlt'])->name('engagement.media.alt');
         Route::delete('engagement/{reply}/media/{media}', [ReplyMediaController::class, 'destroy'])->name('engagement.media.destroy');
         Route::post('engagement/{reply}/media/video-url', [ReplyVideoUploadController::class, 'url'])->name('engagement.media.video-url');
         Route::post('engagement/{reply}/media/video', [ReplyVideoUploadController::class, 'store'])->name('engagement.media.video');

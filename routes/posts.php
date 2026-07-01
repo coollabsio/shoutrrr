@@ -79,6 +79,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // Media uploads are throttled to bound abuse (presigned-URL minting / storage flooding).
     Route::middleware('throttle:60,1')->group(function (): void {
         Route::post('posts/{post}/media', [PostMediaController::class, 'store'])->name('posts.media.store');
+        Route::patch('posts/{post}/media/{media}/alt', [PostMediaController::class, 'updateAlt'])->name('posts.media.alt');
         Route::post('posts/{post}/media/video-url', [PostVideoUploadController::class, 'url'])->name('posts.media.video-url');
         Route::post('posts/{post}/media/video', [PostVideoUploadController::class, 'store'])->name('posts.media.video');
         Route::post('posts/{post}/image-edit', [PostImageEditController::class, 'store'])->name('posts.image-edit.store');

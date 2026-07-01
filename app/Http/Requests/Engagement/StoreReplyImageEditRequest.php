@@ -40,6 +40,7 @@ class StoreReplyImageEditRequest extends FormRequest
             'settings.zoom' => ['required', 'numeric'],
             'settings.tilt' => ['required', 'array'],
             'settings.crop' => ['nullable', 'array'],
+            'alt_text' => ['nullable', 'string', 'max:1000'],
             'source' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/gif', 'max:8192'],
         ];
     }

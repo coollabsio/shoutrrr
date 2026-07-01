@@ -10,6 +10,7 @@ use App\Models\PostMedia;
 use App\Models\PostTargetReply;
 use App\Services\Posts\MediaStorageService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ReplyMediaController extends Controller
 {
@@ -24,6 +25,19 @@ class ReplyMediaController extends Controller
         );
 
         return response()->json(['media' => $media->toView()], 201);
+    }
+
+    public function updateAlt(PostTargetReply $reply, PostMedia $media, Request $request): JsonResponse
+    {
+        abort_unless($media->workspace_id === $reply->workspace_id, 404);
+
+        $validated = $request->validate([
+            'alt_text' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $media->update(['alt_text' => $validated['alt_text']]);
+
+        return response()->json(['media' => $media->refresh()->toView()]);
     }
 
     public function destroy(PostTargetReply $reply, PostMedia $media): JsonResponse
