@@ -85,7 +85,9 @@ test('an owner can start bluesky oauth with a handle that resolves their pds', f
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://bsky.social/oauth/par'
         && $request->hasHeader('DPoP')
         && $request['login_hint'] === 'ada.bsky.social'
-        && $request['scope'] === 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/*');
+        && $request['scope'] === 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/*'
+        && $request['client_assertion_type'] === 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
+        && isset($request['client_assertion']));
 });
 
 test('an owner can start bluesky oauth without a handle', function () {

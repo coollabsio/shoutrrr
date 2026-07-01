@@ -101,6 +101,12 @@ class BlueskyConnector
             $pds = rtrim(trim($override), '/');
             $this->assertSafePds($pds);
 
+            try {
+                $did = $this->resolveDid($identifier);
+            } catch (Throwable) {
+                // DID resolution is best-effort when a PDS override is provided.
+            }
+
             return $pds;
         }
 
@@ -161,6 +167,12 @@ class BlueskyConnector
         $candidates[] = 'https://'.$handle;
 
         foreach ($candidates as $service) {
+            try {
+                $this->assertSafePds($service);
+            } catch (RuntimeException) {
+                continue;
+            }
+
             $response = $this->http
                 ->timeout(5)
                 ->connectTimeout(3)

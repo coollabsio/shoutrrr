@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Atproto;
 
 use Firebase\JWT\JWT;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use phpseclib3\Crypt\EC;
@@ -24,13 +26,39 @@ class DPoP
         $jwkSet = json_decode(EC::createKey('secp256r1')->toString('JWK'), true, flags: JSON_THROW_ON_ERROR);
         $jwk = $jwkSet['keys'][0] ?? null;
 
-        if (! is_array($jwk) || ! isset($jwk['x'], $jwk['y'], $jwk['d'])) {
+        if (! is_array($jwk)) {
             throw new RuntimeException('Could not generate a DPoP key.');
         }
 
+        $key = $this->normalizeJwk($jwk);
+
+        if ($key === null) {
+            throw new RuntimeException('Could not generate a DPoP key.');
+        }
+
+        return $key;
+    }
+
+    /**
+     * @param  array<string, mixed>  $jwk
+     * @return array{kty: string, crv: string, x: string, y: string, d: string}|null
+     */
+    private function normalizeJwk(array $jwk): ?array
+    {
+        if (! isset($jwk['kty'], $jwk['crv'], $jwk['x'], $jwk['y'], $jwk['d'])) {
+            return null;
+        }
+
+        $kty = (string) $jwk['kty'];
+        $crv = (string) $jwk['crv'];
+
+        if ($kty !== 'EC' || $crv !== 'P-256') {
+            return null;
+        }
+
         return [
-            'kty' => 'EC',
-            'crv' => 'P-256',
+            'kty' => $kty,
+            'crv' => $crv,
             'x' => (string) $jwk['x'],
             'y' => (string) $jwk['y'],
             'd' => (string) $jwk['d'],
@@ -38,7 +66,7 @@ class DPoP
     }
 
     /**
-     * @param  array<string, string>  $jwk
+     * @param  array{kty: string, crv: string, x: string, y: string, d: string}  $jwk
      */
     public function proof(string $method, string $url, array $jwk, ?string $accessToken = null, ?string $nonce = null): string
     {
@@ -72,29 +100,36 @@ class DPoP
      */
     public function signingKey(): array
     {
-        return DB::transaction(function (): array {
-            $existing = DB::table('instance_settings')->where('key', self::SETTING_KEY)->first();
+        return Cache::lock('atproto-signing-key', 60)
+            ->block(10, function (): array {
+                $existing = DB::table('instance_settings')->where('key', self::SETTING_KEY)->first();
 
-            if ($existing !== null) {
-                $key = json_decode((string) $existing->value, true, flags: JSON_THROW_ON_ERROR);
+                if ($existing !== null) {
+                    $key = $this->normalizeJwk(
+                        json_decode(
+                            (string) Crypt::decryptString((string) $existing->value),
+                            true,
+                            flags: JSON_THROW_ON_ERROR,
+                        ),
+                    );
 
-                if (is_array($key) && isset($key['x'], $key['y'], $key['d'])) {
-                    return $key;
+                    if ($key !== null) {
+                        return $key;
+                    }
                 }
-            }
 
-            $key = $this->generateKey();
-            DB::table('instance_settings')->updateOrInsert(
-                ['key' => self::SETTING_KEY],
-                ['value' => json_encode($key, JSON_THROW_ON_ERROR)],
-            );
+                $key = $this->generateKey();
+                DB::table('instance_settings')->updateOrInsert(
+                    ['key' => self::SETTING_KEY],
+                    ['value' => Crypt::encryptString(json_encode($key, JSON_THROW_ON_ERROR))],
+                );
 
-            return $key;
-        });
+                return $key;
+            });
     }
 
     /**
-     * @param  array<string, string>  $signingKey
+     * @param  array{kty: string, crv: string, x: string, y: string, d: string}  $signingKey
      */
     public function kid(array $signingKey): string
     {
@@ -104,7 +139,7 @@ class DPoP
     }
 
     /**
-     * @param  array<string, string>  $signingKey
+     * @param  array{kty: string, crv: string, x: string, y: string, d: string}  $signingKey
      */
     public function clientAssertion(string $issuer, array $signingKey, string $clientId = ''): string
     {
@@ -125,7 +160,7 @@ class DPoP
     }
 
     /**
-     * @param  array<string, string>  $signingKey
+     * @param  array{kty: string, crv: string, x: string, y: string, d: string}  $signingKey
      * @return array{keys: list<array<string, mixed>>}
      */
     public function publicJwks(array $signingKey): array
@@ -148,7 +183,7 @@ class DPoP
     /**
      * @param  array<string, mixed>  $header
      * @param  array<string, mixed>  $payload
-     * @param  array<string, string>  $jwk
+     * @param  array{kty: string, crv: string, x: string, y: string, d: string}  $jwk
      */
     private function jwt(array $header, array $payload, array $jwk): string
     {

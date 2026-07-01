@@ -12,7 +12,10 @@ export function useBlueskyHandleResolver() {
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [suggestionsOpen, setSuggestionsOpen] = useState(false);
     const [selectedIdx, setSelectedIdx] = useState(-1);
-    const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+        undefined,
+    );
+    const reqIdRef = useRef(0);
 
     function onInput(value: string) {
         setAvatar('');
@@ -22,22 +25,28 @@ export function useBlueskyHandleResolver() {
         const q = value.replace(/^@/, '').trim();
 
         if (q.length >= 3 && !q.includes('.')) {
-            debounceRef.current = setTimeout(() => fetchSuggestions(q), 300);
+            const id = ++reqIdRef.current;
+            debounceRef.current = setTimeout(
+                () => fetchSuggestions(q, id),
+                300,
+            );
         } else if (q.includes('.') && q.length >= 4) {
+            const id = ++reqIdRef.current;
             setSuggestions([]);
             setSuggestionsOpen(false);
-            debounceRef.current = setTimeout(() => resolveProfile(q), 400);
+            debounceRef.current = setTimeout(() => resolveProfile(q, id), 400);
         } else {
             setSuggestions([]);
             setSuggestionsOpen(false);
         }
     }
 
-    async function fetchSuggestions(q: string) {
+    async function fetchSuggestions(q: string, id: number) {
         try {
             const res = await fetch(
                 `https://public.api.bsky.app/xrpc/app.bsky.actor.searchActorsTypeahead?q=${encodeURIComponent(q)}&limit=6`,
             );
+            if (id !== reqIdRef.current) return;
             if (res.ok) {
                 const d = await res.json();
                 const actors: Suggestion[] = (d.actors ?? []).map(
@@ -56,11 +65,12 @@ export function useBlueskyHandleResolver() {
         }
     }
 
-    async function resolveProfile(handle: string) {
+    async function resolveProfile(handle: string, id: number) {
         try {
             const res = await fetch(
                 `https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(handle)}`,
             );
+            if (id !== reqIdRef.current) return;
             if (res.ok) {
                 const d = await res.json();
                 if (d.avatar) {

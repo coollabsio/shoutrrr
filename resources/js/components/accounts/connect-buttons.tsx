@@ -34,7 +34,7 @@ import type { PlatformName } from '@/types/compose';
 
 import type { Capability } from './types';
 
-export const ADVANCED_SERVICE_URL_TRIGGER_CLASS =
+export const COLLAPSIBLE_TRIGGER_ICON_CLASS =
     '[&[data-state=open]_svg]:rotate-180';
 
 const SUPPORTED_PLATFORM_ICONS = ['x', 'bluesky', 'linkedin'];
@@ -104,6 +104,17 @@ function BlueskyConnectDialog() {
                                 required
                                 value={handle}
                                 autoComplete="off"
+                                role="combobox"
+                                aria-expanded={
+                                    resolver.suggestionsOpen &&
+                                    resolver.suggestions.length > 0
+                                }
+                                aria-controls="bluesky-handle-listbox"
+                                aria-activedescendant={
+                                    resolver.selectedIdx >= 0
+                                        ? `bluesky-handle-option-${resolver.selectedIdx}`
+                                        : undefined
+                                }
                                 onChange={(e) => {
                                     setHandle(e.target.value);
                                     resolver.onInput(e.target.value);
@@ -145,11 +156,20 @@ function BlueskyConnectDialog() {
                         </InputGroup>
                         {resolver.suggestionsOpen &&
                             resolver.suggestions.length > 0 && (
-                                <div className="absolute top-full right-0 left-0 z-50 mt-1 rounded-xl border bg-popover p-1 text-popover-foreground shadow-md">
+                                <div
+                                    id="bluesky-handle-listbox"
+                                    role="listbox"
+                                    className="absolute top-full right-0 left-0 z-50 mt-1 rounded-xl border bg-popover p-1 text-popover-foreground shadow-md"
+                                >
                                     {resolver.suggestions.map((s, i) => (
                                         <button
                                             key={s.did}
                                             type="button"
+                                            role="option"
+                                            id={`bluesky-handle-option-${i}`}
+                                            aria-selected={
+                                                i === resolver.selectedIdx
+                                            }
                                             className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-sm outline-hidden select-none hover:bg-muted ${i === resolver.selectedIdx ? 'bg-muted' : ''}`}
                                             onMouseDown={(e) => {
                                                 e.preventDefault();
@@ -205,7 +225,7 @@ function BlueskyConnectDialog() {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className={ADVANCED_SERVICE_URL_TRIGGER_CLASS}
+                                className={COLLAPSIBLE_TRIGGER_ICON_CLASS}
                             >
                                 Use app password instead
                                 <ChevronDown

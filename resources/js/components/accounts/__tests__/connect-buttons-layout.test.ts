@@ -4,13 +4,13 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-    ADVANCED_SERVICE_URL_TRIGGER_CLASS,
+    COLLAPSIBLE_TRIGGER_ICON_CLASS,
     isSupportedPlatformIcon,
 } from '../connect-buttons';
 
 describe('Bluesky connect dialog layout', () => {
-    it('marks the advanced service URL trigger as a visible expandable control', () => {
-        expect(ADVANCED_SERVICE_URL_TRIGGER_CLASS).toContain(
+    it('marks the collapsible trigger icon as a visible expandable control', () => {
+        expect(COLLAPSIBLE_TRIGGER_ICON_CLASS).toContain(
             '[&[data-state=open]_svg]:rotate-180',
         );
     });
@@ -43,7 +43,7 @@ describe('Bluesky connect dialog layout', () => {
         );
 
         expect(source).toContain('InputGroupAddon');
-        expect(source).toContain('<InputGroupAddon>@</InputGroupAddon>');
+        expect(source).toContain("'@'");
         expect(source).toContain('InputGroupInput');
     });
 });

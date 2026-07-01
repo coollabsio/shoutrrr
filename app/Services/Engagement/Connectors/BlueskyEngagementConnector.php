@@ -35,6 +35,9 @@ class BlueskyEngagementConnector implements EngagementConnector
         private readonly DPoP $dpop,
     ) {}
 
+    /**
+     * @param  array{dpop_private_jwk?: array<string, string>, dpop_nonce?: string|null}  $session
+     */
     private function authorized(string $method, string $url, string $jwt, array $session, ?string $nonce = null): PendingRequest
     {
         $key = $session['dpop_private_jwk'] ?? null;
@@ -49,6 +52,10 @@ class BlueskyEngagementConnector implements EngagementConnector
         return $this->http->withToken($jwt);
     }
 
+    /**
+     * @param  array{dpop_private_jwk?: array<string, string>, dpop_nonce?: string|null}  $session
+     * @param  array<string, mixed>  $payload
+     */
     private function postAuthorized(string $url, string $jwt, array $session, array $payload): Response
     {
         $response = $this->authorized('POST', $url, $jwt, $session)->acceptJson()->post($url, $payload);
@@ -59,6 +66,10 @@ class BlueskyEngagementConnector implements EngagementConnector
             : $response;
     }
 
+    /**
+     * @param  array{dpop_private_jwk?: array<string, string>, dpop_nonce?: string|null}  $session
+     * @param  array<string, mixed>  $query
+     */
     private function getAuthorized(string $url, string $jwt, array $session, array $query): Response
     {
         $response = $this->authorized('GET', $url, $jwt, $session)->acceptJson()->get($url, $query);
@@ -69,6 +80,9 @@ class BlueskyEngagementConnector implements EngagementConnector
             : $response;
     }
 
+    /**
+     * @param  array{dpop_private_jwk?: array<string, string>, dpop_nonce?: string|null}  $session
+     */
     private function postBodyAuthorized(string $url, string $jwt, array $session, string $body, string $mime): Response
     {
         $response = $this->authorized('POST', $url, $jwt, $session)->withBody($body, $mime)->post($url);
@@ -287,7 +301,7 @@ class BlueskyEngagementConnector implements EngagementConnector
      */
     private function buildEmbed(array $media, string $pds, string $jwt, string $did, array $session): array
     {
-        $video = array_values(array_filter($media, fn ($m) => $m->isVideo()));
+        $video = array_values(array_filter($media, fn (PostMedia $mediaItem): bool => $mediaItem->isVideo()));
 
         if ($video !== []) {
             return $this->videoEmbed($video[0], $pds, $jwt, $did, $session);
