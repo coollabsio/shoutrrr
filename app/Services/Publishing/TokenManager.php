@@ -6,10 +6,13 @@ namespace App\Services\Publishing;
 
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
 use App\Exceptions\TokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
+use App\Services\Usage\UsageRecorder;
+use App\Support\UsageOperation;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -24,6 +27,7 @@ class TokenManager
     public function __construct(
         private readonly HttpFactory $http,
         private readonly DPoP $dpop,
+        private readonly UsageRecorder $usageRecorder,
     ) {}
 
     /**
@@ -226,6 +230,15 @@ class TokenManager
         }
 
         $response = $request->post((string) $endpoint, $body);
+
+        $this->usageRecorder->record(
+            category: UsageCategory::ExternalApi,
+            operation: UsageOperation::TOKEN_REFRESH,
+            workspaceId: $account->workspace_id,
+            platform: $account->platform,
+            succeeded: $response->successful(),
+            meta: ['status' => $response->status()],
+        );
 
         if ($response->failed()) {
             $account->forceFill([
