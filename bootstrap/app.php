@@ -3,6 +3,7 @@
 use App\Http\Middleware\CaptureMcpWorkspaceSelection;
 use App\Http\Middleware\EnsureEngagementEnabled;
 use App\Http\Middleware\EnsureMetricsEnabled;
+use App\Http\Middleware\EnsureUsageTrackingEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'engagement.enabled' => EnsureEngagementEnabled::class,
             'metrics.enabled' => EnsureMetricsEnabled::class,
+            'usage.enabled' => EnsureUsageTrackingEnabled::class,
         ]);
 
         $middleware->web(append: [
