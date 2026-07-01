@@ -9,11 +9,14 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -24,7 +27,7 @@ use Throwable;
 
 class LinkedInConnector implements PublishConnector
 {
-    use MapsHttpErrors;
+    use MapsHttpErrors, TracksUsage;
 
     private const string POSTS_URL = 'https://api.linkedin.com/rest/posts';
 
@@ -124,6 +127,8 @@ class LinkedInConnector implements PublishConnector
                 ->withHeaders(['LinkedIn-Version' => $this->apiVersion(), 'X-Restli-Protocol-Version' => '2.0.0'])
                 ->acceptJson()
                 ->post(self::POSTS_URL, $body);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
 
             if ($response->failed()) {
                 return $this->mapFailure($response);
@@ -465,6 +470,8 @@ class LinkedInConnector implements PublishConnector
             ->withToken($token)
             ->withHeaders(['LinkedIn-Version' => $this->apiVersion()])
             ->delete(self::POSTS_URL.'/'.rawurlencode($urn));
+
+        $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response);
 
         $this->throwUnlessDeleteAccepted($response);
     }

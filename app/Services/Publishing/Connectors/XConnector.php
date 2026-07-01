@@ -9,11 +9,14 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -21,7 +24,7 @@ use Illuminate\Support\Facades\Storage;
 
 class XConnector implements PublishConnector
 {
-    use MapsHttpErrors;
+    use MapsHttpErrors, TracksUsage;
 
     private const string TWEETS_URL = 'https://api.twitter.com/2/tweets';
 
@@ -83,6 +86,8 @@ class XConnector implements PublishConnector
                     ->acceptJson()
                     ->post(self::TWEETS_URL, $body);
 
+                $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
+
                 if ($response->failed()) {
                     return $this->mapFailure($response);
                 }
@@ -111,6 +116,8 @@ class XConnector implements PublishConnector
 
         foreach ($target->remote_ids ?? array_filter([$target->remote_id]) as $id) {
             $response = $this->http->withToken($token)->delete(self::TWEETS_URL.'/'.$id);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response);
 
             $this->throwUnlessDeleteAccepted($response);
         }

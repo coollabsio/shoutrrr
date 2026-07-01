@@ -9,12 +9,15 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Atproto\DPoP;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -25,7 +28,7 @@ use Illuminate\Support\Facades\Storage;
 
 class BlueskyPublishConnector implements PublishConnector
 {
-    use MapsHttpErrors;
+    use MapsHttpErrors, TracksUsage;
 
     private const string DEFAULT_PDS = 'https://bsky.social';
 
@@ -102,6 +105,8 @@ class BlueskyPublishConnector implements PublishConnector
                     'record' => $record,
                 ]);
 
+                $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
+
                 if ($response->failed()) {
                     return $this->mapFailure($response);
                 }
@@ -149,6 +154,8 @@ class BlueskyPublishConnector implements PublishConnector
                 'collection' => 'app.bsky.feed.post',
                 'rkey' => $rkey,
             ]);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response);
 
             $this->throwUnlessDeleteAccepted($response);
         }
