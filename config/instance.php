@@ -11,5 +11,6 @@ return [
             'INSTANCE_WORKSPACE_CREATION_ENABLED',
             env('WORKSPACES_CAN_CREATE_WORKSPACE', true),
         ),
+        'usage_tracking_enabled' => env('INSTANCE_USAGE_TRACKING_ENABLED', false),
     ],
 ];
