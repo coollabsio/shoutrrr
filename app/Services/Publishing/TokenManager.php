@@ -80,7 +80,24 @@ class TokenManager
             return $this->blueskyOAuthPayload($secret);
         }
 
-        return $this->refreshOAuth($account, $secret);
+        // Bluesky (ATProto) OAuth refresh tokens are single-use and rotate on every
+        // refresh. Concurrent refreshers — the hourly force-sweep plus the publish,
+        // reply-fetch, and engagement jobs that all call fresh() — would otherwise
+        // race: the winner rotates the token, the loser POSTs the already-consumed
+        // one and 400s with invalid_grant, flipping the account to needs-attention.
+        // Serialize per account and re-read the rotated state under the lock, exactly
+        // as the generic OAuth path below does.
+        return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
+            ->block(10, function () use ($account, $force): array {
+                $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
+                $freshSecret = $freshAccount->secret()->firstOrFail();
+
+                if (! $force && ! $this->needsRefresh($freshAccount)) {
+                    return $this->blueskyOAuthPayload($freshSecret);
+                }
+
+                return $this->refreshOAuth($freshAccount, $freshSecret);
+            });
     }
 
     /**
