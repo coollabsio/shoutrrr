@@ -6,6 +6,7 @@ namespace App\Http\Controllers\OAuth;
 
 use App\Http\Controllers\Controller;
 use App\Services\Atproto\DPoP;
+use App\Services\ConnectedAccounts\BlueskyOAuthConnector;
 use Illuminate\Http\JsonResponse;
 
 class BlueskyClientMetadataController extends Controller
@@ -22,7 +23,7 @@ class BlueskyClientMetadataController extends Controller
             'client_name' => config('app.name', 'Shoutrrr'),
             'client_uri' => url('/'),
             'grant_types' => ['authorization_code', 'refresh_token'],
-            'scope' => 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/*',
+            'scope' => BlueskyOAuthConnector::SCOPE,
             'response_types' => ['code'],
             'redirect_uris' => [route('accounts.bluesky.oauth.callback')],
             'dpop_bound_access_tokens' => true,

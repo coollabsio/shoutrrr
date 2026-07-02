@@ -65,7 +65,7 @@ class BlueskyOAuthController extends Controller
 
             return 'http://localhost/?'.http_build_query([
                 'redirect_uri' => $callback,
-                'scope' => 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/*',
+                'scope' => BlueskyOAuthConnector::SCOPE,
             ]);
         }
 

@@ -221,9 +221,14 @@ class TokenManager
             if ($key === null || $endpoint === '') {
                 throw new TokenRefreshException("Token refresh failed for account {$account->id}.");
             }
-            $signingKey = $this->dpop->signingKey();
-            $body['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
-            $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $signingKey, $clientId);
+            // Confidential clients authenticate with a private_key_jwt assertion; the
+            // loopback dev client (the synthesized `http://localhost/?…` id) is public
+            // and must not send one.
+            $usesAssertion = $clientId === route('oauth.bluesky.metadata');
+            if ($usesAssertion) {
+                $body['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+                $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
+            }
             $request = $request->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $secret->session['dpop_nonce'] ?? null));
         } else {
             $body['client_secret'] = $clientSecret;
@@ -234,8 +239,9 @@ class TokenManager
         if ($response->failed() && $account->platform === Platform::Bluesky) {
             $nonce = $response->header('DPoP-Nonce');
             if ($nonce !== '') {
-                $signingKey = $this->dpop->signingKey();
-                $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $signingKey, $clientId);
+                if ($usesAssertion) {
+                    $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
+                }
                 $response = $this->http->asForm()
                     ->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $nonce))
                     ->post((string) $endpoint, $body);

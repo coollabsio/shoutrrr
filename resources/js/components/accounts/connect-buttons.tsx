@@ -135,9 +135,7 @@ function BlueskyConnectDialog() {
                                         );
                                         setHandle(h);
                                     } else {
-                                        resolver.onKeydown(
-                                            e as unknown as KeyboardEvent,
-                                        );
+                                        resolver.onKeydown(e);
                                     }
                                 }}
                                 onBlur={() =>

@@ -89,7 +89,7 @@ export function useBlueskyHandleResolver() {
         return handle;
     }
 
-    function onKeydown(e: KeyboardEvent) {
+    function onKeydown(e: Pick<KeyboardEvent, 'key' | 'preventDefault'>) {
         if (!suggestionsOpen) return;
         if (e.key === 'ArrowDown') {
             e.preventDefault();

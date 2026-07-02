@@ -258,6 +258,22 @@ export function VideoEditor({
         sourceSize !== null &&
         sourceUrl !== null;
 
+    const altTextField = (
+        <Field label="Alt text">
+            <textarea
+                value={altText}
+                onChange={(e) => setAltText(e.target.value)}
+                placeholder="Describe the video for accessibility"
+                rows={3}
+                maxLength={1000}
+                className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:ring-2 focus:ring-foreground/20 focus:outline-none"
+            />
+            <p className="text-[11px] text-muted-foreground">
+                Describe the video for screen readers
+            </p>
+        </Field>
+    );
+
     return (
         <Dialog
             open={open}
@@ -828,38 +844,14 @@ export function VideoEditor({
                                 </button>
                             )}
 
-                            <Field label="Alt text">
-                                <textarea
-                                    value={altText}
-                                    onChange={(e) => setAltText(e.target.value)}
-                                    placeholder="Describe the video for accessibility"
-                                    rows={3}
-                                    maxLength={1000}
-                                    className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:ring-2 focus:ring-foreground/20 focus:outline-none"
-                                />
-                                <p className="text-[11px] text-muted-foreground">
-                                    Describe the video for screen readers
-                                </p>
-                            </Field>
+                            {altTextField}
                         </aside>
                     )}
 
                     {/* Alt text field shown when there's no crop sidebar */}
                     {!canCrop && (
                         <aside className="flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto border-t border-border p-5 md:w-[288px] md:flex-none md:border-t-0 md:border-l">
-                            <Field label="Alt text">
-                                <textarea
-                                    value={altText}
-                                    onChange={(e) => setAltText(e.target.value)}
-                                    placeholder="Describe the video for accessibility"
-                                    rows={3}
-                                    maxLength={1000}
-                                    className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:ring-2 focus:ring-foreground/20 focus:outline-none"
-                                />
-                                <p className="text-[11px] text-muted-foreground">
-                                    Describe the video for screen readers
-                                </p>
-                            </Field>
+                            {altTextField}
                         </aside>
                     )}
                 </div>

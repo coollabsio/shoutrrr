@@ -17,6 +17,15 @@ use RuntimeException;
 
 class BlueskyOAuthConnector
 {
+    /**
+     * Granular ATProto OAuth scopes. The `rpc:com.atproto.repo.uploadBlob` scope is
+     * required to mint the service-auth token for video uploads: getServiceAuth
+     * checks the *requested* lxm (uploadBlob), not getServiceAuth itself. It is NOT
+     * covered by `repo:`/`blob:`, and dropping it regresses video publishing for
+     * OAuth accounts (it previously rode on `transition:generic`).
+     */
+    public const string SCOPE = 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/* rpc:com.atproto.repo.uploadBlob?aud=*';
+
     public function __construct(
         private readonly HttpFactory $http,
         private readonly BlueskyConnector $bluesky,
@@ -51,21 +60,25 @@ class BlueskyOAuthConnector
         $state = Str::random(64);
         $verifier = $this->base64Url(random_bytes(64));
         $key = $this->dpop->generateKey();
-        $signingKey = $this->dpop->signingKey();
-        $scope = 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/*';
 
         $parEndpoint = (string) $metadata['pushed_authorization_request_endpoint'];
         $parForm = [
             'client_id' => $clientId,
             'response_type' => 'code',
             'redirect_uri' => $redirectUri,
-            'scope' => $scope,
+            'scope' => self::SCOPE,
             'state' => $state,
             'code_challenge' => $this->base64Url(hash('sha256', $verifier, true)),
             'code_challenge_method' => 'S256',
-            'client_assertion_type' => 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
-            'client_assertion' => $this->dpop->clientAssertion($issuer, $signingKey, $clientId),
         ];
+
+        // Confidential clients authenticate to the PAR/token endpoints with a
+        // private_key_jwt assertion. The loopback (localhost) dev client is public
+        // and has no JWKS, so sending an assertion would fail with invalid_client.
+        if ($this->usesClientAssertion($clientId)) {
+            $parForm['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+            $parForm['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
+        }
 
         if ($identifier !== null && $identifier !== '') {
             $parForm['login_hint'] = $identifier;
@@ -120,16 +133,21 @@ class BlueskyOAuthConnector
         /** @var array{kty: string, crv: string, x: string, y: string, d: string} $key */
         $key = $context['dpop_private_jwk'];
         $tokenEndpoint = (string) $context['token_endpoint'];
-        $signingKey = $this->dpop->signingKey();
-        $response = $this->postWithDpopNonce($tokenEndpoint, $key, [
+        $clientId = (string) $context['client_id'];
+        $tokenForm = [
             'grant_type' => 'authorization_code',
             'code' => $code,
-            'client_id' => (string) $context['client_id'],
+            'client_id' => $clientId,
             'redirect_uri' => (string) $context['redirect_uri'],
             'code_verifier' => (string) $context['code_verifier'],
-            'client_assertion_type' => 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
-            'client_assertion' => $this->dpop->clientAssertion($issuer, $signingKey, (string) $context['client_id']),
-        ]);
+        ];
+
+        if ($this->usesClientAssertion($clientId)) {
+            $tokenForm['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+            $tokenForm['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
+        }
+
+        $response = $this->postWithDpopNonce($tokenEndpoint, $key, $tokenForm);
 
         if ($response->failed()) {
             Log::warning('Bluesky OAuth: token exchange failed', [
@@ -275,5 +293,16 @@ class BlueskyOAuthConnector
     private function base64Url(string $value): string
     {
         return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    }
+
+    /**
+     * Whether this client authenticates with a private_key_jwt assertion. The only
+     * confidential client we mint is the published client-metadata document; the
+     * loopback dev client (the synthesized `http://localhost/?…` id) is public
+     * (auth method "none") and must not send one.
+     */
+    private function usesClientAssertion(string $clientId): bool
+    {
+        return $clientId === route('oauth.bluesky.metadata');
     }
 }

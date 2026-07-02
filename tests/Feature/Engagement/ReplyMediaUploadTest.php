@@ -41,6 +41,29 @@ test('uploading an image creates orphan media on the reply workspace', function 
     expect($media->alt_text)->toBe('a picture');
 });
 
+test('updating alt text on reply media persists it', function () {
+    $media = PostMedia::factory()->create(['workspace_id' => $this->workspace->id, 'alt_text' => null]);
+
+    $this->actingAs($this->user)
+        ->patchJson(route('engagement.media.alt', ['reply' => $this->reply, 'media' => $media]), [
+            'alt_text' => 'described for screen readers',
+        ])
+        ->assertOk()
+        ->assertJsonPath('media.alt_text', 'described for screen readers');
+
+    expect($media->refresh()->alt_text)->toBe('described for screen readers');
+});
+
+test('updating alt text on media from another workspace 404s', function () {
+    $foreignMedia = PostMedia::factory()->create(['workspace_id' => Workspace::factory()->create()->id]);
+
+    $this->actingAs($this->user)
+        ->patchJson(route('engagement.media.alt', ['reply' => $this->reply, 'media' => $foreignMedia]), [
+            'alt_text' => 'nope',
+        ])
+        ->assertNotFound();
+});
+
 test('a foreign-workspace reply 404s', function () {
     $foreign = PostTargetReply::factory()->create(['workspace_id' => 'other-ws']);
 

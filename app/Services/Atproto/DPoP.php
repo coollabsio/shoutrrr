@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Services\Atproto;
 
+use App\Models\InstanceSetting;
+use App\Support\InstanceSettings;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use phpseclib3\Crypt\EC;
 use phpseclib3\Crypt\EC\PrivateKey;
 use phpseclib3\Crypt\PublicKeyLoader;
 use RuntimeException;
+use Throwable;
 
 class DPoP
 {
@@ -101,32 +104,66 @@ class DPoP
      */
     public function signingKey(): array
     {
+        // Fast path: the key already exists, so avoid taking a distributed lock on
+        // every OAuth operation (PAR, token exchange, refresh, JWKS fetch).
+        $existing = $this->readSigningKey();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        // First-time generation is serialized so concurrent requests don't each
+        // persist a different key and invalidate one another's published JWKS.
         return Cache::lock('atproto-signing-key', 60)
             ->block(10, function (): array {
-                $existing = DB::table('instance_settings')->where('key', self::SETTING_KEY)->first();
+                $existing = $this->readSigningKey();
 
                 if ($existing !== null) {
-                    $key = $this->normalizeJwk(
-                        json_decode(
-                            (string) Crypt::decryptString((string) $existing->value),
-                            true,
-                            flags: JSON_THROW_ON_ERROR,
-                        ),
-                    );
-
-                    if ($key !== null) {
-                        return $key;
-                    }
+                    return $existing;
                 }
 
                 $key = $this->generateKey();
-                DB::table('instance_settings')->updateOrInsert(
+
+                // Persist through the model so the encrypted blob is JSON-encoded into
+                // the `value` json column — a raw write would be rejected by Postgres/
+                // MySQL json columns as invalid JSON (it only survives on SQLite).
+                InstanceSetting::query()->updateOrCreate(
                     ['key' => self::SETTING_KEY],
                     ['value' => Crypt::encryptString(json_encode($key, JSON_THROW_ON_ERROR))],
                 );
 
+                // The shared instance-settings cache eager-loads every row; drop it so
+                // the freshly written key isn't masked by a stale snapshot.
+                Cache::forget(InstanceSettings::CacheKey);
+
                 return $key;
             });
+    }
+
+    /**
+     * @return array{kty: string, crv: string, x: string, y: string, d: string}|null
+     */
+    private function readSigningKey(): ?array
+    {
+        $setting = InstanceSetting::query()->find(self::SETTING_KEY);
+
+        if ($setting === null) {
+            return null;
+        }
+
+        try {
+            return $this->normalizeJwk(
+                json_decode(
+                    (string) Crypt::decryptString((string) $setting->value),
+                    true,
+                    flags: JSON_THROW_ON_ERROR,
+                ),
+            );
+        } catch (Throwable $e) {
+            Log::warning('Atproto signing key could not be read; regenerating.', ['error' => $e->getMessage()]);
+
+            return null;
+        }
     }
 
     /**
