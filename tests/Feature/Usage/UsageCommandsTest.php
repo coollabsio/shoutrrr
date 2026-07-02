@@ -41,3 +41,25 @@ it('prune deletes events older than the retention window', function () {
 
     expect(UsageEvent::count())->toBe(1);
 });
+
+it('prune keeps open-period events even under a short retention window', function () {
+    config()->set('usage.retention_days', 1);
+    $workspace = Workspace::factory()->create();
+
+    // Open period: must survive despite being older than the 1-day window, because
+    // reconcile still recomputes this period's counters from raw events.
+    $current = UsageEvent::factory()->create([
+        'workspace_id' => $workspace->id,
+        'occurred_at' => Date::now()->startOfMonth(),
+    ]);
+    // Closed prior period: safely prunable.
+    UsageEvent::factory()->create([
+        'workspace_id' => $workspace->id,
+        'occurred_at' => Date::now()->startOfMonth()->subDay(),
+    ]);
+
+    $this->artisan('usage:prune')->assertSuccessful();
+
+    expect(UsageEvent::count())->toBe(1)
+        ->and(UsageEvent::firstOrFail()->is($current))->toBeTrue();
+});

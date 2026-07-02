@@ -487,7 +487,8 @@ class LinkedInConnector implements PublishConnector
             ->withHeaders(['LinkedIn-Version' => $this->apiVersion()])
             ->delete(self::POSTS_URL.'/'.rawurlencode($urn));
 
-        $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response);
+        // A 404 means the post is already gone — throwUnlessDeleteAccepted treats it as done.
+        $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response, succeeded: $response->successful() || $response->status() === 404);
 
         $this->throwUnlessDeleteAccepted($response);
     }

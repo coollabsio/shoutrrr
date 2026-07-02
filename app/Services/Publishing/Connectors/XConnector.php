@@ -130,7 +130,8 @@ class XConnector implements PublishConnector
         foreach ($target->remote_ids ?? array_filter([$target->remote_id]) as $id) {
             $response = $this->http->withToken($token)->delete(self::TWEETS_URL.'/'.$id);
 
-            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response);
+            // A 404 means the tweet is already gone — throwUnlessDeleteAccepted treats it as done.
+            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response, succeeded: $response->successful() || $response->status() === 404);
 
             $this->throwUnlessDeleteAccepted($response);
         }

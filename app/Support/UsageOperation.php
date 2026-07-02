@@ -32,7 +32,6 @@ final class UsageOperation
 
     public const string MCP_REQUEST = 'mcp_request';
 
-    // Reserved: media seams live in private connector helpers and are deferred to a follow-up.
     public const string MEDIA_UPLOAD = 'media_upload';
 
     public const string MEDIA_STATUS_POLL = 'media_status_poll';

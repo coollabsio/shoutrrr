@@ -176,7 +176,8 @@ class BlueskyPublishConnector implements PublishConnector
                 'rkey' => $rkey,
             ]);
 
-            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response);
+            // A 404 means the post is already gone — throwUnlessDeleteAccepted treats it as done.
+            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response, succeeded: $response->successful() || $response->status() === 404);
 
             $this->throwUnlessDeleteAccepted($response);
         }
@@ -359,7 +360,8 @@ class BlueskyPublishConnector implements PublishConnector
         $upload = $this->http->withToken($serviceToken)->withBody($body, 'video/mp4')
             ->post(self::VIDEO_SERVICE.'/xrpc/app.bsky.video.uploadVideo?did='.rawurlencode($did).'&name='.rawurlencode($name));
 
-        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $upload);
+        // A 409 already_exists still carries a usable jobId, so it counts as a successful upload.
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $upload, succeeded: $upload->successful() || $upload->json('error') === 'already_exists');
 
         // Re-uploading identical bytes returns 409 already_exists but still carries the jobId.
         if ($upload->failed() && $upload->json('error') !== 'already_exists') {

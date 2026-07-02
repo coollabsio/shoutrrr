@@ -11,7 +11,7 @@ use App\Exceptions\TokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
-use App\Services\Usage\UsageRecorder;
+use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -20,6 +20,8 @@ use Illuminate\Support\Facades\Date;
 
 class TokenManager
 {
+    use TracksUsage;
+
     private const int SKEW_SECONDS = 120;
 
     private const string BLUESKY_DEFAULT_PDS = 'https://bsky.social';
@@ -27,7 +29,6 @@ class TokenManager
     public function __construct(
         private readonly HttpFactory $http,
         private readonly DPoP $dpop,
-        private readonly UsageRecorder $usageRecorder,
     ) {}
 
     /**
@@ -143,14 +144,7 @@ class TokenManager
         $response = $this->http->withToken($refreshJwt)->acceptJson()
             ->post($pds.'/xrpc/com.atproto.server.refreshSession');
 
-        $this->usageRecorder->record(
-            category: UsageCategory::ExternalApi,
-            operation: UsageOperation::TOKEN_REFRESH,
-            workspaceId: $account->workspace_id,
-            platform: $account->platform,
-            succeeded: $response->successful(),
-            meta: ['status' => $response->status()],
-        );
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
 
         return $this->blueskyTokens($response);
     }
@@ -173,14 +167,7 @@ class TokenManager
                 'password' => $appPassword,
             ]);
 
-        $this->usageRecorder->record(
-            category: UsageCategory::ExternalApi,
-            operation: UsageOperation::TOKEN_REFRESH,
-            workspaceId: $account->workspace_id,
-            platform: $account->platform,
-            succeeded: $response->successful(),
-            meta: ['status' => $response->status()],
-        );
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
 
         return $this->blueskyTokens($response);
     }
@@ -270,14 +257,7 @@ class TokenManager
             }
         }
 
-        $this->usageRecorder->record(
-            category: UsageCategory::ExternalApi,
-            operation: UsageOperation::TOKEN_REFRESH,
-            workspaceId: $account->workspace_id,
-            platform: $account->platform,
-            succeeded: $response->successful(),
-            meta: ['status' => $response->status()],
-        );
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
 
         if ($response->failed()) {
             $account->forceFill([

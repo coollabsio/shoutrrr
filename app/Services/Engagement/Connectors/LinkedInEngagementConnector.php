@@ -73,7 +73,8 @@ class LinkedInEngagementConnector implements EngagementConnector
             return ReplyFetchResult::failed($e->getMessage());
         }
 
-        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response);
+        // LinkedIn 404s a post that simply has no comments yet — a routine success, not a failed read.
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response, succeeded: $response->successful() || $response->status() === 404);
 
         // LinkedIn returns 404 for a post that simply has no comments yet.
         if ($response->status() === 404) {

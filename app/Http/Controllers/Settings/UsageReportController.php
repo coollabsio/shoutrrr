@@ -19,8 +19,16 @@ class UsageReportController extends Controller
         $user = $request->user();
         abort_unless($user?->isInstanceOwner(), 403);
 
+        // Validate up front so unparseable dates return 422, not a Carbon 500.
+        $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+        ]);
+
         $from = $request->date('from') ?? Date::now()->startOfMonth();
-        $to = $request->date('to') ?? Date::now();
+        // Span the whole end day; a bare date parses to midnight and would otherwise
+        // exclude every event recorded after 00:00:00 on that day.
+        $to = ($request->date('to') ?? Date::now())->endOfDay();
 
         // Whitelisted grouping column — never interpolate raw input into SQL.
         $column = match ($request->string('group_by')->toString()) {

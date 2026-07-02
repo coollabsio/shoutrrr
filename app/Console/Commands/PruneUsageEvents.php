@@ -18,7 +18,13 @@ class PruneUsageEvents extends Command
     public function handle(): int
     {
         $days = (int) config('usage.retention_days', 180);
-        $cutoff = CarbonImmutable::instance(Date::now())->subDays($days);
+        $now = CarbonImmutable::instance(Date::now());
+
+        // Never prune events inside the open billing period: usage:reconcile still
+        // recomputes that period's counters from raw events, so deleting them would
+        // shrink the totals the counters are meant to durably hold. This keeps a low
+        // USAGE_RETENTION_DAYS from silently corrupting the current month's usage.
+        $cutoff = $now->subDays($days)->min($now->startOfMonth());
 
         UsageEvent::query()->where('occurred_at', '<', $cutoff)->delete();
 
