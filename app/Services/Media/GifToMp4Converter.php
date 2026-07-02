@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 class GifToMp4Converter
@@ -37,6 +38,17 @@ class GifToMp4Converter
             $disk->delete($derivedPath);
         }
 
+        // Resolve ffmpeg up front so a missing binary fails fast with an actionable,
+        // non-retryable error rather than surfacing as an opaque process failure that
+        // the publish loop would treat as transient and retry.
+        $ffmpeg = (new ExecutableFinder)->find('ffmpeg');
+
+        if ($ffmpeg === null) {
+            throw new GifToMp4ConverterUnavailable(
+                'Cannot publish this GIF: video conversion is unavailable because ffmpeg is not installed on the server.',
+            );
+        }
+
         $tempDir = storage_path('app/tmp/gif-to-mp4/'.Str::uuid());
         File::ensureDirectoryExists($tempDir);
 
@@ -44,16 +56,31 @@ class GifToMp4Converter
         $output = $tempDir.'/output.mp4';
 
         try {
-            $stream = $disk->readStream($media->path);
+            $source = $disk->readStream($media->path);
 
-            if ($stream === null) {
+            if ($source === null) {
                 throw new GifToMp4ConversionFailed('Could not read GIF media.');
             }
 
-            file_put_contents($input, stream_get_contents($stream));
-            fclose($stream);
+            // Stream the source onto local disk rather than buffering the whole GIF in
+            // memory, matching how the upload path streams bytes.
+            $local = fopen($input, 'wb');
 
-            $this->encode($input, $output, $maxBytes);
+            if ($local === false) {
+                fclose($source);
+
+                throw new GifToMp4ConversionFailed('Could not open a temporary file for GIF conversion.');
+            }
+
+            $copied = stream_copy_to_stream($source, $local);
+            fclose($source);
+            fclose($local);
+
+            if ($copied === false) {
+                throw new GifToMp4ConversionFailed('Could not read GIF media.');
+            }
+
+            $this->encode($ffmpeg, $input, $output, $maxBytes);
 
             $outputStream = fopen($output, 'rb');
 
@@ -83,13 +110,13 @@ class GifToMp4Converter
         return 'media/'.$media->workspace_id.'/derived/'.$media->id.'.mp4';
     }
 
-    private function encode(string $input, string $output, int $maxBytes): void
+    private function encode(string $ffmpeg, string $input, string $output, int $maxBytes): void
     {
         foreach (self::CRF_STEPS as $crf) {
             @unlink($output);
 
             $process = new Process([
-                'ffmpeg',
+                $ffmpeg,
                 '-hide_banner',
                 '-loglevel',
                 'error',

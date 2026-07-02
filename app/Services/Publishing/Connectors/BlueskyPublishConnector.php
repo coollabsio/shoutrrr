@@ -15,6 +15,7 @@ use App\Services\Atproto\DPoP;
 use App\Services\Media\ConvertedVideo;
 use App\Services\Media\GifToMp4ConversionFailed;
 use App\Services\Media\GifToMp4Converter;
+use App\Services\Media\GifToMp4ConverterUnavailable;
 use App\Services\Media\GifToMp4OutputTooLarge;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
@@ -238,6 +239,9 @@ class BlueskyPublishConnector implements PublishConnector
                 },
                 'GIF',
             );
+        } catch (GifToMp4ConverterUnavailable $e) {
+            // ffmpeg is missing on the server — a config problem, not a transient one.
+            return PublishResult::failure(ErrorKind::Unsupported, $e->getMessage());
         } catch (GifToMp4OutputTooLarge $e) {
             return PublishResult::failure(ErrorKind::Validation, $e->getMessage());
         } catch (GifToMp4ConversionFailed $e) {

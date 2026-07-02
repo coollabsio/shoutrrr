@@ -10,6 +10,7 @@ use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Media\ConvertedVideo;
 use App\Services\Media\GifToMp4Converter;
+use App\Services\Media\GifToMp4ConverterUnavailable;
 use App\Services\Media\GifToMp4OutputTooLarge;
 use App\Services\Publishing\Connectors\BlueskyPublishConnector;
 use Illuminate\Support\Facades\Http;
@@ -148,6 +149,30 @@ test('oversized converted gifs fail before calling bluesky', function (): void {
     expect($result->isSuccessful())->toBeFalse()
         ->and($result->errorKind)->toBe(ErrorKind::Validation)
         ->and($result->errorMessage)->toContain('Bluesky video size limit');
+
+    Http::assertNothingSent();
+});
+
+test('a missing ffmpeg fails terminally rather than retrying forever', function (): void {
+    $account = ConnectedAccount::factory()->state(['platform' => 'bluesky', 'remote_account_id' => 'did:plc:abc'])->create();
+    $media = PostMedia::factory()->create(['disk' => 'public', 'path' => 'media/ws/a.gif', 'mime' => 'image/gif']);
+    $target = PostTarget::factory()->for($account, 'account')->create();
+
+    $converter = Mockery::mock(GifToMp4Converter::class);
+    $converter->shouldReceive('convert')
+        ->once()
+        ->andThrow(new GifToMp4ConverterUnavailable('Cannot publish this GIF: video conversion is unavailable because ffmpeg is not installed on the server.'));
+    app()->instance(GifToMp4Converter::class, $converter);
+
+    Http::fake();
+
+    $ctx = new PublishContext($target, ['gif'], [$media], $account, blueskyVideoCredentials());
+    $result = app(BlueskyPublishConnector::class)->publish($ctx);
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::Unsupported)
+        ->and($result->errorKind->isRetryable())->toBeFalse()
+        ->and($result->errorMessage)->toContain('ffmpeg is not installed');
 
     Http::assertNothingSent();
 });
