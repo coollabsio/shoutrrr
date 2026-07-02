@@ -719,11 +719,11 @@ export default function Composer({
         >
             <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color] duration-300 focus-within:border-primary/25 focus-within:shadow-[0_0_16px_-6px_color-mix(in_oklch,var(--primary)_28%,transparent)]">
                 {/* Tab-strip row */}
-                <div className="flex items-center border-b border-border px-2 py-2">
+                <div className="flex flex-wrap items-center gap-y-2 border-b border-border px-2 py-2 md:flex-nowrap md:gap-y-0">
                     {/* Tabs hang to the bottom border (underline meets it) via a
                     negative margin that cancels the row's bottom padding, while
                     the right-side controls stay vertically centered in the bar. */}
-                    <div className="-mb-2 flex min-w-0 flex-1 items-end">
+                    <div className="-mb-2 flex min-w-0 flex-[1_1_100%] items-end md:flex-1">
                         <PlatformTabs
                             accounts={tabAccounts}
                             activeTab={activeAccount?.id ?? state.activeTab}
@@ -737,7 +737,7 @@ export default function Composer({
                             }
                         />
                     </div>
-                    <div className="ml-auto flex items-center gap-2 pr-1">
+                    <div className="ml-auto flex min-w-0 items-center justify-end gap-1.5 pr-1 sm:gap-2">
                         <div
                             className="inline-flex h-7 overflow-hidden rounded-md border border-transparent text-[12px] text-muted-foreground data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground"
                             data-active={previewVisible}
@@ -750,7 +750,9 @@ export default function Composer({
                                 className="inline-flex items-center gap-1.5 px-2 hover:bg-muted hover:text-foreground"
                             >
                                 <Eye className="size-3.5 shrink-0" />
-                                <span>Preview</span>
+                                <span className="hidden sm:inline">
+                                    Preview
+                                </span>
                             </button>
                             <button
                                 type="button"

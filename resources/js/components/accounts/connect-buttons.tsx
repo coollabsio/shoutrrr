@@ -56,6 +56,8 @@ function platformIcon(platform: string) {
 function BlueskyConnectDialog() {
     const [open, setOpen] = useState(false);
     const [appPasswordOpen, setAppPasswordOpen] = useState(false);
+    const [oauthServiceOpen, setOauthServiceOpen] = useState(false);
+    const [appPasswordServiceOpen, setAppPasswordServiceOpen] = useState(false);
     const [oauthLoading, setOauthLoading] = useState(false);
     const [handle, setHandle] = useState('');
     const resolver = useBlueskyHandleResolver();
@@ -75,7 +77,8 @@ function BlueskyConnectDialog() {
                 <DialogHeader>
                     <DialogTitle>Connect a Bluesky account</DialogTitle>
                     <DialogDescription>
-                        Enter your Bluesky handle to sign in.
+                        Enter your handle, or leave it blank to choose on
+                        Bluesky.
                     </DialogDescription>
                 </DialogHeader>
                 <form
@@ -101,7 +104,6 @@ function BlueskyConnectDialog() {
                                 id="oauth_identifier"
                                 name="identifier"
                                 placeholder="you.bsky.social"
-                                required
                                 value={handle}
                                 autoComplete="off"
                                 role="combobox"
@@ -201,6 +203,40 @@ function BlueskyConnectDialog() {
                                 </div>
                             )}
                     </div>
+                    <Collapsible
+                        open={oauthServiceOpen}
+                        onOpenChange={setOauthServiceOpen}
+                    >
+                        <CollapsibleTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className={`px-0 text-muted-foreground ${COLLAPSIBLE_TRIGGER_ICON_CLASS}`}
+                            >
+                                Choose Bluesky instance
+                                <ChevronDown
+                                    aria-hidden="true"
+                                    data-icon="inline-end"
+                                    className="size-4 text-muted-foreground transition-transform"
+                                />
+                            </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="grid gap-2 pt-2">
+                            <Label htmlFor="oauth_pds_url">Service URL</Label>
+                            <Input
+                                id="oauth_pds_url"
+                                name="pds_url"
+                                type="url"
+                                placeholder="https://bsky.social"
+                                autoComplete="url"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Use this only if your account is hosted by a
+                                custom ATProto/Bluesky service.
+                            </p>
+                        </CollapsibleContent>
+                    </Collapsible>
                     <Button
                         type="submit"
                         className="w-full"
@@ -298,8 +334,56 @@ function BlueskyConnectDialog() {
                                                 message={errors.app_password}
                                             />
                                         </div>
+                                        <Collapsible
+                                            open={appPasswordServiceOpen}
+                                            onOpenChange={
+                                                setAppPasswordServiceOpen
+                                            }
+                                        >
+                                            <CollapsibleTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className={`px-0 text-muted-foreground ${COLLAPSIBLE_TRIGGER_ICON_CLASS}`}
+                                                >
+                                                    Choose Bluesky instance
+                                                    <ChevronDown
+                                                        aria-hidden="true"
+                                                        data-icon="inline-end"
+                                                        className="size-4 text-muted-foreground transition-transform"
+                                                    />
+                                                </Button>
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent className="grid gap-2 pt-2">
+                                                <Label htmlFor="app_password_pds_url">
+                                                    Service URL
+                                                </Label>
+                                                <Input
+                                                    id="app_password_pds_url"
+                                                    name="pds_url"
+                                                    type="url"
+                                                    placeholder="https://bsky.social"
+                                                    autoComplete="url"
+                                                    aria-invalid={
+                                                        errors.pds_url
+                                                            ? true
+                                                            : undefined
+                                                    }
+                                                />
+                                                <InputError
+                                                    message={errors.pds_url}
+                                                />
+                                                <p className="text-xs text-muted-foreground">
+                                                    Use this only if your
+                                                    account is hosted by a
+                                                    custom ATProto/Bluesky
+                                                    service.
+                                                </p>
+                                            </CollapsibleContent>
+                                        </Collapsible>
                                     </div>
-                                    <DialogFooter>
+                                    <DialogFooter className="pt-4">
                                         <Button
                                             type="button"
                                             variant="outline"
