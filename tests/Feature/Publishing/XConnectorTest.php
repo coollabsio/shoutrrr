@@ -214,6 +214,66 @@ test('x uploads media to the v2 endpoint and attaches data.id to the first tweet
         && ($request['media']['media_ids'] ?? null) === ['99001']);
 });
 
+test('x uploads gifs through the async tweet_gif flow', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/animation.gif', 'gif-bytes');
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/animation.gif',
+        'mime' => 'image/gif',
+        'size_bytes' => strlen('gif-bytes'),
+    ]);
+
+    Http::fake([
+        'https://api.x.com/2/media/upload/initialize' => Http::response(['data' => ['id' => 'gif123']], 200),
+        'https://api.x.com/2/media/upload/gif123/append' => Http::response([], 200),
+        'https://api.x.com/2/media/upload/gif123/finalize' => Http::response(['data' => ['processing_info' => ['state' => 'succeeded']]], 200),
+        'https://api.x.com/2/media/upload*' => Http::response(['data' => ['processing_info' => ['state' => 'succeeded']]], 200),
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => 'tweet1']], 201),
+    ]);
+
+    $result = app(XConnector::class)->publish(xContext(['gif'], [$media]));
+
+    expect($result->isSuccessful())->toBeTrue()
+        ->and($result->remoteIds)->toBe(['tweet1']);
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.x.com/2/media/upload/initialize'
+        && $request['media_category'] === 'tweet_gif'
+        && $request['media_type'] === 'image/gif'
+        && $request['total_bytes'] === strlen('gif-bytes'));
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.twitter.com/2/tweets'
+        && ($request['media']['media_ids'] ?? null) === ['gif123']);
+});
+
+test('x rejects mixing a gif with other media before calling the api', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/animation.gif', 'gif-bytes');
+    Storage::disk('public')->put('media/cat.jpg', 'image-bytes');
+
+    $gif = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/animation.gif',
+        'mime' => 'image/gif',
+    ]);
+    $image = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/cat.jpg',
+        'mime' => 'image/jpeg',
+    ]);
+
+    Http::fake();
+
+    $result = app(XConnector::class)->publish(xContext(['mixed'], [$gif, $image]));
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::Validation)
+        ->and($result->errorMessage)->toContain('one GIF');
+
+    Http::assertNothingSent();
+});
+
 test('x omits an empty text field for a media-only post', function () {
     Storage::fake('public');
     Storage::disk('public')->put('media/cat.jpg', 'image-bytes');

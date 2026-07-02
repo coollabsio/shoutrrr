@@ -138,7 +138,7 @@ enum Platform: string
     public function maxMediaBytes(): int
     {
         return match ($this) {
-            self::Bluesky => 1_048_576,
+            self::Bluesky => 2_000_000,
             self::X => 5_242_880,
             self::LinkedIn => 8_388_608,
         };
@@ -181,7 +181,7 @@ enum Platform: string
         return match ($this) {
             self::X => 536_870_912,        // 512 MB
             self::LinkedIn => 524_288_000, // 500 MB (organic feed)
-            self::Bluesky => 104_857_600,  // 100 MB
+            self::Bluesky => 100_000_000,
         };
     }
 
