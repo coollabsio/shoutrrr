@@ -33,7 +33,11 @@ class UsageRecorder
         array $meta = [],
     ): void {
         try {
-            if (! $this->settings->usageTrackingEnabled()) {
+            // Record when metering is explicitly enabled, or when workspace
+            // subscriptions are active — the billing gate reads these counters
+            // (e.g. the monthly X publish limit) and must not silently no-op on a
+            // cloud instance that leaves the metering toggle off.
+            if (! $this->settings->usageTrackingEnabled() && ! (bool) config('subscriptions.enabled')) {
                 return;
             }
 

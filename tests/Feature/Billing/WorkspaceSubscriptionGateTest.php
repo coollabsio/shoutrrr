@@ -6,11 +6,13 @@ use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\PostStatus;
 use App\Enums\PostTargetStatus;
+use App\Enums\UsageCategory;
 use App\Jobs\PublishPostTarget;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Models\Post;
 use App\Models\PostTarget;
+use App\Models\UsagePeriodCounter;
 use App\Models\Workspace;
 use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Publishing\BackoffSchedule;
@@ -18,6 +20,7 @@ use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Publishing\PostStatusRollup;
 use App\Services\Publishing\PublishConnectorRegistry;
 use App\Services\Publishing\TokenManager;
+use App\Support\UsageOperation;
 use Illuminate\Support\Facades\Date;
 use Laravel\Cashier\Subscription;
 
@@ -28,6 +31,31 @@ beforeEach(function () {
         'subscriptions.x_post_cost_cents' => 1.5,
     ]);
 });
+
+/**
+ * Seed the current-period X publish counter the same way UsageRecorder does, so the
+ * gate (which now reads usage_period_counters via UsageMeter) sees prior X posts.
+ */
+function recordXPosts(Workspace $workspace, int $count = 1): void
+{
+    $now = Date::now();
+
+    $counter = UsagePeriodCounter::query()->firstOrCreate(
+        [
+            'workspace_id' => $workspace->id,
+            'period_start' => $now->copy()->startOfMonth()->toDateString(),
+            'category' => UsageCategory::Publish->value,
+            'platform' => Platform::X->value,
+            'operation' => UsageOperation::POST,
+        ],
+        [
+            'period_end' => $now->copy()->endOfMonth()->toDateString(),
+        ],
+    );
+
+    $counter->increment('event_count', $count);
+    $counter->increment('total_quota', $count);
+}
 
 test('publishing is free and unlimited when self hosted mode disables billing', function () {
     config(['subscriptions.enabled' => false]);
@@ -75,12 +103,12 @@ test('x publishing quota is five dollars worth of monthly requests', function ()
     expect($gate->monthlyXPostLimit())->toBe(333)
         ->and($gate->remainingXPosts($workspace))->toBe(333);
 
-    $gate->recordXPostRequest($workspace, 332);
+    recordXPosts($workspace, 332);
 
     expect($gate->remainingXPosts($workspace))->toBe(1)
         ->and($gate->canPublishX($workspace))->toBeTrue();
 
-    $gate->recordXPostRequest($workspace);
+    recordXPosts($workspace);
 
     expect($gate->remainingXPosts($workspace))->toBe(0)
         ->and($gate->canPublishX($workspace))->toBeFalse();
@@ -88,7 +116,7 @@ test('x publishing quota is five dollars worth of monthly requests', function ()
     Date::setTestNow();
 });
 
-test('x publish requests are recorded before the connector is called', function () {
+test('a failed x publish does not consume quota because the job no longer pre-charges', function () {
     Date::setTestNow('2026-06-15 12:00:00');
     $workspace = subscribedWorkspace();
     $post = Post::factory()->create([
@@ -142,8 +170,10 @@ test('x publish requests are recorded before the connector is called', function 
         app(WorkspaceSubscriptionGate::class),
     );
 
+    // Quota is now driven by the metering counters the publish connector increments
+    // on success. A failed publish meters nothing, so the full quota remains.
     expect($connectorCalls)->toBe(1)
-        ->and(app(WorkspaceSubscriptionGate::class)->remainingXPosts($workspace))->toBe(332);
+        ->and(app(WorkspaceSubscriptionGate::class)->remainingXPosts($workspace))->toBe(333);
 
     Date::setTestNow();
 });
@@ -151,7 +181,7 @@ test('x publish requests are recorded before the connector is called', function 
 test('x publishing stops before calling the connector when quota is exhausted', function () {
     Date::setTestNow('2026-06-15 12:00:00');
     $workspace = subscribedWorkspace();
-    app(WorkspaceSubscriptionGate::class)->recordXPostRequest($workspace, 333);
+    recordXPosts($workspace, 333);
     $post = Post::factory()->create([
         'workspace_id' => $workspace->id,
         'status' => PostStatus::Publishing,

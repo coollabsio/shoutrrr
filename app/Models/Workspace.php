@@ -122,12 +122,4 @@ class Workspace extends Model
     {
         return $this->hasMany(ConnectedAccount::class);
     }
-
-    /**
-     * @return HasMany<XPostUsage, $this>
-     */
-    public function xPostUsages(): HasMany
-    {
-        return $this->hasMany(XPostUsage::class);
-    }
 }

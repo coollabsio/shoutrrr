@@ -1,10 +1,13 @@
 <?php
 
+use App\Enums\Platform;
+use App\Enums\UsageCategory;
 use App\Enums\WorkspaceRole;
+use App\Models\UsagePeriodCounter;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
-use App\Models\XPostUsage;
+use App\Support\UsageOperation;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\Process\Process;
@@ -87,17 +90,26 @@ test('billing page shows current month x post usage', function () {
         'user_id' => $user->id,
         'role' => WorkspaceRole::Owner,
     ]);
-    XPostUsage::query()->create([
+    UsagePeriodCounter::factory()->create([
         'workspace_id' => $workspace->id,
         'period_start' => '2026-06-01',
         'period_end' => '2026-06-30',
-        'used' => 12,
+        'category' => UsageCategory::Publish->value,
+        'platform' => Platform::X->value,
+        'operation' => UsageOperation::POST,
+        'event_count' => 12,
+        'total_quota' => 12,
     ]);
-    XPostUsage::query()->create([
+    // A prior month must not leak into the current-period count.
+    UsagePeriodCounter::factory()->create([
         'workspace_id' => $workspace->id,
         'period_start' => '2026-05-01',
         'period_end' => '2026-05-31',
-        'used' => 99,
+        'category' => UsageCategory::Publish->value,
+        'platform' => Platform::X->value,
+        'operation' => UsageOperation::POST,
+        'event_count' => 99,
+        'total_quota' => 99,
     ]);
     $user->forceFill(['current_workspace_id' => $workspace->id])->save();
 

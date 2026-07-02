@@ -120,9 +120,6 @@ class PublishPostTarget implements ShouldQueue
         } else {
             try {
                 $credentials = $tokens->fresh($account);
-                if ($subscriptions->isEnabled() && $target->platform === Platform::X) {
-                    $subscriptions->recordXPostRequest($workspace);
-                }
                 $result = $registry->for($target->platform)->publish($this->context($target, $credentials));
             } catch (TokenRefreshException $e) {
                 $result = PublishResult::failure(ErrorKind::AuthExpired, $e->getMessage());
