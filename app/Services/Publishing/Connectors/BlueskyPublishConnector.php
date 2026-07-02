@@ -10,6 +10,7 @@ use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\UsageCategory;
+use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Atproto\DPoP;
@@ -65,7 +66,7 @@ class BlueskyPublishConnector implements PublishConnector
                 $embed = $this->videoEmbed($context, $videoMedia[0]);
             } else {
                 // Media rides on the root post only; uploaded once, then embedded below.
-                $embed = $rootUri === null ? $this->uploadImages($context->media, $pds, $jwt, $session) : null;
+                $embed = $rootUri === null ? $this->uploadImages($context->media, $pds, $jwt, $session, $context->account) : null;
             }
 
             // Resume: remote_ids stores only AT-URIs, so recover the root and parent CIDs
@@ -198,13 +199,15 @@ class BlueskyPublishConnector implements PublishConnector
 
         try {
             if ($jobId === null) {
-                $jobId = $this->uploadVideo($media, $pds, $jwt, $did, $session);
+                $jobId = $this->uploadVideo($media, $pds, $jwt, $did, $session, $context->account);
                 $state->markUploaded($media->id, $jobId);
                 $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
             }
 
             $status = $this->http->acceptJson()
                 ->get(self::VIDEO_SERVICE.'/xrpc/app.bsky.video.getJobStatus', ['jobId' => $jobId]);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_STATUS_POLL, $context->account, $status);
 
             if ($status->failed()) {
                 $kind = $this->classifyStatus($status->status());
@@ -249,7 +252,7 @@ class BlueskyPublishConnector implements PublishConnector
      *
      * @param  array<string, mixed>  $session
      */
-    private function uploadVideo(PostMedia $media, string $pds, string $jwt, string $did, array $session): string
+    private function uploadVideo(PostMedia $media, string $pds, string $jwt, string $did, array $session, ConnectedAccount $account): string
     {
         $pdsHost = (string) parse_url($pds, PHP_URL_HOST);
 
@@ -271,6 +274,8 @@ class BlueskyPublishConnector implements PublishConnector
 
         $upload = $this->http->withToken($serviceToken)->withBody($body, 'video/mp4')
             ->post(self::VIDEO_SERVICE.'/xrpc/app.bsky.video.uploadVideo?did='.rawurlencode($did).'&name=video.mp4');
+
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $upload);
 
         // Re-uploading identical bytes returns 409 already_exists but still carries the jobId.
         if ($upload->failed() && $upload->json('error') !== 'already_exists') {
@@ -305,7 +310,7 @@ class BlueskyPublishConnector implements PublishConnector
      * @param  array<string, mixed>  $session
      * @return array{'$type': string, images: list<array{alt: string, image: array<string, mixed>}>}|null
      */
-    private function uploadImages(array $media, string $pds, string $jwt, array $session): ?array
+    private function uploadImages(array $media, string $pds, string $jwt, array $session, ConnectedAccount $account): ?array
     {
         $media = array_slice($media, 0, Platform::Bluesky->maxMedia());
 
@@ -320,6 +325,8 @@ class BlueskyPublishConnector implements PublishConnector
             $compressed = $this->imageCompressor->compressToFit($bytes, Platform::Bluesky->maxMediaBytes(), $item->mime, Platform::Bluesky->allowedMime());
 
             $response = $this->postBodyAuthorized($pds.'/xrpc/com.atproto.repo.uploadBlob', $jwt, $session, $compressed->bytes, $compressed->mime);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $response);
 
             if ($response->failed()) {
                 throw new BlueskyRequestFailed($response);
