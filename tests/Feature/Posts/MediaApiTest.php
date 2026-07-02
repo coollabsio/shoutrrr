@@ -70,3 +70,27 @@ test('it rejects an upload to a post that is no longer editable', function () {
         'file' => UploadedFile::fake()->image('p.jpg', 800, 600)->size(300),
     ], ['Accept' => 'application/json'])->assertStatus(422);
 });
+
+test('PATCH /posts/{post}/media/{media}/alt updates alt text', function () {
+    Storage::fake('public');
+    [$user, $workspace, $post] = memberWithDraft();
+    $media = test()->post("/posts/{$post['id']}/media", [
+        'file' => UploadedFile::fake()->image('p.jpg', 800, 600)->size(300),
+    ], ['Accept' => 'application/json'])->json('media');
+
+    test()->patchJson("/posts/{$post['id']}/media/{$media['id']}/alt", ['alt_text' => 'a red bicycle'])
+        ->assertOk()
+        ->assertJsonPath('media.alt_text', 'a red bicycle');
+});
+
+test('it rejects an alt-text update on a post that is no longer editable', function () {
+    Storage::fake('public');
+    [$user, $workspace, $post] = memberWithDraft();
+    $media = test()->post("/posts/{$post['id']}/media", [
+        'file' => UploadedFile::fake()->image('p.jpg', 800, 600)->size(300),
+    ], ['Accept' => 'application/json'])->json('media');
+    Post::findOrFail($post['id'])->forceFill(['status' => 'published'])->save();
+
+    test()->patchJson("/posts/{$post['id']}/media/{$media['id']}/alt", ['alt_text' => 'too late'])
+        ->assertStatus(422);
+});

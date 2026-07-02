@@ -6,6 +6,7 @@ use App\Models\ConnectedAccount;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Services\ConnectedAccounts\BlueskyOAuthConnector;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -31,6 +32,9 @@ function fakeDefaultBlueskyOAuthDiscovery(): void
 
         return match (true) {
             $url === 'https://bsky.social/.well-known/oauth-protected-resource' => Http::response([], 404),
+            $url === 'https://pds.example/.well-known/oauth-protected-resource' => Http::response([
+                'authorization_servers' => ['https://bsky.social'],
+            ]),
             $url === 'https://bsky.social/.well-known/oauth-authorization-server' => Http::response([
                 'issuer' => 'https://bsky.social',
                 'authorization_endpoint' => 'https://bsky.social/oauth/authorize',
@@ -43,8 +47,11 @@ function fakeDefaultBlueskyOAuthDiscovery(): void
                 'refresh_token' => 'refresh-oauth',
                 'expires_in' => 3600,
                 'sub' => 'did:plc:abc',
-                'scope' => 'atproto transition:generic',
+                'scope' => 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/* rpc:com.atproto.repo.uploadBlob?aud=*',
             ], 200, ['DPoP-Nonce' => 'nonce-2']),
+            str_contains($url, 'com.atproto.identity.resolveHandle') => Http::response([
+                'did' => 'did:plc:abc',
+            ]),
             str_contains($url, 'plc.directory/did:plc:abc') => Http::response([
                 'service' => [['type' => 'AtprotoPersonalDataServer', 'serviceEndpoint' => 'https://pds.example']],
             ]),
@@ -62,11 +69,29 @@ test('bluesky oauth client metadata is public', function () {
     test()->get(route('oauth.bluesky.metadata'))
         ->assertOk()
         ->assertJsonPath('dpop_bound_access_tokens', true)
-        ->assertJsonPath('scope', 'atproto transition:generic')
-        ->assertJsonPath('token_endpoint_auth_method', 'none');
+        ->assertJsonPath('scope', 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/* rpc:com.atproto.repo.uploadBlob?aud=*')
+        ->assertJsonPath('token_endpoint_auth_method', 'private_key_jwt')
+        ->assertJsonPath('token_endpoint_auth_signing_alg', 'ES256')
+        ->assertJsonPath('jwks_uri', route('oauth.bluesky.jwks'));
 });
 
-test('an owner can start bluesky oauth without a login hint', function () {
+test('an owner can start bluesky oauth with a handle that resolves their pds', function () {
+    blueskyOAuthOwner();
+    fakeDefaultBlueskyOAuthDiscovery();
+
+    test()->get(route('accounts.bluesky.oauth', ['identifier' => 'ada.bsky.social']))
+        ->assertRedirect('https://bsky.social/oauth/authorize?client_id='.urlencode(route('oauth.bluesky.metadata')).'&request_uri=urn%3Arequest%3A123');
+
+    expect(session('accounts.bluesky.oauth'))->toHaveCount(1);
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://bsky.social/oauth/par'
+        && $request->hasHeader('DPoP')
+        && $request['login_hint'] === 'ada.bsky.social'
+        && $request['scope'] === 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/* rpc:com.atproto.repo.uploadBlob?aud=*'
+        && $request['client_assertion_type'] === 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
+        && isset($request['client_assertion']));
+});
+
+test('an owner can start bluesky oauth without a handle', function () {
     blueskyOAuthOwner();
     fakeDefaultBlueskyOAuthDiscovery();
 
@@ -77,7 +102,23 @@ test('an owner can start bluesky oauth without a login hint', function () {
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://bsky.social/oauth/par'
         && $request->hasHeader('DPoP')
         && ! isset($request['login_hint'])
-        && $request['scope'] === 'atproto transition:generic');
+        && $request['scope'] === 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/* rpc:com.atproto.repo.uploadBlob?aud=*');
+});
+
+test('bluesky oauth omits client_assertion for the public loopback dev client', function () {
+    fakeDefaultBlueskyOAuthDiscovery();
+
+    // The loopback client (a synthesized http://localhost/?… id, not the published
+    // metadata document) is a public client and must not send a private_key_jwt.
+    app(BlueskyOAuthConnector::class)->authorizationRedirect(
+        null,
+        'http://localhost/?redirect_uri=http://127.0.0.1/callback&scope=atproto',
+        'http://127.0.0.1/callback',
+    );
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://bsky.social/oauth/par'
+        && ! isset($request['client_assertion'])
+        && ! isset($request['client_assertion_type']));
 });
 
 test('bluesky oauth can start from an advanced service url', function () {

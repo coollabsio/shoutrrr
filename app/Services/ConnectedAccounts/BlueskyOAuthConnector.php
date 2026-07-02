@@ -7,14 +7,25 @@ namespace App\Services\ConnectedAccounts;
 use App\Dto\ConnectedAccount\ConnectedAccountData;
 use App\Enums\Platform;
 use App\Services\Atproto\DPoP;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
 class BlueskyOAuthConnector
 {
+    /**
+     * Granular ATProto OAuth scopes. The `rpc:com.atproto.repo.uploadBlob` scope is
+     * required to mint the service-auth token for video uploads: getServiceAuth
+     * checks the *requested* lxm (uploadBlob), not getServiceAuth itself. It is NOT
+     * covered by `repo:`/`blob:`, and dropping it regresses video publishing for
+     * OAuth accounts (it previously rode on `transition:generic`).
+     */
+    public const string SCOPE = 'atproto repo:app.bsky.feed.post repo:app.bsky.feed.like blob:*/* rpc:com.atproto.repo.uploadBlob?aud=*';
+
     public function __construct(
         private readonly HttpFactory $http,
         private readonly BlueskyConnector $bluesky,
@@ -27,32 +38,63 @@ class BlueskyOAuthConnector
     public function authorizationRedirect(?string $identifier, string $clientId, string $redirectUri, ?string $pdsUrl = null): array
     {
         $identifier = $identifier === null ? null : ltrim(trim($identifier), '@');
+
+        $did = null;
         $pds = match (true) {
-            $identifier !== null && $identifier !== '' => $this->bluesky->resolvePds($identifier, null),
+            $identifier !== null && $identifier !== '' => $this->bluesky->resolvePdsAndDid($identifier, $pdsUrl, $did),
             $pdsUrl !== null && trim($pdsUrl) !== '' => $this->bluesky->resolvePds('bsky.social', $pdsUrl),
             default => 'https://bsky.social',
         };
-        $did = $identifier ? $this->resolveDid($identifier) : null;
-        $issuer = $this->authorizationServer($pds);
-        $metadata = $this->authorizationMetadata($issuer);
+        try {
+            $metadata = $this->authorizationMetadata($pds);
+        } catch (RuntimeException $e) {
+            Log::warning('Bluesky OAuth: metadata discovery failed', [
+                'pds' => $pds,
+                'identifier' => $identifier,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+        $issuer = (string) ($metadata['issuer'] ?? $pds);
 
         $state = Str::random(64);
         $verifier = $this->base64Url(random_bytes(64));
         $key = $this->dpop->generateKey();
-        $scope = 'atproto transition:generic';
 
         $parEndpoint = (string) $metadata['pushed_authorization_request_endpoint'];
-        $par = $this->postWithDpopNonce($parEndpoint, $key, [
+        $parForm = [
             'client_id' => $clientId,
             'response_type' => 'code',
             'redirect_uri' => $redirectUri,
-            'scope' => $scope,
+            'scope' => self::SCOPE,
             'state' => $state,
             'code_challenge' => $this->base64Url(hash('sha256', $verifier, true)),
             'code_challenge_method' => 'S256',
-        ]);
+        ];
+
+        // Confidential clients authenticate to the PAR/token endpoints with a
+        // private_key_jwt assertion. The loopback (localhost) dev client is public
+        // and has no JWKS, so sending an assertion would fail with invalid_client.
+        if ($this->usesClientAssertion($clientId)) {
+            $parForm['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+            $parForm['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
+        }
+
+        if ($identifier !== null && $identifier !== '') {
+            $parForm['login_hint'] = $identifier;
+        }
+
+        $par = $this->postWithDpopNonce($parEndpoint, $key, $parForm);
 
         if ($par->failed() || ! is_string($par->json('request_uri'))) {
+            Log::warning('Bluesky OAuth: PAR request failed', [
+                'par_endpoint' => $parEndpoint,
+                'status' => $par->status(),
+                'body' => $par->body(),
+                'identifier' => $identifier,
+                'pds' => $pds,
+                'issuer' => $issuer,
+            ]);
             throw new RuntimeException('Bluesky OAuth could not start. Please try the app-password option for now.');
         }
 
@@ -88,18 +130,31 @@ class BlueskyOAuthConnector
             throw new RuntimeException('Bluesky returned from an unexpected authorization server.');
         }
 
-        /** @var array<string, string> $key */
+        /** @var array{kty: string, crv: string, x: string, y: string, d: string} $key */
         $key = $context['dpop_private_jwk'];
         $tokenEndpoint = (string) $context['token_endpoint'];
-        $response = $this->postWithDpopNonce($tokenEndpoint, $key, [
+        $clientId = (string) $context['client_id'];
+        $tokenForm = [
             'grant_type' => 'authorization_code',
             'code' => $code,
-            'client_id' => (string) $context['client_id'],
+            'client_id' => $clientId,
             'redirect_uri' => (string) $context['redirect_uri'],
             'code_verifier' => (string) $context['code_verifier'],
-        ]);
+        ];
+
+        if ($this->usesClientAssertion($clientId)) {
+            $tokenForm['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+            $tokenForm['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
+        }
+
+        $response = $this->postWithDpopNonce($tokenEndpoint, $key, $tokenForm);
 
         if ($response->failed()) {
+            Log::warning('Bluesky OAuth: token exchange failed', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+                'issuer' => $issuer,
+            ]);
             throw new RuntimeException('Bluesky OAuth token exchange failed. Please try again. (HTTP '.$response->status().')');
         }
 
@@ -129,6 +184,7 @@ class BlueskyOAuthConnector
             session: [
                 'pds' => $pds,
                 'auth_server' => (string) $context['issuer'],
+                'issuer' => (string) $context['issuer'],
                 'token_endpoint' => $tokenEndpoint,
                 'client_id' => (string) $context['client_id'],
                 'dpop_private_jwk' => $key,
@@ -138,21 +194,9 @@ class BlueskyOAuthConnector
         );
     }
 
-    private function resolveDid(string $identifier): ?string
-    {
-        if (str_starts_with($identifier, 'did:')) {
-            return $identifier;
-        }
-
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
-            ->get('https://bsky.social/xrpc/com.atproto.identity.resolveHandle', ['handle' => $identifier]);
-
-        return $response->successful() ? $response->json('did') : null;
-    }
-
     private function resolveDidToPds(string $did): ?string
     {
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
+        $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
             ->get('https://plc.directory/'.$did);
 
         if ($response->failed()) {
@@ -171,35 +215,21 @@ class BlueskyOAuthConnector
         return null;
     }
 
-    private function authorizationServer(string $pds): string
-    {
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
-            ->get($pds.'/.well-known/oauth-protected-resource');
-
-        $server = $response->json('authorization_servers.0');
-
-        if (is_string($server) && $server !== '') {
-            return rtrim($server, '/');
-        }
-
-        $origin = parse_url($pds, PHP_URL_SCHEME).'://'.parse_url($pds, PHP_URL_HOST);
-        $metadata = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
-            ->get($origin.'/.well-known/oauth-authorization-server');
-
-        if ($metadata->successful() && $metadata->json('issuer') === $origin) {
-            return $origin;
-        }
-
-        throw new RuntimeException('Could not discover the Bluesky authorization server.');
-    }
-
     /**
      * @return array<string, mixed>
      */
-    private function authorizationMetadata(string $issuer): array
+    private function authorizationMetadata(string $pds): array
     {
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
-            ->get($issuer.'/.well-known/oauth-authorization-server');
+        $resource = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
+            ->get($pds.'/.well-known/oauth-protected-resource');
+
+        $authServer = $resource->json('authorization_servers.0');
+        $endpoint = is_string($authServer) && $authServer !== ''
+            ? rtrim($authServer, '/')
+            : $pds;
+
+        $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
+            ->get($endpoint.'/.well-known/oauth-authorization-server');
 
         if ($response->failed()) {
             throw new RuntimeException('Could not read Bluesky OAuth metadata.');
@@ -218,17 +248,32 @@ class BlueskyOAuthConnector
     }
 
     /**
-     * @param  array<string, string>  $key
+     * @param  array{kty: string, crv: string, x: string, y: string, d: string}  $key
      * @param  array<string, string>  $form
      */
     private function postWithDpopNonce(string $url, array $key, array $form, ?string $nonce = null): Response
     {
-        $response = $this->http->asForm()
-            ->withHeader('DPoP', $this->dpop->proof('POST', $url, $key, nonce: $nonce))
-            ->post($url, $form);
+        try {
+            $response = $this->http->asForm()
+                ->withHeader('DPoP', $this->dpop->proof('POST', $url, $key, nonce: $nonce))
+                ->post($url, $form);
+        } catch (ConnectionException $e) {
+            Log::warning('Bluesky OAuth: connection error during POST', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+            throw new RuntimeException('Could not reach the Bluesky authorization server. Please try again.');
+        }
 
-        if ($response->status() === 400 && $nonce === null) {
-            return $this->postWithDpopNonce($url, $key, $form, $response->header('DPoP-Nonce'));
+        $freshNonce = $response->header('DPoP-Nonce');
+        if ($freshNonce === '') {
+            $freshNonce = null;
+        }
+
+        if ($response->status() === 400 && $freshNonce !== null && $freshNonce !== $nonce && str_contains((string) $response->body(), 'use_dpop_nonce')) {
+            return $this->http->asForm()
+                ->withHeader('DPoP', $this->dpop->proof('POST', $url, $key, nonce: $freshNonce))
+                ->post($url, $form);
         }
 
         return $response;
@@ -239,7 +284,7 @@ class BlueskyOAuthConnector
      */
     private function profile(string $did): array
     {
-        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
+        $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
             ->get('https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile', ['actor' => $did]);
 
         return $response->successful() ? (array) $response->json() : [];
@@ -248,5 +293,16 @@ class BlueskyOAuthConnector
     private function base64Url(string $value): string
     {
         return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    }
+
+    /**
+     * Whether this client authenticates with a private_key_jwt assertion. The only
+     * confidential client we mint is the published client-metadata document; the
+     * loopback dev client (the synthesized `http://localhost/?…` id) is public
+     * (auth method "none") and must not send one.
+     */
+    private function usesClientAssertion(string $clientId): bool
+    {
+        return $clientId === route('oauth.bluesky.metadata');
     }
 }

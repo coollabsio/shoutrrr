@@ -67,9 +67,21 @@ type Editing =
           items: { file: File; url: string }[];
           index: number;
       }
-    | { kind: 'reedit'; url: string; settings: EditSettings; mediaId: string }
+    | {
+          kind: 'reedit';
+          url: string;
+          settings: EditSettings;
+          mediaId: string;
+          altText: string | null;
+      }
     | { kind: 'raw'; url: string; mediaId: string }
-    | { kind: 'video'; url: string; durationSeconds: number; mediaId: string }
+    | {
+          kind: 'video';
+          url: string;
+          durationSeconds: number;
+          mediaId: string;
+          altText: string | null;
+      }
     | { kind: 'video-new'; url: string; durationSeconds: number; file: File };
 
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
@@ -357,6 +369,7 @@ export default function Composer({
             url: m.url,
             durationSeconds: m.duration_seconds ?? 0,
             mediaId: m.id,
+            altText: m.alt_text,
         });
     }
 
@@ -373,6 +386,7 @@ export default function Composer({
                 url: m.source_url,
                 settings: normalizeSettings(m.edit_settings),
                 mediaId: m.id,
+                altText: m.alt_text,
             });
         } else {
             setEditing({ kind: 'raw', url: m.url, mediaId: m.id });
@@ -383,6 +397,7 @@ export default function Composer({
     async function applyEditing(
         composed: Blob,
         settings: EditSettings,
+        altText: string,
     ): Promise<void> {
         if (!editing) {
             return;
@@ -394,6 +409,7 @@ export default function Composer({
                 composed,
                 editing.items[editing.index].file,
                 settings,
+                altText,
             );
             if (!ok) {
                 return;
@@ -403,6 +419,7 @@ export default function Composer({
                 editing.mediaId,
                 composed,
                 settings,
+                altText,
             );
             if (!ok) {
                 return;
@@ -411,7 +428,12 @@ export default function Composer({
             // A plain image beautified for the first time: keep the raw image as
             // the source, attach the composed result, drop the raw attachment.
             const rawBlob = await fetch(editing.url).then((r) => r.blob());
-            const ok = await imageEditor.applyNew(composed, rawBlob, settings);
+            const ok = await imageEditor.applyNew(
+                composed,
+                rawBlob,
+                settings,
+                altText,
+            );
             if (!ok) {
                 return;
             }
@@ -445,6 +467,7 @@ export default function Composer({
             : (editing?.url ?? null);
     const editorSettings =
         editing?.kind === 'reedit' ? editing.settings : DEFAULT_EDIT_SETTINGS;
+    const editorAltText = editing?.kind === 'reedit' ? editing.altText : null;
     const editorQueue =
         editing?.kind === 'batch'
             ? {
@@ -921,6 +944,7 @@ export default function Composer({
                         }
                         sourceUrl={editorSourceUrl}
                         initialSettings={editorSettings}
+                        initialAltText={editorAltText}
                         onApply={applyEditing}
                         onCancel={cancelEditing}
                         onDiscard={discardEditing}
@@ -953,6 +977,9 @@ export default function Composer({
                         }
                         phase={videoEditor.phase}
                         progress={videoEditor.progress}
+                        initialAltText={
+                            editing?.kind === 'video' ? editing.altText : null
+                        }
                         onCancel={closeVideoEditing}
                         onSkip={() => {
                             if (editing?.kind !== 'video-new') {
@@ -961,7 +988,7 @@ export default function Composer({
                             void mediaUploads.handleFiles([editing.file]);
                             closeVideoEditing();
                         }}
-                        onApply={async (settings) => {
+                        onApply={async (settings, altText) => {
                             if (
                                 editing?.kind !== 'video' &&
                                 editing?.kind !== 'video-new'
@@ -983,6 +1010,7 @@ export default function Composer({
                                     source,
                                     oldMediaId,
                                     settings,
+                                    altText,
                                     limits: selectedVideoLimits,
                                 });
                                 if (ok) {

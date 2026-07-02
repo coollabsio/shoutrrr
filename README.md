@@ -34,7 +34,7 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 | Platform        | Connect with     | Publishing                                                | Threads         | Analytics                            |
 | --------------- | ---------------- | --------------------------------------------------------- | --------------- | ------------------------------------ |
 | **X** (Twitter) | OAuth 2.0        | ✅ (≤280 chars, ≤25,000 for Premium, up to 4 media)       | ✅              | likes, reposts, replies, impressions |
-| **Bluesky**     | App password     | ✅ (≤300 graphemes, up to 4 images or 1 video)            | ✅              | likes, reposts, replies              |
+| **Bluesky**     | ATProto OAuth or app passwords     | ✅ (≤300 graphemes, up to 4 images or 1 video)            | ✅              | likes, reposts, replies              |
 | **LinkedIn**    | OAuth 2.0 (OIDC) | ✅ (≤3000 chars, up to 9 images or 1 video)               | — (single post) | not available for personal accounts  |
 
 ## Features
