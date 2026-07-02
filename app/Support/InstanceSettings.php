@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Cache;
 
 class InstanceSettings
 {
-    private const string CacheKey = 'instance_settings';
+    public const string CacheKey = 'instance_settings';
 
     public function registrationsEnabled(): bool
     {

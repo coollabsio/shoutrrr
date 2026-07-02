@@ -28,7 +28,10 @@ type Props = {
     open: boolean;
     sourceUrl: string | null;
     durationSeconds: number;
-    onApply: (settings: VideoEditSettings) => Promise<void> | void;
+    onApply: (
+        settings: VideoEditSettings,
+        altText: string,
+    ) => Promise<void> | void;
     onCancel: () => void;
     /** 'new' = a just-added video (offer "Upload without editing"); 'existing' = re-editing an uploaded video. */
     variant?: 'new' | 'existing';
@@ -37,6 +40,8 @@ type Props = {
     phase: 'idle' | 'rendering' | 'compressing' | 'uploading';
     /** 0..1 — shown as a progress bar while phase !== 'idle'. */
     progress: number;
+    /** Initial alt text: persisted value on re-edit, empty for a fresh video. */
+    initialAltText?: string | null;
 };
 
 /** Minimum gap enforced between the in and out trim handles (seconds). */
@@ -65,6 +70,7 @@ export function VideoEditor({
     onSkip,
     phase,
     progress,
+    initialAltText = '',
 }: Props) {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const trackRef = useRef<HTMLDivElement | null>(null);
@@ -81,6 +87,7 @@ export function VideoEditor({
     const [currentTime, setCurrentTime] = useState(0);
     const [volume, setVolume] = useState(1);
     const [muted, setMuted] = useState(false);
+    const [altText, setAltText] = useState(initialAltText ?? '');
     // Whether the browser can actually re-encode at this clip's resolution.
     // Cropping forces a re-encode; trimming only copies the track, so the editor
     // always offers trim but hides the crop tools when encoding isn't possible.
@@ -250,6 +257,22 @@ export function VideoEditor({
         settings.aspect !== 'auto' &&
         sourceSize !== null &&
         sourceUrl !== null;
+
+    const altTextField = (
+        <Field label="Alt text">
+            <textarea
+                value={altText}
+                onChange={(e) => setAltText(e.target.value)}
+                placeholder="Describe the video for accessibility"
+                rows={3}
+                maxLength={1000}
+                className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:ring-2 focus:ring-foreground/20 focus:outline-none"
+            />
+            <p className="text-[11px] text-muted-foreground">
+                Describe the video for screen readers
+            </p>
+        </Field>
+    );
 
     return (
         <Dialog
@@ -820,6 +843,15 @@ export function VideoEditor({
                                     Clear crop
                                 </button>
                             )}
+
+                            {altTextField}
+                        </aside>
+                    )}
+
+                    {/* Alt text field shown when there's no crop sidebar */}
+                    {!canCrop && (
+                        <aside className="flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto border-t border-border p-5 md:w-[288px] md:flex-none md:border-t-0 md:border-l">
+                            {altTextField}
                         </aside>
                     )}
                 </div>
@@ -873,7 +905,7 @@ export function VideoEditor({
                             type="button"
                             disabled={busy}
                             onClick={() => {
-                                void onApply(settings);
+                                void onApply(settings, altText);
                             }}
                             className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50 md:py-2"
                         >

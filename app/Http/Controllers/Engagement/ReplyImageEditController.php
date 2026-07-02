@@ -23,6 +23,7 @@ class ReplyImageEditController extends Controller
             $request->file('composed'),
             $request->file('source'),
             $request->validated('settings'),
+            $request->validated('alt_text'),
         );
 
         return response()->json(['media' => $media->toView()], 201);
@@ -36,6 +37,7 @@ class ReplyImageEditController extends Controller
             $media,
             $request->file('composed'),
             $request->validated('settings'),
+            $request->validated('alt_text'),
         );
 
         return response()->json(['media' => $updated->toView()]);

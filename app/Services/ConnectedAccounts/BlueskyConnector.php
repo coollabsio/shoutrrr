@@ -14,6 +14,8 @@ class BlueskyConnector
 {
     private const string DEFAULT_PDS = 'https://bsky.social';
 
+    private const string APPVIEW = 'https://public.api.bsky.app';
+
     public function __construct(private readonly HttpFactory $http) {}
 
     public function connect(string $identifier, string $appPassword, ?string $pdsUrl = null): ConnectedAccountData
@@ -73,13 +75,37 @@ class BlueskyConnector
         );
     }
 
+    public function resolveDid(string $identifier): ?string
+    {
+        $identifier = $this->normalizeIdentifier($identifier);
+
+        if (str_starts_with($identifier, 'did:')) {
+            return $identifier;
+        }
+
+        return $this->resolveHandleToDid($identifier);
+    }
+
     public function resolvePds(string $identifier, ?string $override): string
+    {
+        $did = null;
+
+        return $this->resolvePdsAndDid($identifier, $override, $did);
+    }
+
+    public function resolvePdsAndDid(string $identifier, ?string $override, ?string &$did): string
     {
         $identifier = $this->normalizeIdentifier($identifier);
 
         if ($override !== null && trim($override) !== '') {
             $pds = rtrim(trim($override), '/');
             $this->assertSafePds($pds);
+
+            try {
+                $did = $this->resolveDid($identifier);
+            } catch (Throwable) {
+                // DID resolution is best-effort when a PDS override is provided.
+            }
 
             return $pds;
         }
@@ -132,13 +158,35 @@ class BlueskyConnector
 
     private function resolveHandleToDid(string $handle): ?string
     {
-        $response = $this->http
-            ->timeout(10)
-            ->connectTimeout(5)
-            ->acceptJson()
-            ->get(self::DEFAULT_PDS.'/xrpc/com.atproto.identity.resolveHandle', ['handle' => $handle]);
+        $candidates = [self::APPVIEW];
 
-        return $response->successful() ? $response->json('did') : null;
+        $parts = explode('.', $handle);
+        if (count($parts) > 2) {
+            $candidates[] = 'https://'.implode('.', array_slice($parts, 1));
+        }
+        $candidates[] = 'https://'.$handle;
+
+        foreach ($candidates as $service) {
+            try {
+                $this->assertSafePds($service);
+            } catch (RuntimeException) {
+                continue;
+            }
+
+            $response = $this->http
+                ->timeout(5)
+                ->connectTimeout(3)
+                ->acceptJson()
+                ->get($service.'/xrpc/com.atproto.identity.resolveHandle', ['handle' => $handle]);
+
+            $did = $response->successful() ? $response->json('did') : null;
+
+            if (is_string($did) && str_starts_with($did, 'did:')) {
+                return $did;
+            }
+        }
+
+        return null;
     }
 
     private function normalizeIdentifier(string $identifier): string

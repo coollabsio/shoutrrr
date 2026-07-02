@@ -26,4 +26,13 @@ describe('composer preview controls', () => {
         expect(composer).toContain('aria-pressed={previewPinned}');
         expect(composer).toContain('<Pin className="size-3.5 shrink-0" />');
     });
+
+    it('lets the mobile tab row use the full header width', () => {
+        const composer = source();
+
+        expect(composer).toContain('flex-wrap items-center gap-y-2');
+        expect(composer).toContain('flex-[1_1_100%]');
+        expect(composer).toContain('md:flex-nowrap');
+        expect(composer).toContain('hidden sm:inline');
+    });
 });

@@ -27,12 +27,17 @@ class BlueskyOAuthController extends Controller
         $request->user()->can('create', ConnectedAccount::class) ?: abort(403);
 
         $validated = $request->validate([
+            'identifier' => ['nullable', 'string', 'max:255'],
             'pds_url' => ['nullable', 'url', 'max:255'],
         ]);
 
+        $identifier = isset($validated['identifier'])
+            ? ltrim(trim($validated['identifier']), '@')
+            : null;
+
         try {
             $authorization = $this->connector->authorizationRedirect(
-                null,
+                $identifier !== '' ? $identifier : null,
                 $this->clientId(),
                 route('accounts.bluesky.oauth.callback'),
                 $validated['pds_url'] ?? null,
@@ -52,9 +57,15 @@ class BlueskyOAuthController extends Controller
         $host = parse_url($callback, PHP_URL_HOST);
 
         if (app()->isLocal() && in_array($host, ['127.0.0.1', '::1', 'localhost'], true)) {
+            $appHost = parse_url(config('app.url'), PHP_URL_HOST);
+
+            if (! in_array($appHost, ['127.0.0.1', '::1', 'localhost'], true)) {
+                return route('oauth.bluesky.metadata');
+            }
+
             return 'http://localhost/?'.http_build_query([
                 'redirect_uri' => $callback,
-                'scope' => 'atproto transition:generic',
+                'scope' => BlueskyOAuthConnector::SCOPE,
             ]);
         }
 

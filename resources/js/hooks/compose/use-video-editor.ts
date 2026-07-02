@@ -16,6 +16,7 @@ type ApplyInput = {
     source: Blob;
     oldMediaId: string | null;
     settings: VideoEditSettings;
+    altText?: string;
     limits: PlatformLimits[];
 };
 
@@ -41,7 +42,7 @@ export function useVideoEditor({ onEnsurePost, onComplete }: Args) {
             duration_seconds: number;
             width: number;
             height: number;
-            alt_text: null;
+            alt_text: string | null;
         },
         { media: MediaView }
     >({ key: '', duration_seconds: 0, width: 0, height: 0, alt_text: null });
@@ -50,6 +51,7 @@ export function useVideoEditor({ onEnsurePost, onComplete }: Args) {
         source,
         oldMediaId,
         settings,
+        altText = '',
         limits,
     }: ApplyInput): Promise<boolean> {
         try {
@@ -112,7 +114,7 @@ export function useVideoEditor({ onEnsurePost, onComplete }: Args) {
                 duration_seconds: meta.durationSeconds,
                 width: meta.width,
                 height: meta.height,
-                alt_text: null,
+                alt_text: altText || null,
             });
             const { media } = await confirmHttp.post(
                 PostVideoUploadController.store(id).url,

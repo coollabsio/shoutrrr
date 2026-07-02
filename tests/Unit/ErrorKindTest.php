@@ -12,6 +12,7 @@ test('terminal kinds report not retryable', function () {
     expect(ErrorKind::AuthExpired->isRetryable())->toBeFalse()
         ->and(ErrorKind::Validation->isRetryable())->toBeFalse()
         ->and(ErrorKind::DuplicateContent->isRetryable())->toBeFalse()
+        ->and(ErrorKind::Unsupported->isRetryable())->toBeFalse()
         ->and(ErrorKind::Unknown->isRetryable())->toBeFalse();
 });
 

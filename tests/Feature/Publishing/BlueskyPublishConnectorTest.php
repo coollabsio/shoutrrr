@@ -293,3 +293,25 @@ test('bluesky compresses oversized images via the compressor before upload', fun
         && $request->body() === 'small-bytes'
         && $request->hasHeader('Content-Type', 'image/webp'));
 });
+
+test('bluesky rejects images over the embed image byte limit before upload', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/big.png', str_repeat('p', Platform::Bluesky->maxMediaBytes() + 1));
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/big.png',
+        'mime' => 'image/png',
+        'alt_text' => 'big image',
+    ]);
+
+    Http::fake();
+
+    $result = app(BlueskyPublishConnector::class)->publish(bskyContext(['look'], [$media]));
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::Validation)
+        ->and($result->errorMessage)->toContain('Bluesky images must be 2 MB or smaller');
+
+    Http::assertNothingSent();
+});

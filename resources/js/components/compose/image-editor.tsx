@@ -41,11 +41,17 @@ type Props = {
     sourceUrl: string | null;
     /** Initial settings: defaults for a fresh image, persisted settings on re-edit. */
     initialSettings: EditSettings;
+    /** Initial alt text: persisted value on re-edit, empty for a fresh image. */
+    initialAltText?: string | null;
     /**
      * Compose + persist the result. The parent decides what to upload (new vs
      * replace) and advances the queue / closes the modal afterwards.
      */
-    onApply: (composed: Blob, settings: EditSettings) => Promise<void> | void;
+    onApply: (
+        composed: Blob,
+        settings: EditSettings,
+        altText: string,
+    ) => Promise<void> | void;
     /** Keep the image without editing (attach the original on a fresh upload; close on re-edit). */
     onCancel: () => void;
     /** Discard entirely — don't attach a fresh upload / remove an existing image. */
@@ -62,6 +68,7 @@ export function ImageEditor({
     open,
     sourceUrl,
     initialSettings,
+    initialAltText = '',
     onApply,
     onCancel,
     onDiscard,
@@ -84,6 +91,7 @@ export function ImageEditor({
     const [advanced, setAdvanced] = useState(false);
     const [loadError, setLoadError] = useState(false);
     const [box, setBox] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+    const [altText, setAltText] = useState(initialAltText ?? '');
 
     // Measure the canvas so the image scales to fit it at any modal size. Keyed on
     // the element (a callback ref) rather than `open`, so it observes the moment the
@@ -110,6 +118,7 @@ export function ImageEditor({
             return;
         }
         setSettings(initialSettings);
+        setAltText(initialAltText ?? '');
         // An image opened with existing padding/radius/shadow is already styled,
         // so a background change must not re-apply the one-time defaults.
         hasAutoStyledRef.current =
@@ -135,7 +144,7 @@ export function ImageEditor({
         return () => {
             revoked = true;
         };
-    }, [sourceUrl, initialSettings]);
+    }, [sourceUrl, initialSettings, initialAltText]);
 
     // Recompute the cropped image whenever the source or crop rect changes.
     // Skipped while cropping: the crop overlay (not the cropped output) is shown
@@ -232,7 +241,7 @@ export function ImageEditor({
                 node,
                 Math.max(stage.width, stage.height),
             );
-            await onApply(composed, settings);
+            await onApply(composed, settings, altText);
         } catch {
             // Upload errors are toasted by the hook; a rasterize failure lands
             // here — surface it rather than failing silently.
@@ -419,6 +428,20 @@ export function ImageEditor({
                                 Crop image
                             </button>
                         )}
+
+                        <Field label="Alt text">
+                            <textarea
+                                value={altText}
+                                onChange={(e) => setAltText(e.target.value)}
+                                placeholder="Describe the image for accessibility"
+                                rows={3}
+                                maxLength={1000}
+                                className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:ring-2 focus:ring-foreground/20 focus:outline-none"
+                            />
+                            <p className="text-[11px] text-muted-foreground">
+                                Describe the image for screen readers
+                            </p>
+                        </Field>
 
                         {/* Effects & background (opt-in) */}
                         <div className="border-t border-border pt-5">

@@ -35,7 +35,10 @@ export function reconnectOAuthUrl(account: Account): string {
     }
 
     return BlueskyOAuthController.redirect.url({
-        query: account.pds_url ? { pds_url: account.pds_url } : {},
+        query: {
+            identifier: account.handle.replace(/^@/, ''),
+            ...(account.pds_url ? { pds_url: account.pds_url } : {}),
+        },
     });
 }
 

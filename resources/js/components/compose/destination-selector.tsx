@@ -204,7 +204,7 @@ export default function DestinationSelector({
                 <button
                     type="button"
                     aria-label="Post destination"
-                    className="inline-flex h-7 max-w-[150px] items-center gap-1 rounded-md border border-transparent bg-transparent px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                    className="inline-flex h-7 max-w-[116px] items-center gap-1 rounded-md border border-transparent bg-transparent px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50 sm:max-w-[150px]"
                 >
                     <span className="truncate">{label}</span>
                     <ChevronDown className="size-3 shrink-0 opacity-70" />

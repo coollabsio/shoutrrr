@@ -4,6 +4,7 @@
 use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTargetReply;
+use App\Services\Atproto\DPoP;
 use App\Services\Engagement\Connectors\BlueskyEngagementConnector;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\UploadedFile;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
 
 function bskyConnector(): BlueskyEngagementConnector
 {
-    return new BlueskyEngagementConnector(app(Factory::class));
+    return new BlueskyEngagementConnector(app(Factory::class), app(DPoP::class));
 }
 
 function bskyCreds(): array

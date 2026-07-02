@@ -38,6 +38,8 @@ class XConnector implements PublishConnector
 
     private const int APPEND_CHUNK = 4 * 1024 * 1024;
 
+    private const int GIF_MAX_BYTES = 15 * 1024 * 1024;
+
     public function __construct(
         private readonly HttpFactory $http,
         private readonly ImageCompressor $imageCompressor,
@@ -50,9 +52,19 @@ class XConnector implements PublishConnector
 
         try {
             $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
+            $gifMedia = array_values(array_filter(
+                $context->media,
+                fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime === 'image/gif',
+            ));
 
             if ($videoMedia !== []) {
                 $ready = $this->ensureVideoReady($context, $videoMedia[0], $token);
+                if (! $ready->isSuccessful()) {
+                    return $ready;
+                }
+                $mediaIds = [(string) $ready->remoteIds[0]];
+            } elseif ($gifMedia !== []) {
+                $ready = $this->ensureGifReady($context, $gifMedia, $token);
                 if (! $ready->isSuccessful()) {
                     return $ready;
                 }
@@ -130,12 +142,51 @@ class XConnector implements PublishConnector
      */
     private function ensureVideoReady(PublishContext $context, PostMedia $media, string $token): PublishResult
     {
+        return $this->ensureChunkedMediaReady($context, $media, $token, 'video/mp4', 'tweet_video', 'video');
+    }
+
+    /**
+     * @param  list<PostMedia>  $media
+     */
+    private function ensureGifReady(PublishContext $context, array $media, string $token): PublishResult
+    {
+        if (count($context->media) > 1 || count($media) > 1) {
+            return PublishResult::failure(
+                ErrorKind::Validation,
+                'X supports one GIF per post, and a GIF cannot be mixed with other media.',
+            );
+        }
+
+        $item = $media[0];
+        $size = (int) Storage::disk($item->disk)->size($item->path);
+
+        if ($size > self::GIF_MAX_BYTES) {
+            return PublishResult::failure(
+                ErrorKind::Validation,
+                'X GIF uploads must be 15 MB or smaller.',
+            );
+        }
+
+        return $this->ensureChunkedMediaReady($context, $item, $token, 'image/gif', 'tweet_gif', 'GIF');
+    }
+
+    /**
+     * Upload (once) and poll the async media processing state.
+     */
+    private function ensureChunkedMediaReady(
+        PublishContext $context,
+        PostMedia $media,
+        string $token,
+        string $mediaType,
+        string $mediaCategory,
+        string $label,
+    ): PublishResult {
         $state = new MediaUploadState($context->target->media_upload_state);
         $mediaId = $state->remoteRef($media->id);
 
         try {
             if ($mediaId === null) {
-                $mediaId = $this->uploadVideoChunks($media, $token, $context->account);
+                $mediaId = $this->uploadChunks($media, $token, $mediaType, $mediaCategory, $context->account);
                 $state->markUploaded($media->id, $mediaId);
                 $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
             }
@@ -153,7 +204,7 @@ class XConnector implements PublishConnector
                     // 5-attempt publish-failure budget.
                     return PublishResult::failure(
                         ErrorKind::MediaProcessing,
-                        'Could not check video processing status; will retry.',
+                        "Could not check {$label} processing status; will retry.",
                         retryAfter: $this->retryAfter($status) ?? 6,
                     );
                 }
@@ -166,13 +217,13 @@ class XConnector implements PublishConnector
             $stateName = (string) ($info['state'] ?? 'succeeded');
 
             if ($stateName === 'failed') {
-                return PublishResult::failure(ErrorKind::ServerError, 'X failed to process the video.');
+                return PublishResult::failure(ErrorKind::ServerError, "X failed to process the {$label}.");
             }
 
             if ($stateName !== 'succeeded') {
                 return PublishResult::failure(
                     ErrorKind::MediaProcessing,
-                    'Video is still processing on X.',
+                    ucfirst($label).' is still processing on X.',
                     retryAfter: (int) ($info['check_after_secs'] ?? 5),
                 );
             }
@@ -183,16 +234,16 @@ class XConnector implements PublishConnector
         }
     }
 
-    private function uploadVideoChunks(PostMedia $media, string $token, ConnectedAccount $account): string
+    private function uploadChunks(PostMedia $media, string $token, string $mediaType, string $mediaCategory, ConnectedAccount $account): string
     {
         $disk = Storage::disk($media->disk);
         $total = (int) $disk->size($media->path);
 
         $init = $this->http->withToken($token)->acceptJson()
             ->post(self::MEDIA_BASE.'/initialize', [
-                'media_type' => 'video/mp4',
+                'media_type' => $mediaType,
                 'total_bytes' => $total,
-                'media_category' => 'tweet_video',
+                'media_category' => $mediaCategory,
             ]);
         $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $init);
         if ($init->failed()) {

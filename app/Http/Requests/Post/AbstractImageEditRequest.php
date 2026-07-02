@@ -43,6 +43,7 @@ abstract class AbstractImageEditRequest extends FormRequest
             'settings.zoom' => ['required', 'numeric'],
             'settings.tilt' => ['required', 'array'],
             'settings.crop' => ['nullable', 'array'],
+            'alt_text' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

@@ -22,7 +22,13 @@ type Editing =
           items: { file: File; url: string }[];
           index: number;
       }
-    | { kind: 'reedit'; url: string; settings: EditSettings; mediaId: string }
+    | {
+          kind: 'reedit';
+          url: string;
+          settings: EditSettings;
+          mediaId: string;
+          altText: string | null;
+      }
     | { kind: 'raw'; url: string; mediaId: string };
 
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
@@ -120,6 +126,7 @@ export function useReplyMedia({
     async function applyEditing(
         composed: Blob,
         settings: EditSettings,
+        altText: string,
     ): Promise<void> {
         if (!editing) {
             return;
@@ -134,6 +141,7 @@ export function useReplyMedia({
                         'source.png',
                     ),
                     settings: JSON.stringify(settings),
+                    alt_text: altText,
                 }));
                 const { media: result } = await editHttp.post(
                     ReplyImageEditController.store(replyId).url,
@@ -144,6 +152,7 @@ export function useReplyMedia({
                 editHttp.transform(() => ({
                     composed: blobToFile(composed, 'image.png'),
                     settings: JSON.stringify(settings),
+                    alt_text: altText,
                     _method: 'put',
                 }));
                 const { media: result } = await editHttp.post(
@@ -164,6 +173,7 @@ export function useReplyMedia({
                     composed: blobToFile(composed, 'image.png'),
                     source: blobToFile(rawBlob, 'source.png'),
                     settings: JSON.stringify(settings),
+                    alt_text: altText,
                 }));
                 const { media: result } = await editHttp.post(
                     ReplyImageEditController.store(replyId).url,
@@ -259,6 +269,7 @@ export function useReplyMedia({
                 url: m.source_url,
                 settings: normalizeSettings(m.edit_settings),
                 mediaId: m.id,
+                altText: m.alt_text,
             });
         } else {
             setEditing({ kind: 'raw', url: m.url, mediaId: m.id });
@@ -273,6 +284,7 @@ export function useReplyMedia({
             : (editing?.url ?? null);
     const editorSettings =
         editing?.kind === 'reedit' ? editing.settings : DEFAULT_EDIT_SETTINGS;
+    const editorAltText = editing?.kind === 'reedit' ? editing.altText : null;
     const editorQueue =
         editing?.kind === 'batch'
             ? {
@@ -331,6 +343,7 @@ export function useReplyMedia({
             open={editing !== null}
             sourceUrl={editorSourceUrl}
             initialSettings={editorSettings}
+            initialAltText={editorAltText}
             onApply={applyEditing}
             onCancel={cancelEditing}
             onDiscard={discardEditing}
