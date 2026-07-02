@@ -340,9 +340,22 @@ export default function Composer({
         if (images.length === 0) {
             return;
         }
+
+        // GIFs skip the beautifier: it composes to a static PNG, which would strip
+        // the animation. Upload them as-is; the rest open the editor as a batch.
+        const gifs = images.filter((f) => f.type === 'image/gif');
+        const editable = images.filter((f) => f.type !== 'image/gif');
+
+        if (gifs.length > 0) {
+            void mediaUploads.handleFiles(gifs);
+        }
+
+        if (editable.length === 0) {
+            return;
+        }
         setEditing({
             kind: 'batch',
-            items: images.map((f) => ({
+            items: editable.map((f) => ({
                 file: f,
                 url: URL.createObjectURL(f),
             })),
@@ -377,7 +390,8 @@ export default function Composer({
     // source + settings; a plain one is beautified from scratch.
     function openImage(mediaId: string) {
         const m = state.media.find((x) => x.id === mediaId);
-        if (!m || m.kind === 'video') {
+        // GIFs have no editor — the beautifier would flatten them to a static PNG.
+        if (!m || m.kind === 'video' || m.mime === 'image/gif') {
             return;
         }
         if (m.edit_settings && m.source_url) {

@@ -161,15 +161,15 @@ export function MediaChips({
         <div className="ml-0.5 flex items-center gap-2">
             {media.map((m, idx) => {
                 const excluded = isExcluded(m.id);
-                // Both kinds open an editor on click. Videos are always
-                // editable (trim works without an encoder); the editor hides the
-                // crop tools when the browser can't re-encode.
+                const isGif = m.mime === 'image/gif';
+                // Videos open the trim editor; static images open the beautifier.
+                // GIFs open neither — the beautifier would flatten them to a static
+                // PNG — so they're attach-only.
                 const canEdit =
                     m.kind === 'video'
                         ? Boolean(onVideoClick)
-                        : Boolean(onImageClick);
-                const blueskyGif =
-                    activePlatform === 'bluesky' && m.mime === 'image/gif';
+                        : Boolean(onImageClick) && !isGif;
+                const blueskyGif = activePlatform === 'bluesky' && isGif;
 
                 return (
                     <Tooltip key={m.id}>
