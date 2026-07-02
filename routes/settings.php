@@ -5,7 +5,6 @@ use App\Http\Controllers\Settings\InstanceSettingsController;
 use App\Http\Controllers\Settings\NotificationPreferencesController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
-use App\Http\Controllers\Settings\UsageReportController;
 use App\Http\Controllers\Settings\WorkspaceSettingsController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
@@ -36,9 +35,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/instance/admins', [InstanceSettingsController::class, 'admins'])->name('instance-settings.admins');
     Route::post('settings/instance/admins', [InstanceSettingsController::class, 'storeAdmin'])->name('instance-settings.admins.store');
     Route::delete('settings/instance/admins/{owner}', [InstanceSettingsController::class, 'destroyAdmin'])->name('instance-settings.admins.destroy');
-    Route::get('settings/instance/usage', [UsageReportController::class, 'index'])
-        ->middleware('usage.enabled')
-        ->name('instance-settings.usage');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {

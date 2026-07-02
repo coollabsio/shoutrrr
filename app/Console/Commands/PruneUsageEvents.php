@@ -26,7 +26,17 @@ class PruneUsageEvents extends Command
         // USAGE_RETENTION_DAYS from silently corrupting the current month's usage.
         $cutoff = $now->subDays($days)->min($now->startOfMonth());
 
-        UsageEvent::query()->where('occurred_at', '<', $cutoff)->delete();
+        // Chunked delete: usage_events grows a row per metered API attempt, so a
+        // single unbounded DELETE risks long lock times / replication lag. chunkById
+        // keeps each batch small and is portable across sqlite/MySQL/Postgres (unlike
+        // DELETE ... LIMIT). Deleting the just-read ids never skips rows because each
+        // chunk pages forward by id.
+        UsageEvent::query()
+            ->where('occurred_at', '<', $cutoff)
+            ->orderBy('id')
+            ->chunkById(1000, function ($events): void {
+                UsageEvent::query()->whereIn('id', $events->pluck('id'))->delete();
+            });
 
         return self::SUCCESS;
     }
