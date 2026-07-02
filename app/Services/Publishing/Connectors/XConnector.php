@@ -10,6 +10,7 @@ use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\UsageCategory;
+use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Media\ImageCompressor;
@@ -57,7 +58,7 @@ class XConnector implements PublishConnector
                 }
                 $mediaIds = [(string) $ready->remoteIds[0]];
             } else {
-                $mediaIds = $this->uploadMedia($context->media, $token);
+                $mediaIds = $this->uploadMedia($context->media, $token, $context->account);
             }
 
             foreach ($context->segments as $index => $text) {
@@ -134,13 +135,15 @@ class XConnector implements PublishConnector
 
         try {
             if ($mediaId === null) {
-                $mediaId = $this->uploadVideoChunks($media, $token);
+                $mediaId = $this->uploadVideoChunks($media, $token, $context->account);
                 $state->markUploaded($media->id, $mediaId);
                 $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
             }
 
             $status = $this->http->withToken($token)->acceptJson()
                 ->get(self::MEDIA_BASE, ['command' => 'STATUS', 'media_id' => $mediaId]);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_STATUS_POLL, $context->account, $status);
 
             if ($status->failed()) {
                 $kind = $this->classifyStatus($status->status());
@@ -180,7 +183,7 @@ class XConnector implements PublishConnector
         }
     }
 
-    private function uploadVideoChunks(PostMedia $media, string $token): string
+    private function uploadVideoChunks(PostMedia $media, string $token, ConnectedAccount $account): string
     {
         $disk = Storage::disk($media->disk);
         $total = (int) $disk->size($media->path);
@@ -191,6 +194,7 @@ class XConnector implements PublishConnector
                 'total_bytes' => $total,
                 'media_category' => 'tweet_video',
             ]);
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $init);
         if ($init->failed()) {
             throw new XRequestFailed($init);
         }
@@ -208,6 +212,7 @@ class XConnector implements PublishConnector
                 $append = $this->http->withToken($token)->asMultipart()
                     ->attach('media', $segment, 'chunk')
                     ->post(self::MEDIA_BASE.'/'.$mediaId.'/append', ['segment_index' => $segmentIndex]);
+                $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $append);
                 if ($append->failed()) {
                     throw new XRequestFailed($append);
                 }
@@ -219,6 +224,7 @@ class XConnector implements PublishConnector
 
         $finalize = $this->http->withToken($token)->acceptJson()
             ->post(self::MEDIA_BASE.'/'.$mediaId.'/finalize');
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $finalize);
         if ($finalize->failed()) {
             throw new XRequestFailed($finalize);
         }
@@ -230,7 +236,7 @@ class XConnector implements PublishConnector
      * @param  list<PostMedia>  $media
      * @return list<string>
      */
-    private function uploadMedia(array $media, string $token): array
+    private function uploadMedia(array $media, string $token, ConnectedAccount $account): array
     {
         $ids = [];
 
@@ -242,6 +248,8 @@ class XConnector implements PublishConnector
                 ->asMultipart()
                 ->attach('media', $compressed->bytes, 'upload')
                 ->post(self::MEDIA_URL, ['media_category' => 'tweet_image']);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $response);
 
             if ($response->failed()) {
                 throw new XRequestFailed($response);
