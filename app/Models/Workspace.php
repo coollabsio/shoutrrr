@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Cashier\Billable;
 
 #[Fillable([
     'name',
@@ -25,7 +26,7 @@ use Illuminate\Support\Facades\Storage;
 class Workspace extends Model
 {
     /** @use HasFactory<WorkspaceFactory> */
-    use HasFactory, HasUuids;
+    use Billable, HasFactory, HasUuids;
 
     public function getLogoAttribute(?string $value): string
     {
@@ -46,6 +47,11 @@ class Workspace extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function stripeEmail(): ?string
+    {
+        return $this->owner()->value('email');
     }
 
     /**

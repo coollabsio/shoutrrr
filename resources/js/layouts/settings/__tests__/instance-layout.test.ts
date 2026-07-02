@@ -14,6 +14,7 @@ describe('instance settings layout', () => {
             "import InstanceSettingsLayout from '@/layouts/settings/instance-layout';",
         );
         expect(app).toContain("case name === 'settings/instance' ||");
+        expect(app).toContain("name === 'settings/instance-polling' ||");
         expect(app).toContain("name === 'settings/instance-admins':");
         expect(app).toContain('return [AppLayout, InstanceSettingsLayout];');
     });
@@ -27,11 +28,13 @@ describe('instance settings layout', () => {
         expect(workspaceLayout).not.toContain("title: 'Instance'");
     });
 
-    it('includes an admins sub navigation item', () => {
+    it('includes polling and admins sub navigation items', () => {
         const layout = readSource(
             'resources/js/layouts/settings/instance-layout.tsx',
         );
 
+        expect(layout).toContain("title: 'Polling'");
+        expect(layout).toContain('InstanceSettingsController.polling()');
         expect(layout).toContain("title: 'Admins'");
         expect(layout).toContain('InstanceSettingsController.admins()');
     });

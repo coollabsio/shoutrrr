@@ -6,6 +6,7 @@ use App\Enums\Platform;
 use App\Listeners\BindWorkspaceToAccessToken;
 use App\Listeners\SetCurrentWorkspaceOnLogin;
 use App\Models\User;
+use App\Models\Workspace;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -20,6 +21,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Inertia\ExceptionResponse;
 use Inertia\Inertia;
+use Laravel\Cashier\Cashier;
 use Laravel\Passport\Events\AccessTokenCreated;
 use Laravel\Passport\Passport;
 use Override;
@@ -46,6 +48,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configureErrorPages();
         $this->configureTrustedProxies();
+        Cashier::useCustomerModel(Workspace::class);
 
         // OAuth tokens issued for the MCP/API integration. Without explicit
         // lifetimes Passport defaults to ~1 year, so a leaked bearer is
@@ -61,6 +64,7 @@ class AppServiceProvider extends ServiceProvider
         // account/post list can't trip the platforms' own rate limits.
         foreach (Platform::cases() as $platform) {
             RateLimiter::for("metrics-{$platform->value}", fn (): Limit => Limit::perMinute(30));
+            RateLimiter::for("engagement-{$platform->value}", fn (): Limit => Limit::perMinute(10));
         }
 
         Gate::before(function (User $user, string $ability): ?bool {

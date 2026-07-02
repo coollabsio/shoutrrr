@@ -106,6 +106,8 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        $target->forceFill(['reply_fetched_at' => Date::now()])->save();
+
         $inserted = [];
 
         foreach ($result->replies as $fetched) {

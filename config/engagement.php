@@ -7,5 +7,5 @@ return [
     'enabled' => (bool) env('ENGAGEMENT_ENABLED', true),
 
     // Only posts published within this many days are polled for new replies.
-    'window_days' => (int) env('ENGAGEMENT_WINDOW_DAYS', 14),
+    'window_days' => (int) env('ENGAGEMENT_WINDOW_DAYS', 7),
 ];

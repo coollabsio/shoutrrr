@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Settings;
 use App\Enums\InstanceRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\StoreInstanceOwnerRequest;
+use App\Http\Requests\Settings\UpdateInstancePollingSettingsRequest;
 use App\Http\Requests\Settings\UpdateInstanceSettingsRequest;
 use App\Models\User;
 use App\Support\InstanceSettings;
@@ -76,11 +77,29 @@ class InstanceSettingsController extends Controller
         ]);
     }
 
+    public function polling(Request $request, InstanceSettings $settings): Response
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+        abort_unless($user?->isInstanceOwner(), 403);
+
+        return Inertia::render('settings/instance-polling', [
+            'settings' => $settings->polling(),
+        ]);
+    }
+
     public function update(UpdateInstanceSettingsRequest $request, InstanceSettings $settings): RedirectResponse
     {
         $settings->update($request->instanceSettings());
 
         return back()->with('success', 'Instance settings updated.');
+    }
+
+    public function updatePolling(UpdateInstancePollingSettingsRequest $request, InstanceSettings $settings): RedirectResponse
+    {
+        $settings->update($request->instancePollingSettings());
+
+        return back()->with('success', 'Polling settings updated.');
     }
 
     public function destroyAdmin(Request $request, User $owner): RedirectResponse

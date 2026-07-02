@@ -1,0 +1,171 @@
+<?php
+
+use App\Enums\Platform;
+use App\Enums\UsageCategory;
+use App\Enums\WorkspaceRole;
+use App\Models\UsagePeriodCounter;
+use App\Models\User;
+use App\Models\Workspace;
+use App\Models\WorkspaceMembership;
+use App\Support\UsageOperation;
+use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Route;
+use Symfony\Component\Process\Process;
+
+afterEach(function () {
+    Date::setTestNow();
+});
+
+test('billing routes exist but are inactive on self hosted instances', function () {
+    expect(config('subscriptions.enabled'))->toBeFalse()
+        ->and(Route::has('billing.index'))->toBeTrue()
+        ->and(Route::has('billing.checkout'))->toBeTrue()
+        ->and(Route::has('billing.portal'))->toBeTrue();
+
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Owner,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+
+    $this->actingAs($user)
+        ->get(route('billing.index'))
+        ->assertNotFound();
+});
+
+test('billing page is routed through workspace settings', function () {
+    expect(route('billing.index', absolute: false))->toBe('/settings/workspace/subscription');
+});
+
+test('billing defaults to disabled when self hosted is unset', function () {
+    $process = new Process([
+        PHP_BINARY,
+        '-r',
+        'require "vendor/autoload.php"; putenv("SELF_HOSTED"); unset($_ENV["SELF_HOSTED"], $_SERVER["SELF_HOSTED"]); $config = require "config/subscriptions.php"; echo $config["enabled"] ? "enabled" : "disabled";',
+    ], base_path(), ['SELF_HOSTED' => false]);
+
+    $process->mustRun();
+
+    expect($process->getOutput())->toBe('disabled');
+});
+
+test('billing page does not show portal management for a customer without a subscription', function () {
+    config(['subscriptions.enabled' => true]);
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create([
+        'owner_id' => $user->id,
+        'stripe_id' => 'cus_test_without_subscription',
+    ]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Owner,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+
+    $this->actingAs($user)
+        ->get(route('billing.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/workspace/subscription')
+            ->where('subscribed', false)
+            ->where('canManageSubscription', false));
+});
+
+test('billing page shows current month x post usage', function () {
+    Date::setTestNow('2026-06-15 12:00:00');
+    config([
+        'subscriptions.enabled' => true,
+        'subscriptions.monthly_x_budget_cents' => 500,
+        'subscriptions.x_post_cost_cents' => 1.5,
+    ]);
+    Workspace::factory()->create();
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Owner,
+    ]);
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id,
+        'period_start' => '2026-06-01',
+        'period_end' => '2026-06-30',
+        'category' => UsageCategory::Publish->value,
+        'platform' => Platform::X->value,
+        'operation' => UsageOperation::POST,
+        'event_count' => 12,
+        'total_quota' => 12,
+    ]);
+    // A prior month must not leak into the current-period count.
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id,
+        'period_start' => '2026-05-01',
+        'period_end' => '2026-05-31',
+        'category' => UsageCategory::Publish->value,
+        'platform' => Platform::X->value,
+        'operation' => UsageOperation::POST,
+        'event_count' => 99,
+        'total_quota' => 99,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+
+    $this->actingAs($user)
+        ->get(route('billing.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/workspace/subscription')
+            ->where('monthlyXPostLimit', 333)
+            ->where('monthlyXPostUsed', 12)
+            ->where('monthlyXPostRemaining', 321));
+});
+
+test('portal is unavailable for a customer without a subscription', function () {
+    config(['subscriptions.enabled' => true]);
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create([
+        'owner_id' => $user->id,
+        'stripe_id' => 'cus_test_without_subscription',
+    ]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Owner,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+
+    $this->actingAs($user)
+        ->post(route('billing.portal'))
+        ->assertNotFound();
+});
+
+test('workspace stripe customer email comes from its owner', function () {
+    $user = User::factory()->create(['email' => 'test2@example.com']);
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+
+    expect($workspace->stripeEmail())->toBe('test2@example.com');
+});
+
+test('checkout rejects the placeholder stripe price before creating a customer', function () {
+    config([
+        'subscriptions.enabled' => true,
+        'subscriptions.stripe_price_id' => 'price_your_10_monthly_test_price',
+    ]);
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Owner,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+
+    $this->actingAs($user)
+        ->post(route('billing.checkout'))
+        ->assertSessionHas('error', 'Configure STRIPE_SUBSCRIPTION_PRICE_ID before starting checkout.');
+
+    expect($workspace->refresh()->stripe_id)->toBeNull();
+});

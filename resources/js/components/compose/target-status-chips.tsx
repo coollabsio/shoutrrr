@@ -3,6 +3,11 @@ import { Check, ExternalLink, RotateCw, X } from 'lucide-react';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { Spinner } from '@/components/ui/spinner';
 import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
     type TargetTone,
     targetStatusMeta,
 } from '@/lib/compose/publish-status';
@@ -54,6 +59,11 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
                 const isFailed = target.status === 'failed';
                 const isRetrying = retryingIds?.has(target.id) ?? false;
                 const attempts = target.attempts ?? 0;
+                const errorMessage = target.error_message
+                    ? attempts > 0
+                        ? `Attempt ${attempts}: ${target.error_message}`
+                        : target.error_message
+                    : null;
                 const permalink =
                     target.status === 'published'
                         ? postPermalink(
@@ -97,16 +107,30 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
                             ) : null}
                             <span>{meta.label}</span>
                         </span>
-                        {isFailed && target.error_message && (
-                            <span className="min-w-0 truncate text-destructive/90">
-                                {attempts > 0 && (
-                                    <span className="font-medium">
-                                        Attempt {attempts}:{' '}
-                                    </span>
-                                )}
-                                <span title={target.error_message}>
-                                    {target.error_message}
-                                </span>
+                        {isFailed && errorMessage && (
+                            <span className="min-w-0 flex-1 truncate text-destructive/90">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span
+                                            tabIndex={0}
+                                            className="inline-block max-w-full cursor-help truncate underline decoration-destructive/40 decoration-dotted underline-offset-2"
+                                        >
+                                            {errorMessage}
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                        side="top"
+                                        align="start"
+                                        className="block max-w-80 border border-border text-left leading-relaxed whitespace-normal text-popover-foreground shadow-lg [--tooltip-bg:var(--popover)]"
+                                    >
+                                        {attempts > 0 && (
+                                            <span className="font-medium whitespace-nowrap">
+                                                Attempt {attempts}:{' '}
+                                            </span>
+                                        )}
+                                        <span>{target.error_message}</span>
+                                    </TooltipContent>
+                                </Tooltip>
                             </span>
                         )}
                         {isFailed && onRetry && (

@@ -67,6 +67,73 @@ test('workspace creation setting cannot be enabled when workspaces are globally 
     expect(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
 });
 
+test('instance owner can view polling settings', function () {
+    $owner = User::factory()->instanceOwner()->create();
+
+    $this->actingAs($owner)
+        ->get(route('instance-settings.polling'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('settings/instance-polling')
+            ->where('settings.engagement.x', 360)
+            ->where('settings.engagement.bluesky', 15)
+            ->where('settings.post_metrics.x', 360)
+            ->where('settings.post_metrics.linkedin', 15)
+            ->where('settings.account_metrics.x', 1440)
+            ->where('settings.account_metrics.bluesky', 1440)
+            ->where('settings.account_metrics.linkedin', 1440));
+});
+
+test('instance owner can update polling settings', function () {
+    $owner = User::factory()->instanceOwner()->create();
+
+    $this->actingAs($owner)
+        ->put(route('instance-settings.polling.update'), [
+            'engagement' => [
+                'x' => 720,
+                'bluesky' => 30,
+                'linkedin' => 120,
+            ],
+            'post_metrics' => [
+                'x' => 1440,
+                'bluesky' => 45,
+                'linkedin' => 180,
+            ],
+            'account_metrics' => [
+                'x' => 1440,
+                'bluesky' => 240,
+                'linkedin' => 480,
+            ],
+        ])
+        ->assertRedirect();
+
+    expect(app(InstanceSettings::class)->polling())->toMatchArray([
+        'engagement' => [
+            'x' => 720,
+            'bluesky' => 30,
+            'linkedin' => 120,
+        ],
+        'post_metrics' => [
+            'x' => 1440,
+            'bluesky' => 45,
+            'linkedin' => 180,
+        ],
+        'account_metrics' => [
+            'x' => 1440,
+            'bluesky' => 240,
+            'linkedin' => 480,
+        ],
+    ]);
+});
+
+test('regular users cannot view polling settings', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('instance-settings.polling'))
+        ->assertForbidden();
+});
+
 test('instance owner can view instance admins and search registered users by email', function () {
     $owner = User::factory()->instanceOwner()->create(['email' => 'owner@example.com']);
     $matchingUser = User::factory()->create(['email' => 'admin-candidate@example.com']);

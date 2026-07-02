@@ -61,6 +61,7 @@ test('the job inserts fetched replies with the workspace id', function () {
     $reply = PostTargetReply::withoutGlobalScopes()->first();
     expect($reply->remote_reply_id)->toBe('at://r1');
     expect($reply->workspace_id)->toBe($target->post->workspace_id);
+    expect($target->fresh()->reply_fetched_at)->not->toBeNull();
 });
 
 test('re-running the job does not duplicate replies', function () {
@@ -74,4 +75,18 @@ test('re-running the job does not duplicate replies', function () {
     (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
 
     expect(PostTargetReply::withoutGlobalScopes()->count())->toBe(1);
+});
+
+test('a failed fetch does not stamp reply_fetched_at', function () {
+    $target = targetWithPost();
+
+    $connector = Mockery::mock(EngagementConnector::class);
+    $connector->shouldReceive('fetchReplies')->andReturn(ReplyFetchResult::failed('boom'));
+    $registry = Mockery::mock(EngagementConnectorRegistry::class);
+    $registry->shouldReceive('for')->andReturn($connector);
+    app()->instance(EngagementConnectorRegistry::class, $registry);
+
+    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+
+    expect($target->fresh()->reply_fetched_at)->toBeNull();
 });

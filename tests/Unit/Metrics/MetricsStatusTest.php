@@ -11,6 +11,7 @@ test('unsupported is the only terminal (non-pollable) status', function () {
 
 test('metrics config exposes flag and cadence', function () {
     expect(config('metrics.enabled'))->toBeBool();
-    expect(config('metrics.account_interval_minutes'))->toBeInt();
-    expect(config('metrics.post_refresh'))->toBeArray()->not->toBeEmpty();
+    expect(config('metrics.post_refresh'))->toBe([
+        ['max_age_hours' => 168],
+    ]);
 });

@@ -7,6 +7,9 @@ namespace App\Http\Controllers\Posts;
 use App\Enums\PostStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Post;
+use App\Models\User;
+use App\Models\Workspace;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Publishing\PublishDispatcher;
 use App\Support\PostView;
 use Illuminate\Http\JsonResponse;
@@ -14,9 +17,20 @@ use Illuminate\Http\Request;
 
 class PublishController extends Controller
 {
-    public function store(Request $request, Post $post, PublishDispatcher $dispatcher): JsonResponse
+    public function store(Request $request, Post $post, PublishDispatcher $dispatcher, WorkspaceSubscriptionGate $subscriptions): JsonResponse
     {
         abort_unless($request->user()->can('update', $post), 403);
+
+        /** @var User $user */
+        $user = $request->user();
+        $workspace = $user->currentWorkspace;
+
+        if ($workspace instanceof Workspace && ! $subscriptions->canPublish($workspace)) {
+            return response()->json([
+                'message' => 'Subscribe to publish this post.',
+                'billing_url' => route('billing.index'),
+            ], 402);
+        }
 
         $post->forceFill(['status' => PostStatus::Publishing->value])->save();
 

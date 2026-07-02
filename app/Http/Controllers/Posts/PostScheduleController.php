@@ -8,14 +8,31 @@ use App\Enums\PostStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Post\SchedulePostRequest;
 use App\Models\Post;
+use App\Models\User;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Support\PostView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 
 class PostScheduleController extends Controller
 {
-    public function update(SchedulePostRequest $request, Post $post): JsonResponse|RedirectResponse
+    public function update(SchedulePostRequest $request, Post $post, WorkspaceSubscriptionGate $subscriptions): JsonResponse|RedirectResponse
     {
+        /** @var User $user */
+        $user = $request->user();
+        $workspace = $user->currentWorkspace;
+
+        if ($request->validated('scheduled_at') !== null && ! $subscriptions->canPublish($workspace)) {
+            if ($request->headers->has('X-Inertia')) {
+                return redirect()->route('billing.index');
+            }
+
+            return response()->json([
+                'message' => 'Subscribe to publish this post.',
+                'billing_url' => route('billing.index'),
+            ], 402);
+        }
+
         $scheduledAt = $request->validated('scheduled_at');
 
         if ($scheduledAt !== null) {

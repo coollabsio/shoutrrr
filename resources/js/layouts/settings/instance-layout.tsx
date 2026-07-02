@@ -21,6 +21,11 @@ export default function InstanceSettingsLayout({
             icon: null,
         },
         {
+            title: 'Polling',
+            href: InstanceSettingsController.polling(),
+            icon: null,
+        },
+        {
             title: 'Admins',
             href: InstanceSettingsController.admins(),
             icon: null,

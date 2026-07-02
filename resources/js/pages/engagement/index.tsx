@@ -80,7 +80,7 @@ function StreamEmpty({ filtered }: { filtered: boolean }) {
                 <EmptyDescription>
                     {filtered
                         ? 'Try clearing a filter to see more of your inbox.'
-                        : 'Replies to your published posts land here within ~15 minutes. Publish a post and check back.'}
+                        : 'Replies to your published posts land here after periodic checks. Publish a post and check back later.'}
                 </EmptyDescription>
             </EmptyHeader>
         </Empty>

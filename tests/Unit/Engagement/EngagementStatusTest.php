@@ -16,5 +16,5 @@ test('reply status has the three lifecycle cases', function () {
 
 test('engagement config exposes enabled flag and window', function () {
     expect(config('engagement.enabled'))->toBeTrue();
-    expect(config('engagement.window_days'))->toBe(14);
+    expect(config('engagement.window_days'))->toBe(7);
 });

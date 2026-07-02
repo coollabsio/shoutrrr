@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
 
+import BillingController from '@/actions/App/Http/Controllers/BillingController';
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import Heading from '@/components/common/heading';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ export default function WorkspaceSettingsLayout({
     children,
 }: PropsWithChildren) {
     const { isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
-    const { workspaces } = usePage().props;
+    const { features, workspaces } = usePage().props;
 
     const sidebarNavItems: NavItem[] = [
         {
@@ -26,6 +27,15 @@ export default function WorkspaceSettingsLayout({
             href: WorkspaceSettingsController.showMembers(),
             icon: null,
         },
+        ...(features?.billing
+            ? [
+                  {
+                      title: 'Subscription',
+                      href: BillingController.index(),
+                      icon: null,
+                  },
+              ]
+            : []),
     ];
 
     return (

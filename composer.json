@@ -15,6 +15,7 @@
         "php": "^8.5",
         "inertiajs/inertia-laravel": "^3.0",
         "intervention/image": "^4.0",
+        "laravel/cashier": "^16.6",
         "laravel/chisel": "^0.1.0",
         "laravel/fortify": "^1.37.2",
         "laravel/framework": "^13.7",

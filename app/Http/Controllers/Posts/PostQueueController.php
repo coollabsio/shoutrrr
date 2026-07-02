@@ -8,6 +8,7 @@ use App\Enums\PostStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Post;
 use App\Models\User;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Posts\NextSlotResolver;
 use App\Support\PostView;
 use Carbon\CarbonImmutable;
@@ -18,7 +19,7 @@ class PostQueueController extends Controller
 {
     public function __construct(private readonly NextSlotResolver $resolver) {}
 
-    public function store(Request $request, Post $post): JsonResponse
+    public function store(Request $request, Post $post, WorkspaceSubscriptionGate $subscriptions): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -26,6 +27,13 @@ class PostQueueController extends Controller
 
         $workspace = $user->currentWorkspace;
         abort_if($workspace === null, 404);
+
+        if (! $subscriptions->canPublish($workspace)) {
+            return response()->json([
+                'message' => 'Subscribe to publish this post.',
+                'billing_url' => route('billing.index'),
+            ], 402);
+        }
 
         $validated = $request->validate([
             'scheduled_at' => ['nullable', 'date', 'after:now'],
