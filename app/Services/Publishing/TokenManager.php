@@ -102,8 +102,8 @@ class TokenManager
         $session = $secret->session ?? [];
         $pds = (string) ($session['pds'] ?? self::BLUESKY_DEFAULT_PDS);
 
-        $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''))
-            ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password);
+        $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''), $account)
+            ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password, $account);
 
         if ($tokens === null) {
             $account->forceFill([
@@ -133,17 +133,26 @@ class TokenManager
      *
      * @return array{accessJwt: string, refreshJwt: string}|null
      */
-    private function refreshBlueskySession(string $pds, string $refreshJwt): ?array
+    private function refreshBlueskySession(string $pds, string $refreshJwt, ConnectedAccount $account): ?array
     {
         if ($refreshJwt === '') {
             return null;
         }
 
         // refreshSession authenticates with the refreshJwt as the bearer token.
-        return $this->blueskyTokens(
-            $this->http->withToken($refreshJwt)->acceptJson()
-                ->post($pds.'/xrpc/com.atproto.server.refreshSession')
+        $response = $this->http->withToken($refreshJwt)->acceptJson()
+            ->post($pds.'/xrpc/com.atproto.server.refreshSession');
+
+        $this->usageRecorder->record(
+            category: UsageCategory::ExternalApi,
+            operation: UsageOperation::TOKEN_REFRESH,
+            workspaceId: $account->workspace_id,
+            platform: $account->platform,
+            succeeded: $response->successful(),
+            meta: ['status' => $response->status()],
         );
+
+        return $this->blueskyTokens($response);
     }
 
     /**
@@ -152,19 +161,28 @@ class TokenManager
      *
      * @return array{accessJwt: string, refreshJwt: string}|null
      */
-    private function createBlueskySession(string $pds, string $identifier, string $appPassword): ?array
+    private function createBlueskySession(string $pds, string $identifier, string $appPassword, ConnectedAccount $account): ?array
     {
         if ($identifier === '' || $appPassword === '') {
             return null;
         }
 
-        return $this->blueskyTokens(
-            $this->http->acceptJson()
-                ->post($pds.'/xrpc/com.atproto.server.createSession', [
-                    'identifier' => $identifier,
-                    'password' => $appPassword,
-                ])
+        $response = $this->http->acceptJson()
+            ->post($pds.'/xrpc/com.atproto.server.createSession', [
+                'identifier' => $identifier,
+                'password' => $appPassword,
+            ]);
+
+        $this->usageRecorder->record(
+            category: UsageCategory::ExternalApi,
+            operation: UsageOperation::TOKEN_REFRESH,
+            workspaceId: $account->workspace_id,
+            platform: $account->platform,
+            succeeded: $response->successful(),
+            meta: ['status' => $response->status()],
         );
+
+        return $this->blueskyTokens($response);
     }
 
     /**
