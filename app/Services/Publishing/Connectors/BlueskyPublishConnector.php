@@ -159,7 +159,7 @@ class BlueskyPublishConnector implements PublishConnector
      * Fetch the CID of an already-posted record so a resumed thread can reference it.
      * The rkey is the 5th `/`-split segment of the at-uri (same extraction as delete()).
      *
-     * @param  array<string, mixed>  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      */
     private function recordCid(string $pds, string $jwt, string $did, string $uri, array $session): string
     {
@@ -183,7 +183,7 @@ class BlueskyPublishConnector implements PublishConnector
      * and uploads the video, persisting the jobId. On subsequent calls, polls getJobStatus.
      * Returns a successful PublishResult only when the job has completed.
      *
-     * @param  array<string, mixed>  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      */
     private function ensureVideoReady(PublishContext $context, PostMedia $media, string $pds, string $jwt, string $did, array $session): PublishResult
     {
@@ -241,7 +241,7 @@ class BlueskyPublishConnector implements PublishConnector
      * Mint a service-auth token scoped to the user's PDS for blob upload, then push raw
      * bytes to the video service (which cannot be PDS-proxied).
      *
-     * @param  array<string, mixed>  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      */
     private function uploadVideo(PostMedia $media, string $pds, string $jwt, string $did, array $session): string
     {
@@ -296,7 +296,7 @@ class BlueskyPublishConnector implements PublishConnector
      * Upload each media item as a blob and build an `app.bsky.embed.images` embed.
      *
      * @param  list<PostMedia>  $media
-     * @param  array<string, mixed>  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @return array{'$type': string, images: list<array{alt: string, image: array<string, mixed>}>}|null
      */
     private function uploadImages(array $media, string $pds, string $jwt, array $session): ?array
@@ -329,7 +329,7 @@ class BlueskyPublishConnector implements PublishConnector
     }
 
     /**
-     * @param  array<string, mixed>  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @param  array<string, mixed>  $payload
      */
     private function postJsonAuthorized(string $url, string $jwt, array $session, array $payload): Response
@@ -343,7 +343,7 @@ class BlueskyPublishConnector implements PublishConnector
     }
 
     /**
-     * @param  array<string, mixed>  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @param  array<string, mixed>  $query
      */
     private function getAuthorized(string $url, string $jwt, array $session, array $query): Response
@@ -357,7 +357,7 @@ class BlueskyPublishConnector implements PublishConnector
     }
 
     /**
-     * @param  array<string, mixed>  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      */
     private function postBodyAuthorized(string $url, string $jwt, array $session, string $body, string $mime): Response
     {
@@ -377,7 +377,7 @@ class BlueskyPublishConnector implements PublishConnector
     }
 
     /**
-     * @param  array<string, mixed>  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      */
     private function authorized(string $method, string $url, string $jwt, array $session, ?string $nonce = null): PendingRequest
     {

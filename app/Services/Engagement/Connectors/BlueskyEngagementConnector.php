@@ -36,7 +36,7 @@ class BlueskyEngagementConnector implements EngagementConnector
     ) {}
 
     /**
-     * @param  array{dpop_private_jwk?: array<string, string>, dpop_nonce?: string|null}  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      */
     private function authorized(string $method, string $url, string $jwt, array $session, ?string $nonce = null): PendingRequest
     {
@@ -53,7 +53,7 @@ class BlueskyEngagementConnector implements EngagementConnector
     }
 
     /**
-     * @param  array{dpop_private_jwk?: array<string, string>, dpop_nonce?: string|null}  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @param  array<string, mixed>  $payload
      */
     private function postAuthorized(string $url, string $jwt, array $session, array $payload): Response
@@ -67,7 +67,7 @@ class BlueskyEngagementConnector implements EngagementConnector
     }
 
     /**
-     * @param  array{dpop_private_jwk?: array<string, string>, dpop_nonce?: string|null}  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @param  array<string, mixed>  $query
      */
     private function getAuthorized(string $url, string $jwt, array $session, array $query): Response
@@ -81,7 +81,7 @@ class BlueskyEngagementConnector implements EngagementConnector
     }
 
     /**
-     * @param  array{dpop_private_jwk?: array<string, string>, dpop_nonce?: string|null}  $session
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      */
     private function postBodyAuthorized(string $url, string $jwt, array $session, string $body, string $mime): Response
     {
@@ -298,6 +298,7 @@ class BlueskyEngagementConnector implements EngagementConnector
 
     /**
      * @param  list<PostMedia>  $media
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @return array<string, mixed>
      */
     private function buildEmbed(array $media, string $pds, string $jwt, string $did, array $session): array
@@ -313,6 +314,7 @@ class BlueskyEngagementConnector implements EngagementConnector
 
     /**
      * @param  list<PostMedia>  $media
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @return array{'$type': string, images: list<array{alt: string, image: array<string, mixed>}>}
      */
     private function imagesEmbed(array $media, string $pds, string $jwt, array $session): array
@@ -331,6 +333,7 @@ class BlueskyEngagementConnector implements EngagementConnector
     }
 
     /**
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @return array{'$type': string, video: array<string, mixed>, alt?: string}
      */
     private function videoEmbed(PostMedia $media, string $pds, string $jwt, string $did, array $session): array
@@ -378,6 +381,7 @@ class BlueskyEngagementConnector implements EngagementConnector
      * if the parent is itself the original post (no reply field), it IS the root.
      *
      * @param  array{uri: string, cid: string}  $parentRef
+     * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @return array{uri: string, cid: string}
      */
     private function resolveRoot(string $pds, string $jwt, string $did, PostTargetReply $parent, array $parentRef, array $session): array

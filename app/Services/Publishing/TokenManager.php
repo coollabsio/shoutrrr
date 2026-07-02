@@ -216,9 +216,9 @@ class TokenManager
         if ($account->platform === Platform::X) {
             $request = $request->withBasicAuth($clientId, $clientSecret);
         } elseif ($account->platform === Platform::Bluesky) {
-            /** @var array<string, string>|null $key */
+            /** @var array{kty: string, crv: string, x: string, y: string, d: string}|null $key */
             $key = $secret->session['dpop_private_jwk'] ?? null;
-            if (! is_array($key) || $endpoint === '') {
+            if ($key === null || $endpoint === '') {
                 throw new TokenRefreshException("Token refresh failed for account {$account->id}.");
             }
             $signingKey = $this->dpop->signingKey();
@@ -233,7 +233,7 @@ class TokenManager
 
         if ($response->failed() && $account->platform === Platform::Bluesky) {
             $nonce = $response->header('DPoP-Nonce');
-            if ($nonce !== '' && is_array($key)) {
+            if ($nonce !== '') {
                 $signingKey = $this->dpop->signingKey();
                 $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $signingKey, $clientId);
                 $response = $this->http->asForm()

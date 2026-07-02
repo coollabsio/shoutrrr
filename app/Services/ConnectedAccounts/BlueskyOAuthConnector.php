@@ -117,7 +117,7 @@ class BlueskyOAuthConnector
             throw new RuntimeException('Bluesky returned from an unexpected authorization server.');
         }
 
-        /** @var array<string, string> $key */
+        /** @var array{kty: string, crv: string, x: string, y: string, d: string} $key */
         $key = $context['dpop_private_jwk'];
         $tokenEndpoint = (string) $context['token_endpoint'];
         $signingKey = $this->dpop->signingKey();
@@ -176,11 +176,6 @@ class BlueskyOAuthConnector
         );
     }
 
-    private function resolveDid(string $identifier): ?string
-    {
-        return $this->bluesky->resolveDid($identifier);
-    }
-
     private function resolveDidToPds(string $did): ?string
     {
         $response = $this->http->timeout(5)->connectTimeout(3)->acceptJson()
@@ -235,7 +230,7 @@ class BlueskyOAuthConnector
     }
 
     /**
-     * @param  array<string, string>  $key
+     * @param  array{kty: string, crv: string, x: string, y: string, d: string}  $key
      * @param  array<string, string>  $form
      */
     private function postWithDpopNonce(string $url, array $key, array $form, ?string $nonce = null): Response
