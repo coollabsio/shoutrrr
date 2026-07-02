@@ -84,7 +84,7 @@ class MediaStorageService
      *
      * @param  array<string, mixed>  $settings
      */
-    public function storeBeautified(string $workspaceId, UploadedFile $composed, UploadedFile $source, array $settings): PostMedia
+    public function storeBeautified(string $workspaceId, UploadedFile $composed, UploadedFile $source, array $settings, ?string $altText = null): PostMedia
     {
         $disk = 'public';
         $path = $composed->store('media/'.$workspaceId, $disk);
@@ -105,7 +105,7 @@ class MediaStorageService
             'size_bytes' => $composed->getSize(),
             'width' => $dimensions[0] ?? null,
             'height' => $dimensions[1] ?? null,
-            'alt_text' => null,
+            'alt_text' => $altText,
             'position' => 0,
         ]);
     }
@@ -115,7 +115,7 @@ class MediaStorageService
      *
      * @param  array<string, mixed>  $settings
      */
-    public function replaceBeautified(PostMedia $media, UploadedFile $composed, array $settings): PostMedia
+    public function replaceBeautified(PostMedia $media, UploadedFile $composed, array $settings, ?string $altText = null): PostMedia
     {
         // Store the new file and commit the row before deleting the old file, so a
         // failed store never leaves the row pointing at a now-missing path.
@@ -130,6 +130,7 @@ class MediaStorageService
             'size_bytes' => $composed->getSize(),
             'width' => $dimensions[0] ?? null,
             'height' => $dimensions[1] ?? null,
+            'alt_text' => $altText,
         ]);
 
         if ($oldPath !== $path) {

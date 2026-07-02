@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Cache;
 
 class InstanceSettings
 {
-    private const string CacheKey = 'instance_settings';
+    public const string CacheKey = 'instance_settings';
 
     public function registrationsEnabled(): bool
     {
@@ -22,6 +22,11 @@ class InstanceSettings
     public function workspaceCreationEnabled(): bool
     {
         return $this->boolean('workspace_creation_enabled');
+    }
+
+    public function usageTrackingEnabled(): bool
+    {
+        return $this->boolean('usage_tracking_enabled');
     }
 
     public function registrationsAllowed(?string $invitationToken = null): bool
@@ -52,13 +57,14 @@ class InstanceSettings
     }
 
     /**
-     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool}
+     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool}
      */
     public function all(): array
     {
         return [
             'registrations_enabled' => $this->registrationsEnabled(),
             'workspace_creation_enabled' => $this->workspaceCreationEnabled(),
+            'usage_tracking_enabled' => $this->usageTrackingEnabled(),
         ];
     }
 
@@ -94,7 +100,7 @@ class InstanceSettings
     }
 
     /**
-     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool}  $values
+     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool}  $values
      */
     public function update(array $values): void
     {

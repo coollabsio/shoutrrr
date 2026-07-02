@@ -116,7 +116,7 @@ export default function PlatformTabs({
         );
     }
 
-    const mobileTabs = visiblePlatformTabAccounts(accounts, activeTab, 1);
+    const mobileTabs = visiblePlatformTabAccounts(accounts, activeTab, 2);
     const desktopTabs = visiblePlatformTabAccounts(accounts, activeTab);
 
     return (
@@ -124,6 +124,7 @@ export default function PlatformTabs({
             <PlatformTabRow
                 className="flex md:hidden"
                 visibleAccounts={mobileTabs.visibleAccounts}
+                compact
                 overflowAccounts={mobileTabs.overflowAccounts}
                 overflowOpen={overflowOpen}
                 setOverflowOpen={setOverflowOpen}
@@ -160,6 +161,7 @@ function PlatformTabRow({
     chipFor,
     stateFor,
     hasOverride,
+    compact = false,
 }: {
     className: string;
     visibleAccounts: Account[];
@@ -171,6 +173,7 @@ function PlatformTabRow({
     chipFor: (accountId: string) => string;
     stateFor: (accountId: string) => 'ok' | 'warn' | 'over';
     hasOverride: (accountId: string) => boolean;
+    compact?: boolean;
 }) {
     return (
         <div
@@ -190,6 +193,7 @@ function PlatformTabRow({
                     chipFor={chipFor}
                     stateFor={stateFor}
                     hasOverride={hasOverride}
+                    compact={compact}
                 />
             ))}
             {overflowAccounts.length > 0 && (
@@ -197,7 +201,12 @@ function PlatformTabRow({
                     <PopoverTrigger asChild>
                         <button
                             type="button"
-                            className={cn(TAB_CLASS, 'shrink-0 gap-1.5')}
+                            className={cn(
+                                TAB_CLASS,
+                                compact
+                                    ? 'shrink-0 gap-1.5 px-2'
+                                    : 'shrink-0 gap-1.5',
+                            )}
                             aria-label={`${overflowAccounts.length} more accounts`}
                         >
                             <span>+{overflowAccounts.length} more</span>
@@ -238,6 +247,7 @@ function PlatformTabButton({
     stateFor,
     hasOverride,
     inMenu = false,
+    compact = false,
 }: {
     account: Account;
     activeTab: string;
@@ -246,6 +256,7 @@ function PlatformTabButton({
     stateFor: (accountId: string) => 'ok' | 'warn' | 'over';
     hasOverride: (accountId: string) => boolean;
     inMenu?: boolean;
+    compact?: boolean;
 }) {
     const isActive = account.id === activeTab;
     const severity = stateFor(account.id);
@@ -266,6 +277,7 @@ function PlatformTabButton({
                 TAB_CLASS,
                 inMenu &&
                     'h-9 w-full rounded-xl px-2 pt-1.5 pb-1.5 after:hidden',
+                compact && !inMenu && 'min-w-0 flex-1 basis-0 gap-1.5 px-2',
             )}
         >
             <span

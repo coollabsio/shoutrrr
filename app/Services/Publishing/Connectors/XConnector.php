@@ -9,11 +9,15 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
+use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -21,7 +25,7 @@ use Illuminate\Support\Facades\Storage;
 
 class XConnector implements PublishConnector
 {
-    use MapsHttpErrors;
+    use MapsHttpErrors, TracksUsage;
 
     private const string TWEETS_URL = 'https://api.twitter.com/2/tweets';
 
@@ -33,6 +37,8 @@ class XConnector implements PublishConnector
     private const string MEDIA_BASE = 'https://api.x.com/2/media/upload';
 
     private const int APPEND_CHUNK = 4 * 1024 * 1024;
+
+    private const int GIF_MAX_BYTES = 15 * 1024 * 1024;
 
     public function __construct(
         private readonly HttpFactory $http,
@@ -46,6 +52,10 @@ class XConnector implements PublishConnector
 
         try {
             $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
+            $gifMedia = array_values(array_filter(
+                $context->media,
+                fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime === 'image/gif',
+            ));
 
             if ($videoMedia !== []) {
                 $ready = $this->ensureVideoReady($context, $videoMedia[0], $token);
@@ -53,8 +63,14 @@ class XConnector implements PublishConnector
                     return $ready;
                 }
                 $mediaIds = [(string) $ready->remoteIds[0]];
+            } elseif ($gifMedia !== []) {
+                $ready = $this->ensureGifReady($context, $gifMedia, $token);
+                if (! $ready->isSuccessful()) {
+                    return $ready;
+                }
+                $mediaIds = [(string) $ready->remoteIds[0]];
             } else {
-                $mediaIds = $this->uploadMedia($context->media, $token);
+                $mediaIds = $this->uploadMedia($context->media, $token, $context->account);
             }
 
             foreach ($context->segments as $index => $text) {
@@ -82,6 +98,8 @@ class XConnector implements PublishConnector
                     ->withToken($token)
                     ->acceptJson()
                     ->post(self::TWEETS_URL, $body);
+
+                $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
 
                 if ($response->failed()) {
                     return $this->mapFailure($response);
@@ -112,6 +130,9 @@ class XConnector implements PublishConnector
         foreach ($target->remote_ids ?? array_filter([$target->remote_id]) as $id) {
             $response = $this->http->withToken($token)->delete(self::TWEETS_URL.'/'.$id);
 
+            // A 404 means the tweet is already gone — throwUnlessDeleteAccepted treats it as done.
+            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response, succeeded: $response->successful() || $response->status() === 404);
+
             $this->throwUnlessDeleteAccepted($response);
         }
     }
@@ -122,18 +143,59 @@ class XConnector implements PublishConnector
      */
     private function ensureVideoReady(PublishContext $context, PostMedia $media, string $token): PublishResult
     {
+        return $this->ensureChunkedMediaReady($context, $media, $token, 'video/mp4', 'tweet_video', 'video');
+    }
+
+    /**
+     * @param  list<PostMedia>  $media
+     */
+    private function ensureGifReady(PublishContext $context, array $media, string $token): PublishResult
+    {
+        if (count($context->media) > 1 || count($media) > 1) {
+            return PublishResult::failure(
+                ErrorKind::Validation,
+                'X supports one GIF per post, and a GIF cannot be mixed with other media.',
+            );
+        }
+
+        $item = $media[0];
+        $size = (int) Storage::disk($item->disk)->size($item->path);
+
+        if ($size > self::GIF_MAX_BYTES) {
+            return PublishResult::failure(
+                ErrorKind::Validation,
+                'X GIF uploads must be 15 MB or smaller.',
+            );
+        }
+
+        return $this->ensureChunkedMediaReady($context, $item, $token, 'image/gif', 'tweet_gif', 'GIF');
+    }
+
+    /**
+     * Upload (once) and poll the async media processing state.
+     */
+    private function ensureChunkedMediaReady(
+        PublishContext $context,
+        PostMedia $media,
+        string $token,
+        string $mediaType,
+        string $mediaCategory,
+        string $label,
+    ): PublishResult {
         $state = new MediaUploadState($context->target->media_upload_state);
         $mediaId = $state->remoteRef($media->id);
 
         try {
             if ($mediaId === null) {
-                $mediaId = $this->uploadVideoChunks($media, $token);
+                $mediaId = $this->uploadChunks($media, $token, $mediaType, $mediaCategory, $context->account);
                 $state->markUploaded($media->id, $mediaId);
                 $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
             }
 
             $status = $this->http->withToken($token)->acceptJson()
                 ->get(self::MEDIA_BASE, ['command' => 'STATUS', 'media_id' => $mediaId]);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_STATUS_POLL, $context->account, $status);
 
             if ($status->failed()) {
                 $kind = $this->classifyStatus($status->status());
@@ -143,7 +205,7 @@ class XConnector implements PublishConnector
                     // 5-attempt publish-failure budget.
                     return PublishResult::failure(
                         ErrorKind::MediaProcessing,
-                        'Could not check video processing status; will retry.',
+                        "Could not check {$label} processing status; will retry.",
                         retryAfter: $this->retryAfter($status) ?? 6,
                     );
                 }
@@ -156,13 +218,13 @@ class XConnector implements PublishConnector
             $stateName = (string) ($info['state'] ?? 'succeeded');
 
             if ($stateName === 'failed') {
-                return PublishResult::failure(ErrorKind::ServerError, 'X failed to process the video.');
+                return PublishResult::failure(ErrorKind::ServerError, "X failed to process the {$label}.");
             }
 
             if ($stateName !== 'succeeded') {
                 return PublishResult::failure(
                     ErrorKind::MediaProcessing,
-                    'Video is still processing on X.',
+                    ucfirst($label).' is still processing on X.',
                     retryAfter: (int) ($info['check_after_secs'] ?? 5),
                 );
             }
@@ -173,17 +235,18 @@ class XConnector implements PublishConnector
         }
     }
 
-    private function uploadVideoChunks(PostMedia $media, string $token): string
+    private function uploadChunks(PostMedia $media, string $token, string $mediaType, string $mediaCategory, ConnectedAccount $account): string
     {
         $disk = Storage::disk($media->disk);
         $total = (int) $disk->size($media->path);
 
         $init = $this->http->withToken($token)->acceptJson()
             ->post(self::MEDIA_BASE.'/initialize', [
-                'media_type' => 'video/mp4',
+                'media_type' => $mediaType,
                 'total_bytes' => $total,
-                'media_category' => 'tweet_video',
+                'media_category' => $mediaCategory,
             ]);
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $init);
         if ($init->failed()) {
             throw new XRequestFailed($init);
         }
@@ -201,6 +264,7 @@ class XConnector implements PublishConnector
                 $append = $this->http->withToken($token)->asMultipart()
                     ->attach('media', $segment, 'chunk')
                     ->post(self::MEDIA_BASE.'/'.$mediaId.'/append', ['segment_index' => $segmentIndex]);
+                $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $append);
                 if ($append->failed()) {
                     throw new XRequestFailed($append);
                 }
@@ -212,6 +276,7 @@ class XConnector implements PublishConnector
 
         $finalize = $this->http->withToken($token)->acceptJson()
             ->post(self::MEDIA_BASE.'/'.$mediaId.'/finalize');
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $finalize);
         if ($finalize->failed()) {
             throw new XRequestFailed($finalize);
         }
@@ -223,7 +288,7 @@ class XConnector implements PublishConnector
      * @param  list<PostMedia>  $media
      * @return list<string>
      */
-    private function uploadMedia(array $media, string $token): array
+    private function uploadMedia(array $media, string $token, ConnectedAccount $account): array
     {
         $ids = [];
 
@@ -235,6 +300,8 @@ class XConnector implements PublishConnector
                 ->asMultipart()
                 ->attach('media', $compressed->bytes, 'upload')
                 ->post(self::MEDIA_URL, ['media_category' => 'tweet_image']);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $response);
 
             if ($response->failed()) {
                 throw new XRequestFailed($response);

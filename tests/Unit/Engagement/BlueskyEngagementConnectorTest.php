@@ -3,6 +3,7 @@
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
+use App\Services\Atproto\DPoP;
 use App\Services\Engagement\Connectors\BlueskyEngagementConnector;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Factory;
@@ -42,7 +43,7 @@ test('fetchReplies flattens the thread and excludes the owner and root', functio
     $account = blueskyAccount();
     $target = PostTarget::factory()->create(['remote_id' => 'at://root', 'remote_ids' => ['at://root']]);
 
-    $result = (new BlueskyEngagementConnector(app(Factory::class)))
+    $result = (new BlueskyEngagementConnector(app(Factory::class), app(DPoP::class)))
         ->fetchReplies($account, $target, [], null);
 
     expect($result->isOk())->toBeTrue();
@@ -67,7 +68,7 @@ test('fetchReplies drops replies at or before since', function () {
         ]),
     ]);
 
-    $result = (new BlueskyEngagementConnector(app(Factory::class)))
+    $result = (new BlueskyEngagementConnector(app(Factory::class), app(DPoP::class)))
         ->fetchReplies(blueskyAccount(), PostTarget::factory()->create(['remote_id' => 'at://root']), [], CarbonImmutable::parse('2026-06-25T09:30:00Z'));
 
     expect($result->replies)->toHaveCount(0);
@@ -81,7 +82,7 @@ test('postReply creates a record threaded under the parent', function () {
 
     $parent = PostTargetReply::factory()->create(['remote_reply_id' => 'at://reply1', 'remote_cid' => 'cid1']);
 
-    $result = (new BlueskyEngagementConnector(app(Factory::class)))
+    $result = (new BlueskyEngagementConnector(app(Factory::class), app(DPoP::class)))
         ->postReply(blueskyAccount(), $parent, 'thanks!', ['session' => ['pds' => 'https://bsky.social', 'accessJwt' => 'jwt']]);
 
     expect($result->isOk())->toBeTrue();
@@ -101,7 +102,7 @@ test('postReply falls back to the parent as root when the parent is the original
 
     $parent = PostTargetReply::factory()->create(['remote_reply_id' => 'at://did:plc:author/app.bsky.feed.post/abc', 'remote_cid' => 'cid1']);
 
-    $result = (new BlueskyEngagementConnector(app(Factory::class)))
+    $result = (new BlueskyEngagementConnector(app(Factory::class), app(DPoP::class)))
         ->postReply(blueskyAccount(), $parent, 'thanks!', ['session' => ['pds' => 'https://bsky.social', 'accessJwt' => 'jwt']]);
 
     expect($result->isOk())->toBeTrue();

@@ -124,6 +124,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         unzip \
         curl \
         jq \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 # Install the Bun binary for the target architecture (amd64 -> x64, arm64 -> aarch64).
 # TARGETARCH is provided automatically by buildx.

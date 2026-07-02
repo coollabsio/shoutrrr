@@ -7,7 +7,7 @@ test('per-platform video limits match the spec', function (): void {
         ->and(Platform::X->maxVideoDurationSeconds())->toBe(140)
         ->and(Platform::LinkedIn->maxVideoBytes())->toBe(524_288_000)
         ->and(Platform::LinkedIn->maxVideoDurationSeconds())->toBe(1800)
-        ->and(Platform::Bluesky->maxVideoBytes())->toBe(104_857_600)
+        ->and(Platform::Bluesky->maxVideoBytes())->toBe(100_000_000)
         ->and(Platform::Bluesky->maxVideoDurationSeconds())->toBe(180)
         ->and(Platform::X->allowedVideoMime())->toBe(['video/mp4']);
 });

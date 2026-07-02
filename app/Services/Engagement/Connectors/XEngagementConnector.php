@@ -8,11 +8,14 @@ use App\Dto\Engagement\FetchedReply;
 use App\Dto\Engagement\ReplyActionResult;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
+use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -22,6 +25,8 @@ use Illuminate\Support\Facades\Storage;
 
 class XEngagementConnector implements EngagementConnector
 {
+    use TracksUsage;
+
     private const string BASE = 'https://api.twitter.com/2';
 
     private const string MEDIA_BASE = 'https://api.x.com/2/media/upload';
@@ -63,6 +68,8 @@ class XEngagementConnector implements EngagementConnector
             return ReplyFetchResult::failed($e->getMessage());
         }
 
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response);
+
         if ($response->failed()) {
             return $this->mapFetchFailure($response);
         }
@@ -97,7 +104,7 @@ class XEngagementConnector implements EngagementConnector
         try {
             $token = (string) ($credentials['access_token'] ?? '');
 
-            $mediaIds = $media === [] ? [] : $this->uploadReplyMedia($media, $token);
+            $mediaIds = $media === [] ? [] : $this->uploadReplyMedia($account, $media, $token);
 
             $body = [
                 'text' => $text,
@@ -117,6 +124,8 @@ class XEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyPostResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $response);
 
         if ($response->failed()) {
             return match (true) {
@@ -141,6 +150,8 @@ class XEngagementConnector implements EngagementConnector
             return ReplyActionResult::failed($e->getMessage());
         }
 
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_LIKE, $account, $response);
+
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }
 
@@ -153,6 +164,8 @@ class XEngagementConnector implements EngagementConnector
             return ReplyActionResult::failed($e->getMessage());
         }
 
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_UNLIKE, $account, $response);
+
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }
 
@@ -164,6 +177,8 @@ class XEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyActionResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_DELETE, $account, $response);
 
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }
@@ -182,22 +197,22 @@ class XEngagementConnector implements EngagementConnector
      * @param  list<PostMedia>  $media
      * @return list<string>
      */
-    private function uploadReplyMedia(array $media, string $token): array
+    private function uploadReplyMedia(ConnectedAccount $account, array $media, string $token): array
     {
         $videoMedia = array_values(array_filter($media, fn (PostMedia $m): bool => $m->isVideo()));
 
         if ($videoMedia !== []) {
-            return [$this->uploadVideoChunks($videoMedia[0], $token)];
+            return [$this->uploadVideoChunks($account, $videoMedia[0], $token)];
         }
 
-        return $this->uploadImages($media, $token);
+        return $this->uploadImages($account, $media, $token);
     }
 
     /**
      * @param  list<PostMedia>  $media
      * @return list<string>
      */
-    private function uploadImages(array $media, string $token): array
+    private function uploadImages(ConnectedAccount $account, array $media, string $token): array
     {
         $ids = [];
 
@@ -209,6 +224,8 @@ class XEngagementConnector implements EngagementConnector
                 ->attach('media', (string) $bytes, 'upload')
                 ->post(self::MEDIA_BASE, ['media_category' => 'tweet_image']);
 
+            $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $response);
+
             if ($response->failed()) {
                 throw new XReplyMediaFailed($response);
             }
@@ -219,7 +236,7 @@ class XEngagementConnector implements EngagementConnector
         return $ids;
     }
 
-    private function uploadVideoChunks(PostMedia $media, string $token): string
+    private function uploadVideoChunks(ConnectedAccount $account, PostMedia $media, string $token): string
     {
         $disk = Storage::disk($media->disk);
         $total = (int) $disk->size($media->path);
@@ -230,6 +247,8 @@ class XEngagementConnector implements EngagementConnector
                 'total_bytes' => $total,
                 'media_category' => 'tweet_video',
             ]);
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $init);
 
         if ($init->failed()) {
             throw new XReplyMediaFailed($init);
@@ -249,6 +268,9 @@ class XEngagementConnector implements EngagementConnector
                 $append = $this->http->withToken($token)->asMultipart()
                     ->attach('media', $segment, 'chunk')
                     ->post(self::MEDIA_BASE.'/'.$mediaId.'/append', ['segment_index' => $segmentIndex]);
+
+                $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $append);
+
                 if ($append->failed()) {
                     throw new XReplyMediaFailed($append);
                 }
@@ -261,6 +283,8 @@ class XEngagementConnector implements EngagementConnector
         $finalize = $this->http->withToken($token)->acceptJson()
             ->post(self::MEDIA_BASE.'/'.$mediaId.'/finalize');
 
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $finalize);
+
         if ($finalize->failed()) {
             throw new XReplyMediaFailed($finalize);
         }
@@ -270,6 +294,8 @@ class XEngagementConnector implements EngagementConnector
         for ($i = 0; $i < self::STATUS_POLL_MAX; $i++) {
             $status = $this->http->withToken($token)->acceptJson()
                 ->get(self::MEDIA_BASE, ['command' => 'STATUS', 'media_id' => $mediaId]);
+
+            $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $status);
 
             if ($status->failed()) {
                 throw new XReplyMediaFailed($status);

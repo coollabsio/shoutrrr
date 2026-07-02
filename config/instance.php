@@ -28,5 +28,6 @@ return [
                 'linkedin' => 1440,
             ],
         ],
+        'usage_tracking_enabled' => env('INSTANCE_USAGE_TRACKING_ENABLED', false),
     ],
 ];

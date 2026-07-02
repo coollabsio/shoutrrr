@@ -29,6 +29,7 @@ export function useImageEditor({
         composed: Blob,
         source: Blob,
         settings: EditSettings,
+        altText = '',
     ): Promise<boolean> {
         setIsSaving(true);
         try {
@@ -42,6 +43,7 @@ export function useImageEditor({
                 composed: blobToFile(composed, 'image.png'),
                 source: blobToFile(source, 'source.png'),
                 settings: JSON.stringify(settings),
+                alt_text: altText,
             }));
             const { media } = await http.post(
                 PostImageEditController.store(id).url,
@@ -64,6 +66,7 @@ export function useImageEditor({
         mediaId: string,
         composed: Blob,
         settings: EditSettings,
+        altText = '',
     ): Promise<boolean> {
         setIsSaving(true);
         try {
@@ -76,6 +79,7 @@ export function useImageEditor({
             http.transform(() => ({
                 composed: blobToFile(composed, 'image.png'),
                 settings: JSON.stringify(settings),
+                alt_text: altText,
                 _method: 'put',
             }));
             const { media } = await http.post(

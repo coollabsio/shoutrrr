@@ -8,10 +8,13 @@ use App\Dto\Engagement\FetchedReply;
 use App\Dto\Engagement\ReplyActionResult;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
+use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -29,6 +32,8 @@ use Illuminate\Http\Client\Response;
  */
 class LinkedInEngagementConnector implements EngagementConnector
 {
+    use TracksUsage;
+
     private const string SOCIAL_ACTIONS_URL = 'https://api.linkedin.com/rest/socialActions';
 
     public function __construct(private readonly HttpFactory $http) {}
@@ -67,6 +72,9 @@ class LinkedInEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyFetchResult::failed($e->getMessage());
         }
+
+        // LinkedIn 404s a post that simply has no comments yet — a routine success, not a failed read.
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response, succeeded: $response->successful() || $response->status() === 404);
 
         // LinkedIn returns 404 for a post that simply has no comments yet.
         if ($response->status() === 404) {
@@ -139,6 +147,8 @@ class LinkedInEngagementConnector implements EngagementConnector
             return ReplyPostResult::failed($e->getMessage());
         }
 
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $response);
+
         if ($response->failed()) {
             return match (true) {
                 $response->status() === 401 => ReplyPostResult::authExpired($this->excerpt($response)),
@@ -170,6 +180,8 @@ class LinkedInEngagementConnector implements EngagementConnector
             return ReplyActionResult::failed($e->getMessage());
         }
 
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_LIKE, $account, $response);
+
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }
 
@@ -186,6 +198,8 @@ class LinkedInEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyActionResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_UNLIKE, $account, $response);
 
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }
@@ -210,6 +224,8 @@ class LinkedInEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyActionResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_DELETE, $account, $response);
 
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }

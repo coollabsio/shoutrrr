@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 type InstanceSettings = {
     registrations_enabled: boolean;
     workspace_creation_enabled: boolean;
+    usage_tracking_enabled: boolean;
 };
 
 type PageProps = {
@@ -21,6 +22,7 @@ export default function Instance({ settings, workspaces_enabled }: PageProps) {
         registrations_enabled: settings.registrations_enabled,
         workspace_creation_enabled:
             workspaces_enabled && settings.workspace_creation_enabled,
+        usage_tracking_enabled: settings.usage_tracking_enabled,
     });
 
     function handleSubmit(event: React.FormEvent) {
@@ -88,6 +90,29 @@ export default function Instance({ settings, workspaces_enabled }: PageProps) {
                                     {workspaces_enabled
                                         ? 'When disabled, users can still access workspaces they already belong to.'
                                         : 'Workspace creation is unavailable because workspaces are disabled by the WORKSPACES_ENABLED environment setting.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                            <Checkbox
+                                id="usage_tracking_enabled"
+                                checked={data.usage_tracking_enabled}
+                                onCheckedChange={(checked) =>
+                                    setData(
+                                        'usage_tracking_enabled',
+                                        checked === true,
+                                    )
+                                }
+                            />
+                            <div className="space-y-1">
+                                <Label htmlFor="usage_tracking_enabled">
+                                    Track platform API usage
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                    When enabled, records per-workspace API
+                                    usage (posts, reads, requests) for cost and
+                                    abuse monitoring. Off by default.
                                 </p>
                             </div>
                         </div>

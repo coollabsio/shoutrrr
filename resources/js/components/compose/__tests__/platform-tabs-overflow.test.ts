@@ -65,27 +65,30 @@ describe('platform tabs overflow', () => {
         expect(overflowAccounts).toEqual([]);
     });
 
-    it('keeps only one account visible for the mobile tab limit', () => {
-        const accounts = ['one', 'two'].map(account);
+    it('keeps two accounts visible for the mobile tab limit', () => {
+        const accounts = ['one', 'two', 'three'].map(account);
 
         const { visibleAccounts, overflowAccounts } =
-            visiblePlatformTabAccounts(accounts, 'one', 1);
+            visiblePlatformTabAccounts(accounts, 'one', 2);
 
-        expect(visibleAccounts.map((item) => item.id)).toEqual(['one']);
-        expect(overflowAccounts.map((item) => item.id)).toEqual(['two']);
+        expect(visibleAccounts.map((item) => item.id)).toEqual(['one', 'two']);
+        expect(overflowAccounts.map((item) => item.id)).toEqual(['three']);
     });
 
     it('keeps the active account visible with the mobile tab limit', () => {
         const accounts = ['one', 'two', 'three'].map(account);
 
         const { visibleAccounts, overflowAccounts } =
-            visiblePlatformTabAccounts(accounts, 'three', 1);
+            visiblePlatformTabAccounts(accounts, 'three', 2);
 
-        expect(visibleAccounts.map((item) => item.id)).toEqual(['three']);
-        expect(overflowAccounts.map((item) => item.id)).toEqual(['one', 'two']);
+        expect(visibleAccounts.map((item) => item.id)).toEqual([
+            'one',
+            'three',
+        ]);
+        expect(overflowAccounts.map((item) => item.id)).toEqual(['two']);
     });
 
-    it('renders a one-account mobile tab row and a larger desktop tab row', () => {
+    it('renders a two-account mobile tab row and a larger desktop tab row', () => {
         const source = readFileSync(
             resolve(
                 process.cwd(),
@@ -95,9 +98,12 @@ describe('platform tabs overflow', () => {
         );
 
         expect(source).toContain(
-            'visiblePlatformTabAccounts(accounts, activeTab, 1)',
+            'visiblePlatformTabAccounts(accounts, activeTab, 2)',
         );
         expect(source).toContain('md:hidden');
         expect(source).toContain('hidden md:flex');
+        expect(source).toContain('compact');
+        expect(source).toContain('min-w-0 flex-1 basis-0');
+        expect(source).toContain('+{overflowAccounts.length} more');
     });
 });
