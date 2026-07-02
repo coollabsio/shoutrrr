@@ -179,6 +179,8 @@ class LinkedInEngagementConnector implements EngagementConnector
             return ReplyActionResult::failed($e->getMessage());
         }
 
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_LIKE, $account, $response);
+
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }
 
@@ -195,6 +197,8 @@ class LinkedInEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyActionResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_UNLIKE, $account, $response);
 
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }
@@ -219,6 +223,8 @@ class LinkedInEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyActionResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_DELETE, $account, $response);
 
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }

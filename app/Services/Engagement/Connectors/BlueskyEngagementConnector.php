@@ -178,6 +178,8 @@ class BlueskyEngagementConnector implements EngagementConnector
             return ReplyActionResult::failed($e->getMessage());
         }
 
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_LIKE, $account, $response);
+
         return $response->failed()
             ? $this->mapActionFailure($response)
             : ReplyActionResult::ok((string) $response->json('uri'));
@@ -189,12 +191,12 @@ class BlueskyEngagementConnector implements EngagementConnector
             return ReplyActionResult::ok();
         }
 
-        return $this->deleteRecord($account, $credentials, 'app.bsky.feed.like', $likeRemoteId);
+        return $this->deleteRecord($account, $credentials, 'app.bsky.feed.like', $likeRemoteId, UsageOperation::REPLY_UNLIKE);
     }
 
     public function deleteReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
     {
-        return $this->deleteRecord($account, $credentials, 'app.bsky.feed.post', $reply->remote_reply_id);
+        return $this->deleteRecord($account, $credentials, 'app.bsky.feed.post', $reply->remote_reply_id, UsageOperation::REPLY_DELETE);
     }
 
     /**
@@ -203,7 +205,7 @@ class BlueskyEngagementConnector implements EngagementConnector
      *
      * @param  array<string, mixed>  $credentials
      */
-    private function deleteRecord(ConnectedAccount $account, array $credentials, string $collection, string $uri): ReplyActionResult
+    private function deleteRecord(ConnectedAccount $account, array $credentials, string $collection, string $uri, string $operation): ReplyActionResult
     {
         $session = (array) ($credentials['session'] ?? []);
         $pds = (string) ($session['pds'] ?? self::DEFAULT_PDS);
@@ -224,6 +226,8 @@ class BlueskyEngagementConnector implements EngagementConnector
         } catch (ConnectionException $e) {
             return ReplyActionResult::failed($e->getMessage());
         }
+
+        $this->meter(UsageCategory::ExternalApi, $operation, $account, $response);
 
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }

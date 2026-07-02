@@ -22,6 +22,12 @@ final class UsageOperation
 
     public const string REPLY_SEND = 'reply_send';
 
+    public const string REPLY_LIKE = 'reply_like';
+
+    public const string REPLY_UNLIKE = 'reply_unlike';
+
+    public const string REPLY_DELETE = 'reply_delete';
+
     public const string TOKEN_REFRESH = 'token_refresh';
 
     public const string MCP_REQUEST = 'mcp_request';
