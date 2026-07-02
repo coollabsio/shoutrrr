@@ -30,13 +30,17 @@ class UsageReportController extends Controller
         // exclude every event recorded after 00:00:00 on that day.
         $to = ($request->date('to') ?? Date::now())->endOfDay();
 
-        // Whitelisted grouping column — never interpolate raw input into SQL.
-        $column = match ($request->string('group_by')->toString()) {
-            'workspace' => 'workspace_id',
+        // Whitelisted grouping — normalize unknown input to 'category' once so the
+        // SQL column and the reported group_by label can never disagree.
+        $groupBy = match ($request->string('group_by')->toString()) {
+            'workspace' => 'workspace',
             'platform' => 'platform',
             'operation' => 'operation',
             default => 'category',
         };
+
+        // Never interpolate raw input into SQL — derive the column from the whitelist.
+        $column = $groupBy === 'workspace' ? 'workspace_id' : $groupBy;
 
         $data = UsageEvent::query()
             ->whereBetween('occurred_at', [$from, $to])
@@ -51,7 +55,7 @@ class UsageReportController extends Controller
             ]);
 
         return response()->json([
-            'group_by' => $request->string('group_by')->toString() ?: 'category',
+            'group_by' => $groupBy,
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
             'data' => $data,

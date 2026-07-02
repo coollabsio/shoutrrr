@@ -193,7 +193,7 @@ class BlueskyEngagementConnector implements EngagementConnector
         try {
             $root = $this->resolveRoot($pds, $jwt, $did, $parent, $parentRef, $session);
 
-            $embed = $media === [] ? null : $this->buildEmbed($media, $pds, $jwt, $did, $session);
+            $embed = $media === [] ? null : $this->buildEmbed($account, $media, $pds, $jwt, $did, $session);
 
             $record = [
                 '$type' => 'app.bsky.feed.post',
@@ -314,15 +314,15 @@ class BlueskyEngagementConnector implements EngagementConnector
      * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @return array<string, mixed>
      */
-    private function buildEmbed(array $media, string $pds, string $jwt, string $did, array $session): array
+    private function buildEmbed(ConnectedAccount $account, array $media, string $pds, string $jwt, string $did, array $session): array
     {
         $video = array_values(array_filter($media, fn (PostMedia $mediaItem): bool => $mediaItem->isVideo()));
 
         if ($video !== []) {
-            return $this->videoEmbed($video[0], $pds, $jwt, $did, $session);
+            return $this->videoEmbed($account, $video[0], $pds, $jwt, $did, $session);
         }
 
-        return $this->imagesEmbed($media, $pds, $jwt, $session);
+        return $this->imagesEmbed($account, $media, $pds, $jwt, $session);
     }
 
     /**
@@ -330,12 +330,15 @@ class BlueskyEngagementConnector implements EngagementConnector
      * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @return array{'$type': string, images: list<array{alt: string, image: array<string, mixed>}>}
      */
-    private function imagesEmbed(array $media, string $pds, string $jwt, array $session): array
+    private function imagesEmbed(ConnectedAccount $account, array $media, string $pds, string $jwt, array $session): array
     {
         $images = [];
         foreach (array_slice($media, 0, Platform::Bluesky->maxMedia()) as $item) {
             $bytes = (string) Storage::disk($item->disk)->get($item->path);
             $response = $this->postBodyAuthorized($pds.'/xrpc/com.atproto.repo.uploadBlob', $jwt, $session, $bytes, $item->mime);
+
+            $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $response);
+
             if ($response->failed()) {
                 throw new BlueskyReplyMediaFailed($response->status());
             }
@@ -349,7 +352,7 @@ class BlueskyEngagementConnector implements EngagementConnector
      * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
      * @return array{'$type': string, video: array<string, mixed>, alt?: string}
      */
-    private function videoEmbed(PostMedia $media, string $pds, string $jwt, string $did, array $session): array
+    private function videoEmbed(ConnectedAccount $account, PostMedia $media, string $pds, string $jwt, string $did, array $session): array
     {
         $pdsHost = (string) parse_url($pds, PHP_URL_HOST);
         $auth = $this->getAuthorized($pds.'/xrpc/com.atproto.server.getServiceAuth', $jwt, $session, [
@@ -362,6 +365,9 @@ class BlueskyEngagementConnector implements EngagementConnector
         $body = Utils::streamFor(Storage::disk($media->disk)->readStream($media->path));
         $upload = $this->http->withToken((string) $auth->json('token'))->withBody($body, 'video/mp4')
             ->post('https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?did='.rawurlencode($did).'&name=video.mp4');
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $upload, succeeded: $upload->successful() || $upload->json('error') === 'already_exists');
+
         if ($upload->failed() && $upload->json('error') !== 'already_exists') {
             throw new BlueskyReplyMediaFailed($upload->status());
         }
@@ -371,6 +377,9 @@ class BlueskyEngagementConnector implements EngagementConnector
         for ($i = 0; $i < 60; $i++) {
             $status = $this->http->acceptJson()
                 ->get('https://video.bsky.app/xrpc/app.bsky.video.getJobStatus', ['jobId' => $jobId]);
+
+            $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $status);
+
             $state = (string) $status->json('jobStatus.state', '');
             if ($state === 'JOB_STATE_COMPLETED') {
                 $embed = ['$type' => 'app.bsky.embed.video', 'video' => (array) $status->json('jobStatus.blob')];

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\Platform;
 use App\Enums\UsageCategory;
 use App\Models\UsagePeriodCounter;
 use App\Models\Workspace;
@@ -25,7 +26,7 @@ class UsagePeriodCounterFactory extends Factory
             'period_start' => $now->copy()->startOfMonth()->toDateString(),
             'period_end' => $now->copy()->endOfMonth()->toDateString(),
             'category' => UsageCategory::Publish->value,
-            'platform' => 'x',
+            'platform' => Platform::X->value,
             'operation' => UsageOperation::POST,
             'event_count' => 0,
             'total_quota' => 0,

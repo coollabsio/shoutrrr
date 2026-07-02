@@ -26,11 +26,23 @@ it('returns zero / full remaining for an unknown workspace', function () {
         ->and($meter->remaining('missing-id', 5))->toBe(5);
 });
 
-it('reads the none sentinel when platform is null', function () {
+it('ignores the platform filter and sums across platforms when platform is null', function () {
     $workspace = Workspace::factory()->create();
     UsagePeriodCounter::factory()->create([
         'workspace_id' => $workspace->id, 'platform' => 'none', 'operation' => UsageOperation::MCP_REQUEST, 'total_quota' => 5,
     ]);
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id, 'platform' => 'x', 'operation' => UsageOperation::MCP_REQUEST, 'total_quota' => 3,
+    ]);
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id, 'platform' => 'bluesky', 'operation' => UsageOperation::MCP_REQUEST, 'total_quota' => 2,
+    ]);
 
-    expect(app(UsageMeter::class)->currentPeriodQuota($workspace->id, null, UsageOperation::MCP_REQUEST))->toBe(5);
+    $meter = app(UsageMeter::class);
+
+    // Null platform must NOT match a 'none' sentinel — it drops the platform
+    // filter entirely and sums every platform's counter for the operation.
+    expect($meter->currentPeriodQuota($workspace->id, null, UsageOperation::MCP_REQUEST))->toBe(10)
+        // A concrete platform still filters to that platform's row only.
+        ->and($meter->currentPeriodQuota($workspace->id, Platform::X, UsageOperation::MCP_REQUEST))->toBe(3);
 });

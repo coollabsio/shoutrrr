@@ -115,7 +115,7 @@ class LinkedInConnector implements PublishConnector
                         ],
                     ];
                 } else {
-                    $article = $this->articleFromText($text, $author, $token);
+                    $article = $this->articleFromText($text, $author, $token, $context->account);
 
                     if ($article !== null) {
                         $body['content'] = ['article' => $article];
@@ -156,7 +156,7 @@ class LinkedInConnector implements PublishConnector
      *
      * @return array{source: string, title: string, description?: string, thumbnail?: string}|null
      */
-    private function articleFromText(string $text, string $author, string $token): ?array
+    private function articleFromText(string $text, string $author, string $token, ConnectedAccount $account): ?array
     {
         $url = $this->firstUrl($text);
 
@@ -195,7 +195,7 @@ class LinkedInConnector implements PublishConnector
 
             $imageUrl = $this->absoluteUrl($this->metaContent($html, ['og:image', 'twitter:image']), $source);
             if ($imageUrl !== null) {
-                $thumbnail = $this->uploadArticleThumbnail($imageUrl, $author, $token);
+                $thumbnail = $this->uploadArticleThumbnail($imageUrl, $author, $token, $account);
 
                 if ($thumbnail !== null) {
                     $article['thumbnail'] = $thumbnail;
@@ -279,7 +279,7 @@ class LinkedInConnector implements PublishConnector
         return $scheme.'://'.$host.$directory.'/'.$url;
     }
 
-    private function uploadArticleThumbnail(string $url, string $author, string $token): ?string
+    private function uploadArticleThumbnail(string $url, string $author, string $token, ConnectedAccount $account): ?string
     {
         try {
             $image = $this->http->timeout(10)->connectTimeout(3)->get($url);
@@ -294,6 +294,8 @@ class LinkedInConnector implements PublishConnector
                 ->acceptJson()
                 ->post(self::IMAGES_URL, ['initializeUploadRequest' => ['owner' => $author]]);
 
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $register);
+
             if ($register->failed()) {
                 return null;
             }
@@ -305,6 +307,8 @@ class LinkedInConnector implements PublishConnector
                 ->withToken($token)
                 ->withBody($image->body(), $image->header('Content-Type') ?: 'image/jpeg')
                 ->put($uploadUrl);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $upload);
 
             return $upload->failed() || $urn === '' ? null : $urn;
         } catch (Throwable) {
