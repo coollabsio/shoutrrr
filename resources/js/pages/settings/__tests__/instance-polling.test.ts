@@ -1,18 +1,80 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
-const source = readFileSync(
-    resolve(process.cwd(), 'resources/js/pages/settings/instance-polling.tsx'),
-    'utf8',
-);
+import {
+    pollingWithMinutes,
+    pollingWithPlatformEnabled,
+    type PollingSettings,
+} from '../instance-polling';
+
+const settings: PollingSettings = {
+    engagement: {
+        x: 15,
+        bluesky: 30,
+        linkedin: 60,
+        enabled: {
+            x: true,
+            bluesky: true,
+            linkedin: true,
+        },
+    },
+    post_metrics: {
+        x: 120,
+        bluesky: 240,
+        linkedin: 360,
+        enabled: {
+            x: true,
+            bluesky: false,
+            linkedin: true,
+        },
+    },
+    account_metrics: {
+        x: 720,
+        bluesky: 1440,
+        linkedin: 2880,
+        enabled: {
+            x: false,
+            bluesky: true,
+            linkedin: true,
+        },
+    },
+};
 
 describe('instance polling settings', () => {
-    it('autosaves platform toggles separately from interval edits', () => {
-        expect(source).toContain('function setPlatformEnabled');
-        expect(source).toContain('router.put');
-        expect(source).toContain('onEnabledChange={setPlatformEnabled}');
-        expect(source).toContain('onChange={setMinutes}');
+    it('updates interval minutes without changing enabled platforms', () => {
+        expect(pollingWithMinutes(settings, 'engagement', 'x', '45')).toEqual({
+            ...settings,
+            engagement: {
+                ...settings.engagement,
+                x: 45,
+            },
+        });
+
+        expect(pollingWithMinutes(settings, 'engagement', 'x', '')).toEqual({
+            ...settings,
+            engagement: {
+                ...settings.engagement,
+                x: 0,
+            },
+        });
+    });
+
+    it('updates platform enabled state without changing interval minutes', () => {
+        expect(
+            pollingWithPlatformEnabled(
+                settings,
+                'post_metrics',
+                'bluesky',
+                true,
+            ),
+        ).toEqual({
+            ...settings,
+            post_metrics: {
+                ...settings.post_metrics,
+                enabled: {
+                    ...settings.post_metrics.enabled,
+                    bluesky: true,
+                },
+            },
+        });
     });
 });

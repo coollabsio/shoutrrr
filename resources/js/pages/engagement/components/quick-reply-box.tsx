@@ -9,7 +9,7 @@ import type { MediaView, PlatformName } from '@/types/compose';
 import { useReplyMedia } from './use-reply-media';
 
 const LIMITS: Record<string, number> = { x: 280, bluesky: 300, linkedin: 3000 };
-export const QUICK_REPLY_SEND_SHORTCUT = '⌘↵';
+export const QUICK_REPLY_SEND_SHORTCUT = '⌘/Ctrl↵';
 
 type Props = {
     replyId: string;

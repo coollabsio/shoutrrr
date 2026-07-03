@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { remainingXPostLabel } from '../subscription';
+
 const source = () =>
     readFileSync(
         resolve(
@@ -55,6 +57,14 @@ describe('subscription checkout forms', () => {
         expect(subscriptionPage).toContain('monthlyXPostRemaining');
         expect(subscriptionPage).toContain('unlimited publishes to');
         expect(subscriptionPage).toContain('every other platform');
-        expect(subscriptionPage).toContain('X/Twitter publish requests');
+        expect(subscriptionPage).toContain('X/Twitter');
+        expect(subscriptionPage).toContain('publish requests each month');
+    });
+
+    it('labels remaining X posts as unlimited when the plan has no monthly limit', () => {
+        expect(remainingXPostLabel(null, 10)).toBe('Unlimited remaining');
+        expect(remainingXPostLabel(null, null)).toBe('Unlimited remaining');
+        expect(remainingXPostLabel(100, null)).toBe('Unlimited remaining');
+        expect(remainingXPostLabel(100, 25)).toBe('25 remaining');
     });
 });

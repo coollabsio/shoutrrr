@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Exceptions\CannotDeleteInitialWorkspace;
 use Database\Factories\WorkspaceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -40,12 +41,10 @@ class Workspace extends Model
             $workspace->is_initial ??= ! static::query()->exists();
         });
 
-        static::deleting(function (Workspace $workspace): ?bool {
+        static::deleting(function (Workspace $workspace): void {
             if ($workspace->is_initial && (bool) config('subscriptions.enabled')) {
-                return false;
+                throw new CannotDeleteInitialWorkspace;
             }
-
-            return null;
         });
     }
 

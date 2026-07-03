@@ -23,3 +23,13 @@ it('shows disabled engagement platforms to end users', () => {
     expect(source).toContain('Reply polling is temporarily disabled for');
     expect(source).toContain('disabledPlatformLabels');
 });
+
+it('derives disabled platform labels from engagement enabled keys', () => {
+    const source = readFileSync(
+        resolve(import.meta.dirname, 'index.tsx'),
+        'utf8',
+    );
+
+    expect(source).not.toContain('const engagementPlatforms');
+    expect(source).toContain('Object.keys(enabled)');
+});

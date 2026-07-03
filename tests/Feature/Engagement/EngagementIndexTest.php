@@ -284,3 +284,28 @@ test('replies from another workspace are not visible', function (): void {
     // HasWorkspaceScope filters by Context workspace_id, so the foreign row must not be visible.
     expect(PostTargetReply::query()->where('text', 'foreign')->exists())->toBeFalse();
 });
+
+test('new replies persist the base reply conversation id', function (): void {
+    $post = Post::factory()->create(['workspace_id' => $this->workspace->id]);
+    $target = PostTarget::factory()->for($post)->create([
+        'platform' => Platform::Bluesky,
+        'remote_id' => 'at://root-post',
+    ]);
+
+    $base = PostTargetReply::factory()->for($target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'remote_reply_id' => 'at://base',
+        'parent_remote_id' => 'at://root-post',
+        'is_ours' => false,
+    ]);
+
+    $child = PostTargetReply::factory()->for($target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'remote_reply_id' => 'at://child',
+        'parent_remote_id' => $base->remote_reply_id,
+        'is_ours' => false,
+    ]);
+
+    expect($base->fresh()->conversation_remote_id)->toBe($base->remote_reply_id)
+        ->and($child->fresh()->conversation_remote_id)->toBe($base->remote_reply_id);
+});

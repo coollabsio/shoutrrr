@@ -89,6 +89,7 @@ type Props = {
         previous: string;
     };
     pricing_source: string;
+    pricing_currency: string;
     summaries: UsageSummary[];
     counters: UsageCounter[];
     error_events: UsageErrorEvent[];
@@ -110,6 +111,7 @@ export default function InstanceUsage({
     filters,
     comparison_periods,
     pricing_source,
+    pricing_currency,
     summaries,
     counters,
     error_events,
@@ -253,11 +255,13 @@ export default function InstanceUsage({
                             <TableCell>
                                 {formatMoney(
                                     summary.current_estimated_cost_usd,
+                                    pricing_currency,
                                 )}
                             </TableCell>
                             <TableCell>
                                 <CostDeltaBadge
                                     delta={summary.estimated_cost_delta_usd}
+                                    currency={pricing_currency}
                                 />
                             </TableCell>
                             <TableCell>{summary.current_event_count}</TableCell>
@@ -306,6 +310,7 @@ export default function InstanceUsage({
                                 {counter.pricing
                                     ? formatMoney(
                                           counter.pricing.estimated_cost_usd,
+                                          pricing_currency,
                                       )
                                     : '—'}
                             </TableCell>
@@ -313,6 +318,7 @@ export default function InstanceUsage({
                                 {counter.pricing
                                     ? `${counter.pricing.label} @ ${formatMoney(
                                           counter.pricing.unit_cost_usd,
+                                          pricing_currency,
                                       )}`
                                     : 'Unmapped'}
                             </TableCell>
@@ -432,7 +438,13 @@ function DeltaBadge({
     );
 }
 
-function CostDeltaBadge({ delta }: { delta: number }) {
+function CostDeltaBadge({
+    delta,
+    currency,
+}: {
+    delta: number;
+    currency: string;
+}) {
     if (delta === 0) {
         return <Badge variant="outline">No change</Badge>;
     }
@@ -442,15 +454,15 @@ function CostDeltaBadge({ delta }: { delta: number }) {
     return (
         <Badge variant={delta > 0 ? 'warning' : 'success'}>
             {sign}
-            {formatMoney(delta)}
+            {formatMoney(delta, currency)}
         </Badge>
     );
 }
 
-function formatMoney(value: number) {
+export function formatMoney(value: number, currency: string) {
     return new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: 'USD',
+        currency,
         minimumFractionDigits: value === 0 ? 2 : 3,
         maximumFractionDigits: 3,
     }).format(value);

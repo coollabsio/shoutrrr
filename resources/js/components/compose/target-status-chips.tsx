@@ -111,12 +111,12 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
                             <span className="min-w-0 flex-1 truncate text-destructive/90">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <span
-                                            tabIndex={0}
-                                            className="inline-block max-w-full cursor-help truncate underline decoration-destructive/40 decoration-dotted underline-offset-2"
+                                        <button
+                                            type="button"
+                                            className="inline-block max-w-full cursor-help truncate border-0 bg-transparent p-0 text-left font-[inherit] text-inherit underline decoration-destructive/40 decoration-dotted underline-offset-2"
                                         >
                                             {errorMessage}
-                                        </span>
+                                        </button>
                                     </TooltipTrigger>
                                     <TooltipContent
                                         side="top"

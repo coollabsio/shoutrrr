@@ -37,6 +37,15 @@ type Props = {
     canAccessPortal: boolean;
 };
 
+export function remainingXPostLabel(
+    monthlyXPostLimit: number | null,
+    monthlyXPostRemaining: number | null,
+): string {
+    return monthlyXPostLimit === null || monthlyXPostRemaining === null
+        ? 'Unlimited remaining'
+        : `${monthlyXPostRemaining} remaining`;
+}
+
 export default function Subscription({
     subscribed,
     monthlyPrice,
@@ -50,12 +59,10 @@ export default function Subscription({
         monthlyXPostLimit !== null && monthlyXPostLimit > 0
             ? Math.min(100, (monthlyXPostUsed / monthlyXPostLimit) * 100)
             : 0;
-    const remainingLabel =
-        monthlyXPostRemaining === null ||
-        (monthlyXPostLimit !== null &&
-            monthlyXPostRemaining > monthlyXPostLimit)
-            ? 'Unlimited remaining'
-            : `${monthlyXPostRemaining} remaining`;
+    const remainingLabel = remainingXPostLabel(
+        monthlyXPostLimit,
+        monthlyXPostRemaining,
+    );
 
     return (
         <>

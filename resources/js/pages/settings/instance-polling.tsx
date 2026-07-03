@@ -20,7 +20,7 @@ type PollingGroup = Record<PlatformName, number> & {
     enabled: Record<PlatformName, boolean>;
 };
 
-type PollingSettings = {
+export type PollingSettings = {
     engagement: PollingGroup;
     post_metrics: PollingGroup;
     account_metrics: PollingGroup;
@@ -35,6 +35,39 @@ const platforms: { key: PlatformName; label: string }[] = [
     { key: 'bluesky', label: 'Bluesky' },
     { key: 'linkedin', label: 'LinkedIn' },
 ];
+
+export function pollingWithMinutes(
+    settings: PollingSettings,
+    group: keyof PollingSettings,
+    platform: PlatformName,
+    value: string,
+): PollingSettings {
+    return {
+        ...settings,
+        [group]: {
+            ...settings[group],
+            [platform]: Number.parseInt(value || '0', 10),
+        },
+    };
+}
+
+export function pollingWithPlatformEnabled(
+    settings: PollingSettings,
+    group: keyof PollingSettings,
+    platform: PlatformName,
+    enabled: boolean,
+): PollingSettings {
+    return {
+        ...settings,
+        [group]: {
+            ...settings[group],
+            enabled: {
+                ...settings[group].enabled,
+                [platform]: enabled,
+            },
+        },
+    };
+}
 
 export default function InstancePolling({ settings }: Props) {
     const { data, setData, put, processing, errors } =
@@ -53,10 +86,7 @@ export default function InstancePolling({ settings }: Props) {
         platform: PlatformName,
         value: string,
     ) {
-        setData(group, {
-            ...data[group],
-            [platform]: Number.parseInt(value || '0', 10),
-        });
+        setData(group, pollingWithMinutes(data, group, platform, value)[group]);
     }
 
     function setPlatformEnabled(
@@ -64,19 +94,14 @@ export default function InstancePolling({ settings }: Props) {
         platform: PlatformName,
         enabled: boolean,
     ) {
-        const nextGroup = {
-            ...data[group],
-            enabled: {
-                ...data[group].enabled,
-                [platform]: enabled,
-            },
-        };
-        const nextData = {
-            ...data,
-            [group]: nextGroup,
-        };
+        const nextData = pollingWithPlatformEnabled(
+            data,
+            group,
+            platform,
+            enabled,
+        );
 
-        setData(group, nextGroup);
+        setData(group, nextData[group]);
 
         router.put(InstanceSettingsController.updatePolling().url, nextData, {
             preserveScroll: true,

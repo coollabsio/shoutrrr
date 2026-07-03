@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\CannotDeleteInitialWorkspace;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
@@ -23,6 +24,21 @@ test('workspace settings disables deletion for the last workspace', function () 
     $this->actingAs($owner)->get(route('settings.workspace'))
         ->assertInertia(fn ($page) => $page
             ->where('canDelete', false)
+        );
+});
+
+test('workspace settings disables deletion for the initial workspace on a cloud instance', function () {
+    config(['subscriptions.enabled' => true]);
+    $workspace = Workspace::factory()->create();
+    $other = Workspace::factory()->create();
+    $owner = User::factory()->create(['current_workspace_id' => $workspace->id]);
+    WorkspaceMembership::factory()->owner()->create(['workspace_id' => $workspace->id, 'user_id' => $owner->id]);
+    WorkspaceMembership::factory()->create(['workspace_id' => $other->id, 'user_id' => $owner->id]);
+
+    $this->actingAs($owner)->get(route('settings.workspace'))
+        ->assertInertia(fn ($page) => $page
+            ->where('canDelete', false)
+            ->where('deleteDisabledReason', 'The initial workspace of this instance cannot be deleted.')
         );
 });
 
@@ -70,8 +86,8 @@ test('the initial workspace cannot be deleted on a cloud instance', function () 
 
     $this->assertDatabaseHas('workspaces', ['id' => $workspace->id]);
 
-    // Model-level guard holds even when the controller is bypassed.
-    expect($workspace->refresh()->delete())->toBeFalse();
+    // Model-level guard is loud when the controller is bypassed.
+    expect(fn () => $workspace->refresh()->delete())->toThrow(CannotDeleteInitialWorkspace::class);
     $this->assertDatabaseHas('workspaces', ['id' => $workspace->id]);
 });
 

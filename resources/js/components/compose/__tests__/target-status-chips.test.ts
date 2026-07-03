@@ -1,6 +1,8 @@
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+/** @vitest-environment jsdom */
+
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
     type ChipTarget,
@@ -17,46 +19,135 @@ const failedTarget = (overrides: Partial<ChipTarget> = {}): ChipTarget => ({
     ...overrides,
 });
 
-const render = (targets: ChipTarget[]) =>
-    renderToStaticMarkup(
-        createElement(
-            TooltipProvider,
-            null,
-            createElement(TargetStatusChips, { targets }),
-        ),
-    );
+let mountedRoot: Root | null = null;
+let mountedContainer: HTMLDivElement | null = null;
+
+beforeAll(() => {
+    globalThis.ResizeObserver = class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+    };
+
+    globalThis.PointerEvent = MouseEvent as typeof PointerEvent;
+});
+
+afterEach(() => {
+    if (mountedRoot) {
+        act(() => mountedRoot?.unmount());
+    }
+
+    mountedContainer?.remove();
+    mountedRoot = null;
+    mountedContainer = null;
+});
+
+const renderChips = (targets: ChipTarget[]): HTMLDivElement => {
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    mountedContainer = container;
+    mountedRoot = createRoot(container);
+
+    act(() => {
+        mountedRoot?.render(
+            createElement(
+                TooltipProvider,
+                null,
+                createElement(TargetStatusChips, { targets }),
+            ),
+        );
+    });
+
+    return container;
+};
+
+const waitForElement = async (selector: string): Promise<Element> => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+        const element = document.querySelector(selector);
+
+        if (element) {
+            return element;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    throw new Error(`Could not find ${selector}`);
+};
+
+const tooltipContent = (): Element | null =>
+    document.querySelector('[data-slot="tooltip-content"]');
 
 describe('target status chips', () => {
-    it('shows the failure message through a focusable tooltip trigger', () => {
-        const html = render([failedTarget()]);
+    it('shows the failure message in a readable tooltip on focus', async () => {
+        const container = renderChips([failedTarget()]);
+        const trigger = container.querySelector('button');
 
-        // The trigger is a real Tooltip trigger, keyboard-focusable, with a
-        // help cursor — not a native `title` tooltip the reviewer flagged.
-        expect(html).toContain('data-slot="tooltip-trigger"');
-        expect(html).toContain('tabindex="0"');
-        expect(html).toContain('cursor-help');
-        expect(html).not.toContain('title=');
+        act(() => trigger?.focus());
 
-        // The visible trigger carries the failure text (with the attempt
-        // prefix) so it is readable on hover/focus.
-        expect(html).toContain('Attempt 2: Remote server rejected the post');
+        await waitForElement('[role="tooltip"]');
+
+        expect(tooltipContent()?.textContent).toContain(
+            'Attempt 2: Remote server rejected the post',
+        );
+        expect(tooltipContent()?.classList.contains('whitespace-normal')).toBe(
+            true,
+        );
+        expect(document.activeElement?.textContent).toBe(
+            'Attempt 2: Remote server rejected the post',
+        );
+        expect(document.activeElement?.tagName).toBe('BUTTON');
     });
 
-    it('omits the attempt prefix when there were no recorded attempts', () => {
-        const html = render([
+    it('shows the failure message in a readable tooltip on hover', async () => {
+        const container = renderChips([failedTarget()]);
+        const trigger = container.querySelector('button');
+
+        act(() => {
+            trigger?.dispatchEvent(
+                new PointerEvent('pointermove', {
+                    bubbles: true,
+                    pointerType: 'mouse',
+                }),
+            );
+        });
+
+        await waitForElement('[role="tooltip"]');
+
+        expect(tooltipContent()?.textContent).toContain(
+            'Attempt 2: Remote server rejected the post',
+        );
+    });
+
+    it('omits the attempt prefix when there were no recorded attempts', async () => {
+        const container = renderChips([
             failedTarget({ attempts: 0, error_message: 'Network timeout' }),
         ]);
+        const trigger = container.querySelector('button');
 
-        expect(html).toContain('Network timeout');
-        expect(html).not.toContain('Attempt');
+        act(() => {
+            trigger?.dispatchEvent(
+                new PointerEvent('pointermove', {
+                    bubbles: true,
+                    pointerType: 'mouse',
+                }),
+            );
+        });
+
+        await waitForElement('[role="tooltip"]');
+
+        expect(tooltipContent()?.textContent).toContain('Network timeout');
+        expect(tooltipContent()?.textContent).not.toContain('Attempt');
     });
 
-    it('renders no failure tooltip for non-failed targets', () => {
-        const html = render([
+    it('renders no failure tooltip for non-failed targets', async () => {
+        renderChips([
             failedTarget({ status: 'published', error_message: null }),
         ]);
 
-        expect(html).not.toContain('data-slot="tooltip-trigger"');
-        expect(html).not.toContain('cursor-help');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.querySelector('[role="tooltip"]')).toBeNull();
     });
 });

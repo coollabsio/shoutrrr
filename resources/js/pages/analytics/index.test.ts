@@ -7,6 +7,7 @@ const source = readFileSync(resolve(import.meta.dirname, 'index.tsx'), 'utf8');
 
 describe('analytics disabled metric notices', () => {
     it('shows partial platform disables where metrics are used', () => {
+        expect(source).toContain('{!metricsDisabled && (');
         expect(source).toContain('AnalyticsPollingBanner');
         expect(source).toContain('Some analytics are temporarily disabled');
         expect(source).toContain(
@@ -14,6 +15,13 @@ describe('analytics disabled metric notices', () => {
         );
         expect(source).toContain('Some post metrics are temporarily disabled');
         expect(source).toContain('account metrics temporarily disabled');
+    });
+
+    it('derives disabled platform labels from the polling payload keys', () => {
+        expect(source).not.toContain(
+            "const analyticsPlatforms: PlatformName[] = ['x', 'bluesky', 'linkedin'];",
+        );
+        expect(source).toContain('Object.keys(enabled) as PlatformName[]');
     });
 });
 

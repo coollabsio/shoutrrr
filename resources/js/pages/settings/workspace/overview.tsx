@@ -36,6 +36,7 @@ type Props = {
     canManage: boolean;
     isOwner: boolean;
     canDelete: boolean;
+    deleteDisabledReason: string | null;
     timezone: string;
     timezones: string[];
 };
@@ -45,6 +46,7 @@ export default function WorkspaceOverview({
     canManage,
     isOwner,
     canDelete,
+    deleteDisabledReason,
     timezone,
     timezones,
 }: Props) {
@@ -266,9 +268,9 @@ export default function WorkspaceOverview({
                                         ? 'Deleting...'
                                         : 'Delete workspace'}
                                 </Button>
-                                {!canDelete && (
+                                {deleteDisabledReason && (
                                     <p className="max-w-48 text-xs text-muted-foreground sm:text-right">
-                                        You can’t delete your only workspace.
+                                        {deleteDisabledReason}
                                     </p>
                                 )}
                             </div>

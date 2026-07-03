@@ -25,6 +25,7 @@ use Override;
  * @property string $remote_reply_id
  * @property string|null $remote_cid
  * @property string|null $parent_remote_id
+ * @property string|null $conversation_remote_id
  * @property string $author_handle
  * @property string|null $author_name
  * @property string|null $author_avatar_url
@@ -46,6 +47,7 @@ use Override;
     'remote_reply_id',
     'remote_cid',
     'parent_remote_id',
+    'conversation_remote_id',
     'author_handle',
     'author_name',
     'author_avatar_url',
@@ -66,6 +68,39 @@ class PostTargetReply extends Model
     use HasFactory, HasUuids;
 
     use HasWorkspaceScope;
+
+    protected static function booted(): void
+    {
+        static::saving(function (PostTargetReply $reply): void {
+            if ($reply->conversation_remote_id !== null && ! $reply->isDirty('parent_remote_id')) {
+                return;
+            }
+
+            $reply->conversation_remote_id = $reply->resolveConversationRemoteId();
+        });
+    }
+
+    private function resolveConversationRemoteId(): string
+    {
+        $targetRemoteId = PostTarget::withoutGlobalScopes()
+            ->whereKey($this->post_target_id)
+            ->value('remote_id');
+
+        if ($this->parent_remote_id === null || $this->parent_remote_id === $targetRemoteId) {
+            return $this->remote_reply_id;
+        }
+
+        $parent = self::withoutGlobalScopes()
+            ->where('post_target_id', $this->post_target_id)
+            ->where('remote_reply_id', $this->parent_remote_id)
+            ->first(['id', 'remote_reply_id', 'conversation_remote_id']);
+
+        if ($parent === null) {
+            return $this->remote_reply_id;
+        }
+
+        return $parent->conversation_remote_id ?? $parent->remote_reply_id;
+    }
 
     /**
      * @return array<string, string>

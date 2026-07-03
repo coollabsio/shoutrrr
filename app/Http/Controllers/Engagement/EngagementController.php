@@ -18,6 +18,7 @@ use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
 use App\Support\ReplyListItem;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +26,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -135,8 +137,9 @@ class EngagementController extends Controller
 
     public function markRead(Request $request, PostTargetReply $reply): RedirectResponse|Response
     {
-        $this->inboundRepliesForBaseThread($reply)
-            ->each(fn (PostTargetReply $threadReply): bool => $threadReply->forceFill(['read_at' => now()])->save());
+        PostTargetReply::query()
+            ->whereIn('id', $this->inboundRepliesForBaseThread($reply)->pluck('id'))
+            ->update(['read_at' => now()]);
 
         if ($request->expectsJson()) {
             return response()->noContent();
@@ -147,8 +150,9 @@ class EngagementController extends Controller
 
     public function archive(Request $request, PostTargetReply $reply): RedirectResponse|Response
     {
-        $this->inboundRepliesForBaseThread($reply)
-            ->each(fn (PostTargetReply $threadReply): bool => $threadReply->forceFill(['status' => ReplyStatus::Archived->value])->save());
+        PostTargetReply::query()
+            ->whereIn('id', $this->inboundRepliesForBaseThread($reply)->pluck('id'))
+            ->update(['status' => ReplyStatus::Archived->value]);
 
         if ($request->expectsJson()) {
             return response()->noContent();
@@ -158,58 +162,87 @@ class EngagementController extends Controller
     }
 
     /**
-     * @param  callable(mixed): mixed  $apply
-     * @return LengthAwarePaginator<int, array<string, mixed>>
+     * @param  callable(Builder<PostTargetReply>): Builder<PostTargetReply>  $apply
+     * @return LengthAwarePaginator<int, non-empty-array<string, mixed>>
      */
     private function conversationPaginator(callable $apply, Request $request): LengthAwarePaginator
     {
-        $inboundReplies = $apply(PostTargetReply::query()->with(['target.post', 'target.account']))
-            ->orderByDesc('remote_created_at')
+        $perPage = 25;
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $groupsQuery = $apply(PostTargetReply::query())
+            ->selectRaw('post_target_id, conversation_remote_id')
+            ->selectRaw('max(remote_created_at) as latest_remote_created_at')
+            ->selectRaw('count(*) as reply_count')
+            ->selectRaw('sum(case when read_at is null then 1 else 0 end) as unread_count')
+            ->groupBy('post_target_id', 'conversation_remote_id');
+
+        $total = DB::query()
+            ->fromSub((clone $groupsQuery)->toBase(), 'conversation_groups')
+            ->count();
+
+        $groups = (clone $groupsQuery)
+            ->orderByDesc('latest_remote_created_at')
+            ->offset(($page - 1) * $perPage)
+            ->limit($perPage)
             ->get();
 
-        $targetReplies = PostTargetReply::query()
-            ->whereIn('post_target_id', $inboundReplies->pluck('post_target_id')->unique()->values())
-            ->with(['target.post', 'target.account'])
-            ->get();
+        $latestReplies = $groups->isEmpty()
+            ? new EloquentCollection
+            : $apply(PostTargetReply::query()->with(['target.post', 'target.account']))
+                ->where(function ($query) use ($groups): void {
+                    foreach ($groups as $group) {
+                        $query->orWhere(function ($query) use ($group): void {
+                            $query
+                                ->where('post_target_id', $group->post_target_id)
+                                ->where('remote_created_at', $group->getAttribute('latest_remote_created_at'));
 
-        $items = $inboundReplies
-            ->groupBy(fn (PostTargetReply $reply): string => $this->conversationKeyFor($reply, $targetReplies))
-            ->map(function ($group, string $conversationKey): array {
-                /** @var PostTargetReply $latestReply */
-                $latestReply = $group->sortByDesc('remote_created_at')->first();
-                $unreadCount = $group->where('read_at', null)->count();
+                            if ($group->conversation_remote_id === null) {
+                                $query->whereNull('conversation_remote_id');
+
+                                return;
+                            }
+
+                            $query->where('conversation_remote_id', $group->conversation_remote_id);
+                        });
+                    }
+                })
+                ->orderByDesc('remote_created_at')
+                ->get()
+                ->keyBy(fn (PostTargetReply $reply): string => $reply->post_target_id.':'.$reply->conversation_remote_id);
+
+        $items = $groups
+            ->map(function (PostTargetReply $group) use ($latestReplies): ?array {
+                $latestReply = $latestReplies->get($group->post_target_id.':'.$group->conversation_remote_id);
+
+                if (! $latestReply instanceof PostTargetReply) {
+                    return null;
+                }
+
+                $unreadCount = (int) $group->getAttribute('unread_count');
 
                 return [
                     ...ReplyListItem::make($latestReply),
-                    'conversation_key' => $conversationKey,
-                    'reply_count' => $group->count(),
+                    'conversation_key' => $this->conversationKeyFor($latestReply),
+                    'reply_count' => (int) $group->getAttribute('reply_count'),
                     'unread_count' => $unreadCount,
                     'is_read' => $unreadCount === 0,
                 ];
             })
-            ->sortByDesc('remote_created_at')
+            ->filter()
             ->values();
 
-        $perPage = 25;
-        $page = LengthAwarePaginator::resolveCurrentPage();
-
         return new LengthAwarePaginator(
-            $items->forPage($page, $perPage)->values(),
-            $items->count(),
+            $items,
+            $total,
             $perPage,
             $page,
             ['path' => $request->url(), 'query' => $request->query()],
         );
     }
 
-    /**
-     * @param  EloquentCollection<int, PostTargetReply>  $targetReplies
-     */
-    private function conversationKeyFor(PostTargetReply $reply, EloquentCollection $targetReplies): string
+    private function conversationKeyFor(PostTargetReply $reply): string
     {
-        $baseReply = $this->baseReplyFor($reply, $targetReplies);
-
-        return $reply->post_target_id.':'.$baseReply->remote_reply_id;
+        return $reply->post_target_id.':'.($reply->conversation_remote_id ?? $reply->remote_reply_id);
     }
 
     /**
@@ -217,7 +250,14 @@ class EngagementController extends Controller
      */
     private function baseReplyFor(PostTargetReply $reply, EloquentCollection $targetReplies): PostTargetReply
     {
-        $byRemoteId = $targetReplies->keyBy('remote_reply_id');
+        static $indexCache = null;
+
+        $indexCache ??= new \WeakMap;
+        if (! isset($indexCache[$targetReplies])) {
+            $indexCache[$targetReplies] = $targetReplies->keyBy('remote_reply_id');
+        }
+
+        $byRemoteId = $indexCache[$targetReplies];
         $rootRemoteId = $reply->target?->remote_id;
         $cursor = $reply;
         $visited = [];

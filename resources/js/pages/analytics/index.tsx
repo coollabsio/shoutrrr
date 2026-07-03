@@ -39,10 +39,8 @@ function allDisabled(enabled: Record<string, boolean>) {
     return Object.values(enabled).every((value) => !value);
 }
 
-const analyticsPlatforms: PlatformName[] = ['x', 'bluesky', 'linkedin'];
-
 function disabledPlatformLabels(enabled: Record<PlatformName, boolean>) {
-    return analyticsPlatforms
+    return (Object.keys(enabled) as PlatformName[])
         .filter((platform) => !enabled[platform])
         .map((platform) => platformLabel(platform));
 }
@@ -255,12 +253,16 @@ export default function AnalyticsIndex({
                     </Empty>
                 )}
 
-                <AnalyticsPollingBanner
-                    disabledAccountMetricPlatforms={
-                        disabledAccountMetricPlatforms
-                    }
-                    disabledPostMetricPlatforms={disabledPostMetricPlatforms}
-                />
+                {!metricsDisabled && (
+                    <AnalyticsPollingBanner
+                        disabledAccountMetricPlatforms={
+                            disabledAccountMetricPlatforms
+                        }
+                        disabledPostMetricPlatforms={
+                            disabledPostMetricPlatforms
+                        }
+                    />
+                )}
 
                 {/* Follower timeline — the signature piece */}
                 <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm ring-1 ring-foreground/5 dark:ring-foreground/10">

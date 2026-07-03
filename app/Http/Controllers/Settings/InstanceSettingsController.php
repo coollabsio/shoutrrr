@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Enums\InstanceRole;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\StoreInstanceOwnerRequest;
 use App\Http\Requests\Settings\UpdateInstancePollingSettingsRequest;
@@ -164,9 +165,9 @@ class InstanceSettingsController extends Controller
                     'current_estimated_cost_usd' => $currentEstimatedCostUsd,
                     'previous_estimated_cost_usd' => $previousEstimatedCostUsd,
                     'estimated_cost_delta_usd' => round($currentEstimatedCostUsd - $previousEstimatedCostUsd, 6),
-                    'publish_quota' => (int) $currentRows->where('category', 'publish')->sum('total_quota'),
-                    'external_api_quota' => (int) $currentRows->where('category', 'external_api')->sum('total_quota'),
-                    'api_request_quota' => (int) $currentRows->where('category', 'api_request')->sum('total_quota'),
+                    'publish_quota' => (int) $currentRows->where('category', UsageCategory::Publish->value)->sum('total_quota'),
+                    'external_api_quota' => (int) $currentRows->where('category', UsageCategory::ExternalApi->value)->sum('total_quota'),
+                    'api_request_quota' => (int) $currentRows->where('category', UsageCategory::ApiRequest->value)->sum('total_quota'),
                     'posts_quota' => (int) $currentRows->where('operation', UsageOperation::POST)->sum('total_quota'),
                 ];
             })
@@ -249,6 +250,7 @@ class InstanceSettingsController extends Controller
                 'previous' => $previousPeriodStart,
             ],
             'pricing_source' => config('usage_pricing.source_url'),
+            'pricing_currency' => config('usage_pricing.platforms.x.currency', 'USD'),
             'summaries' => $summaries,
             'counters' => $counters,
             'error_events' => $errorEvents,

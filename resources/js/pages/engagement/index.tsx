@@ -55,10 +55,12 @@ type PageProps = {
     engagementEnabled: Record<PlatformName, boolean>;
 };
 
-const engagementPlatforms: PlatformName[] = ['x', 'bluesky', 'linkedin'];
+function platformKeys(enabled: Record<PlatformName, boolean>): PlatformName[] {
+    return Object.keys(enabled) as PlatformName[];
+}
 
 function disabledPlatformLabels(enabled: Record<PlatformName, boolean>) {
-    return engagementPlatforms
+    return platformKeys(enabled)
         .filter((platform) => !enabled[platform])
         .map((platform) => platformLabel(platform));
 }
@@ -406,7 +408,7 @@ export default function EngagementIndex({
     const items = replies?.data ?? [];
     const disabledPlatforms = disabledPlatformLabels(engagementEnabled);
     const allEngagementDisabled =
-        disabledPlatforms.length === engagementPlatforms.length;
+        disabledPlatforms.length === platformKeys(engagementEnabled).length;
     const filtered =
         filters.unread ||
         filters.archived ||

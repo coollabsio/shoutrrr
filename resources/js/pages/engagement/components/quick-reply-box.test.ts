@@ -16,8 +16,8 @@ vi.mock('./use-reply-media', () => ({
 }));
 
 describe('QUICK_REPLY_SEND_SHORTCUT', () => {
-    it('shows command enter as the only send shortcut', () => {
-        expect(QUICK_REPLY_SEND_SHORTCUT).toBe('⌘↵');
+    it('shows both supported send shortcuts', () => {
+        expect(QUICK_REPLY_SEND_SHORTCUT).toBe('⌘/Ctrl↵');
     });
 
     it('renders the shortcut on the reply button', () => {

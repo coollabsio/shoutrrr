@@ -111,6 +111,35 @@ test('it skips only disabled engagement platforms', function () {
     Queue::assertPushed(FetchPostTargetReplies::class, 1);
 });
 
+test('it does not dispatch fetch jobs when all engagement platforms are disabled', function () {
+    Queue::fake();
+    app(InstanceSettings::class)->update([
+        'engagement_polling_enabled' => [
+            'x' => false,
+            'bluesky' => false,
+            'linkedin' => false,
+        ],
+    ]);
+
+    foreach (Platform::cases() as $platform) {
+        $account = ConnectedAccount::factory()->create([
+            'platform' => $platform,
+            'status' => ConnectedAccountStatus::Active,
+        ]);
+
+        PostTarget::factory()->for($account, 'account')->create([
+            'platform' => $platform,
+            'status' => PostTargetStatus::Published,
+            'remote_id' => "{$platform->value}-root",
+            'posted_at' => now()->subDays(2),
+        ]);
+    }
+
+    $this->artisan('engagement:dispatch-due')->assertSuccessful();
+
+    Queue::assertNothingPushed();
+});
+
 test('it dispatches targets checked before the platform polling interval', function () {
     Queue::fake();
     app(InstanceSettings::class)->update([

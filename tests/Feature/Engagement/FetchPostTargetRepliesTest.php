@@ -90,3 +90,18 @@ test('a failed fetch does not stamp reply_fetched_at', function () {
 
     expect($target->fresh()->reply_fetched_at)->toBeNull();
 });
+
+test('the job stores the base conversation id when fetched replies are out of order', function (): void {
+    $target = targetWithPost();
+
+    fakeFetch([
+        new FetchedReply('at://child', 'c2', 'at://base', 'fan', 'Fan', null, 'child', CarbonImmutable::now()),
+        new FetchedReply('at://base', 'c1', 'at://root', 'fan', 'Fan', null, 'base', CarbonImmutable::now()->subMinute()),
+    ]);
+
+    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+
+    $child = PostTargetReply::withoutGlobalScopes()->where('remote_reply_id', 'at://child')->firstOrFail();
+
+    expect($child->conversation_remote_id)->toBe('at://base');
+});

@@ -31,16 +31,16 @@ class AnalyticsController extends Controller
             ...$this->buildPayload($days),
             'rangeDays' => $days,
             'polling' => [
-                'post_metrics_enabled' => [
-                    'x' => $settings->postMetricsPollingEnabled(Platform::X),
-                    'bluesky' => $settings->postMetricsPollingEnabled(Platform::Bluesky),
-                    'linkedin' => $settings->postMetricsPollingEnabled(Platform::LinkedIn),
-                ],
-                'account_metrics_enabled' => [
-                    'x' => $settings->accountMetricsPollingEnabled(Platform::X),
-                    'bluesky' => $settings->accountMetricsPollingEnabled(Platform::Bluesky),
-                    'linkedin' => $settings->accountMetricsPollingEnabled(Platform::LinkedIn),
-                ],
+                'post_metrics_enabled' => collect(Platform::cases())
+                    ->mapWithKeys(fn (Platform $platform): array => [
+                        $platform->value => $settings->postMetricsPollingEnabled($platform),
+                    ])
+                    ->all(),
+                'account_metrics_enabled' => collect(Platform::cases())
+                    ->mapWithKeys(fn (Platform $platform): array => [
+                        $platform->value => $settings->accountMetricsPollingEnabled($platform),
+                    ])
+                    ->all(),
             ],
         ]);
     }

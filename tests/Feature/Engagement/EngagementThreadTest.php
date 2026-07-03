@@ -3,6 +3,7 @@
 use App\Enums\Platform;
 use App\Enums\ReplyStatus;
 use App\Enums\WorkspaceRole;
+use App\Http\Controllers\Engagement\EngagementController;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostTarget;
@@ -10,7 +11,9 @@ use App\Models\PostTargetReply;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\DB;
 
 beforeEach(function (): void {
     $this->workspace = Workspace::factory()->create();
@@ -216,6 +219,68 @@ test('mark read marks all inbound replies in the base reply thread', function ()
         ->and($other->fresh()->read_at)->toBeNull();
 });
 
+test('mark read updates the base reply thread with a single bulk query', function (): void {
+    $this->target->forceFill(['remote_id' => 'at://root-post'])->save();
+
+    $first = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'remote_reply_id' => 'at://base',
+        'parent_remote_id' => 'at://root-post',
+        'read_at' => null,
+        'is_ours' => false,
+    ]);
+    $second = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'remote_reply_id' => 'at://child',
+        'parent_remote_id' => 'at://base',
+        'read_at' => null,
+        'is_ours' => false,
+    ]);
+
+    $updateQueries = [];
+    DB::listen(function ($query) use (&$updateQueries): void {
+        if (str_starts_with(strtolower($query->sql), 'update "post_target_replies"')) {
+            $updateQueries[] = $query->sql;
+        }
+    });
+
+    $this->postJson(route('engagement.read', $second))->assertNoContent();
+
+    expect($first->fresh()->read_at)->not->toBeNull()
+        ->and($second->fresh()->read_at)->not->toBeNull()
+        ->and($updateQueries)->toHaveCount(1);
+});
+
+test('archive updates the base reply thread with a single bulk query', function (): void {
+    $this->target->forceFill(['remote_id' => 'at://root-post'])->save();
+
+    $first = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'remote_reply_id' => 'at://base',
+        'parent_remote_id' => 'at://root-post',
+        'is_ours' => false,
+    ]);
+    $second = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'remote_reply_id' => 'at://child',
+        'parent_remote_id' => 'at://base',
+        'is_ours' => false,
+    ]);
+
+    $updateQueries = [];
+    DB::listen(function ($query) use (&$updateQueries): void {
+        if (str_starts_with(strtolower($query->sql), 'update "post_target_replies"')) {
+            $updateQueries[] = $query->sql;
+        }
+    });
+
+    $this->postJson(route('engagement.archive', $second))->assertNoContent();
+
+    expect($first->fresh()->status)->toBe(ReplyStatus::Archived)
+        ->and($second->fresh()->status)->toBe(ReplyStatus::Archived)
+        ->and($updateQueries)->toHaveCount(1);
+});
+
 test('a parent_remote_id cycle is bounded and does not hang', function (): void {
     $a = PostTargetReply::factory()->for($this->target, 'target')->create([
         'workspace_id' => $this->workspace->id,
@@ -236,4 +301,47 @@ test('a parent_remote_id cycle is bounded and does not hang', function (): void 
     // ancestors (A->B, capped by the visited-set) + self + direct children.
     expect($response->json('thread'))->toBeArray()
         ->and(count($response->json('thread')))->toBeLessThanOrEqual(4);
+});
+
+test('base reply lookup reuses the remote reply index for one collection', function (): void {
+    $this->target->forceFill(['remote_id' => 'at://root-post'])->save();
+
+    $base = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'remote_reply_id' => 'at://base',
+        'parent_remote_id' => 'at://root-post',
+    ]);
+    $ourReply = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'remote_reply_id' => 'at://ours',
+        'parent_remote_id' => $base->remote_reply_id,
+        'is_ours' => true,
+    ]);
+    $child = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'remote_reply_id' => 'at://child',
+        'parent_remote_id' => $ourReply->remote_reply_id,
+    ]);
+
+    $targetReplies = new class([$base, $ourReply, $child]) extends EloquentCollection
+    {
+        public int $keyByCalls = 0;
+
+        public function keyBy($keyBy)
+        {
+            $this->keyByCalls++;
+
+            return parent::keyBy($keyBy);
+        }
+    };
+
+    $method = new ReflectionMethod(EngagementController::class, 'baseReplyFor');
+    $method->setAccessible(true);
+
+    $controller = app(EngagementController::class);
+
+    expect($method->invoke($controller, $child, $targetReplies)->is($base))->toBeTrue();
+    expect($method->invoke($controller, $base, $targetReplies)->is($base))->toBeTrue();
+    expect($method->invoke($controller, $child, $targetReplies)->is($base))->toBeTrue();
+    expect($targetReplies->keyByCalls)->toBe(1);
 });

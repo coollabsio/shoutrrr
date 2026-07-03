@@ -224,6 +224,8 @@ test('instance usage can be filtered by platform', function () {
 });
 
 test('instance usage includes x pricing estimates', function () {
+    config(['usage_pricing.platforms.x.currency' => 'EUR']);
+
     $owner = User::factory()->instanceOwner()->create();
     $workspace = Workspace::factory()->create();
 
@@ -249,6 +251,7 @@ test('instance usage includes x pricing estimates', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('pricing_source', 'https://developer.x.com/#pricing')
+            ->where('pricing_currency', 'EUR')
             ->where('summaries.0.current_estimated_cost_usd', 0.03)
             ->where('summaries.0.previous_estimated_cost_usd', 0.015)
             ->where('summaries.0.estimated_cost_delta_usd', 0.015)
