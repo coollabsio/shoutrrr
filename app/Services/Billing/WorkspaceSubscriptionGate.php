@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
+use App\Enums\Platform;
 use App\Models\Workspace;
-use App\Models\XPostUsage;
-use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\Date;
+use App\Services\Usage\UsageMeter;
+use App\Support\UsageOperation;
 
 class WorkspaceSubscriptionGate
 {
+    public function __construct(private readonly UsageMeter $usageMeter) {}
+
     public function isEnabled(): bool
     {
         return (bool) config('subscriptions.enabled');
@@ -57,43 +59,17 @@ class WorkspaceSubscriptionGate
             return PHP_INT_MAX;
         }
 
-        $usage = $this->usageForCurrentPeriod($workspace);
-
-        return max(0, $this->monthlyXPostLimit() - $usage->used);
+        return max(0, $this->monthlyXPostLimit() - $this->currentXPostUsage($workspace));
     }
 
+    /**
+     * Current-period X publishes, read from the usage-metering counters that the X
+     * publish connector increments on every successful post. This replaces the old
+     * standalone x_post_usages table.
+     */
     public function currentXPostUsage(Workspace $workspace): int
     {
-        [$periodStart] = $this->currentMonthlyPeriod();
-
-        return (int) XPostUsage::query()
-            ->where('workspace_id', $workspace->id)
-            ->whereDate('period_start', $periodStart->toDateString())
-            ->value('used');
-    }
-
-    public function recordXPostRequest(Workspace $workspace, int $count = 1): XPostUsage
-    {
-        $usage = $this->usageForCurrentPeriod($workspace);
-        $usage->increment('used', $count);
-
-        return $usage->refresh();
-    }
-
-    private function usageForCurrentPeriod(Workspace $workspace): XPostUsage
-    {
-        [$periodStart, $periodEnd] = $this->currentMonthlyPeriod();
-
-        return XPostUsage::query()->firstOrCreate(
-            [
-                'workspace_id' => $workspace->id,
-                'period_start' => $periodStart,
-            ],
-            [
-                'period_end' => $periodEnd,
-                'used' => 0,
-            ],
-        );
+        return $this->usageMeter->currentPeriodCount($workspace->id, Platform::X, UsageOperation::POST);
     }
 
     private function isFirstWorkspace(Workspace $workspace): bool
@@ -104,16 +80,5 @@ class WorkspaceSubscriptionGate
             ->value('id');
 
         return $firstWorkspaceId === $workspace->id;
-    }
-
-    /**
-     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
-     */
-    private function currentMonthlyPeriod(): array
-    {
-        $now = CarbonImmutable::instance(Date::now());
-        $periodStart = $now->startOfMonth();
-
-        return [$periodStart, $periodStart->endOfMonth()];
     }
 }
