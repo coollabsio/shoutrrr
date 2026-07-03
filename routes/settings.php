@@ -35,6 +35,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('settings/instance', [InstanceSettingsController::class, 'update'])->name('instance-settings.update');
     Route::get('settings/instance/polling', [InstanceSettingsController::class, 'polling'])->name('instance-settings.polling');
     Route::put('settings/instance/polling', [InstanceSettingsController::class, 'updatePolling'])->name('instance-settings.polling.update');
+    Route::get('settings/instance/usage', [InstanceSettingsController::class, 'usage'])->name('instance-settings.usage');
     Route::get('settings/instance/admins', [InstanceSettingsController::class, 'admins'])->name('instance-settings.admins');
     Route::post('settings/instance/admins', [InstanceSettingsController::class, 'storeAdmin'])->name('instance-settings.admins.store');
     Route::delete('settings/instance/admins/{owner}', [InstanceSettingsController::class, 'destroyAdmin'])->name('instance-settings.admins.destroy');

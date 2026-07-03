@@ -1,8 +1,15 @@
 <?php
 
 use App\Enums\InstanceRole;
+use App\Enums\Platform;
+use App\Enums\UsageCategory;
+use App\Models\UsageEvent;
+use App\Models\UsagePeriodCounter;
 use App\Models\User;
+use App\Models\Workspace;
 use App\Support\InstanceSettings;
+use App\Support\UsageOperation;
+use Illuminate\Support\Facades\Date;
 use Inertia\Testing\AssertableInertia;
 
 test('instance owner can view instance settings', function () {
@@ -82,6 +89,174 @@ test('instance owner can view polling settings', function () {
             ->where('settings.account_metrics.x', 1440)
             ->where('settings.account_metrics.bluesky', 1440)
             ->where('settings.account_metrics.linkedin', 1440));
+});
+
+test('instance owner can view usage details', function () {
+    $owner = User::factory()->instanceOwner()->create();
+    $workspace = Workspace::factory()->create(['name' => 'Usage Workspace']);
+
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category' => UsageCategory::Publish->value,
+        'platform' => Platform::Bluesky->value,
+        'operation' => UsageOperation::POST,
+        'event_count' => 2,
+        'total_quota' => 2,
+    ]);
+
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id,
+        'period_start' => Date::now()->subMonthNoOverflow()->startOfMonth()->toDateString(),
+        'period_end' => Date::now()->subMonthNoOverflow()->endOfMonth()->toDateString(),
+        'category' => UsageCategory::Publish->value,
+        'platform' => Platform::Bluesky->value,
+        'operation' => UsageOperation::POST,
+        'event_count' => 1,
+        'total_quota' => 1,
+    ]);
+
+    UsageEvent::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category' => UsageCategory::Publish->value,
+        'platform' => Platform::Bluesky->value,
+        'operation' => UsageOperation::POST,
+        'quota_weight' => 1,
+        'succeeded' => false,
+        'meta' => ['status' => 429],
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('instance-settings.usage'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('settings/instance-usage')
+            ->where('workspace_options.0.id', $workspace->id)
+            ->where('workspace_options.0.name', 'Usage Workspace')
+            ->where('platforms.0.value', 'bluesky')
+            ->where('filters.workspace', null)
+            ->where('filters.platform', null)
+            ->where('summaries.0.workspace.name', 'Usage Workspace')
+            ->where('summaries.0.current_total_quota', 2)
+            ->where('summaries.0.previous_total_quota', 1)
+            ->where('summaries.0.quota_delta', 1)
+            ->where('summaries.0.posts_quota', 2)
+            ->where('counters.0.workspace.name', 'Usage Workspace')
+            ->where('counters.0.platform', 'bluesky')
+            ->where('counters.0.event_count', 2)
+            ->where('error_events.0.operation', UsageOperation::POST)
+            ->where('error_events.0.meta.status', 429));
+});
+
+test('instance usage can be filtered by workspace', function () {
+    $owner = User::factory()->instanceOwner()->create();
+    $shownWorkspace = Workspace::factory()->create(['name' => 'Shown Workspace']);
+    $hiddenWorkspace = Workspace::factory()->create(['name' => 'Hidden Workspace']);
+
+    UsagePeriodCounter::factory()->create(['workspace_id' => $shownWorkspace->id]);
+    UsagePeriodCounter::factory()->create(['workspace_id' => $hiddenWorkspace->id]);
+    UsageEvent::factory()->create(['workspace_id' => $shownWorkspace->id, 'succeeded' => false]);
+    UsageEvent::factory()->create(['workspace_id' => $hiddenWorkspace->id, 'succeeded' => false]);
+
+    $this->actingAs($owner)
+        ->get(route('instance-settings.usage', ['workspace' => $shownWorkspace->id]))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('filters.workspace', $shownWorkspace->id)
+            ->has('counters', 1)
+            ->where('counters.0.workspace.id', $shownWorkspace->id)
+            ->has('error_events', 1)
+            ->where('error_events.0.workspace.id', $shownWorkspace->id));
+});
+
+test('instance usage does not override shared workspace shell props', function () {
+    $owner = User::factory()->instanceOwner()->create();
+
+    $response = $this->actingAs($owner)
+        ->get(route('instance-settings.usage'))
+        ->assertOk();
+
+    expect($response->inertiaProps())->toHaveKey('workspace_options')
+        ->and($response->inertiaProps('workspaces'))->toHaveKeys(['enabled', 'current', 'all']);
+});
+
+test('instance usage can be filtered by platform', function () {
+    $owner = User::factory()->instanceOwner()->create();
+    $workspace = Workspace::factory()->create();
+
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::Bluesky->value,
+        'total_quota' => 3,
+    ]);
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::X->value,
+        'total_quota' => 5,
+    ]);
+    UsageEvent::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::Bluesky->value,
+        'succeeded' => false,
+    ]);
+    UsageEvent::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::X->value,
+        'succeeded' => false,
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('instance-settings.usage', ['platform' => Platform::Bluesky->value]))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('filters.platform', Platform::Bluesky->value)
+            ->has('summaries', 1)
+            ->where('summaries.0.current_total_quota', 3)
+            ->has('counters', 1)
+            ->where('counters.0.platform', Platform::Bluesky->value)
+            ->has('error_events', 1)
+            ->where('error_events.0.platform', Platform::Bluesky->value));
+});
+
+test('instance usage includes x pricing estimates', function () {
+    $owner = User::factory()->instanceOwner()->create();
+    $workspace = Workspace::factory()->create();
+
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::X->value,
+        'operation' => UsageOperation::POST,
+        'event_count' => 2,
+        'total_quota' => 2,
+    ]);
+    UsagePeriodCounter::factory()->create([
+        'workspace_id' => $workspace->id,
+        'period_start' => Date::now()->subMonthNoOverflow()->startOfMonth()->toDateString(),
+        'period_end' => Date::now()->subMonthNoOverflow()->endOfMonth()->toDateString(),
+        'platform' => Platform::X->value,
+        'operation' => UsageOperation::POST,
+        'event_count' => 1,
+        'total_quota' => 1,
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('instance-settings.usage', ['platform' => Platform::X->value]))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('pricing_source', 'https://developer.x.com/#pricing')
+            ->where('summaries.0.current_estimated_cost_usd', 0.03)
+            ->where('summaries.0.previous_estimated_cost_usd', 0.015)
+            ->where('summaries.0.estimated_cost_delta_usd', 0.015)
+            ->where('counters.0.pricing.resource', 'post_create')
+            ->where('counters.0.pricing.unit_cost_usd', 0.015)
+            ->where('counters.0.pricing.estimated_cost_usd', 0.03));
+});
+
+test('regular users cannot view usage details', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('instance-settings.usage'))
+        ->assertForbidden();
 });
 
 test('instance owner can update polling settings', function () {
