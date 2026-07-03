@@ -125,7 +125,7 @@ class HandleInertiaRequests extends Middleware
             'accounts' => $accounts,
             'sets' => $sets,
             'limits' => Platform::allLimits(),
-            'unreadReplies' => config('engagement.enabled')
+            'unreadReplies' => config('engagement.enabled') && app(InstanceSettings::class)->engagementPollingEnabled()
                 ? PostTargetReply::query()
                     ->where('workspace_id', $workspaceId)
                     ->where('is_ours', false)

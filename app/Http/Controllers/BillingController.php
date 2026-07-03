@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Stripe\Exception\ApiErrorException;
+use Stripe\Exception\InvalidRequestException;
 
 class BillingController extends Controller
 {
@@ -25,14 +26,16 @@ class BillingController extends Controller
 
         $subscribed = $workspace->subscribed('default');
         $subscriptionGate = app(WorkspaceSubscriptionGate::class);
+        $remaining = $subscriptionGate->remainingXPosts($workspace);
 
         return Inertia::render('settings/workspace/subscription', [
             'subscribed' => $subscribed,
             'monthlyPrice' => (int) config('subscriptions.monthly_price_cents'),
             'monthlyXPostLimit' => $subscriptionGate->monthlyXPostLimit(),
             'monthlyXPostUsed' => $subscriptionGate->currentXPostUsage($workspace),
-            'monthlyXPostRemaining' => $subscriptionGate->remainingXPosts($workspace),
+            'monthlyXPostRemaining' => $remaining === PHP_INT_MAX ? null : $remaining,
             'canManageSubscription' => $subscribed,
+            'canAccessPortal' => $workspace->hasStripeId(),
         ]);
     }
 
@@ -44,6 +47,10 @@ class BillingController extends Controller
         $user = $request->user();
 
         abort_unless($user instanceof User && $workspace instanceof Workspace, 404);
+
+        if ($workspace->subscribed('default')) {
+            return back()->with('error', 'This workspace already has an active subscription.');
+        }
 
         $priceId = $this->configuredPriceId();
 
@@ -59,7 +66,19 @@ class BillingController extends Controller
 
         try {
             if ($hadStripeCustomer) {
-                $workspace->updateStripeCustomer($customerOptions);
+                try {
+                    $workspace->updateStripeCustomer($customerOptions);
+                } catch (InvalidRequestException $e) {
+                    // The stored customer no longer exists in Stripe (deleted in the
+                    // dashboard, or a test->live key switch). Clear the stale id so a
+                    // fresh customer is created instead of failing forever.
+                    if (! str_contains(strtolower($e->getMessage()), 'no such customer')) {
+                        throw $e;
+                    }
+
+                    $this->forgetIncompleteStripeCustomer($workspace);
+                    $hadStripeCustomer = false;
+                }
             }
 
             return $workspace
@@ -89,7 +108,10 @@ class BillingController extends Controller
 
         $workspace = $this->currentWorkspace($request);
 
-        abort_unless($workspace instanceof Workspace && $workspace->subscribed('default'), 404);
+        // Gate on the Stripe customer, not an active subscription: a past_due or
+        // expired customer still needs the portal to fix their payment method and
+        // download invoices.
+        abort_unless($workspace instanceof Workspace && $workspace->hasStripeId(), 404);
 
         return $workspace->redirectToBillingPortal(route('billing.index'));
     }

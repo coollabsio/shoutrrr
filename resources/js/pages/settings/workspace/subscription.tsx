@@ -30,10 +30,11 @@ function csrfToken(): string {
 type Props = {
     subscribed: boolean;
     monthlyPrice: number;
-    monthlyXPostLimit: number;
+    monthlyXPostLimit: number | null;
     monthlyXPostUsed: number;
-    monthlyXPostRemaining: number;
+    monthlyXPostRemaining: number | null;
     canManageSubscription: boolean;
+    canAccessPortal: boolean;
 };
 
 export default function Subscription({
@@ -43,14 +44,16 @@ export default function Subscription({
     monthlyXPostUsed,
     monthlyXPostRemaining,
     canManageSubscription,
+    canAccessPortal,
 }: Props) {
     const monthlyUsagePercent =
-        monthlyXPostLimit > 0
+        monthlyXPostLimit !== null && monthlyXPostLimit > 0
             ? Math.min(100, (monthlyXPostUsed / monthlyXPostLimit) * 100)
             : 0;
     const remainingLabel =
-        monthlyXPostRemaining === Number.MAX_SAFE_INTEGER ||
-        monthlyXPostRemaining > monthlyXPostLimit
+        monthlyXPostRemaining === null ||
+        (monthlyXPostLimit !== null &&
+            monthlyXPostRemaining > monthlyXPostLimit)
             ? 'Unlimited remaining'
             : `${monthlyXPostRemaining} remaining`;
 
@@ -84,8 +87,9 @@ export default function Subscription({
                             </div>
                             <p className="text-sm text-muted-foreground">
                                 Includes unlimited seats, unlimited publishes to
-                                every other platform, and {monthlyXPostLimit}{' '}
-                                X/Twitter publish requests each month.
+                                every other platform, and{' '}
+                                {monthlyXPostLimit ?? 'unlimited'} X/Twitter
+                                publish requests each month.
                             </p>
                         </div>
 
@@ -112,7 +116,7 @@ export default function Subscription({
                                     </span>
                                     <span className="text-muted-foreground">
                                         {' '}
-                                        / {monthlyXPostLimit}
+                                        / {monthlyXPostLimit ?? '∞'}
                                     </span>
                                 </div>
                             </div>
@@ -141,19 +145,36 @@ export default function Subscription({
                                 </Button>
                             </form>
                         ) : (
-                            <form
-                                action={BillingController.checkout.url()}
-                                method="post"
-                            >
-                                <input
-                                    type="hidden"
-                                    name="_token"
-                                    defaultValue={csrfToken()}
-                                />
-                                <Button type="submit">
-                                    Subscribe to publish
-                                </Button>
-                            </form>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <form
+                                    action={BillingController.checkout.url()}
+                                    method="post"
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="_token"
+                                        defaultValue={csrfToken()}
+                                    />
+                                    <Button type="submit">
+                                        Subscribe to publish
+                                    </Button>
+                                </form>
+                                {canAccessPortal && (
+                                    <form
+                                        action={BillingController.portal.url()}
+                                        method="post"
+                                    >
+                                        <input
+                                            type="hidden"
+                                            name="_token"
+                                            defaultValue={csrfToken()}
+                                        />
+                                        <Button type="submit" variant="outline">
+                                            Billing portal
+                                        </Button>
+                                    </form>
+                                )}
+                            </div>
                         )}
                     </CardContent>
                 </Card>

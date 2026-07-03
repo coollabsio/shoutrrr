@@ -57,6 +57,7 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
                 preserveState: true,
                 preserveScroll: true,
                 only: ['replies', 'filters'],
+                reset: ['replies'],
                 replace: true,
             },
         );
@@ -66,10 +67,19 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
         <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2.5">
             <ToggleGroup
                 type="single"
-                value={filters.unread ? 'unread' : 'all'}
+                value={
+                    filters.archived
+                        ? 'archived'
+                        : filters.unread
+                          ? 'unread'
+                          : 'all'
+                }
                 onValueChange={(v) => {
                     if (v) {
-                        update({ unread: v === 'unread' });
+                        update({
+                            unread: v === 'unread',
+                            archived: v === 'archived',
+                        });
                     }
                 }}
                 variant="outline"
@@ -80,6 +90,9 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
                 </ToggleGroupItem>
                 <ToggleGroupItem value="unread" className="px-3 text-xs">
                     Unread
+                </ToggleGroupItem>
+                <ToggleGroupItem value="archived" className="px-3 text-xs">
+                    Archived
                 </ToggleGroupItem>
             </ToggleGroup>
 

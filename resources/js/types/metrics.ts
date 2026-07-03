@@ -59,5 +59,9 @@ export type AnalyticsPageProps = {
         top: AnalyticsComparisonRow[];
         bottom: AnalyticsComparisonRow[];
     };
+    polling: {
+        post_metrics_enabled: Record<PlatformName, boolean>;
+        account_metrics_enabled: Record<PlatformName, boolean>;
+    };
     rangeDays: number;
 };

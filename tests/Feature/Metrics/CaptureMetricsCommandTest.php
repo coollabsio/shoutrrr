@@ -8,6 +8,7 @@ use App\Jobs\CaptureAccountMetrics;
 use App\Jobs\CapturePostTargetMetrics;
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 
@@ -60,4 +61,80 @@ test('command is a no-op when feature disabled', function () {
     $this->artisan('metrics:capture')->assertSuccessful();
 
     Queue::assertNothingPushed();
+});
+
+test('command skips disabled metric polling groups', function () {
+    Queue::fake();
+    app(InstanceSettings::class)->update([
+        'post_metrics_polling_enabled' => false,
+        'account_metrics_polling_enabled' => false,
+    ]);
+
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Bluesky,
+        'status' => ConnectedAccountStatus::Active,
+        'metrics_captured_at' => null,
+    ]);
+
+    PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Bluesky,
+        'status' => PostTargetStatus::Published,
+        'remote_id' => 'at://a/app.bsky.feed.post/1',
+        'posted_at' => Date::now()->subHours(2),
+        'metrics_captured_at' => null,
+    ]);
+
+    $this->artisan('metrics:capture')->assertSuccessful();
+
+    Queue::assertNothingPushed();
+});
+
+test('command skips only disabled metric platforms', function () {
+    Queue::fake();
+    app(InstanceSettings::class)->update([
+        'post_metrics_polling_enabled' => [
+            'x' => false,
+            'bluesky' => true,
+            'linkedin' => true,
+        ],
+        'account_metrics_polling_enabled' => [
+            'x' => false,
+            'bluesky' => true,
+            'linkedin' => true,
+        ],
+    ]);
+
+    $xAccount = ConnectedAccount::factory()->create([
+        'platform' => Platform::X,
+        'status' => ConnectedAccountStatus::Active,
+        'metrics_captured_at' => null,
+    ]);
+    $blueskyAccount = ConnectedAccount::factory()->create([
+        'platform' => Platform::Bluesky,
+        'status' => ConnectedAccountStatus::Active,
+        'metrics_captured_at' => null,
+    ]);
+
+    PostTarget::factory()->create([
+        'connected_account_id' => $xAccount->id,
+        'platform' => Platform::X,
+        'status' => PostTargetStatus::Published,
+        'remote_id' => 'x-root',
+        'posted_at' => Date::now()->subHours(2),
+        'metrics_captured_at' => null,
+    ]);
+    PostTarget::factory()->create([
+        'connected_account_id' => $blueskyAccount->id,
+        'platform' => Platform::Bluesky,
+        'status' => PostTargetStatus::Published,
+        'remote_id' => 'at://a/app.bsky.feed.post/1',
+        'posted_at' => Date::now()->subHours(2),
+        'metrics_captured_at' => null,
+    ]);
+
+    $this->artisan('metrics:capture')->assertSuccessful();
+
+    Queue::assertPushed(CapturePostTargetMetrics::class, 1);
+    Queue::assertPushed(CaptureAccountMetrics::class, 1);
 });

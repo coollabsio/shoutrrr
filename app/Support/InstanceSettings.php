@@ -29,6 +29,21 @@ class InstanceSettings
         return $this->boolean('usage_tracking_enabled');
     }
 
+    public function engagementPollingEnabled(?Platform $platform = null): bool
+    {
+        return $this->platformEnabled('engagement_polling_enabled', $platform);
+    }
+
+    public function postMetricsPollingEnabled(?Platform $platform = null): bool
+    {
+        return $this->platformEnabled('post_metrics_polling_enabled', $platform);
+    }
+
+    public function accountMetricsPollingEnabled(?Platform $platform = null): bool
+    {
+        return $this->platformEnabled('account_metrics_polling_enabled', $platform);
+    }
+
     public function registrationsAllowed(?string $invitationToken = null): bool
     {
         if (! $this->ownerExists()) {
@@ -70,17 +85,26 @@ class InstanceSettings
 
     /**
      * @return array{
-     *     engagement: array{x: int, bluesky: int, linkedin: int},
-     *     post_metrics: array{x: int, bluesky: int, linkedin: int},
-     *     account_metrics: array{x: int, bluesky: int, linkedin: int}
+     *     engagement: array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int},
+     *     post_metrics: array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int},
+     *     account_metrics: array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int}
      * }
      */
     public function polling(): array
     {
         return [
-            'engagement' => $this->platformMinutes('engagement_poll_interval_minutes', 'engagement'),
-            'post_metrics' => $this->platformMinutes('post_metrics_poll_interval_minutes', 'post_metrics'),
-            'account_metrics' => $this->platformMinutes('account_metrics_poll_interval_minutes', 'account_metrics'),
+            'engagement' => [
+                'enabled' => $this->platformEnabledValues('engagement_polling_enabled'),
+                ...$this->platformMinutes('engagement_poll_interval_minutes', 'engagement'),
+            ],
+            'post_metrics' => [
+                'enabled' => $this->platformEnabledValues('post_metrics_polling_enabled'),
+                ...$this->platformMinutes('post_metrics_poll_interval_minutes', 'post_metrics'),
+            ],
+            'account_metrics' => [
+                'enabled' => $this->platformEnabledValues('account_metrics_polling_enabled'),
+                ...$this->platformMinutes('account_metrics_poll_interval_minutes', 'account_metrics'),
+            ],
         ];
     }
 
@@ -100,7 +124,7 @@ class InstanceSettings
     }
 
     /**
-     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool}  $values
+     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, engagement_polling_enabled?: bool|array{x: bool, bluesky: bool, linkedin: bool}, post_metrics_polling_enabled?: bool|array{x: bool, bluesky: bool, linkedin: bool}, account_metrics_polling_enabled?: bool|array{x: bool, bluesky: bool, linkedin: bool}, engagement_poll_interval_minutes?: array{x: int, bluesky: int, linkedin: int}, post_metrics_poll_interval_minutes?: array{x: int, bluesky: int, linkedin: int}, account_metrics_poll_interval_minutes?: array{x: int, bluesky: int, linkedin: int}}  $values
      */
     public function update(array $values): void
     {
@@ -114,9 +138,44 @@ class InstanceSettings
         Cache::forget(self::CacheKey);
     }
 
-    private function boolean(string $key): bool
+    private function boolean(string $key, ?bool $default = null): bool
     {
-        return (bool) ($this->settings()[$key] ?? config("instance.defaults.{$key}"));
+        return (bool) ($this->settings()[$key] ?? $default ?? config("instance.defaults.{$key}"));
+    }
+
+    private function platformEnabled(string $key, ?Platform $platform): bool
+    {
+        $values = $this->platformEnabledValues($key);
+
+        if ($platform !== null) {
+            return $values[$platform->value];
+        }
+
+        return in_array(true, $values, true);
+    }
+
+    /**
+     * @return array{x: bool, bluesky: bool, linkedin: bool}
+     */
+    private function platformEnabledValues(string $key): array
+    {
+        $stored = $this->settings()[$key] ?? true;
+
+        if (is_bool($stored)) {
+            return [
+                Platform::X->value => $stored,
+                Platform::Bluesky->value => $stored,
+                Platform::LinkedIn->value => $stored,
+            ];
+        }
+
+        $stored = (array) $stored;
+
+        return [
+            Platform::X->value => (bool) ($stored[Platform::X->value] ?? true),
+            Platform::Bluesky->value => (bool) ($stored[Platform::Bluesky->value] ?? true),
+            Platform::LinkedIn->value => (bool) ($stored[Platform::LinkedIn->value] ?? true),
+        ];
     }
 
     /**

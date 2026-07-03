@@ -50,6 +50,31 @@ test('non owner cannot delete workspace', function () {
     $this->assertDatabaseHas('workspaces', ['id' => $workspace->id]);
 });
 
+test('the first workspace created on the instance is flagged as initial', function () {
+    $first = Workspace::factory()->create();
+    $second = Workspace::factory()->create();
+
+    expect($first->refresh()->is_initial)->toBeTrue()
+        ->and($second->refresh()->is_initial)->toBeFalse();
+});
+
+test('the initial workspace cannot be deleted on a cloud instance', function () {
+    config(['subscriptions.enabled' => true]);
+    $workspace = Workspace::factory()->create();
+    $other = Workspace::factory()->create();
+    $owner = User::factory()->create(['current_workspace_id' => $workspace->id]);
+    WorkspaceMembership::factory()->owner()->create(['workspace_id' => $workspace->id, 'user_id' => $owner->id]);
+    WorkspaceMembership::factory()->create(['workspace_id' => $other->id, 'user_id' => $owner->id]);
+
+    $this->actingAs($owner)->delete(route('workspaces.destroy', $workspace))->assertSessionHasErrors('workspace');
+
+    $this->assertDatabaseHas('workspaces', ['id' => $workspace->id]);
+
+    // Model-level guard holds even when the controller is bypassed.
+    expect($workspace->refresh()->delete())->toBeFalse();
+    $this->assertDatabaseHas('workspaces', ['id' => $workspace->id]);
+});
+
 test('deleting current workspace reassigns to another membership', function () {
     $a = Workspace::factory()->create();
     $b = Workspace::factory()->create();

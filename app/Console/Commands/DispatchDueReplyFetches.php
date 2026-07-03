@@ -21,7 +21,7 @@ class DispatchDueReplyFetches extends Command
 
     public function handle(InstanceSettings $settings): int
     {
-        if (! config('engagement.enabled')) {
+        if (! config('engagement.enabled') || ! $settings->engagementPollingEnabled()) {
             return self::SUCCESS;
         }
 
@@ -34,6 +34,10 @@ class DispatchDueReplyFetches extends Command
             ->where('posted_at', '>=', $cutoff)
             ->where(function ($query) use ($settings): void {
                 foreach (Platform::cases() as $platform) {
+                    if (! $settings->engagementPollingEnabled($platform)) {
+                        continue;
+                    }
+
                     $query->orWhere(function ($query) use ($settings, $platform): void {
                         $interval = Date::now()->subMinutes($settings->engagementPollIntervalMinutes($platform));
 

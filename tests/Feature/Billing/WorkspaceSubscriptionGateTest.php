@@ -12,6 +12,7 @@ use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Models\Post;
 use App\Models\PostTarget;
+use App\Models\UsageEvent;
 use App\Models\UsagePeriodCounter;
 use App\Models\Workspace;
 use App\Services\Billing\WorkspaceSubscriptionGate;
@@ -33,12 +34,24 @@ beforeEach(function () {
 });
 
 /**
- * Seed the current-period X publish counter the same way UsageRecorder does, so the
- * gate (which now reads usage_period_counters via UsageMeter) sees prior X posts.
+ * Seed X publish usage the same way UsageRecorder does: one usage event per post
+ * (the gate counts events within the billing-anchored period for subscribed
+ * workspaces) plus the calendar-month counter (the fallback for unsubscribed ones).
  */
-function recordXPosts(Workspace $workspace, int $count = 1): void
+function recordXPosts(Workspace $workspace, int $count = 1, mixed $occurredAt = null): void
 {
     $now = Date::now();
+    $occurredAt ??= $now;
+
+    UsageEvent::factory()->count($count)->create([
+        'workspace_id' => $workspace->id,
+        'category' => UsageCategory::Publish->value,
+        'platform' => Platform::X->value,
+        'operation' => UsageOperation::POST,
+        'quota_weight' => 1,
+        'succeeded' => true,
+        'occurred_at' => $occurredAt,
+    ]);
 
     $counter = UsagePeriodCounter::query()->firstOrCreate(
         [
@@ -219,7 +232,41 @@ test('x publishing stops before calling the connector when quota is exhausted', 
     $target->refresh();
     expect($target->status)->toBe(PostTargetStatus::Failed)
         ->and($target->error_kind)->toBe(ErrorKind::BillingRequired)
-        ->and($target->error_message)->toBe('Monthly X publishing quota exceeded. Upgrade or wait for the next billing month.');
+        ->and($target->error_message)->toBe('Monthly X publishing quota exceeded. Upgrade or wait for the next billing period.');
 
     Date::setTestNow();
+});
+
+test('x quota period is anchored to the subscription date, not the calendar month', function () {
+    Date::setTestNow('2026-06-10 12:00:00');
+    $workspace = subscribedWorkspace(); // subscription created June 10
+
+    // Posts from before the current cycle started must not count.
+    recordXPosts($workspace, 5, Date::now()->subDays(3));
+
+    Date::setTestNow('2026-07-05 12:00:00'); // still inside the June 10 → July 10 cycle
+    recordXPosts($workspace, 2);
+
+    $gate = app(WorkspaceSubscriptionGate::class);
+
+    // Only the 2 posts since June 10 count, even though 5 happened in June and
+    // a calendar-month reset on July 1 would have shown zero usage.
+    expect($gate->currentXPostUsage($workspace))->toBe(2)
+        ->and($gate->remainingXPosts($workspace))->toBe(331);
+
+    Date::setTestNow('2026-07-11 12:00:00'); // next cycle started July 10
+    expect($gate->currentXPostUsage($workspace))->toBe(0)
+        ->and($gate->remainingXPosts($workspace))->toBe(333);
+
+    Date::setTestNow();
+});
+
+test('a non positive x post cost means unlimited x publishing', function () {
+    config(['subscriptions.x_post_cost_cents' => 0]);
+    $workspace = subscribedWorkspace();
+    $gate = app(WorkspaceSubscriptionGate::class);
+
+    expect($gate->monthlyXPostLimit())->toBeNull()
+        ->and($gate->remainingXPosts($workspace))->toBe(PHP_INT_MAX)
+        ->and($gate->canPublishX($workspace))->toBeTrue();
 });

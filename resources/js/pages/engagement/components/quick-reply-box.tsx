@@ -1,4 +1,4 @@
-import { CornerDownLeft, Paperclip } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import type { MediaView, PlatformName } from '@/types/compose';
 import { useReplyMedia } from './use-reply-media';
 
 const LIMITS: Record<string, number> = { x: 280, bluesky: 300, linkedin: 3000 };
+export const QUICK_REPLY_SEND_SHORTCUT = '⌘↵';
 
 type Props = {
     replyId: string;
@@ -92,17 +93,11 @@ export function QuickReplyBox({
                     <Paperclip className="size-4" aria-hidden="true" />
                 </Button>
 
-                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    {rm.isUploading ? (
-                        'Uploading…'
-                    ) : (
-                        <>
-                            <CornerDownLeft className="size-3" aria-hidden />
-                            <kbd className="font-sans tracking-tight">⌘↵</kbd>
-                            <span className="hidden sm:inline">to send</span>
-                        </>
-                    )}
-                </span>
+                {rm.isUploading ? (
+                    <span className="text-[11px] text-muted-foreground">
+                        Uploading…
+                    </span>
+                ) : null}
 
                 <span
                     className={cn(
@@ -123,7 +118,19 @@ export function QuickReplyBox({
                     onClick={() => void send()}
                     disabled={disabled || !canSend}
                 >
-                    {sending ? 'Sending…' : 'Reply'}
+                    {sending ? (
+                        'Sending…'
+                    ) : (
+                        <>
+                            <span>Reply</span>
+                            <kbd
+                                aria-hidden="true"
+                                className="ml-0.5 hidden h-4 items-center rounded border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex"
+                            >
+                                {QUICK_REPLY_SEND_SHORTCUT}
+                            </kbd>
+                        </>
+                    )}
                 </Button>
             </div>
 

@@ -28,6 +28,27 @@ class Workspace extends Model
     /** @use HasFactory<WorkspaceFactory> */
     use Billable, HasFactory, HasUuids;
 
+    #[\Override]
+    protected static function booted(): void
+    {
+        // The very first workspace created on the instance is flagged as the free
+        // "initial" workspace. The billing gate exempts it from subscriptions, so
+        // it must be a stable, persisted flag — and it can never be deleted on a
+        // cloud instance, otherwise the exemption would silently move to the
+        // next-oldest workspace.
+        static::creating(function (Workspace $workspace): void {
+            $workspace->is_initial ??= ! static::query()->exists();
+        });
+
+        static::deleting(function (Workspace $workspace): ?bool {
+            if ($workspace->is_initial && (bool) config('subscriptions.enabled')) {
+                return false;
+            }
+
+            return null;
+        });
+    }
+
     public function getLogoAttribute(?string $value): string
     {
         if ($value) {
@@ -85,6 +106,7 @@ class Workspace extends Model
     protected function casts(): array
     {
         return [
+            'is_initial' => 'boolean',
             'onboarding_welcomed_at' => 'datetime',
             'onboarding_dismissed_at' => 'datetime',
             'onboarding_progress' => 'array',

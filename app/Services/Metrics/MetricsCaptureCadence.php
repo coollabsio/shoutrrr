@@ -14,6 +14,10 @@ class MetricsCaptureCadence
     /** Sampling interval (seconds) for a post of the given age, or null once polling stops. */
     public function postIntervalSeconds(PostTarget $target, CarbonImmutable $now): ?int
     {
+        if (! app(InstanceSettings::class)->postMetricsPollingEnabled($target->platform)) {
+            return null;
+        }
+
         if ($target->posted_at === null) {
             return null;
         }
@@ -58,6 +62,10 @@ class MetricsCaptureCadence
 
     public function accountDue(ConnectedAccount $account, CarbonImmutable $now): bool
     {
+        if (! app(InstanceSettings::class)->accountMetricsPollingEnabled($account->platform)) {
+            return false;
+        }
+
         if ($account->metrics_status !== null && ! $account->metrics_status->isPollable()) {
             return false;
         }

@@ -10,6 +10,7 @@ use App\Models\WorkspaceMembership;
 use App\Support\UsageOperation;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Route;
+use Laravel\Cashier\Subscription;
 use Symfony\Component\Process\Process;
 
 afterEach(function () {
@@ -72,7 +73,8 @@ test('billing page does not show portal management for a customer without a subs
         ->assertInertia(fn ($page) => $page
             ->component('settings/workspace/subscription')
             ->where('subscribed', false)
-            ->where('canManageSubscription', false));
+            ->where('canManageSubscription', false)
+            ->where('canAccessPortal', true));
 });
 
 test('billing page shows current month x post usage', function () {
@@ -123,13 +125,10 @@ test('billing page shows current month x post usage', function () {
             ->where('monthlyXPostRemaining', 321));
 });
 
-test('portal is unavailable for a customer without a subscription', function () {
+test('portal is unavailable for a workspace that never became a stripe customer', function () {
     config(['subscriptions.enabled' => true]);
     $user = User::factory()->create();
-    $workspace = Workspace::factory()->create([
-        'owner_id' => $user->id,
-        'stripe_id' => 'cus_test_without_subscription',
-    ]);
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
     WorkspaceMembership::factory()->create([
         'workspace_id' => $workspace->id,
         'user_id' => $user->id,
@@ -140,6 +139,34 @@ test('portal is unavailable for a customer without a subscription', function () 
     $this->actingAs($user)
         ->post(route('billing.portal'))
         ->assertNotFound();
+});
+
+test('checkout is rejected when the workspace already has an active subscription', function () {
+    config(['subscriptions.enabled' => true]);
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create([
+        'owner_id' => $user->id,
+        'stripe_id' => 'cus_test_active',
+    ]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Owner,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+
+    Subscription::query()->create([
+        'workspace_id' => $workspace->id,
+        'type' => 'default',
+        'stripe_id' => 'sub_test_active',
+        'stripe_status' => 'active',
+        'stripe_price' => config('subscriptions.stripe_price_id'),
+        'quantity' => 1,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('billing.checkout'))
+        ->assertSessionHas('error', 'This workspace already has an active subscription.');
 });
 
 test('workspace stripe customer email comes from its owner', function () {

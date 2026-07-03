@@ -48,6 +48,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configureErrorPages();
         $this->configureTrustedProxies();
+        $this->guardAgainstMisconfiguredStripe();
         Cashier::useCustomerModel(Workspace::class);
 
         // OAuth tokens issued for the MCP/API integration. Without explicit
@@ -92,6 +93,33 @@ class AppServiceProvider extends ServiceProvider
             }
         );
 
+    }
+
+    /**
+     * A cloud instance (SELF_HOSTED=false) sells subscriptions through Stripe, so
+     * booting without the full Stripe configuration must fail fast. In particular,
+     * a missing STRIPE_WEBHOOK_SECRET would make Cashier accept unsigned webhooks —
+     * anyone could forge a subscription event and unlock the app for free.
+     */
+    protected function guardAgainstMisconfiguredStripe(): void
+    {
+        if (! (bool) config('subscriptions.enabled')) {
+            return;
+        }
+
+        $required = [
+            'cashier.key' => 'STRIPE_KEY',
+            'cashier.secret' => 'STRIPE_SECRET',
+            'cashier.webhook.secret' => 'STRIPE_WEBHOOK_SECRET',
+        ];
+
+        foreach ($required as $configKey => $envKey) {
+            if ((string) config($configKey) === '') {
+                throw new RuntimeException(
+                    "Workspace subscriptions are enabled (SELF_HOSTED=false) but {$envKey} is not set. Refusing to boot."
+                );
+            }
+        }
     }
 
     /**

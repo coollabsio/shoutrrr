@@ -1,4 +1,4 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 
 import InstanceSettingsController from '@/actions/App/Http/Controllers/Settings/InstanceSettingsController';
 import Heading from '@/components/common/heading';
@@ -11,11 +11,14 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { PlatformName } from '@/types/compose';
 
-type PollingGroup = Record<PlatformName, number>;
+type PollingGroup = Record<PlatformName, number> & {
+    enabled: Record<PlatformName, boolean>;
+};
 
 type PollingSettings = {
     engagement: PollingGroup;
@@ -56,6 +59,30 @@ export default function InstancePolling({ settings }: Props) {
         });
     }
 
+    function setPlatformEnabled(
+        group: keyof PollingSettings,
+        platform: PlatformName,
+        enabled: boolean,
+    ) {
+        const nextGroup = {
+            ...data[group],
+            enabled: {
+                ...data[group].enabled,
+                [platform]: enabled,
+            },
+        };
+        const nextData = {
+            ...data,
+            [group]: nextGroup,
+        };
+
+        setData(group, nextGroup);
+
+        router.put(InstanceSettingsController.updatePolling().url, nextData, {
+            preserveScroll: true,
+        });
+    }
+
     return (
         <>
             <Head title="Instance polling" />
@@ -75,6 +102,7 @@ export default function InstancePolling({ settings }: Props) {
                         values={data.engagement}
                         errors={errors}
                         onChange={setMinutes}
+                        onEnabledChange={setPlatformEnabled}
                     />
 
                     <PollingCard
@@ -84,6 +112,7 @@ export default function InstancePolling({ settings }: Props) {
                         values={data.post_metrics}
                         errors={errors}
                         onChange={setMinutes}
+                        onEnabledChange={setPlatformEnabled}
                     />
 
                     <PollingCard
@@ -93,6 +122,7 @@ export default function InstancePolling({ settings }: Props) {
                         values={data.account_metrics}
                         errors={errors}
                         onChange={setMinutes}
+                        onEnabledChange={setPlatformEnabled}
                     />
 
                     <Button type="submit" disabled={processing}>
@@ -111,6 +141,7 @@ function PollingCard({
     values,
     errors,
     onChange,
+    onEnabledChange,
 }: {
     title: string;
     description: string;
@@ -122,16 +153,35 @@ function PollingCard({
         platform: PlatformName,
         value: string,
     ) => void;
+    onEnabledChange: (
+        group: keyof PollingSettings,
+        platform: PlatformName,
+        enabled: boolean,
+    ) => void;
 }) {
+    const hasDisabledPlatform = platforms.some(
+        (platform) => !values.enabled[platform.key],
+    );
+
     return (
         <Card>
             <CardHeader>
-                <CardTitle>{title}</CardTitle>
-                <CardDescription>{description}</CardDescription>
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <CardTitle>{title}</CardTitle>
+                        <CardDescription>{description}</CardDescription>
+                    </div>
+                    {hasDisabledPlatform && (
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                            Partially disabled
+                        </span>
+                    )}
+                </div>
             </CardHeader>
             <CardContent className="space-y-4">
                 {platforms.map((platform) => {
                     const errorKey = `${group}.${platform.key}`;
+                    const isEnabled = values.enabled[platform.key];
 
                     return (
                         <div
@@ -139,11 +189,33 @@ function PollingCard({
                             className="grid gap-2 sm:grid-cols-[1fr_9rem] sm:items-start"
                         >
                             <div className="space-y-1">
-                                <Label htmlFor={`${group}-${platform.key}`}>
-                                    {platform.label}
-                                </Label>
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        id={`${group}-${platform.key}-enabled`}
+                                        checked={isEnabled}
+                                        onCheckedChange={(checked) =>
+                                            onEnabledChange(
+                                                group,
+                                                platform.key,
+                                                checked === true,
+                                            )
+                                        }
+                                    />
+                                    <Label
+                                        htmlFor={`${group}-${platform.key}-enabled`}
+                                    >
+                                        {platform.label}
+                                    </Label>
+                                    {!isEnabled && (
+                                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                            Temporarily disabled
+                                        </span>
+                                    )}
+                                </div>
                                 <p className="text-sm text-muted-foreground">
-                                    Interval in minutes.
+                                    {isEnabled
+                                        ? 'Interval in minutes.'
+                                        : `Polling for ${platform.label} is paused.`}
                                 </p>
                             </div>
                             <div>
@@ -154,6 +226,7 @@ function PollingCard({
                                     max={10080}
                                     step={5}
                                     value={values[platform.key]}
+                                    disabled={!isEnabled}
                                     onChange={(event) =>
                                         onChange(
                                             group,

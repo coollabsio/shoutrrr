@@ -1,10 +1,8 @@
-import { Link } from '@inertiajs/react';
 import { ArrowUpRight, ExternalLink, Heart, Trash2 } from 'lucide-react';
 
-import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { postPermalink } from '@/lib/posts/permalink';
+import { platformLabel, postPermalink } from '@/lib/posts/permalink';
 import { cn } from '@/lib/utils';
 
 import { atHandle, initials, relativeTime } from '../helpers';
@@ -12,7 +10,8 @@ import type { ReplyItem } from '../types';
 
 type Props = {
     postExcerpt: string | null;
-    postId: string | null;
+    postUrl: string | null;
+    platform: ReplyItem['platform'];
     thread: ReplyItem[];
     loading: boolean;
     onToggleLike: (reply: ReplyItem) => void;
@@ -24,12 +23,15 @@ const actionButton =
 
 export function ReplyThread({
     postExcerpt,
-    postId,
+    postUrl,
+    platform,
     thread,
     loading,
     onToggleLike,
     onDelete,
 }: Props) {
+    const postPlatformLabel = platformLabel(platform);
+
     if (loading) {
         return (
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -48,14 +50,16 @@ export function ReplyThread({
                         <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                             Your post
                         </span>
-                        {postId ? (
-                            <Link
-                                href={ComposerController.show(postId).url}
+                        {postUrl ? (
+                            <a
+                                href={postUrl}
+                                target="_blank"
+                                rel="noreferrer noopener"
                                 className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
                             >
-                                Open post
+                                Open post on {postPlatformLabel}
                                 <ArrowUpRight className="size-3" />
-                            </Link>
+                            </a>
                         ) : null}
                     </div>
                     <p className="line-clamp-3 text-sm text-foreground/80">
@@ -110,7 +114,7 @@ export function ReplyThread({
                                         href={permalink}
                                         target="_blank"
                                         rel="noreferrer"
-                                        aria-label="Open on platform"
+                                        aria-label={`Open on ${platformLabel(reply.platform)}`}
                                         className={cn(
                                             actionButton,
                                             'hover:text-foreground',
@@ -206,7 +210,7 @@ export function ReplyThread({
                                         href={permalink}
                                         target="_blank"
                                         rel="noreferrer"
-                                        aria-label="Open on platform"
+                                        aria-label={`Open on ${platformLabel(reply.platform)}`}
                                         className={cn(
                                             actionButton,
                                             'hover:text-foreground',

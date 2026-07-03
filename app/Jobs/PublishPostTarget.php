@@ -110,7 +110,7 @@ class PublishPostTarget implements ShouldQueue
         } elseif ($target->platform === Platform::X && ! $subscriptions->canPublishX($workspace)) {
             $result = PublishResult::failure(
                 ErrorKind::BillingRequired,
-                'Monthly X publishing quota exceeded. Upgrade or wait for the next billing month.',
+                'Monthly X publishing quota exceeded. Upgrade or wait for the next billing period.',
             );
         } elseif ($account->status === ConnectedAccountStatus::NeedsAttention) {
             $result = PublishResult::failure(

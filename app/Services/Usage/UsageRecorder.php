@@ -58,7 +58,10 @@ class UsageRecorder
                 }
             });
         } catch (Throwable $e) {
-            // Metering must never break the caller (a publish/fetch). Swallow + log.
+            // Metering must never break the caller (a publish/fetch), but a silent
+            // failure means billed usage goes uncounted — report to the exception
+            // handler (monitoring) in addition to the log line.
+            report($e);
             Log::error('Usage recording failed.', ['message' => $e->getMessage()]);
         }
     }

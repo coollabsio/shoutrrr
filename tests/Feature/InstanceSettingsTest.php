@@ -82,10 +82,16 @@ test('instance owner can view polling settings', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('settings/instance-polling')
+            ->where('settings.engagement.enabled.x', true)
+            ->where('settings.engagement.enabled.bluesky', true)
             ->where('settings.engagement.x', 360)
             ->where('settings.engagement.bluesky', 15)
+            ->where('settings.post_metrics.enabled.x', true)
+            ->where('settings.post_metrics.enabled.linkedin', true)
             ->where('settings.post_metrics.x', 360)
             ->where('settings.post_metrics.linkedin', 15)
+            ->where('settings.account_metrics.enabled.x', true)
+            ->where('settings.account_metrics.enabled.bluesky', true)
             ->where('settings.account_metrics.x', 1440)
             ->where('settings.account_metrics.bluesky', 1440)
             ->where('settings.account_metrics.linkedin', 1440));
@@ -251,6 +257,30 @@ test('instance usage includes x pricing estimates', function () {
             ->where('counters.0.pricing.estimated_cost_usd', 0.03));
 });
 
+test('analytics exposes disabled metric polling groups', function () {
+    app(InstanceSettings::class)->update([
+        'post_metrics_polling_enabled' => false,
+        'account_metrics_polling_enabled' => false,
+    ]);
+
+    $workspace = Workspace::factory()->create();
+    $owner = User::factory()->instanceOwner()->create(['current_workspace_id' => $workspace->id]);
+    $owner->workspaceMemberships()->create([
+        'workspace_id' => $workspace->id,
+        'role' => 'owner',
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('analytics.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('analytics/index')
+            ->where('polling.post_metrics_enabled.x', false)
+            ->where('polling.post_metrics_enabled.bluesky', false)
+            ->where('polling.account_metrics_enabled.x', false)
+            ->where('polling.account_metrics_enabled.bluesky', false));
+});
+
 test('regular users cannot view usage details', function () {
     $user = User::factory()->create();
 
@@ -265,16 +295,31 @@ test('instance owner can update polling settings', function () {
     $this->actingAs($owner)
         ->put(route('instance-settings.polling.update'), [
             'engagement' => [
+                'enabled' => [
+                    'x' => false,
+                    'bluesky' => true,
+                    'linkedin' => true,
+                ],
                 'x' => 720,
                 'bluesky' => 30,
                 'linkedin' => 120,
             ],
             'post_metrics' => [
+                'enabled' => [
+                    'x' => false,
+                    'bluesky' => true,
+                    'linkedin' => true,
+                ],
                 'x' => 1440,
                 'bluesky' => 45,
                 'linkedin' => 180,
             ],
             'account_metrics' => [
+                'enabled' => [
+                    'x' => false,
+                    'bluesky' => true,
+                    'linkedin' => true,
+                ],
                 'x' => 1440,
                 'bluesky' => 240,
                 'linkedin' => 480,
@@ -284,16 +329,31 @@ test('instance owner can update polling settings', function () {
 
     expect(app(InstanceSettings::class)->polling())->toMatchArray([
         'engagement' => [
+            'enabled' => [
+                'x' => false,
+                'bluesky' => true,
+                'linkedin' => true,
+            ],
             'x' => 720,
             'bluesky' => 30,
             'linkedin' => 120,
         ],
         'post_metrics' => [
+            'enabled' => [
+                'x' => false,
+                'bluesky' => true,
+                'linkedin' => true,
+            ],
             'x' => 1440,
             'bluesky' => 45,
             'linkedin' => 180,
         ],
         'account_metrics' => [
+            'enabled' => [
+                'x' => false,
+                'bluesky' => true,
+                'linkedin' => true,
+            ],
             'x' => 1440,
             'bluesky' => 240,
             'linkedin' => 480,
