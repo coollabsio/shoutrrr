@@ -67,9 +67,21 @@ type Editing =
           items: { file: File; url: string }[];
           index: number;
       }
-    | { kind: 'reedit'; url: string; settings: EditSettings; mediaId: string }
+    | {
+          kind: 'reedit';
+          url: string;
+          settings: EditSettings;
+          mediaId: string;
+          altText: string | null;
+      }
     | { kind: 'raw'; url: string; mediaId: string }
-    | { kind: 'video'; url: string; durationSeconds: number; mediaId: string }
+    | {
+          kind: 'video';
+          url: string;
+          durationSeconds: number;
+          mediaId: string;
+          altText: string | null;
+      }
     | { kind: 'video-new'; url: string; durationSeconds: number; file: File };
 
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
@@ -328,9 +340,22 @@ export default function Composer({
         if (images.length === 0) {
             return;
         }
+
+        // GIFs skip the beautifier: it composes to a static PNG, which would strip
+        // the animation. Upload them as-is; the rest open the editor as a batch.
+        const gifs = images.filter((f) => f.type === 'image/gif');
+        const editable = images.filter((f) => f.type !== 'image/gif');
+
+        if (gifs.length > 0) {
+            void mediaUploads.handleFiles(gifs);
+        }
+
+        if (editable.length === 0) {
+            return;
+        }
         setEditing({
             kind: 'batch',
-            items: images.map((f) => ({
+            items: editable.map((f) => ({
                 file: f,
                 url: URL.createObjectURL(f),
             })),
@@ -357,6 +382,7 @@ export default function Composer({
             url: m.url,
             durationSeconds: m.duration_seconds ?? 0,
             mediaId: m.id,
+            altText: m.alt_text,
         });
     }
 
@@ -364,7 +390,8 @@ export default function Composer({
     // source + settings; a plain one is beautified from scratch.
     function openImage(mediaId: string) {
         const m = state.media.find((x) => x.id === mediaId);
-        if (!m || m.kind === 'video') {
+        // GIFs have no editor — the beautifier would flatten them to a static PNG.
+        if (!m || m.kind === 'video' || m.mime === 'image/gif') {
             return;
         }
         if (m.edit_settings && m.source_url) {
@@ -373,6 +400,7 @@ export default function Composer({
                 url: m.source_url,
                 settings: normalizeSettings(m.edit_settings),
                 mediaId: m.id,
+                altText: m.alt_text,
             });
         } else {
             setEditing({ kind: 'raw', url: m.url, mediaId: m.id });
@@ -383,6 +411,7 @@ export default function Composer({
     async function applyEditing(
         composed: Blob,
         settings: EditSettings,
+        altText: string,
     ): Promise<void> {
         if (!editing) {
             return;
@@ -394,6 +423,7 @@ export default function Composer({
                 composed,
                 editing.items[editing.index].file,
                 settings,
+                altText,
             );
             if (!ok) {
                 return;
@@ -403,6 +433,7 @@ export default function Composer({
                 editing.mediaId,
                 composed,
                 settings,
+                altText,
             );
             if (!ok) {
                 return;
@@ -411,7 +442,12 @@ export default function Composer({
             // A plain image beautified for the first time: keep the raw image as
             // the source, attach the composed result, drop the raw attachment.
             const rawBlob = await fetch(editing.url).then((r) => r.blob());
-            const ok = await imageEditor.applyNew(composed, rawBlob, settings);
+            const ok = await imageEditor.applyNew(
+                composed,
+                rawBlob,
+                settings,
+                altText,
+            );
             if (!ok) {
                 return;
             }
@@ -445,6 +481,7 @@ export default function Composer({
             : (editing?.url ?? null);
     const editorSettings =
         editing?.kind === 'reedit' ? editing.settings : DEFAULT_EDIT_SETTINGS;
+    const editorAltText = editing?.kind === 'reedit' ? editing.altText : null;
     const editorQueue =
         editing?.kind === 'batch'
             ? {
@@ -696,11 +733,11 @@ export default function Composer({
         >
             <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color] duration-300 focus-within:border-primary/25 focus-within:shadow-[0_0_16px_-6px_color-mix(in_oklch,var(--primary)_28%,transparent)]">
                 {/* Tab-strip row */}
-                <div className="flex items-center border-b border-border px-2 py-2">
+                <div className="flex flex-wrap items-center gap-y-2 border-b border-border px-2 py-2 md:flex-nowrap md:gap-y-0">
                     {/* Tabs hang to the bottom border (underline meets it) via a
                     negative margin that cancels the row's bottom padding, while
                     the right-side controls stay vertically centered in the bar. */}
-                    <div className="-mb-2 flex min-w-0 flex-1 items-end">
+                    <div className="-mb-2 flex min-w-0 flex-[1_1_100%] items-end md:flex-1">
                         <PlatformTabs
                             accounts={tabAccounts}
                             activeTab={activeAccount?.id ?? state.activeTab}
@@ -714,7 +751,7 @@ export default function Composer({
                             }
                         />
                     </div>
-                    <div className="ml-auto flex items-center gap-2 pr-1">
+                    <div className="ml-auto flex min-w-0 items-center justify-end gap-1.5 pr-1 sm:gap-2">
                         <div
                             className="inline-flex h-7 overflow-hidden rounded-md border border-transparent text-[12px] text-muted-foreground data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground"
                             data-active={previewVisible}
@@ -727,7 +764,9 @@ export default function Composer({
                                 className="inline-flex items-center gap-1.5 px-2 hover:bg-muted hover:text-foreground"
                             >
                                 <Eye className="size-3.5 shrink-0" />
-                                <span>Preview</span>
+                                <span className="hidden sm:inline">
+                                    Preview
+                                </span>
                             </button>
                             <button
                                 type="button"
@@ -921,6 +960,7 @@ export default function Composer({
                         }
                         sourceUrl={editorSourceUrl}
                         initialSettings={editorSettings}
+                        initialAltText={editorAltText}
                         onApply={applyEditing}
                         onCancel={cancelEditing}
                         onDiscard={discardEditing}
@@ -953,6 +993,9 @@ export default function Composer({
                         }
                         phase={videoEditor.phase}
                         progress={videoEditor.progress}
+                        initialAltText={
+                            editing?.kind === 'video' ? editing.altText : null
+                        }
                         onCancel={closeVideoEditing}
                         onSkip={() => {
                             if (editing?.kind !== 'video-new') {
@@ -961,7 +1004,7 @@ export default function Composer({
                             void mediaUploads.handleFiles([editing.file]);
                             closeVideoEditing();
                         }}
-                        onApply={async (settings) => {
+                        onApply={async (settings, altText) => {
                             if (
                                 editing?.kind !== 'video' &&
                                 editing?.kind !== 'video-new'
@@ -983,6 +1026,7 @@ export default function Composer({
                                     source,
                                     oldMediaId,
                                     settings,
+                                    altText,
                                     limits: selectedVideoLimits,
                                 });
                                 if (ok) {

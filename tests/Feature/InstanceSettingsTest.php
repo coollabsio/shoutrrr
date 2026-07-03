@@ -28,6 +28,7 @@ test('instance owner can update instance settings', function () {
         ->put(route('instance-settings.update'), [
             'registrations_enabled' => false,
             'workspace_creation_enabled' => false,
+            'usage_tracking_enabled' => false,
         ])
         ->assertRedirect();
 
@@ -59,6 +60,7 @@ test('workspace creation setting cannot be enabled when workspaces are globally 
         ->put(route('instance-settings.update'), [
             'registrations_enabled' => true,
             'workspace_creation_enabled' => true,
+            'usage_tracking_enabled' => false,
         ])
         ->assertRedirect();
 

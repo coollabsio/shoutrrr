@@ -6,10 +6,13 @@ namespace App\Services\Publishing;
 
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
 use App\Exceptions\TokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -17,6 +20,8 @@ use Illuminate\Support\Facades\Date;
 
 class TokenManager
 {
+    use TracksUsage;
+
     private const int SKEW_SECONDS = 120;
 
     private const string BLUESKY_DEFAULT_PDS = 'https://bsky.social';
@@ -80,7 +85,24 @@ class TokenManager
             return $this->blueskyOAuthPayload($secret);
         }
 
-        return $this->refreshOAuth($account, $secret);
+        // Bluesky (ATProto) OAuth refresh tokens are single-use and rotate on every
+        // refresh. Concurrent refreshers — the hourly force-sweep plus the publish,
+        // reply-fetch, and engagement jobs that all call fresh() — would otherwise
+        // race: the winner rotates the token, the loser POSTs the already-consumed
+        // one and 400s with invalid_grant, flipping the account to needs-attention.
+        // Serialize per account and re-read the rotated state under the lock, exactly
+        // as the generic OAuth path below does.
+        return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
+            ->block(10, function () use ($account, $force): array {
+                $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
+                $freshSecret = $freshAccount->secret()->firstOrFail();
+
+                if (! $force && ! $this->needsRefresh($freshAccount)) {
+                    return $this->blueskyOAuthPayload($freshSecret);
+                }
+
+                return $this->refreshOAuth($freshAccount, $freshSecret);
+            });
     }
 
     /**
@@ -98,8 +120,8 @@ class TokenManager
         $session = $secret->session ?? [];
         $pds = (string) ($session['pds'] ?? self::BLUESKY_DEFAULT_PDS);
 
-        $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''))
-            ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password);
+        $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''), $account)
+            ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password, $account);
 
         if ($tokens === null) {
             $account->forceFill([
@@ -129,17 +151,19 @@ class TokenManager
      *
      * @return array{accessJwt: string, refreshJwt: string}|null
      */
-    private function refreshBlueskySession(string $pds, string $refreshJwt): ?array
+    private function refreshBlueskySession(string $pds, string $refreshJwt, ConnectedAccount $account): ?array
     {
         if ($refreshJwt === '') {
             return null;
         }
 
         // refreshSession authenticates with the refreshJwt as the bearer token.
-        return $this->blueskyTokens(
-            $this->http->withToken($refreshJwt)->acceptJson()
-                ->post($pds.'/xrpc/com.atproto.server.refreshSession')
-        );
+        $response = $this->http->withToken($refreshJwt)->acceptJson()
+            ->post($pds.'/xrpc/com.atproto.server.refreshSession');
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
+
+        return $this->blueskyTokens($response);
     }
 
     /**
@@ -148,19 +172,21 @@ class TokenManager
      *
      * @return array{accessJwt: string, refreshJwt: string}|null
      */
-    private function createBlueskySession(string $pds, string $identifier, string $appPassword): ?array
+    private function createBlueskySession(string $pds, string $identifier, string $appPassword, ConnectedAccount $account): ?array
     {
         if ($identifier === '' || $appPassword === '') {
             return null;
         }
 
-        return $this->blueskyTokens(
-            $this->http->acceptJson()
-                ->post($pds.'/xrpc/com.atproto.server.createSession', [
-                    'identifier' => $identifier,
-                    'password' => $appPassword,
-                ])
-        );
+        $response = $this->http->acceptJson()
+            ->post($pds.'/xrpc/com.atproto.server.createSession', [
+                'identifier' => $identifier,
+                'password' => $appPassword,
+            ]);
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
+
+        return $this->blueskyTokens($response);
     }
 
     /**
@@ -189,6 +215,7 @@ class TokenManager
     {
         if ($account->platform === Platform::Bluesky) {
             $endpoint = (string) ($secret->session['token_endpoint'] ?? '');
+            $issuer = (string) ($secret->session['issuer'] ?? $secret->session['auth_server'] ?? $endpoint);
         } elseif ($account->platform === Platform::X) {
             $endpoint = 'https://api.twitter.com/2/oauth2/token';
         } else {
@@ -215,10 +242,18 @@ class TokenManager
         if ($account->platform === Platform::X) {
             $request = $request->withBasicAuth($clientId, $clientSecret);
         } elseif ($account->platform === Platform::Bluesky) {
-            /** @var array<string, string>|null $key */
+            /** @var array{kty: string, crv: string, x: string, y: string, d: string}|null $key */
             $key = $secret->session['dpop_private_jwk'] ?? null;
-            if (! is_array($key) || $endpoint === '') {
+            if ($key === null || $endpoint === '') {
                 throw new TokenRefreshException("Token refresh failed for account {$account->id}.");
+            }
+            // Confidential clients authenticate with a private_key_jwt assertion; the
+            // loopback dev client (the synthesized `http://localhost/?…` id) is public
+            // and must not send one.
+            $usesAssertion = $clientId === route('oauth.bluesky.metadata');
+            if ($usesAssertion) {
+                $body['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+                $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
             }
             $request = $request->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $secret->session['dpop_nonce'] ?? null));
         } else {
@@ -226,6 +261,20 @@ class TokenManager
         }
 
         $response = $request->post((string) $endpoint, $body);
+
+        if ($response->failed() && $account->platform === Platform::Bluesky) {
+            $nonce = $response->header('DPoP-Nonce');
+            if ($nonce !== '') {
+                if ($usesAssertion) {
+                    $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
+                }
+                $response = $this->http->asForm()
+                    ->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $nonce))
+                    ->post((string) $endpoint, $body);
+            }
+        }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
 
         if ($response->failed()) {
             $account->forceFill([

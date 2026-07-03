@@ -1,4 +1,4 @@
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Eye, EyeOff, Film, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
 
@@ -161,13 +161,15 @@ export function MediaChips({
         <div className="ml-0.5 flex items-center gap-2">
             {media.map((m, idx) => {
                 const excluded = isExcluded(m.id);
-                // Both kinds open an editor on click. Videos are always
-                // editable (trim works without an encoder); the editor hides the
-                // crop tools when the browser can't re-encode.
+                const isGif = m.mime === 'image/gif';
+                // Videos open the trim editor; static images open the beautifier.
+                // GIFs open neither — the beautifier would flatten them to a static
+                // PNG — so they're attach-only.
                 const canEdit =
                     m.kind === 'video'
                         ? Boolean(onVideoClick)
-                        : Boolean(onImageClick);
+                        : Boolean(onImageClick) && !isGif;
+                const blueskyGif = activePlatform === 'bluesky' && isGif;
 
                 return (
                     <Tooltip key={m.id}>
@@ -277,10 +279,22 @@ export function MediaChips({
                                         )}
                                     </button>
                                 )}
+                                {blueskyGif && (
+                                    <span className="absolute -right-1 -bottom-1 z-10 grid size-4 place-items-center rounded-full border border-background bg-amber-500 text-white shadow-sm">
+                                        <Film
+                                            className="size-2.5"
+                                            aria-hidden="true"
+                                        />
+                                    </span>
+                                )}
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[11px]">
-                            {canEdit ? 'Click to edit' : 'Attached media'}
+                            {blueskyGif
+                                ? 'Bluesky will publish this GIF as video'
+                                : canEdit
+                                  ? 'Click to edit'
+                                  : 'Attached media'}
                         </TooltipContent>
                     </Tooltip>
                 );

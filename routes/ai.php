@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\RecordApiUsage;
 use App\Mcp\Servers\ShoutrrrServer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -15,7 +16,7 @@ Route::middleware('throttle:20,1')->group(function (): void {
 });
 
 Mcp::web('/mcp', ShoutrrrServer::class)
-    ->middleware(['auth:api', 'throttle:mcp']);
+    ->middleware(['auth:api', 'throttle:mcp', RecordApiUsage::class]);
 
 // Browsers that GET /mcp would otherwise hit the package's bare "405 Method Not
 // Allowed" handler, which renders as a confusing error page. Override the GET

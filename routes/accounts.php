@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('oauth/bluesky/client-metadata.json', BlueskyClientMetadataController::class)
     ->name('oauth.bluesky.metadata');
 
+Route::get('oauth/bluesky/jwks.json', [BlueskyClientMetadataController::class, 'jwks'])
+    ->name('oauth.bluesky.jwks');
+
 // Route-model binding runs in SubstituteBindings, which executes before the
 // appended WorkspaceMiddleware sets the workspace Context — so the model's global
 // workspace scope is a no-op here. Scope the lookup to the authenticated user's

@@ -9,11 +9,15 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\UsageCategory;
+use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -24,7 +28,7 @@ use Throwable;
 
 class LinkedInConnector implements PublishConnector
 {
-    use MapsHttpErrors;
+    use MapsHttpErrors, TracksUsage;
 
     private const string POSTS_URL = 'https://api.linkedin.com/rest/posts';
 
@@ -97,7 +101,7 @@ class LinkedInConnector implements PublishConnector
             if ($videoUrn !== null) {
                 $body['content'] = ['media' => ['id' => $videoUrn, 'title' => '']];
             } else {
-                $images = $this->uploadImages($context->media, $author, $token);
+                $images = $this->uploadImages($context->media, $author, $token, $context->account);
 
                 if (count($images) === 1) {
                     $body['content'] = ['media' => ['id' => $images[0]['urn'], 'altText' => $images[0]['altText']]];
@@ -111,7 +115,7 @@ class LinkedInConnector implements PublishConnector
                         ],
                     ];
                 } else {
-                    $article = $this->articleFromText($text, $author, $token);
+                    $article = $this->articleFromText($text, $author, $token, $context->account);
 
                     if ($article !== null) {
                         $body['content'] = ['article' => $article];
@@ -124,6 +128,8 @@ class LinkedInConnector implements PublishConnector
                 ->withHeaders(['LinkedIn-Version' => $this->apiVersion(), 'X-Restli-Protocol-Version' => '2.0.0'])
                 ->acceptJson()
                 ->post(self::POSTS_URL, $body);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
 
             if ($response->failed()) {
                 return $this->mapFailure($response);
@@ -150,7 +156,7 @@ class LinkedInConnector implements PublishConnector
      *
      * @return array{source: string, title: string, description?: string, thumbnail?: string}|null
      */
-    private function articleFromText(string $text, string $author, string $token): ?array
+    private function articleFromText(string $text, string $author, string $token, ConnectedAccount $account): ?array
     {
         $url = $this->firstUrl($text);
 
@@ -189,7 +195,7 @@ class LinkedInConnector implements PublishConnector
 
             $imageUrl = $this->absoluteUrl($this->metaContent($html, ['og:image', 'twitter:image']), $source);
             if ($imageUrl !== null) {
-                $thumbnail = $this->uploadArticleThumbnail($imageUrl, $author, $token);
+                $thumbnail = $this->uploadArticleThumbnail($imageUrl, $author, $token, $account);
 
                 if ($thumbnail !== null) {
                     $article['thumbnail'] = $thumbnail;
@@ -273,7 +279,7 @@ class LinkedInConnector implements PublishConnector
         return $scheme.'://'.$host.$directory.'/'.$url;
     }
 
-    private function uploadArticleThumbnail(string $url, string $author, string $token): ?string
+    private function uploadArticleThumbnail(string $url, string $author, string $token, ConnectedAccount $account): ?string
     {
         try {
             $image = $this->http->timeout(10)->connectTimeout(3)->get($url);
@@ -288,6 +294,8 @@ class LinkedInConnector implements PublishConnector
                 ->acceptJson()
                 ->post(self::IMAGES_URL, ['initializeUploadRequest' => ['owner' => $author]]);
 
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $register);
+
             if ($register->failed()) {
                 return null;
             }
@@ -299,6 +307,8 @@ class LinkedInConnector implements PublishConnector
                 ->withToken($token)
                 ->withBody($image->body(), $image->header('Content-Type') ?: 'image/jpeg')
                 ->put($uploadUrl);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $upload);
 
             return $upload->failed() || $urn === '' ? null : $urn;
         } catch (Throwable) {
@@ -312,7 +322,7 @@ class LinkedInConnector implements PublishConnector
      * @param  list<PostMedia>  $media
      * @return list<array{urn: string, altText: string}>
      */
-    private function uploadImages(array $media, string $author, string $token): array
+    private function uploadImages(array $media, string $author, string $token, ConnectedAccount $account): array
     {
         $media = array_slice($media, 0, Platform::LinkedIn->maxMedia());
         $images = [];
@@ -323,6 +333,8 @@ class LinkedInConnector implements PublishConnector
                 ->withHeaders(['LinkedIn-Version' => $this->apiVersion(), 'X-Restli-Protocol-Version' => '2.0.0'])
                 ->acceptJson()
                 ->post(self::IMAGES_URL, ['initializeUploadRequest' => ['owner' => $author]]);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $register);
 
             if ($register->failed()) {
                 throw new LinkedInRequestFailed($register);
@@ -338,6 +350,8 @@ class LinkedInConnector implements PublishConnector
                 ->withToken($token)
                 ->withBody($compressed->bytes, $compressed->mime)
                 ->put($uploadUrl);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $upload);
 
             if ($upload->failed()) {
                 throw new LinkedInRequestFailed($upload);
@@ -356,7 +370,7 @@ class LinkedInConnector implements PublishConnector
 
         try {
             if ($urn === null) {
-                $urn = $this->uploadVideo($media, $author, $token);
+                $urn = $this->uploadVideo($media, $author, $token, $context->account);
                 $state->markUploaded($media->id, $urn);
                 $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
             }
@@ -365,6 +379,8 @@ class LinkedInConnector implements PublishConnector
                 ->withHeaders(['LinkedIn-Version' => $this->apiVersion(), 'X-Restli-Protocol-Version' => '2.0.0'])
                 ->acceptJson()
                 ->get(self::VIDEOS_URL.'/'.rawurlencode($urn));
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_STATUS_POLL, $context->account, $status);
 
             if ($status->failed()) {
                 $kind = $this->classifyStatus($status->status());
@@ -399,7 +415,7 @@ class LinkedInConnector implements PublishConnector
         }
     }
 
-    private function uploadVideo(PostMedia $media, string $author, string $token): string
+    private function uploadVideo(PostMedia $media, string $author, string $token, ConnectedAccount $account): string
     {
         $disk = Storage::disk($media->disk);
         $total = (int) $disk->size($media->path);
@@ -409,6 +425,9 @@ class LinkedInConnector implements PublishConnector
             ->post(self::VIDEOS_INIT_URL, [
                 'initializeUploadRequest' => ['owner' => $author, 'fileSizeBytes' => $total],
             ]);
+
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $init);
+
         if ($init->failed()) {
             throw new LinkedInRequestFailed($init);
         }
@@ -428,6 +447,9 @@ class LinkedInConnector implements PublishConnector
                 fseek($stream, $first);
                 $part = (string) stream_get_contents($stream, $length);
                 $put = $this->http->withToken($token)->withBody($part, 'application/octet-stream')->put($instruction['uploadUrl']);
+
+                $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $put);
+
                 if ($put->failed()) {
                     throw new LinkedInRequestFailed($put);
                 }
@@ -441,6 +463,9 @@ class LinkedInConnector implements PublishConnector
             ->post(self::VIDEOS_FINALIZE_URL, [
                 'finalizeUploadRequest' => ['video' => $urn, 'uploadToken' => $uploadToken, 'uploadedPartIds' => $etags],
             ]);
+
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $account, $finalize);
+
         if ($finalize->failed()) {
             throw new LinkedInRequestFailed($finalize);
         }
@@ -465,6 +490,9 @@ class LinkedInConnector implements PublishConnector
             ->withToken($token)
             ->withHeaders(['LinkedIn-Version' => $this->apiVersion()])
             ->delete(self::POSTS_URL.'/'.rawurlencode($urn));
+
+        // A 404 means the post is already gone — throwUnlessDeleteAccepted treats it as done.
+        $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response, succeeded: $response->successful() || $response->status() === 404);
 
         $this->throwUnlessDeleteAccepted($response);
     }

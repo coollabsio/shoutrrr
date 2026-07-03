@@ -10,6 +10,7 @@ use App\Models\Post;
 use App\Models\PostMedia;
 use App\Services\Posts\MediaStorageService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class PostMediaController extends Controller
 {
@@ -26,6 +27,20 @@ class PostMediaController extends Controller
         );
 
         return response()->json(['media' => $media->toView()], 201);
+    }
+
+    public function updateAlt(Post $post, PostMedia $media, Request $request): JsonResponse
+    {
+        abort_unless($media->workspace_id === $post->workspace_id, 404);
+        abort_unless($post->status->isEditable(), 422, 'This post can no longer be edited.');
+
+        $validated = $request->validate([
+            'alt_text' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $media->update(['alt_text' => $validated['alt_text']]);
+
+        return response()->json(['media' => $media->refresh()->toView()]);
     }
 
     public function destroy(Post $post, PostMedia $media): JsonResponse
