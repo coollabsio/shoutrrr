@@ -64,6 +64,15 @@ class SecurityHeaders
 
     protected function contentSecurityPolicy(string $nonce): string
     {
+        // The remote storage origin (empty on local/public-disk deployments) is
+        // needed both to XHR-PUT direct-to-storage uploads / GET the video
+        // editor's source (connect-src) and to play back a signed video URL in a
+        // <video> element (media-src). Adding it only when the disk is remote
+        // keeps local and public-disk deployments on the tightest policy.
+        $storage = $this->storageOrigins();
+        $connect = trim("'self' blob: ".implode(' ', $storage));
+        $media = trim("'self' blob: ".implode(' ', $storage));
+
         $directives = [
             "default-src 'self'",
             "script-src 'self' 'nonce-{$nonce}' 'strict-dynamic'",
@@ -72,8 +81,13 @@ class SecurityHeaders
             // XSS risk and script-src remains strict.
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob: https:",
+            // blob: backs the composer's local video preview (URL.createObjectURL);
+            // the storage origin backs playback of an already-uploaded video served
+            // from a signed remote URL. Without media-src both fall through to
+            // default-src 'self' and are blocked.
+            "media-src {$media}",
             "font-src 'self' data:",
-            "connect-src 'self' blob:",
+            "connect-src {$connect}",
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "form-action 'self'",
@@ -81,5 +95,56 @@ class SecurityHeaders
         ];
 
         return implode('; ', $directives);
+    }
+
+    /**
+     * CSP source origins for the deployment's media storage host. Empty unless
+     * the default disk is remote (s3), so local/public-disk deployments keep the
+     * tightest policy. Derived from the configured public URL and API endpoint;
+     * an s3 disk with neither configured (vanilla AWS, whose virtual-hosted,
+     * region-derived presign host can't be predicted cheaply here) falls back to
+     * `https:` so uploads and playback still work.
+     *
+     * @return list<string>
+     */
+    private function storageOrigins(): array
+    {
+        if (config('filesystems.default') !== 's3') {
+            return [];
+        }
+
+        $origins = [];
+
+        foreach (['filesystems.disks.s3.url', 'filesystems.disks.s3.endpoint'] as $key) {
+            $origin = $this->originOf((string) config($key));
+
+            if ($origin !== null) {
+                $origins[$origin] = $origin;
+            }
+        }
+
+        return $origins === [] ? ['https:'] : array_values($origins);
+    }
+
+    /**
+     * Reduce a URL to its CSP-source origin (`scheme://host[:port]`), or null if
+     * it lacks a usable scheme and host.
+     */
+    private function originOf(string $url): ?string
+    {
+        if ($url === '') {
+            return null;
+        }
+
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if (! is_string($scheme) || ! is_string($host) || $host === '') {
+            return null;
+        }
+
+        $port = parse_url($url, PHP_URL_PORT);
+
+        return $scheme.'://'.$host.(is_int($port) ? ':'.$port : '');
     }
 }
