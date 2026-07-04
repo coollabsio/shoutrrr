@@ -9,6 +9,10 @@ import { ImageEditor } from '@/components/compose/image-editor';
 import { MediaChips } from '@/components/compose/media-chips';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import {
+    wouldMixVideoAndImages,
+    wouldViolateBlueskyGif,
+} from '@/lib/compose/media-rules';
+import {
     defaultSettings,
     type EditSettings,
     normalizeSettings,
@@ -226,15 +230,21 @@ export function useReplyMedia({
 
     async function handleAddedFiles(files: FileList | File[]): Promise<void> {
         const all = Array.from(files);
+
+        // Bluesky publishes a GIF as video and allows only one, unmixed. Block it
+        // up front (same as the one-video rule below) so it never reaches posting.
+        if (platform === 'bluesky' && wouldViolateBlueskyGif(media, all)) {
+            toast.error(
+                'Bluesky supports one animated GIF per post, and it cannot be mixed with other media.',
+            );
+
+            return;
+        }
+
         const videos = all.filter((f) => f.type.startsWith('video/'));
         const images = all.filter((f) => !f.type.startsWith('video/'));
 
-        const hasVideoNow = media.some((m) => m.kind === 'video');
-        const hasImageNow = media.some((m) => m.kind !== 'video');
-        if (
-            (videos.length > 0 && (images.length > 0 || hasImageNow)) ||
-            (images.length > 0 && hasVideoNow)
-        ) {
+        if (wouldMixVideoAndImages(media, all)) {
             toast.error('A reply can contain one video or images, not both.');
 
             return;

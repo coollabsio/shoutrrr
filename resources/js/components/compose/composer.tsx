@@ -19,6 +19,10 @@ import {
     type ComposerState,
 } from '@/lib/compose/composer-state';
 import {
+    wouldMixVideoAndImages,
+    wouldViolateBlueskyGif,
+} from '@/lib/compose/media-rules';
+import {
     replaceMentionLabel,
     replaceMentionTokens,
     savedMentionToPlaceholder,
@@ -302,6 +306,21 @@ export default function Composer({
     // the editor as a batch (edited one at a time).
     async function handleAddedFiles(files: FileList | File[]): Promise<void> {
         const all = Array.from(files);
+
+        // Bluesky publishes a GIF as video and allows only one, unmixed. Block it
+        // up front (same as the one-video rule) so it never reaches publishing —
+        // only when a Bluesky account is a target, since LinkedIn allows GIF+images.
+        const targetsBluesky = tabAccounts.some(
+            (a) => a.platform === 'bluesky',
+        );
+        if (targetsBluesky && wouldViolateBlueskyGif(state.media, all)) {
+            toast.error(
+                'Bluesky supports one animated GIF per post, and it cannot be mixed with other media.',
+            );
+
+            return;
+        }
+
         const videos = all.filter((f) => f.type.startsWith('video/'));
         // Anything that isn't a video is treated as an image: some clipboard
         // pastes report an empty/unknown MIME type, and the server validates the
@@ -310,12 +329,7 @@ export default function Composer({
 
         // A post is one video OR images, never both — decide before uploading
         // anything, so a mixed drop doesn't half-attach the video.
-        const hasVideo = state.media.some((m) => m.kind === 'video');
-        const hasImage = state.media.some((m) => m.kind !== 'video');
-        if (
-            (videos.length > 0 && (images.length > 0 || hasImage)) ||
-            (images.length > 0 && hasVideo)
-        ) {
+        if (wouldMixVideoAndImages(state.media, all)) {
             toast.error('A post can contain one video or images, not both.');
 
             return;
