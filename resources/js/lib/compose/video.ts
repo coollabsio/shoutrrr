@@ -174,8 +174,11 @@ export function readVideoMetadata(file: File): Promise<VideoMeta> {
                 resolve({
                     sizeBytes: file.size,
                     mime: file.type,
-                    // Floor, not round: a 140.4s clip must not be rejected against a 140s cap.
-                    durationSeconds: Math.floor(video.duration),
+                    // Floor, not round: a 140.4s clip must not be rejected against a
+                    // 140s cap. Clamp to ≥1: a valid video always has some duration,
+                    // but a sub-second trim (e.g. 0.8s) floors to 0, which fails the
+                    // confirm endpoint's `min:1` rule and 422s the upload.
+                    durationSeconds: Math.max(1, Math.floor(video.duration)),
                     width: video.videoWidth,
                     height: video.videoHeight,
                 }),
@@ -193,8 +196,11 @@ export function readVideoMetadata(file: File): Promise<VideoMeta> {
             if (hasDuration() && hasDimensions()) {
                 succeed();
             } else if (Number.isFinite(video.duration) && !hasDimensions()) {
-                // Duration is known but dimensions aren't — decode one frame.
-                video.currentTime = 0;
+                // Duration is known but dimensions aren't — decode one frame. Seek
+                // to a small non-zero offset rather than 0: the element already
+                // sits at currentTime 0, and assigning the current value is a no-op
+                // that never fires `seeked`, so we'd hang to the timeout instead.
+                video.currentTime = 1e-3;
             } else {
                 video.currentTime = 1e101;
             }

@@ -33,6 +33,11 @@ class FakeVideo {
     }
 
     set currentTime(value: number) {
+        // Real browsers don't fire `seeked` when the assigned value equals the
+        // current position — modelling that keeps the fake honest about no-op seeks.
+        if (value === this.currentTimeValue) {
+            return;
+        }
         this.currentTimeValue = value;
         this.seeks.push(value);
         if (value > 1e50 && this.resolvedDuration !== null) {
@@ -93,6 +98,25 @@ it('resolves immediately when the first metadata read is already valid', async (
     expect(el.seeks).toEqual([]);
 });
 
+it('clamps a sub-second duration to 1 so the confirm endpoint does not 422', async () => {
+    const promise = readVideoMetadata(file());
+    const el = created!;
+    // A short trim: a valid clip, but Math.floor(0.8) is 0, which fails the
+    // server's `min:1` rule and reintroduces the reported 422.
+    el.duration = 0.8;
+    el.videoWidth = 1080;
+    el.videoHeight = 1920;
+    el.onloadedmetadata?.();
+
+    await expect(promise).resolves.toMatchObject({
+        durationSeconds: 1,
+        width: 1080,
+        height: 1920,
+    });
+    // A clean (if short) read still must not pay for the seek nudge.
+    expect(el.seeks).toEqual([]);
+});
+
 it('nudges with a seek when duration comes back non-finite, then resolves', async () => {
     const promise = readVideoMetadata(file());
     const el = created!;
@@ -131,7 +155,9 @@ it('nudges when dimensions are missing even if duration is known', async () => {
         width: 640,
         height: 480,
     });
-    expect(el.seeks).toContain(0);
+    // A non-zero nudge is required: seeking to 0 (the current position) would be
+    // a no-op that never fires `seeked`, so the frame decode would never trigger.
+    expect(el.seeks.some((t) => t > 0)).toBe(true);
 });
 
 it('rejects (rather than returning bad data) when the video errors', async () => {
