@@ -10,6 +10,7 @@ type InstanceSettings = {
     registrations_enabled: boolean;
     workspace_creation_enabled: boolean;
     usage_tracking_enabled: boolean;
+    quote_tweets_enabled: boolean;
 };
 
 type PageProps = {
@@ -23,6 +24,7 @@ export default function Instance({ settings, workspaces_enabled }: PageProps) {
         workspace_creation_enabled:
             workspaces_enabled && settings.workspace_creation_enabled,
         usage_tracking_enabled: settings.usage_tracking_enabled,
+        quote_tweets_enabled: settings.quote_tweets_enabled,
     });
 
     function handleSubmit(event: React.FormEvent) {
@@ -113,6 +115,30 @@ export default function Instance({ settings, workspaces_enabled }: PageProps) {
                                     When enabled, records per-workspace API
                                     usage (posts, reads, requests) for cost and
                                     abuse monitoring. Off by default.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                            <Checkbox
+                                id="quote_tweets_enabled"
+                                checked={data.quote_tweets_enabled}
+                                onCheckedChange={(checked) =>
+                                    setData(
+                                        'quote_tweets_enabled',
+                                        checked === true,
+                                    )
+                                }
+                            />
+                            <div className="space-y-1">
+                                <Label htmlFor="quote_tweets_enabled">
+                                    Quote tweets on X from pasted links
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                    When enabled, a post link in an X update
+                                    becomes a quote tweet instead of a plain
+                                    link. Requires X Enterprise API access;
+                                    leave off on other tiers. Off by default.
                                 </p>
                             </div>
                         </div>

@@ -17,6 +17,7 @@ use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -43,6 +44,7 @@ class XConnector implements PublishConnector
     public function __construct(
         private readonly HttpFactory $http,
         private readonly ImageCompressor $imageCompressor,
+        private readonly InstanceSettings $settings,
     ) {}
 
     public function publish(PublishContext $context): PublishResult
@@ -79,13 +81,28 @@ class XConnector implements PublishConnector
                     continue;
                 }
 
-                // X rejects an empty `text` field; once media_ids are attached
+                $hasMedia = $index === 0 && $mediaIds !== [];
+
+                // Quote-posting is opt-in per instance (it needs X Enterprise API access),
+                // and quote_tweet_id is mutually exclusive with media on X — so only pull a
+                // quoted status link out of the copy when the instance allows it and this
+                // segment carries no media. (Otherwise the link stays inline as a plain URL.)
+                $quoteTweetId = null;
+                if (! $hasMedia && $this->settings->quoteTweetsEnabled()) {
+                    [$text, $quoteTweetId] = $this->extractQuoteTweet($text);
+                }
+
+                // X rejects an empty `text` field; once media_ids or a quote are attached
                 // text is optional, so omit it entirely for a media-only post
                 // (otherwise the API returns a 400 "Invalid Request").
                 $body = $text === '' ? [] : ['text' => $text];
 
-                if ($index === 0 && $mediaIds !== []) {
+                if ($hasMedia) {
                     $body['media'] = ['media_ids' => $mediaIds];
+                }
+
+                if ($quoteTweetId !== null) {
+                    $body['quote_tweet_id'] = $quoteTweetId;
                 }
 
                 $previous = $remoteIds[$index - 1] ?? null;
@@ -121,6 +138,46 @@ class XConnector implements PublishConnector
         }
 
         return PublishResult::success(array_values($remoteIds));
+    }
+
+    /**
+     * Pull a quoted-post target out of a tweet's copy.
+     *
+     * A bare status link never renders as a quote on its own — X only shows a quote
+     * card when the request carries a separate `quote_tweet_id`. Mirroring X's native
+     * behaviour, the LAST status link in the text becomes the quote and is stripped
+     * from the visible copy so the reader sees a card, not a redundant t.co link.
+     *
+     * @return array{0: string, 1: ?string} the copy with the quoted link removed, and the quoted tweet id (or null)
+     */
+    private function extractQuoteTweet(string $text): array
+    {
+        $matched = preg_match_all(
+            '~https?://(?:www\.|mobile\.)?(?:twitter|x)\.com/\w+/status(?:es)?/(\d{1,19})(?:[/?#]\S*)?~i',
+            $text,
+            $matches,
+            PREG_OFFSET_CAPTURE,
+        );
+
+        if ($matched === 0 || $matched === false) {
+            return [$text, null];
+        }
+
+        $lastUrl = end($matches[0]);
+        $lastId = end($matches[1]);
+
+        if ($lastUrl === false || $lastId === false) {
+            return [$text, null];
+        }
+
+        [$url, $offset] = $lastUrl;
+        $quoteTweetId = $lastId[0];
+
+        // Remove the quoted link, then collapse the whitespace it left behind.
+        $stripped = substr_replace($text, '', $offset, strlen($url));
+        $stripped = trim((string) preg_replace('/\s{2,}/', ' ', $stripped));
+
+        return [$stripped, $quoteTweetId];
     }
 
     public function delete(PostTarget $target, array $credentials): void

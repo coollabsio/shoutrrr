@@ -29,6 +29,7 @@ test('instance owner can update instance settings', function () {
             'registrations_enabled' => false,
             'workspace_creation_enabled' => false,
             'usage_tracking_enabled' => false,
+            'quote_tweets_enabled' => false,
         ])
         ->assertRedirect();
 
@@ -61,6 +62,7 @@ test('workspace creation setting cannot be enabled when workspaces are globally 
             'registrations_enabled' => true,
             'workspace_creation_enabled' => true,
             'usage_tracking_enabled' => false,
+            'quote_tweets_enabled' => false,
         ])
         ->assertRedirect();
 

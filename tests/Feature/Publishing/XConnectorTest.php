@@ -301,6 +301,116 @@ test('x omits an empty text field for a media-only post', function () {
         && ($request['media']['media_ids'] ?? null) === ['99001']);
 });
 
+test('x quotes a pasted status link and strips it from the text', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
+    Http::fake([
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
+    ]);
+
+    $result = app(XConnector::class)->publish(xContext([
+        'great thread 👇 https://x.com/foo/status/1234567890',
+    ]));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.twitter.com/2/tweets'
+        && $request['text'] === 'great thread 👇'
+        && ($request['quote_tweet_id'] ?? null) === '1234567890');
+});
+
+test('x quotes twitter.com links and tolerates query strings', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
+    Http::fake([
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
+    ]);
+
+    app(XConnector::class)->publish(xContext([
+        'look https://twitter.com/foo/status/999?s=20',
+    ]));
+
+    Http::assertSent(fn ($request) => $request['text'] === 'look'
+        && ($request['quote_tweet_id'] ?? null) === '999');
+});
+
+test('x quotes the last status link when several are present', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
+    Http::fake([
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
+    ]);
+
+    app(XConnector::class)->publish(xContext([
+        'https://x.com/a/status/111 vs https://x.com/b/status/222',
+    ]));
+
+    Http::assertSent(fn ($request) => ($request['quote_tweet_id'] ?? null) === '222'
+        && $request['text'] === 'https://x.com/a/status/111 vs');
+});
+
+test('x omits text entirely for a quote-only tweet', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
+    Http::fake([
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
+    ]);
+
+    app(XConnector::class)->publish(xContext(['https://x.com/foo/status/1234567890']));
+
+    Http::assertSent(fn ($request) => ! array_key_exists('text', $request->data())
+        && ($request['quote_tweet_id'] ?? null) === '1234567890');
+});
+
+test('x does not treat a non-status x.com link as a quote', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
+    Http::fake([
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
+    ]);
+
+    app(XConnector::class)->publish(xContext(['follow me https://x.com/foo']));
+
+    Http::assertSent(fn ($request) => $request['text'] === 'follow me https://x.com/foo'
+        && ! array_key_exists('quote_tweet_id', $request->data()));
+});
+
+test('x leaves a status link inline when quote tweets are disabled (the default)', function () {
+    Http::fake([
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
+    ]);
+
+    app(XConnector::class)->publish(xContext([
+        'great thread 👇 https://x.com/foo/status/1234567890',
+    ]));
+
+    // Off by default: the link is posted verbatim, no quote_tweet_id.
+    Http::assertSent(fn ($request) => $request['text'] === 'great thread 👇 https://x.com/foo/status/1234567890'
+        && ! array_key_exists('quote_tweet_id', $request->data()));
+});
+
+test('x leaves a status link inline and skips quoting when media is attached', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
+    Storage::fake('public');
+    Storage::disk('public')->put('media/cat.jpg', 'image-bytes');
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/cat.jpg',
+        'mime' => 'image/jpeg',
+    ]);
+
+    Http::fake([
+        'https://api.x.com/2/media/upload' => Http::response(['data' => ['id' => '99001']]),
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
+    ]);
+
+    app(XConnector::class)->publish(xContext([
+        'see https://x.com/foo/status/1234567890',
+    ], [$media]));
+
+    // quote_tweet_id is mutually exclusive with media, so the link stays in the copy.
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.twitter.com/2/tweets'
+        && $request['text'] === 'see https://x.com/foo/status/1234567890'
+        && ! array_key_exists('quote_tweet_id', $request->data())
+        && ($request['media']['media_ids'] ?? null) === ['99001']);
+});
+
 test('x compresses oversized images via the compressor before upload', function () {
     Storage::fake('public');
     Storage::disk('public')->put('media/big.jpg', 'image-bytes');
