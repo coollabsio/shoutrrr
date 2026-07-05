@@ -75,7 +75,8 @@ declare module '@tiptap/core' {
 
 /**
  * Manual thread-break atom node. Renders as a non-editable `<div data-section-break>`
- * and serializes to the canonical `---` boundary the server-side PostSplitter splits on.
+ * and marks a segment boundary — `docToSegments` ends the current segment here, so
+ * the server-side PostSplitter receives it as an array boundary, not an in-text marker.
  */
 export const SectionBreak = Node.create({
     name: 'sectionBreak',
@@ -241,6 +242,11 @@ export const SectionBreak = Node.create({
                     .focus()
                     .run();
             },
+            // Shift+Enter is the "soft" newline: split the paragraph so the
+            // caret moves to the next line within the same post, without ever
+            // converting to a section break the way an empty-line Enter does.
+            // Two Shift+Enters therefore make a blank line inside one post.
+            'Shift-Enter': () => this.editor.commands.splitBlock(),
             'Mod-Shift-Enter': () => this.editor.commands.insertSectionBreak(),
         };
     },
