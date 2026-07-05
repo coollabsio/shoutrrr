@@ -108,6 +108,37 @@ describe('buildPlatformPreview', () => {
         ]);
     });
 
+    it('collapses extra blank lines to one in the X preview text but counts the raw body', () => {
+        const preview = buildPlatformPreview({
+            account: { ...account('x'), max_text_length: 280 },
+            segments: ['line one\n\n\n\nline two'],
+            mentions: [],
+            media: [],
+            excludedMediaIds: new Set(),
+            limit: 280,
+            autoSplit: true,
+        });
+
+        // Rendered spacing matches X (one blank line), while the count still
+        // reflects the four transmitted newlines.
+        expect(preview.items[0]?.text).toBe('line one\n\nline two');
+        expect(preview.items[0]?.count).toBe('line one\n\n\n\nline two'.length);
+    });
+
+    it('keeps every blank line in the Bluesky preview text', () => {
+        const preview = buildPlatformPreview({
+            account: { ...account('bluesky'), max_text_length: 300 },
+            segments: ['line one\n\n\n\nline two'],
+            mentions: [],
+            media: [],
+            excludedMediaIds: new Set(),
+            limit: 300,
+            autoSplit: false,
+        });
+
+        expect(preview.items[0]?.text).toBe('line one\n\n\n\nline two');
+    });
+
     it('marks LinkedIn mention display domains as link exclusions', () => {
         const preview = buildPlatformPreview({
             account: account('linkedin'),

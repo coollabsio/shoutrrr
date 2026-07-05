@@ -2,6 +2,7 @@ import {
     mentionInputValue,
     replaceMentionTokens,
 } from '@/lib/compose/mentions';
+import { collapsePlatformNewlines } from '@/lib/compose/platform-newlines';
 import { measure, previewSections } from '@/lib/compose/section-split';
 import type {
     Account,
@@ -80,7 +81,9 @@ export function buildPlatformPreview({
         autoSplit,
         items: sections.map((section, index) => ({
             id: `${account.platform}-preview-${index + 1}`,
-            text: section,
+            // Show the spacing the platform will actually render; the character
+            // budget below still measures the raw text that gets transmitted.
+            text: collapsePlatformNewlines(section, account.platform),
             media: index === 0 ? visibleMedia : [],
             count: measure(section, account.platform),
             overLimit: limit > 0 && measure(section, account.platform) > limit,
