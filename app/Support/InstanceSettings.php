@@ -28,6 +28,11 @@ class InstanceSettings
         return $this->boolean('usage_tracking_enabled');
     }
 
+    public function quoteTweetsEnabled(): bool
+    {
+        return $this->boolean('quote_tweets_enabled');
+    }
+
     public function registrationsAllowed(?string $invitationToken = null): bool
     {
         if (! $this->ownerExists()) {
@@ -56,7 +61,7 @@ class InstanceSettings
     }
 
     /**
-     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool}
+     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool}
      */
     public function all(): array
     {
@@ -64,11 +69,12 @@ class InstanceSettings
             'registrations_enabled' => $this->registrationsEnabled(),
             'workspace_creation_enabled' => $this->workspaceCreationEnabled(),
             'usage_tracking_enabled' => $this->usageTrackingEnabled(),
+            'quote_tweets_enabled' => $this->quoteTweetsEnabled(),
         ];
     }
 
     /**
-     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool}  $values
+     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool}  $values
      */
     public function update(array $values): void
     {

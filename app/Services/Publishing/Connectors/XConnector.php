@@ -17,6 +17,7 @@ use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -43,6 +44,7 @@ class XConnector implements PublishConnector
     public function __construct(
         private readonly HttpFactory $http,
         private readonly ImageCompressor $imageCompressor,
+        private readonly InstanceSettings $settings,
     ) {}
 
     public function publish(PublishContext $context): PublishResult
@@ -81,11 +83,12 @@ class XConnector implements PublishConnector
 
                 $hasMedia = $index === 0 && $mediaIds !== [];
 
-                // quote_tweet_id is mutually exclusive with media on X, so only pull a
-                // quoted status link out of the copy when this segment carries no media.
-                // (When media is attached we leave the link inline as a plain URL.)
+                // Quote-posting is opt-in per instance (it needs X Enterprise API access),
+                // and quote_tweet_id is mutually exclusive with media on X — so only pull a
+                // quoted status link out of the copy when the instance allows it and this
+                // segment carries no media. (Otherwise the link stays inline as a plain URL.)
                 $quoteTweetId = null;
-                if (! $hasMedia) {
+                if (! $hasMedia && $this->settings->quoteTweetsEnabled()) {
                     [$text, $quoteTweetId] = $this->extractQuoteTweet($text);
                 }
 

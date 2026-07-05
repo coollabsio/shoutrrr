@@ -4,24 +4,29 @@ use App\Enums\InstanceRole;
 use App\Models\User;
 use App\Support\InstanceSettings;
 
-it('lets an instance owner enable usage tracking', function () {
-    $owner = User::factory()->create(['instance_role' => InstanceRole::Owner->value]);
-
-    $this->actingAs($owner)->put('/settings/instance', [
-        'registrations_enabled' => false,
-        'workspace_creation_enabled' => true,
-        'usage_tracking_enabled' => true,
-        'quote_tweets_enabled' => false,
-    ])->assertRedirect();
-
-    expect(app(InstanceSettings::class)->usageTrackingEnabled())->toBeTrue();
+it('is disabled by default', function () {
+    expect(app(InstanceSettings::class)->quoteTweetsEnabled())->toBeFalse();
 });
 
-it('rejects a missing usage_tracking_enabled field', function () {
+it('lets an instance owner enable quote tweets', function () {
     $owner = User::factory()->create(['instance_role' => InstanceRole::Owner->value]);
 
     $this->actingAs($owner)->put('/settings/instance', [
         'registrations_enabled' => false,
         'workspace_creation_enabled' => true,
-    ])->assertSessionHasErrors('usage_tracking_enabled');
+        'usage_tracking_enabled' => false,
+        'quote_tweets_enabled' => true,
+    ])->assertRedirect();
+
+    expect(app(InstanceSettings::class)->quoteTweetsEnabled())->toBeTrue();
+});
+
+it('rejects a missing quote_tweets_enabled field', function () {
+    $owner = User::factory()->create(['instance_role' => InstanceRole::Owner->value]);
+
+    $this->actingAs($owner)->put('/settings/instance', [
+        'registrations_enabled' => false,
+        'workspace_creation_enabled' => true,
+        'usage_tracking_enabled' => false,
+    ])->assertSessionHasErrors('quote_tweets_enabled');
 });

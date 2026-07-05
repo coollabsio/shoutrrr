@@ -302,6 +302,7 @@ test('x omits an empty text field for a media-only post', function () {
 });
 
 test('x quotes a pasted status link and strips it from the text', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
     Http::fake([
         'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
     ]);
@@ -318,6 +319,7 @@ test('x quotes a pasted status link and strips it from the text', function () {
 });
 
 test('x quotes twitter.com links and tolerates query strings', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
     Http::fake([
         'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
     ]);
@@ -331,6 +333,7 @@ test('x quotes twitter.com links and tolerates query strings', function () {
 });
 
 test('x quotes the last status link when several are present', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
     Http::fake([
         'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
     ]);
@@ -344,6 +347,7 @@ test('x quotes the last status link when several are present', function () {
 });
 
 test('x omits text entirely for a quote-only tweet', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
     Http::fake([
         'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
     ]);
@@ -355,6 +359,7 @@ test('x omits text entirely for a quote-only tweet', function () {
 });
 
 test('x does not treat a non-status x.com link as a quote', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
     Http::fake([
         'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
     ]);
@@ -365,7 +370,22 @@ test('x does not treat a non-status x.com link as a quote', function () {
         && ! array_key_exists('quote_tweet_id', $request->data()));
 });
 
+test('x leaves a status link inline when quote tweets are disabled (the default)', function () {
+    Http::fake([
+        'https://api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']]),
+    ]);
+
+    app(XConnector::class)->publish(xContext([
+        'great thread 👇 https://x.com/foo/status/1234567890',
+    ]));
+
+    // Off by default: the link is posted verbatim, no quote_tweet_id.
+    Http::assertSent(fn ($request) => $request['text'] === 'great thread 👇 https://x.com/foo/status/1234567890'
+        && ! array_key_exists('quote_tweet_id', $request->data()));
+});
+
 test('x leaves a status link inline and skips quoting when media is attached', function () {
+    config(['instance.defaults.quote_tweets_enabled' => true]);
     Storage::fake('public');
     Storage::disk('public')->put('media/cat.jpg', 'image-bytes');
 
