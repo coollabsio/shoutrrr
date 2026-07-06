@@ -155,6 +155,10 @@ function EditorBodyInner(
     // below. A zero-size anchor (mirroring the mention pattern) floats the
     // typeahead popover beside the active `:query`.
     const emojiAnchorRef = useRef<HTMLDivElement>(null);
+    // Read live by the emojiSuggest plugin's handleKeyDown so key consumption
+    // (Enter/Tab/Arrows/Escape) is gated on the popover actually being open,
+    // not merely on a `:token` trigger being active — see emojiPopoverOpen.
+    const emojiPopoverOpenRef = useRef(false);
     const [emojiSuggest, setEmojiSuggest] = useState<EmojiSuggestState>({
         active: false,
         query: '',
@@ -181,7 +185,10 @@ function EditorBodyInner(
     const onPasteFilesRef = useRef(onPasteFiles);
     onPasteFilesRef.current = onPasteFiles;
     const editor = useEditor({
-        extensions: composerExtensions({ placeholder }),
+        extensions: composerExtensions({
+            placeholder,
+            emojiOpenRef: emojiPopoverOpenRef,
+        }),
         content: segmentsToDoc(value) as object,
         editable,
         editorProps: {
@@ -471,6 +478,16 @@ function EditorBodyInner(
             ? mentionPlatforms
             : ([markerPlatform ?? 'x'] as PlatformName[]);
 
+    // Mirrored into a ref (read live by the emojiSuggest plugin's
+    // handleKeyDown) so key consumption tracks the popover's actual open
+    // state, not just an active `:token` trigger.
+    const emojiPopoverOpen =
+        editable &&
+        emojiSuggest.active &&
+        !emojiDismissed.current &&
+        emojiMatches.length > 0;
+    emojiPopoverOpenRef.current = emojiPopoverOpen;
+
     // Place the floating anchor at the active `@` only on the open transition.
     // The `@` does not move as the name is typed into the picker, so positioning
     // once keeps the popover put; re-running on every keystroke would needlessly
@@ -638,14 +655,7 @@ function EditorBodyInner(
                     </PopoverContent>
                 )}
             </Popover>
-            <Popover
-                open={
-                    editable &&
-                    emojiSuggest.active &&
-                    !emojiDismissed.current &&
-                    emojiMatches.length > 0
-                }
-            >
+            <Popover open={emojiPopoverOpen}>
                 <PopoverAnchor asChild>
                     <div
                         ref={emojiAnchorRef}

@@ -17,7 +17,10 @@ import { SectionMarkers } from './section-markers';
  * Mention/Hashtag extensions are intentionally dropped (out of scope).
  */
 export function composerExtensions(
-    opts: { placeholder?: string } = {},
+    opts: {
+        placeholder?: string;
+        emojiOpenRef?: { current: boolean } | null;
+    } = {},
 ): Extensions {
     return [
         Document,
@@ -34,7 +37,7 @@ export function composerExtensions(
         }),
         SectionBreak,
         MentionPlaceholders,
-        EmojiSuggest,
+        EmojiSuggest.configure({ openRef: opts.emojiOpenRef ?? null }),
         SectionMarkers,
     ];
 }

@@ -63,7 +63,15 @@ const NAV_EVENTS: Record<string, { type: string; delta?: number }> = {
 export const EmojiSuggest = Extension.create({
     name: 'emojiSuggest',
 
+    addOptions() {
+        return {
+            openRef: null as { current: boolean } | null,
+        };
+    },
+
     addProseMirrorPlugins() {
+        const openRef = this.options.openRef;
+
         return [
             new Plugin<EmojiSuggestState>({
                 key: emojiSuggestKey,
@@ -87,7 +95,7 @@ export const EmojiSuggest = Extension.create({
                     },
                     handleKeyDown(view, event) {
                         const current = emojiSuggestKey.getState(view.state);
-                        if (!current?.active) {
+                        if (!current?.active || !openRef?.current) {
                             return false;
                         }
 
