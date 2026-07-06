@@ -1,7 +1,14 @@
-import { Image as ImageIcon, Shuffle, Split } from 'lucide-react';
+import { Image as ImageIcon, Shuffle, Smile, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
+import EmojiPicker from '@/components/compose/emoji-picker';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { cn } from '@/lib/utils';
 import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
 
@@ -33,6 +40,12 @@ type Props = {
     onImageClick?: (mediaId: string) => void;
     /** Click a video chip's Edit button to open the video editor. */
     onVideoClick?: (mediaId: string) => void;
+    /** Insert a chosen emoji at the editor caret. */
+    onInsertEmoji: (emoji: string) => void;
+    /** Recently-used emoji, newest first. */
+    emojiRecents: string[];
+    emojiSkinTone: EmojiSkinTone;
+    onEmojiSkinToneChange: (tone: EmojiSkinTone) => void;
 };
 
 export function ComposerToolbar({
@@ -53,6 +66,10 @@ export function ComposerToolbar({
     dismissPending,
     onImageClick,
     onVideoClick,
+    onInsertEmoji,
+    emojiRecents,
+    emojiSkinTone,
+    onEmojiSkinToneChange,
 }: Props) {
     const input = useRef<HTMLInputElement | null>(null);
 
@@ -114,6 +131,13 @@ export function ComposerToolbar({
                             </span>
                         )}
                     </EToolButton>
+
+                    <EmojiPopover
+                        recents={emojiRecents}
+                        skinTone={emojiSkinTone}
+                        onSkinToneChange={onEmojiSkinToneChange}
+                        onSelect={onInsertEmoji}
+                    />
                 </>
             )}
 
@@ -160,6 +184,57 @@ export function ComposerToolbar({
                 </>
             )}
         </div>
+    );
+}
+
+function EmojiPopover({
+    recents,
+    skinTone,
+    onSkinToneChange,
+    onSelect,
+}: {
+    recents: string[];
+    skinTone: EmojiSkinTone;
+    onSkinToneChange: (tone: EmojiSkinTone) => void;
+    onSelect: (emoji: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    title="Emoji"
+                    data-active={open}
+                    className={cn(
+                        'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
+                        'hover:border-border hover:bg-background hover:text-foreground',
+                        'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground',
+                    )}
+                >
+                    <Smile className="size-3.5" aria-hidden="true" />
+                    <span>Emoji</span>
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                align="start"
+                side="top"
+                sideOffset={8}
+                className="w-auto overflow-hidden rounded-2xl p-0"
+                onOpenAutoFocus={(event) => event.preventDefault()}
+            >
+                <EmojiPicker
+                    recents={recents}
+                    skinTone={skinTone}
+                    onSkinToneChange={onSkinToneChange}
+                    onSelect={(emoji) => {
+                        onSelect(emoji);
+                        setOpen(false);
+                    }}
+                />
+            </PopoverContent>
+        </Popover>
     );
 }
 
