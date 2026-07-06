@@ -115,10 +115,18 @@ export function loadEmojiIndex(
 ): Promise<EmojiEntry[]> {
     if (!indexPromise) {
         indexPromise = Promise.all([
-            fetch(`${baseUrl}/${locale}/data.json`).then((r) => r.json()),
-            fetch(`${baseUrl}/${locale}/shortcodes/emojibase.json`).then((r) =>
-                r.json(),
-            ),
+            fetch(`${baseUrl}/${locale}/data.json`).then((r) => {
+                if (!r.ok) {
+                    throw new Error(`emoji data fetch failed: ${r.status}`);
+                }
+                return r.json();
+            }),
+            fetch(`${baseUrl}/${locale}/shortcodes/emojibase.json`).then((r) => {
+                if (!r.ok) {
+                    throw new Error(`emoji shortcodes fetch failed: ${r.status}`);
+                }
+                return r.json();
+            }),
         ])
             .then(([data, shortcodes]) => buildEmojiIndex(data, shortcodes))
             .catch((error) => {
