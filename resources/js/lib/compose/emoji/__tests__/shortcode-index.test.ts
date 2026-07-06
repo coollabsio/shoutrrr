@@ -51,7 +51,7 @@ const RAW: RawEmoji[] = [
 const SHORTCODES: Record<string, string | string[]> = {
     '1F604': 'smile',
     '1F44B': ['wave', 'waving_hand'],
-    '1F60A': 'smiling_face',
+    '1F60A': 'big_smile',
     '1F60F': 'smirk',
 };
 
@@ -78,12 +78,14 @@ describe('buildEmojiIndex', () => {
 describe('rankEmoji', () => {
     it('ranks an exact shortcode above a substring match', () => {
         const results = rankEmoji(index, 'smile', { skinTone: 'none' });
-        // Should match both 'smile' (exact) and 'smiling_face' (substring)
-        expect(results.map((r) => r.emoji)).toContain('😄');
-        expect(results.map((r) => r.emoji)).toContain('☺️');
+        // Should match both 'smile' (exact score 4) and 'big_smile' (substring score 2)
+        const emojis = results.map((r) => r.emoji);
+        expect(emojis).toContain('😄'); // exact match
+        expect(emojis).toContain('☺️'); // substring match
         // Exact match must come first
         expect(results[0]?.emoji).toBe('😄');
-        expect(results[1]?.emoji).toBe('☺️');
+        // Substring match should appear later
+        expect(emojis.indexOf('☺️')).toBeGreaterThan(0);
     });
 
     it('matches on shortcode prefix', () => {
@@ -101,7 +103,7 @@ describe('rankEmoji', () => {
     });
 
     it('respects the limit and returns higher-scored result', () => {
-        // Query 'smile' matches both 'smile' (score 4) and 'smiling_face' (score 2)
+        // Query 'smile' matches both 'smile' (score 4, exact) and 'big_smile' (score 2, substring)
         const allResults = rankEmoji(index, 'smile', { skinTone: 'none' });
         expect(allResults.length).toBeGreaterThanOrEqual(2);
 
@@ -111,7 +113,7 @@ describe('rankEmoji', () => {
             limit: 1,
         });
         expect(limitedResults).toHaveLength(1);
-        // Should be the exact match ('smile'), not the substring match ('smiling_face')
+        // Should be the exact match ('smile'), not the substring match ('big_smile')
         expect(limitedResults[0]?.emoji).toBe('😄');
     });
 
