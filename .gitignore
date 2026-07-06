@@ -5,6 +5,7 @@
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
+/public/emoji
 /storage/*.key
 /storage/pail
 /resources/js/actions
