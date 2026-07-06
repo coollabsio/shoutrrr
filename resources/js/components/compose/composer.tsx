@@ -859,6 +859,8 @@ export default function Composer({
                     onMentionsChange={(mentions) =>
                         dispatch({ type: 'setMentions', mentions })
                     }
+                    emojiSkinTone={emojiPrefs.skinTone}
+                    onEmojiInsert={emojiPrefs.addRecent}
                     markerState={
                         activeAccount
                             ? {
