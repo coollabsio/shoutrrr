@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-    applySkinTone,
-    buildEmojiIndex,
-    rankEmoji,
-} from '../shortcode-index';
+import { applySkinTone, buildEmojiIndex, rankEmoji } from '../shortcode-index';
 import type { RawEmoji } from '../types';
 
 const RAW: RawEmoji[] = [
@@ -119,7 +115,9 @@ describe('rankEmoji', () => {
 
     it('applies the selected skin tone', () => {
         const results = rankEmoji(index, 'wave', { skinTone: 'dark' });
-        expect(results.find((r) => r.label === 'waving hand')?.emoji).toBe('👋🏿');
+        expect(results.find((r) => r.label === 'waving hand')?.emoji).toBe(
+            '👋🏿',
+        );
     });
 });
 

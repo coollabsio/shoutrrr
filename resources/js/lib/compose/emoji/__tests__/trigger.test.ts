@@ -5,11 +5,17 @@ import { matchEmojiTrigger } from '../trigger';
 describe('matchEmojiTrigger', () => {
     it('matches a colon token after whitespace', () => {
         // "hello :sm" — caret at doc pos 20, ":sm" is 3 chars → from = 17
-        expect(matchEmojiTrigger('hello :sm', 20)).toEqual({ query: 'sm', from: 17 });
+        expect(matchEmojiTrigger('hello :sm', 20)).toEqual({
+            query: 'sm',
+            from: 17,
+        });
     });
 
     it('matches a colon token at the start of a block', () => {
-        expect(matchEmojiTrigger(':smile', 6)).toEqual({ query: 'smile', from: 0 });
+        expect(matchEmojiTrigger(':smile', 6)).toEqual({
+            query: 'smile',
+            from: 0,
+        });
     });
 
     it('ignores a colon glued to a word (URLs)', () => {

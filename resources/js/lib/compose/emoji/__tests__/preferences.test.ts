@@ -8,7 +8,11 @@ describe('pushRecent', () => {
     });
 
     it('moves an existing emoji to the front (dedupe)', () => {
-        expect(pushRecent(['😀', '🔥', '❤️'], '❤️')).toEqual(['❤️', '😀', '🔥']);
+        expect(pushRecent(['😀', '🔥', '❤️'], '❤️')).toEqual([
+            '❤️',
+            '😀',
+            '🔥',
+        ]);
     });
 
     it('caps the list length', () => {

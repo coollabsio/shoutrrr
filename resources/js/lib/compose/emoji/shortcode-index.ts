@@ -33,7 +33,9 @@ export function buildEmojiIndex(
         shortcodes: toShortcodes(shortcodes[row.hexcode]),
         skins: (row.skins ?? [])
             .filter(
-                (skin): skin is { hexcode: string; emoji: string; tone: number } =>
+                (
+                    skin,
+                ): skin is { hexcode: string; emoji: string; tone: number } =>
                     typeof skin.tone === 'number',
             )
             .map((skin) => ({ tone: skin.tone, emoji: skin.emoji })),
@@ -47,7 +49,10 @@ export function applySkinTone(entry: EmojiEntry, tone: EmojiSkinTone): string {
         return entry.emoji;
     }
 
-    return entry.skins.find((skin) => skin.tone === toneNumber)?.emoji ?? entry.emoji;
+    return (
+        entry.skins.find((skin) => skin.tone === toneNumber)?.emoji ??
+        entry.emoji
+    );
 }
 
 /** Best match score for an entry against a lowercased needle (0 = no match). */
@@ -121,12 +126,16 @@ export function loadEmojiIndex(
                 }
                 return r.json();
             }),
-            fetch(`${baseUrl}/${locale}/shortcodes/emojibase.json`).then((r) => {
-                if (!r.ok) {
-                    throw new Error(`emoji shortcodes fetch failed: ${r.status}`);
-                }
-                return r.json();
-            }),
+            fetch(`${baseUrl}/${locale}/shortcodes/emojibase.json`).then(
+                (r) => {
+                    if (!r.ok) {
+                        throw new Error(
+                            `emoji shortcodes fetch failed: ${r.status}`,
+                        );
+                    }
+                    return r.json();
+                },
+            ),
         ])
             .then(([data, shortcodes]) => buildEmojiIndex(data, shortcodes))
             .catch((error) => {
