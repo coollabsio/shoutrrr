@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatMoney, usageQuery, xUsageTotal } from '../instance-usage';
+import {
+    canFetchXUsage,
+    formatMoney,
+    usageQuery,
+    xUsageTotal,
+} from '../instance-usage';
 
 describe('instance usage filters', () => {
     it('omits cleared platform filters from the query', () => {
@@ -20,6 +25,12 @@ describe('instance usage money formatting', () => {
 });
 
 describe('x usage response helpers', () => {
+    it('disables fetching when the bearer token is missing or a request is running', () => {
+        expect(canFetchXUsage(false, false)).toBe(false);
+        expect(canFetchXUsage(true, true)).toBe(false);
+        expect(canFetchXUsage(true, false)).toBe(true);
+    });
+
     it('uses project usage when available', () => {
         expect(xUsageTotal({ project_usage: 15420 })).toBe(15420);
     });

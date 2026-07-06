@@ -117,6 +117,7 @@ type Props = {
     };
     pricing_source: string;
     pricing_currency: string;
+    x_usage_available: boolean;
     summaries: UsageSummary[];
     counters: UsageCounter[];
     error_events: UsageErrorEvent[];
@@ -156,6 +157,10 @@ export function xUsageTotal(data: XUsageData | null) {
     );
 }
 
+export function canFetchXUsage(isConfigured: boolean, isProcessing: boolean) {
+    return isConfigured && !isProcessing;
+}
+
 export default function InstanceUsage({
     workspace_options,
     platforms,
@@ -163,6 +168,7 @@ export default function InstanceUsage({
     comparison_periods,
     pricing_source,
     pricing_currency,
+    x_usage_available,
     summaries,
     counters,
     error_events,
@@ -192,6 +198,10 @@ export default function InstanceUsage({
     }
 
     function fetchXUsage() {
+        if (!canFetchXUsage(x_usage_available, xUsageHttp.processing)) {
+            return;
+        }
+
         setXUsageError(null);
 
         void xUsageHttp.get(InstanceSettingsController.xUsage().url, {
@@ -303,7 +313,12 @@ export default function InstanceUsage({
                         <Button
                             type="button"
                             variant="outline"
-                            disabled={xUsageHttp.processing}
+                            disabled={
+                                !canFetchXUsage(
+                                    x_usage_available,
+                                    xUsageHttp.processing,
+                                )
+                            }
                             onClick={fetchXUsage}
                         >
                             {xUsageHttp.processing
@@ -311,6 +326,13 @@ export default function InstanceUsage({
                                 : 'Fetch X usage'}
                         </Button>
                     </div>
+
+                    {!x_usage_available && (
+                        <p className="mt-4 text-sm text-muted-foreground">
+                            Configure X_BEARER_TOKEN to enable fetching X API
+                            usage.
+                        </p>
+                    )}
 
                     {xUsageError && (
                         <p className="mt-4 text-sm text-destructive">

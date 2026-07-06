@@ -101,6 +101,8 @@ test('instance owner can view polling settings', function () {
 });
 
 test('instance owner can view usage details', function () {
+    config()->set('services.x.bearer_token', 'x-bearer-token');
+
     $owner = User::factory()->instanceOwner()->create();
     $workspace = Workspace::factory()->create(['name' => 'Usage Workspace']);
 
@@ -144,6 +146,7 @@ test('instance owner can view usage details', function () {
             ->where('platforms.0.value', 'bluesky')
             ->where('filters.workspace', null)
             ->where('filters.platform', null)
+            ->where('x_usage_available', true)
             ->where('summaries.0.workspace.name', 'Usage Workspace')
             ->where('summaries.0.current_total_quota', 2)
             ->where('summaries.0.previous_total_quota', 1)
@@ -154,6 +157,19 @@ test('instance owner can view usage details', function () {
             ->where('counters.0.event_count', 2)
             ->where('error_events.0.operation', UsageOperation::POST)
             ->where('error_events.0.meta.status', 429));
+});
+
+test('instance usage marks x api usage unavailable without bearer token', function () {
+    config()->set('services.x.bearer_token', '');
+
+    $owner = User::factory()->instanceOwner()->create();
+
+    $this->actingAs($owner)
+        ->get(route('instance-settings.usage'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('settings/instance-usage')
+            ->where('x_usage_available', false));
 });
 
 test('instance usage can be filtered by workspace', function () {
@@ -290,6 +306,8 @@ test('instance owner can fetch x api usage', function () {
 });
 
 test('x api usage fetch requires a configured bearer token', function () {
+    config()->set('services.x.bearer_token', '');
+
     $owner = User::factory()->instanceOwner()->create();
 
     $this->actingAs($owner)

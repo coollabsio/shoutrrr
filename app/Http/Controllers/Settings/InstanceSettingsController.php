@@ -253,6 +253,7 @@ class InstanceSettingsController extends Controller
             ],
             'pricing_source' => config('usage_pricing.source_url'),
             'pricing_currency' => config('usage_pricing.platforms.x.currency', 'USD'),
+            'x_usage_available' => (string) config('services.x.bearer_token', '') !== '',
             'summaries' => $summaries,
             'counters' => $counters,
             'error_events' => $errorEvents,
