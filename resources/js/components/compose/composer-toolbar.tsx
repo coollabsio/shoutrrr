@@ -1,13 +1,9 @@
 import { Image as ImageIcon, Shuffle, Smile, Split } from 'lucide-react';
+import { Popover as PopoverPrimitive } from 'radix-ui';
 import type { ReactNode } from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import EmojiPicker from '@/components/compose/emoji-picker';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { cn } from '@/lib/utils';
 import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
@@ -199,14 +195,29 @@ function EmojiPopover({
     onSelect: (emoji: string) => void;
 }) {
     const [open, setOpen] = useState(false);
+    // Mount the picker on first open and keep it alive afterward. Frimousse
+    // re-reads and re-parses the ~775KB emoji dataset and rebuilds its store on
+    // every fresh mount, so unmounting on close (Radix's default) made each
+    // reopen — and the selection that closes it — feel sluggish. `forceMount`
+    // keeps it warm; we hide it with `invisible` (not unmount) when closed.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        if (open) {
+            setMounted(true);
+        }
+    }, [open]);
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
+        <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+            <PopoverPrimitive.Trigger asChild>
                 <button
                     type="button"
                     title="Emoji"
                     data-active={open}
+                    // Warm the picker the moment the user shows intent, so the
+                    // first open is instant instead of paying the mount cost then.
+                    onPointerEnter={() => setMounted(true)}
+                    onFocus={() => setMounted(true)}
                     className={cn(
                         'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
                         'hover:border-border hover:bg-background hover:text-foreground',
@@ -216,25 +227,38 @@ function EmojiPopover({
                     <Smile className="size-3.5" aria-hidden="true" />
                     <span>Emoji</span>
                 </button>
-            </PopoverTrigger>
-            <PopoverContent
-                align="start"
-                side="top"
-                sideOffset={8}
-                className="w-[336px] overflow-hidden rounded-2xl p-0"
-                onOpenAutoFocus={(event) => event.preventDefault()}
-            >
-                <EmojiPicker
-                    recents={recents}
-                    skinTone={skinTone}
-                    onSkinToneChange={onSkinToneChange}
-                    onSelect={(emoji) => {
-                        onSelect(emoji);
-                        setOpen(false);
-                    }}
-                />
-            </PopoverContent>
-        </Popover>
+            </PopoverPrimitive.Trigger>
+            {mounted && (
+                <PopoverPrimitive.Portal forceMount>
+                    <PopoverPrimitive.Content
+                        forceMount
+                        align="start"
+                        side="top"
+                        sideOffset={8}
+                        onOpenAutoFocus={(event) => event.preventDefault()}
+                        className={cn(
+                            'z-50 w-[336px] origin-(--radix-popover-content-transform-origin) overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 outline-hidden dark:ring-foreground/10',
+                            'duration-100 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+                            // Kept mounted: hide (not unmount) when closed.
+                            // `invisible` preserves the element's box so Frimousse
+                            // keeps its measured width, and the instant hide makes
+                            // selecting feel snappy.
+                            'data-[state=closed]:pointer-events-none data-[state=closed]:invisible',
+                        )}
+                    >
+                        <EmojiPicker
+                            recents={recents}
+                            skinTone={skinTone}
+                            onSkinToneChange={onSkinToneChange}
+                            onSelect={(emoji) => {
+                                onSelect(emoji);
+                                setOpen(false);
+                            }}
+                        />
+                    </PopoverPrimitive.Content>
+                </PopoverPrimitive.Portal>
+            )}
+        </PopoverPrimitive.Root>
     );
 }
 
