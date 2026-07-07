@@ -32,6 +32,8 @@ final class UsageOperation
 
     public const string MCP_REQUEST = 'mcp_request';
 
+    public const string API_REQUEST = 'api_request';
+
     public const string MEDIA_UPLOAD = 'media_upload';
 
     public const string MEDIA_STATUS_POLL = 'media_status_poll';
