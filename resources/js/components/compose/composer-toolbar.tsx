@@ -195,17 +195,35 @@ function EmojiPopover({
     onSelect: (emoji: string) => void;
 }) {
     const [open, setOpen] = useState(false);
-    // Mount the picker on first open and keep it alive afterward. Frimousse
-    // re-reads and re-parses the ~775KB emoji dataset and rebuilds its store on
-    // every fresh mount, so unmounting on close (Radix's default) made each
-    // reopen — and the selection that closes it — feel sluggish. `forceMount`
-    // keeps it warm; we hide it with `invisible` (not unmount) when closed.
+    // Mount the picker once and keep it alive. Frimousse re-reads and re-parses
+    // the ~775KB emoji dataset and rebuilds its store on every fresh mount, so
+    // unmounting on close (Radix's default) made each reopen — and the select
+    // that closes it — sluggish. We warm it during browser idle (never on the
+    // click, which the parse would block) and `forceMount` keeps it alive; when
+    // closed it's hidden with `invisible`, not unmounted.
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
+        if (mounted) {
+            return;
+        }
         if (open) {
             setMounted(true);
+
+            return;
         }
-    }, [open]);
+        const idle = window as Window & {
+            requestIdleCallback?: (callback: () => void) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+        if (typeof idle.requestIdleCallback === 'function') {
+            const handle = idle.requestIdleCallback(() => setMounted(true));
+
+            return () => idle.cancelIdleCallback?.(handle);
+        }
+        const handle = window.setTimeout(() => setMounted(true), 500);
+
+        return () => window.clearTimeout(handle);
+    }, [mounted, open]);
 
     return (
         <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -214,10 +232,6 @@ function EmojiPopover({
                     type="button"
                     title="Emoji"
                     data-active={open}
-                    // Warm the picker the moment the user shows intent, so the
-                    // first open is instant instead of paying the mount cost then.
-                    onPointerEnter={() => setMounted(true)}
-                    onFocus={() => setMounted(true)}
                     className={cn(
                         'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
                         'hover:border-border hover:bg-background hover:text-foreground',
@@ -237,12 +251,12 @@ function EmojiPopover({
                         sideOffset={8}
                         onOpenAutoFocus={(event) => event.preventDefault()}
                         className={cn(
-                            'z-50 w-[336px] origin-(--radix-popover-content-transform-origin) overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 outline-hidden dark:ring-foreground/10',
-                            'duration-100 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-                            // Kept mounted: hide (not unmount) when closed.
-                            // `invisible` preserves the element's box so Frimousse
-                            // keeps its measured width, and the instant hide makes
-                            // selecting feel snappy.
+                            'z-50 w-[336px] overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 outline-hidden dark:ring-foreground/10',
+                            // No enter/exit animation: this popover wraps a heavy
+                            // virtualized emoji grid, and scale/opacity-animating that
+                            // subtree is what felt laggy. Kept mounted (forceMount) and
+                            // toggled with `invisible` (preserves Frimousse's measured
+                            // width) so open + select-to-close are both instant.
                             'data-[state=closed]:pointer-events-none data-[state=closed]:invisible',
                         )}
                     >
