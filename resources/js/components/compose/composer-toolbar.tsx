@@ -115,6 +115,13 @@ export function ComposerToolbar({
                         }}
                     />
 
+                    <EmojiPopover
+                        recents={emojiRecents}
+                        skinTone={emojiSkinTone}
+                        onSkinToneChange={onEmojiSkinToneChange}
+                        onSelect={onInsertEmoji}
+                    />
+
                     <EToolButton
                         title="Add media (⌘⇧M)"
                         onClick={() => input.current?.click()}
@@ -127,13 +134,6 @@ export function ComposerToolbar({
                             </span>
                         )}
                     </EToolButton>
-
-                    <EmojiPopover
-                        recents={emojiRecents}
-                        skinTone={emojiSkinTone}
-                        onSkinToneChange={onEmojiSkinToneChange}
-                        onSelect={onInsertEmoji}
-                    />
                 </>
             )}
 
