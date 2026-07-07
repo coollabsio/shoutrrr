@@ -16,9 +16,9 @@ test('refresh tokens are configured to expire in about 30 days', function () {
         ->toBeLessThanOrEqual(31);
 });
 
-test('personal access tokens are configured to expire in about 30 days', function () {
+test('personal access tokens are configured to expire in about 5 years', function () {
     $expiresAt = now()->add(Passport::personalAccessTokensExpireIn());
 
-    expect($expiresAt->diffInDays(now(), absolute: true))->toBeGreaterThanOrEqual(29)
-        ->toBeLessThanOrEqual(31);
+    expect($expiresAt->diffInDays(now(), absolute: true))->toBeGreaterThanOrEqual(5 * 365 - 2)
+        ->toBeLessThanOrEqual(5 * 365 + 2);
 });
