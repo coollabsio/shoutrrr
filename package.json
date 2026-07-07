@@ -60,6 +60,8 @@
         "concurrently": "^9.0.1",
         "date-fns": "^4.4.0",
         "dayjs": "^1.11.21",
+        "emojibase-data": "^17.0.0",
+        "frimousse": "^0.3.0",
         "globals": "^15.14.0",
         "html-to-image": "^1.11.13",
         "input-otp": "^1.4.2",

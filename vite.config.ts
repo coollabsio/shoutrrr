@@ -1,3 +1,4 @@
+import { cpSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 
 import inertia from '@inertiajs/vite';
@@ -27,6 +28,31 @@ const tailscaleHost = (): string | undefined => {
 
 const hmrHost = process.env.VITE_HMR_HOST ?? tailscaleHost() ?? 'localhost';
 
+// Copy the emojibase `en` locale into public/ so Frimousse and the emoji
+// typeahead fetch it same-origin. The app's CSP (connect-src 'self') blocks
+// Frimousse's default jsdelivr CDN, so the data must be served from our origin.
+function copyEmojiData() {
+    const copy = () => {
+        try {
+            cpSync('node_modules/emojibase-data/en', 'public/emoji/en', {
+                recursive: true,
+            });
+        } catch (error) {
+            throw new Error(
+                'copy-emoji-data: could not copy node_modules/emojibase-data/en ' +
+                    'to public/emoji/en. Run `bun install` to restore the ' +
+                    `emojibase-data dependency. (${(error as Error).message})`,
+            );
+        }
+    };
+
+    return {
+        name: 'copy-emoji-data',
+        buildStart: copy,
+        configureServer: copy,
+    };
+}
+
 export default defineConfig({
     server: {
         host: process.env.VITE_HOST ?? '0.0.0.0',
@@ -40,6 +66,7 @@ export default defineConfig({
             : undefined,
     },
     plugins: [
+        copyEmojiData(),
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.tsx'],
             refresh: true,

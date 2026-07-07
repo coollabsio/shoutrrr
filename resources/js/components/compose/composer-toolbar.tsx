@@ -1,7 +1,10 @@
-import { Image as ImageIcon, Shuffle, Split } from 'lucide-react';
+import { Image as ImageIcon, Shuffle, Smile, Split } from 'lucide-react';
+import { Popover as PopoverPrimitive } from 'radix-ui';
 import type { ReactNode } from 'react';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import EmojiPicker from '@/components/compose/emoji-picker';
+import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { cn } from '@/lib/utils';
 import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
 
@@ -33,6 +36,12 @@ type Props = {
     onImageClick?: (mediaId: string) => void;
     /** Click a video chip's Edit button to open the video editor. */
     onVideoClick?: (mediaId: string) => void;
+    /** Insert a chosen emoji at the editor caret. */
+    onInsertEmoji: (emoji: string) => void;
+    /** Recently-used emoji, newest first. */
+    emojiRecents: string[];
+    emojiSkinTone: EmojiSkinTone;
+    onEmojiSkinToneChange: (tone: EmojiSkinTone) => void;
 };
 
 export function ComposerToolbar({
@@ -53,6 +62,10 @@ export function ComposerToolbar({
     dismissPending,
     onImageClick,
     onVideoClick,
+    onInsertEmoji,
+    emojiRecents,
+    emojiSkinTone,
+    onEmojiSkinToneChange,
 }: Props) {
     const input = useRef<HTMLInputElement | null>(null);
 
@@ -159,7 +172,113 @@ export function ComposerToolbar({
                     </EToolButton>
                 </>
             )}
+
+            {!readOnly && (
+                <EmojiPopover
+                    recents={emojiRecents}
+                    skinTone={emojiSkinTone}
+                    onSkinToneChange={onEmojiSkinToneChange}
+                    onSelect={onInsertEmoji}
+                />
+            )}
         </div>
+    );
+}
+
+function EmojiPopover({
+    recents,
+    skinTone,
+    onSkinToneChange,
+    onSelect,
+}: {
+    recents: string[];
+    skinTone: EmojiSkinTone;
+    onSkinToneChange: (tone: EmojiSkinTone) => void;
+    onSelect: (emoji: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    // Mount the picker once and keep it alive. Frimousse re-reads and re-parses
+    // the ~775KB emoji dataset and rebuilds its store on every fresh mount, so
+    // unmounting on close (Radix's default) made each reopen — and the select
+    // that closes it — sluggish. We warm it during browser idle (never on the
+    // click, which the parse would block) and `forceMount` keeps it alive; when
+    // closed it's hidden with `invisible`, not unmounted.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        if (mounted) {
+            return;
+        }
+        if (open) {
+            setMounted(true);
+
+            return;
+        }
+        const idle = window as Window & {
+            requestIdleCallback?: (callback: () => void) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+        if (typeof idle.requestIdleCallback === 'function') {
+            const handle = idle.requestIdleCallback(() => setMounted(true));
+
+            return () => idle.cancelIdleCallback?.(handle);
+        }
+        const handle = window.setTimeout(() => setMounted(true), 500);
+
+        return () => window.clearTimeout(handle);
+    }, [mounted, open]);
+
+    return (
+        <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+            <PopoverPrimitive.Trigger asChild>
+                <button
+                    type="button"
+                    title="Emoji"
+                    data-active={open}
+                    className={cn(
+                        'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
+                        'hover:border-border hover:bg-background hover:text-foreground',
+                        'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
+                    )}
+                >
+                    <Smile className="size-3.5" aria-hidden="true" />
+                    <span>Emoji</span>
+                </button>
+            </PopoverPrimitive.Trigger>
+            {mounted && (
+                <PopoverPrimitive.Portal forceMount>
+                    <PopoverPrimitive.Content
+                        forceMount
+                        align="end"
+                        side="top"
+                        sideOffset={8}
+                        onOpenAutoFocus={(event) => event.preventDefault()}
+                        className={cn(
+                            'z-50 w-[336px] overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 outline-hidden dark:ring-foreground/10',
+                            // Same fade+zoom feel as the notification bell, but driven
+                            // by a CSS transition instead of Radix's keyframe animate-in/
+                            // -out. The picker is forceMounted (kept warm) and prewarmed
+                            // while closed, so a keyframe `animate-out` would flash it on
+                            // that first hidden mount; a transition only runs on real
+                            // state changes. opacity/transform are GPU-composited, so it
+                            // stays smooth on the heavy virtualized grid.
+                            'origin-(--radix-popover-content-transform-origin) transition-[opacity,transform] duration-100 ease-out',
+                            'data-[state=open]:scale-100 data-[state=open]:opacity-100',
+                            'data-[state=closed]:pointer-events-none data-[state=closed]:scale-95 data-[state=closed]:opacity-0',
+                        )}
+                    >
+                        <EmojiPicker
+                            recents={recents}
+                            skinTone={skinTone}
+                            onSkinToneChange={onSkinToneChange}
+                            onSelect={(emoji) => {
+                                onSelect(emoji);
+                                setOpen(false);
+                            }}
+                        />
+                    </PopoverPrimitive.Content>
+                </PopoverPrimitive.Portal>
+            )}
+        </PopoverPrimitive.Root>
     );
 }
 

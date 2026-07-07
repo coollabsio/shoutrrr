@@ -5,6 +5,7 @@ import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { Placeholder, UndoRedo } from '@tiptap/extensions';
 
+import { EmojiSuggest } from './emoji-suggest';
 import { MentionPlaceholders } from './mention-placeholders';
 import { SectionBreak } from './section-break';
 import { SectionMarkers } from './section-markers';
@@ -16,7 +17,10 @@ import { SectionMarkers } from './section-markers';
  * Mention/Hashtag extensions are intentionally dropped (out of scope).
  */
 export function composerExtensions(
-    opts: { placeholder?: string } = {},
+    opts: {
+        placeholder?: string;
+        emojiOpenRef?: { current: boolean } | null;
+    } = {},
 ): Extensions {
     return [
         Document,
@@ -33,6 +37,7 @@ export function composerExtensions(
         }),
         SectionBreak,
         MentionPlaceholders,
+        EmojiSuggest.configure({ openRef: opts.emojiOpenRef ?? null }),
         SectionMarkers,
     ];
 }

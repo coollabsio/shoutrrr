@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import { useAutosave } from '@/hooks/compose/use-autosave';
+import { useEmojiPreferences } from '@/hooks/compose/use-emoji-preferences';
 import { useImageEditor } from '@/hooks/compose/use-image-editor';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
@@ -54,7 +55,7 @@ import CharCounter from './char-counter';
 import { ComposerToolbar } from './composer-toolbar';
 import { ConflictDialog } from './conflict-dialog';
 import DestinationSelector from './destination-selector';
-import EditorBody from './editor-body';
+import EditorBody, { type EditorBodyHandle } from './editor-body';
 import { ImageEditor } from './image-editor';
 import { PlatformPreviewPanel } from './platform-preview-panel';
 import PlatformTabs from './platform-tabs';
@@ -245,6 +246,16 @@ export default function Composer({
             }
         },
     });
+
+    // The toolbar's Emoji picker inserts through this handle so it reaches the
+    // editor's live selection without lifting TipTap state into the reducer.
+    const editorRef = useRef<EditorBodyHandle>(null);
+    const emojiPrefs = useEmojiPreferences();
+
+    function insertEmoji(emoji: string) {
+        editorRef.current?.insertText(emoji);
+        emojiPrefs.addRecent(emoji);
+    }
 
     // The editor opens automatically when image(s) are added and when an attached
     // image is clicked. A multi-image add becomes a `batch` edited one item at a
@@ -822,6 +833,7 @@ export default function Composer({
 
                 {/* Override banner (inside EditorBody) + editor */}
                 <EditorBody
+                    ref={editorRef}
                     value={activeSegments}
                     onChange={handleSegments}
                     onBlur={flush}
@@ -847,6 +859,8 @@ export default function Composer({
                     onMentionsChange={(mentions) =>
                         dispatch({ type: 'setMentions', mentions })
                     }
+                    emojiSkinTone={emojiPrefs.skinTone}
+                    onEmojiInsert={emojiPrefs.addRecent}
                     markerState={
                         activeAccount
                             ? {
@@ -899,6 +913,10 @@ export default function Composer({
                 {(!readOnly || state.media.length > 0) && (
                     <ComposerToolbar
                         readOnly={readOnly}
+                        onInsertEmoji={insertEmoji}
+                        emojiRecents={emojiPrefs.recents}
+                        emojiSkinTone={emojiPrefs.skinTone}
+                        onEmojiSkinToneChange={emojiPrefs.setSkinTone}
                         activePlatform={activeAccount?.platform}
                         autoSplit={
                             activeAccount

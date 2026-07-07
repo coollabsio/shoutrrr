@@ -164,7 +164,10 @@ The CSP is intentionally **not** sent in `local` (`APP_ENV=local`) because it is
 
 ## Connecting your accounts
 
-**Bluesky** needs nothing extra — users connect with a Bluesky [app password](https://bsky.app/settings/app-passwords).
+**Bluesky** connects two ways, and neither needs you to register a developer app:
+
+- **OAuth (recommended)** — users sign in on Bluesky and authorize Shoutrrr without handing over a password. It's zero-config: Shoutrrr publishes an [ATProto OAuth](https://atproto.com/specs/oauth) client-metadata document at `${APP_URL}/oauth/bluesky/client-metadata.json` (with keys at `${APP_URL}/oauth/bluesky/jwks.json`), and Bluesky's authorization server fetches those to identify your instance. The signing key is generated once and stored encrypted — there's nothing to add to `.env`. **The one requirement:** `APP_URL` must be a public HTTPS URL, because Bluesky has to reach those two documents over the internet. (In `local` dev, Shoutrrr falls back to a loopback client so OAuth still works on `localhost`.)
+- **App password** — users paste a Bluesky [app password](https://bsky.app/settings/app-passwords). No setup, and it works anywhere — including private or LAN deployments Bluesky can't reach for OAuth.
 
 **X** and **LinkedIn** publish through your own developer app, so you'll register one with each provider and add the credentials to `.env`. The redirect URIs must match what you register (they default to `${APP_URL}/...`):
 

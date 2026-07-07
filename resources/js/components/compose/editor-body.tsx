@@ -1,13 +1,23 @@
 import { EditorContent, useEditor } from '@tiptap/react';
 import { Split } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import type { Ref } from 'react';
+import {
+    forwardRef,
+    useEffect,
+    useImperativeHandle,
+    useRef,
+    useState,
+} from 'react';
 
+import EmojiSuggestPopover from '@/components/compose/emoji-suggest-popover';
 import MentionPicker from '@/components/compose/mention-picker';
 import {
     Popover,
     PopoverAnchor,
     PopoverContent,
 } from '@/components/ui/popover';
+import { useEmojiTypeahead } from '@/hooks/compose/use-emoji-typeahead';
+import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { mentionInputValue, updateMentionName } from '@/lib/compose/mentions';
 import {
     docToSegments,
@@ -72,6 +82,15 @@ type EditorBodyProps = {
         limit: number;
         threadMax: number | null;
     };
+    /** Active skin tone for typeahead results. */
+    emojiSkinTone?: EmojiSkinTone;
+    /** Record a chosen emoji as recently used. */
+    onEmojiInsert?: (emoji: string) => void;
+};
+
+export type EditorBodyHandle = {
+    /** Insert text (e.g. an emoji) at the current selection and refocus. */
+    insertText: (text: string) => void;
 };
 
 export function shouldFocusEditorOnMount(
@@ -91,27 +110,32 @@ export function hasPasteableMedia(files: FileList | null | undefined): boolean {
     return !!files && Array.from(files).some(isPasteableMediaFile);
 }
 
-export default function EditorBody({
-    value,
-    onChange,
-    onBlur,
-    placeholder,
-    autoFocus = false,
-    onPasteFiles,
-    overrideBanner = false,
-    activePlatformLabel,
-    onResetOverride,
-    markerState,
-    mentions = [],
-    mentionPlatforms = [],
-    savedMentions = [],
-    onMentionsChange,
-    onMentionNameChange,
-    onApplySavedMention,
-    onSaveMention,
-    saveMentionProcessing = false,
-    editable = true,
-}: EditorBodyProps) {
+function EditorBodyInner(
+    {
+        value,
+        onChange,
+        onBlur,
+        placeholder,
+        autoFocus = false,
+        onPasteFiles,
+        overrideBanner = false,
+        activePlatformLabel,
+        onResetOverride,
+        markerState,
+        mentions = [],
+        mentionPlatforms = [],
+        savedMentions = [],
+        onMentionsChange,
+        onMentionNameChange,
+        onApplySavedMention,
+        onSaveMention,
+        saveMentionProcessing = false,
+        editable = true,
+        emojiSkinTone = 'none',
+        onEmojiInsert,
+    }: EditorBodyProps,
+    ref: Ref<EditorBodyHandle>,
+) {
     const [activeMentionId, setActiveMentionId] = useState<string | null>(null);
     const previousMentionCount = useRef(mentions.length);
     const pendingFocusLabel = useRef<string | null>(null);
@@ -123,13 +147,21 @@ export default function EditorBody({
     const mentionAnchorRef = useRef<HTMLDivElement>(null);
     const mentionWasActive = useRef(false);
     const [mentionAnchorReady, setMentionAnchorReady] = useState(false);
+    // Written live by useEmojiTypeahead and read by the emojiSuggest plugin's
+    // handleKeyDown so key consumption is gated on the popover actually being
+    // open. Created here because composerExtensions needs it before the editor
+    // exists, and the hook needs the editor after — one shared ref bridges them.
+    const emojiOpenRef = useRef(false);
     // editorProps is captured once at editor creation, but onPasteFiles is a
     // fresh closure each render (it reads the current media/limits). Route through
     // a ref so handlePaste always enforces the latest one-video / no-mixing rule.
     const onPasteFilesRef = useRef(onPasteFiles);
     onPasteFilesRef.current = onPasteFiles;
     const editor = useEditor({
-        extensions: composerExtensions({ placeholder }),
+        extensions: composerExtensions({
+            placeholder,
+            emojiOpenRef,
+        }),
         content: segmentsToDoc(value) as object,
         editable,
         editorProps: {
@@ -148,6 +180,25 @@ export default function EditorBody({
             onChange(docToSegments(editor.getJSON() as DocNode)),
         onBlur,
     });
+
+    const emoji = useEmojiTypeahead({
+        editor,
+        containerRef,
+        openRef: emojiOpenRef,
+        skinTone: emojiSkinTone,
+        editable,
+        onInsert: onEmojiInsert,
+    });
+
+    useImperativeHandle(
+        ref,
+        () => ({
+            insertText: (text: string) => {
+                editor?.chain().focus().insertContent(text).run();
+            },
+        }),
+        [editor],
+    );
 
     useEffect(() => {
         if (!editor || !shouldFocusEditorOnMount(autoFocus, editable)) {
@@ -447,6 +498,14 @@ export default function EditorBody({
                     </PopoverContent>
                 )}
             </Popover>
+            <EmojiSuggestPopover
+                open={emoji.open}
+                onDismiss={emoji.dismiss}
+                anchorRef={emoji.anchorRef}
+                matches={emoji.matches}
+                activeIndex={emoji.activeIndex}
+                onSelect={emoji.select}
+            />
             <div className="px-4 pt-[22px] pb-[18px] sm:px-[26px]">
                 <EditorContent
                     editor={editor}
@@ -456,3 +515,6 @@ export default function EditorBody({
         </div>
     );
 }
+
+const EditorBody = forwardRef(EditorBodyInner);
+export default EditorBody;
