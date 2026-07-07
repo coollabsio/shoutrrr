@@ -9,25 +9,21 @@ import {
     useState,
 } from 'react';
 
-import EmojiSuggestList from '@/components/compose/emoji-suggest-list';
+import EmojiSuggestPopover from '@/components/compose/emoji-suggest-popover';
 import MentionPicker from '@/components/compose/mention-picker';
 import {
     Popover,
     PopoverAnchor,
     PopoverContent,
 } from '@/components/ui/popover';
-import { loadEmojiIndex, rankEmoji } from '@/lib/compose/emoji/shortcode-index';
-import type { EmojiMatch, EmojiSkinTone } from '@/lib/compose/emoji/types';
+import { useEmojiTypeahead } from '@/hooks/compose/use-emoji-typeahead';
+import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { mentionInputValue, updateMentionName } from '@/lib/compose/mentions';
 import {
     docToSegments,
     segmentsToDoc,
     type DocNode,
 } from '@/lib/compose/tiptap-doc';
-import {
-    emojiSuggestKey,
-    type EmojiSuggestState,
-} from '@/lib/compose/tiptap/emoji-suggest';
 import {
     editorContainsMentionLabel,
     findMentionLabelStart,
@@ -151,51 +147,20 @@ function EditorBodyInner(
     const mentionAnchorRef = useRef<HTMLDivElement>(null);
     const mentionWasActive = useRef(false);
     const [mentionAnchorReady, setMentionAnchorReady] = useState(false);
-    // Mirrors the emojiSuggest plugin's trigger state; see the `sync` effect
-    // below. A zero-size anchor (mirroring the mention pattern) floats the
-    // typeahead popover beside the active `:query`.
-    const emojiAnchorRef = useRef<HTMLDivElement>(null);
-    // Read live by the emojiSuggest plugin's handleKeyDown so key consumption
-    // (Enter/Tab/Arrows/Escape) is gated on the popover actually being open,
-    // not merely on a `:token` trigger being active — see emojiPopoverOpen.
-    const emojiPopoverOpenRef = useRef(false);
-    const [emojiSuggest, setEmojiSuggest] = useState<EmojiSuggestState>({
-        active: false,
-        query: '',
-        from: 0,
-        to: 0,
-    });
-    const [emojiMatches, setEmojiMatches] = useState<EmojiMatch[]>([]);
-    const [emojiActiveIndex, setEmojiActiveIndex] = useState(0);
-    // Whether the user dismissed the typeahead (Escape / clicked away) for the
-    // current `:query`. State (not a ref) so `emojiPopoverOpen` is derived from
-    // it without reading a mutable ref during render.
-    const [emojiDismissed, setEmojiDismissed] = useState(false);
-    // Read by the CustomEvent handlers, which capture stale state otherwise.
-    const emojiLatest = useRef({
-        suggest: emojiSuggest,
-        matches: emojiMatches,
-        index: emojiActiveIndex,
-    });
-    emojiLatest.current = {
-        suggest: emojiSuggest,
-        matches: emojiMatches,
-        index: emojiActiveIndex,
-    };
+    // Written live by useEmojiTypeahead and read by the emojiSuggest plugin's
+    // handleKeyDown so key consumption is gated on the popover actually being
+    // open. Created here because composerExtensions needs it before the editor
+    // exists, and the hook needs the editor after — one shared ref bridges them.
+    const emojiOpenRef = useRef(false);
     // editorProps is captured once at editor creation, but onPasteFiles is a
     // fresh closure each render (it reads the current media/limits). Route through
     // a ref so handlePaste always enforces the latest one-video / no-mixing rule.
     const onPasteFilesRef = useRef(onPasteFiles);
     onPasteFilesRef.current = onPasteFiles;
-    // Same reason as onPasteFilesRef: the CustomEvent commit handler is bound
-    // once per editor, so it must read the latest onEmojiInsert (addRecent
-    // changes identity across renders) through a ref, not a render closure.
-    const onEmojiInsertRef = useRef(onEmojiInsert);
-    onEmojiInsertRef.current = onEmojiInsert;
     const editor = useEditor({
         extensions: composerExtensions({
             placeholder,
-            emojiOpenRef: emojiPopoverOpenRef,
+            emojiOpenRef,
         }),
         content: segmentsToDoc(value) as object,
         editable,
@@ -214,6 +179,15 @@ function EditorBodyInner(
         onUpdate: ({ editor }) =>
             onChange(docToSegments(editor.getJSON() as DocNode)),
         onBlur,
+    });
+
+    const emoji = useEmojiTypeahead({
+        editor,
+        containerRef,
+        openRef: emojiOpenRef,
+        skinTone: emojiSkinTone,
+        editable,
+        onInsert: onEmojiInsert,
     });
 
     useImperativeHandle(
@@ -314,134 +288,6 @@ function EditorBodyInner(
         });
     }, [editor, markerPlatform, markerAutoSplit, markerLimit, markerThreadMax]);
 
-    // Mirror the emojiSuggest plugin's trigger state into React on every
-    // transaction (mirrors the section-markers → React bridge above).
-    useEffect(() => {
-        if (!editor) {
-            return;
-        }
-        function sync() {
-            setEmojiSuggest(
-                emojiSuggestKey.getState(editor.state) ?? {
-                    active: false,
-                    query: '',
-                    from: 0,
-                    to: 0,
-                },
-            );
-        }
-        editor.on('transaction', sync);
-        sync();
-
-        return () => {
-            editor.off('transaction', sync);
-        };
-    }, [editor]);
-
-    // Fetch + rank matches when the query changes. A new query always clears
-    // any prior dismissal, so re-typing after Escape reopens the popover.
-    useEffect(() => {
-        if (!emojiSuggest.active) {
-            setEmojiMatches([]);
-
-            return;
-        }
-        setEmojiDismissed(false);
-        let cancelled = false;
-        loadEmojiIndex()
-            .then((index) => {
-                if (cancelled) {
-                    return;
-                }
-                setEmojiMatches(
-                    rankEmoji(index, emojiSuggest.query, {
-                        skinTone: emojiSkinTone,
-                    }),
-                );
-                setEmojiActiveIndex(0);
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setEmojiMatches([]);
-                }
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [emojiSuggest.active, emojiSuggest.query, emojiSkinTone]);
-
-    // Replace the active `:query` with the chosen emoji and refocus.
-    function insertEmojiAt(match: EmojiMatch, from: number, to: number) {
-        if (!editor) {
-            return;
-        }
-        editor
-            .chain()
-            .focus()
-            .insertContentAt({ from, to }, `${match.emoji} `)
-            .run();
-        onEmojiInsertRef.current?.(match.emoji);
-    }
-
-    // Bridge the plugin's keyboard-forwarded CustomEvents to the typeahead's
-    // React state. Reads from `emojiLatest` (not the render's closed-over
-    // state) since these handlers are registered once per editor instance.
-    useEffect(() => {
-        const element = editor?.view.dom;
-        if (!element) {
-            return;
-        }
-
-        function onNav(event: Event) {
-            const delta = (event as CustomEvent<{ delta: number }>).detail
-                .delta;
-            const count = emojiLatest.current.matches.length;
-            if (count === 0) {
-                return;
-            }
-            setEmojiActiveIndex((index) => (index + delta + count) % count);
-        }
-
-        function onCommit() {
-            const { suggest, matches, index } = emojiLatest.current;
-            const match = matches[index];
-            if (match) {
-                insertEmojiAt(match, suggest.from, suggest.to);
-            }
-        }
-
-        function onDismiss() {
-            setEmojiDismissed(true);
-        }
-
-        element.addEventListener('composer:emoji-nav', onNav);
-        element.addEventListener('composer:emoji-commit', onCommit);
-        element.addEventListener('composer:emoji-dismiss', onDismiss);
-
-        return () => {
-            element.removeEventListener('composer:emoji-nav', onNav);
-            element.removeEventListener('composer:emoji-commit', onCommit);
-            element.removeEventListener('composer:emoji-dismiss', onDismiss);
-        };
-        // oxlint-disable-next-line react-hooks/exhaustive-deps
-    }, [editor]);
-
-    // Position the floating anchor at the start of the active `:query` so the
-    // popover tracks the caret (reuses positionMentionAnchor's coord logic).
-    useEffect(() => {
-        const container = containerRef.current;
-        const anchor = emojiAnchorRef.current;
-        if (!editor || !emojiSuggest.active || !container || !anchor) {
-            return;
-        }
-        const caret = editor.view.coordsAtPos(emojiSuggest.from);
-        const rect = container.getBoundingClientRect();
-        anchor.style.left = `${caret.left - rect.left}px`;
-        anchor.style.top = `${caret.top - rect.top}px`;
-        anchor.style.height = `${caret.bottom - caret.top}px`;
-    }, [editor, emojiSuggest.active, emojiSuggest.from]);
-
     useEffect(() => {
         const element = editor?.view.dom;
         if (!element) {
@@ -484,16 +330,6 @@ function EditorBodyInner(
         mentionPlatforms.length > 0
             ? mentionPlatforms
             : ([markerPlatform ?? 'x'] as PlatformName[]);
-
-    // Mirrored into a ref (read live by the emojiSuggest plugin's
-    // handleKeyDown) so key consumption tracks the popover's actual open
-    // state, not just an active `:token` trigger.
-    const emojiPopoverOpen =
-        editable &&
-        emojiSuggest.active &&
-        !emojiDismissed &&
-        emojiMatches.length > 0;
-    emojiPopoverOpenRef.current = emojiPopoverOpen;
 
     // Place the floating anchor at the active `@` only on the open transition.
     // The `@` does not move as the name is typed into the picker, so positioning
@@ -662,45 +498,14 @@ function EditorBodyInner(
                     </PopoverContent>
                 )}
             </Popover>
-            <Popover
-                open={emojiPopoverOpen}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        setEmojiDismissed(true);
-                    }
-                }}
-            >
-                <PopoverAnchor asChild>
-                    <div
-                        ref={emojiAnchorRef}
-                        aria-hidden
-                        className="pointer-events-none absolute w-0"
-                    />
-                </PopoverAnchor>
-                <PopoverContent
-                    align="start"
-                    side="bottom"
-                    sideOffset={8}
-                    className="w-auto rounded-xl p-0"
-                    onOpenAutoFocus={(event) => event.preventDefault()}
-                    // Focus stays in the editor while the typeahead is open, so a
-                    // focus-outside must not dismiss it — only Escape or a pointer
-                    // click away (both routed through onOpenChange) should.
-                    onFocusOutside={(event) => event.preventDefault()}
-                >
-                    <EmojiSuggestList
-                        matches={emojiMatches}
-                        activeIndex={emojiActiveIndex}
-                        onSelect={(match) =>
-                            insertEmojiAt(
-                                match,
-                                emojiLatest.current.suggest.from,
-                                emojiLatest.current.suggest.to,
-                            )
-                        }
-                    />
-                </PopoverContent>
-            </Popover>
+            <EmojiSuggestPopover
+                open={emoji.open}
+                onDismiss={emoji.dismiss}
+                anchorRef={emoji.anchorRef}
+                matches={emoji.matches}
+                activeIndex={emoji.activeIndex}
+                onSelect={emoji.select}
+            />
             <div className="px-4 pt-[22px] pb-[18px] sm:px-[26px]">
                 <EditorContent
                     editor={editor}
