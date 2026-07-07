@@ -221,7 +221,7 @@ function EmojiPopover({
                 align="start"
                 side="top"
                 sideOffset={8}
-                className="w-auto overflow-hidden rounded-2xl p-0"
+                className="w-[336px] overflow-hidden rounded-2xl p-0"
                 onOpenAutoFocus={(event) => event.preventDefault()}
             >
                 <EmojiPicker

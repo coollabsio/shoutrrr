@@ -23,7 +23,7 @@ export default function EmojiPicker({
 }: Props) {
     return (
         <Frimousse.Root
-            className="isolate flex h-[368px] w-[336px] flex-col bg-popover text-popover-foreground"
+            className="isolate flex h-[368px] w-full flex-col bg-popover text-popover-foreground"
             locale="en"
             columns={9}
             skinTone={skinTone}
@@ -44,13 +44,13 @@ export default function EmojiPicker({
                     <div className="px-1.5 pb-1 text-xs font-medium text-muted-foreground">
                         Recent
                     </div>
-                    <div className="flex flex-wrap">
+                    <div className="grid grid-cols-9">
                         {recents.map((emoji, position) => (
                             <button
                                 key={`${emoji}-${position}`}
                                 type="button"
                                 onClick={() => onSelect(emoji)}
-                                className="flex size-8 items-center justify-center rounded-md text-lg hover:bg-muted"
+                                className="flex h-8 w-full items-center justify-center rounded-md text-lg hover:bg-muted"
                             >
                                 {emoji}
                             </button>
@@ -77,14 +77,28 @@ export default function EmojiPicker({
                                 {category.label}
                             </div>
                         ),
-                        Row: ({ children, ...props }) => (
-                            <div className="scroll-my-1.5 px-1.5" {...props}>
+                        // Frimousse positions rows absolutely (virtualization) and
+                        // styles them `display:flex` inline; override to a full-width
+                        // grid so the emoji cells fill the picker instead of packing
+                        // left with dead space on the right.
+                        Row: ({ children, style, ...props }) => (
+                            <div
+                                {...props}
+                                style={{
+                                    ...style,
+                                    display: 'grid',
+                                    width: '100%',
+                                    gridTemplateColumns:
+                                        'repeat(9, minmax(0, 1fr))',
+                                }}
+                                className="scroll-my-1.5 px-1.5"
+                            >
                                 {children}
                             </div>
                         ),
                         Emoji: ({ emoji, ...props }) => (
                             <button
-                                className="flex size-8 items-center justify-center rounded-md text-lg data-[active]:bg-muted"
+                                className="flex h-8 w-full items-center justify-center rounded-md text-lg data-[active]:bg-muted"
                                 {...props}
                             >
                                 {emoji.emoji}
