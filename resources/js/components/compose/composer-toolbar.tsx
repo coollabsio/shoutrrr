@@ -115,13 +115,6 @@ export function ComposerToolbar({
                         }}
                     />
 
-                    <EmojiPopover
-                        recents={emojiRecents}
-                        skinTone={emojiSkinTone}
-                        onSkinToneChange={onEmojiSkinToneChange}
-                        onSelect={onInsertEmoji}
-                    />
-
                     <EToolButton
                         title="Add media (⌘⇧M)"
                         onClick={() => input.current?.click()}
@@ -178,6 +171,15 @@ export function ComposerToolbar({
                         <span>Auto-split</span>
                     </EToolButton>
                 </>
+            )}
+
+            {!readOnly && (
+                <EmojiPopover
+                    recents={emojiRecents}
+                    skinTone={emojiSkinTone}
+                    onSkinToneChange={onEmojiSkinToneChange}
+                    onSelect={onInsertEmoji}
+                />
             )}
         </div>
     );
@@ -246,7 +248,7 @@ function EmojiPopover({
                 <PopoverPrimitive.Portal forceMount>
                     <PopoverPrimitive.Content
                         forceMount
-                        align="start"
+                        align="end"
                         side="top"
                         sideOffset={8}
                         onOpenAutoFocus={(event) => event.preventDefault()}
