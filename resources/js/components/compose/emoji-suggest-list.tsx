@@ -20,6 +20,7 @@ export default function EmojiSuggestList({
                 <button
                     key={`${match.shortcode}-${index}`}
                     type="button"
+                    aria-label={match.label}
                     onMouseDown={(event) => {
                         event.preventDefault();
                         onSelect(match);

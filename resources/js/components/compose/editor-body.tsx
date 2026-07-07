@@ -167,7 +167,10 @@ function EditorBodyInner(
     });
     const [emojiMatches, setEmojiMatches] = useState<EmojiMatch[]>([]);
     const [emojiActiveIndex, setEmojiActiveIndex] = useState(0);
-    const emojiDismissed = useRef(false);
+    // Whether the user dismissed the typeahead (Escape / clicked away) for the
+    // current `:query`. State (not a ref) so `emojiPopoverOpen` is derived from
+    // it without reading a mutable ref during render.
+    const [emojiDismissed, setEmojiDismissed] = useState(false);
     // Read by the CustomEvent handlers, which capture stale state otherwise.
     const emojiLatest = useRef({
         suggest: emojiSuggest,
@@ -184,6 +187,11 @@ function EditorBodyInner(
     // a ref so handlePaste always enforces the latest one-video / no-mixing rule.
     const onPasteFilesRef = useRef(onPasteFiles);
     onPasteFilesRef.current = onPasteFiles;
+    // Same reason as onPasteFilesRef: the CustomEvent commit handler is bound
+    // once per editor, so it must read the latest onEmojiInsert (addRecent
+    // changes identity across renders) through a ref, not a render closure.
+    const onEmojiInsertRef = useRef(onEmojiInsert);
+    onEmojiInsertRef.current = onEmojiInsert;
     const editor = useEditor({
         extensions: composerExtensions({
             placeholder,
@@ -338,7 +346,7 @@ function EditorBodyInner(
 
             return;
         }
-        emojiDismissed.current = false;
+        setEmojiDismissed(false);
         let cancelled = false;
         loadEmojiIndex()
             .then((index) => {
@@ -373,7 +381,7 @@ function EditorBodyInner(
             .focus()
             .insertContentAt({ from, to }, `${match.emoji} `)
             .run();
-        onEmojiInsert?.(match.emoji);
+        onEmojiInsertRef.current?.(match.emoji);
     }
 
     // Bridge the plugin's keyboard-forwarded CustomEvents to the typeahead's
@@ -404,8 +412,7 @@ function EditorBodyInner(
         }
 
         function onDismiss() {
-            emojiDismissed.current = true;
-            setEmojiMatches([]);
+            setEmojiDismissed(true);
         }
 
         element.addEventListener('composer:emoji-nav', onNav);
@@ -484,7 +491,7 @@ function EditorBodyInner(
     const emojiPopoverOpen =
         editable &&
         emojiSuggest.active &&
-        !emojiDismissed.current &&
+        !emojiDismissed &&
         emojiMatches.length > 0;
     emojiPopoverOpenRef.current = emojiPopoverOpen;
 
@@ -655,7 +662,14 @@ function EditorBodyInner(
                     </PopoverContent>
                 )}
             </Popover>
-            <Popover open={emojiPopoverOpen}>
+            <Popover
+                open={emojiPopoverOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEmojiDismissed(true);
+                    }
+                }}
+            >
                 <PopoverAnchor asChild>
                     <div
                         ref={emojiAnchorRef}
@@ -669,6 +683,10 @@ function EditorBodyInner(
                     sideOffset={8}
                     className="w-auto rounded-xl p-0"
                     onOpenAutoFocus={(event) => event.preventDefault()}
+                    // Focus stays in the editor while the typeahead is open, so a
+                    // focus-outside must not dismiss it — only Escape or a pointer
+                    // click away (both routed through onOpenChange) should.
+                    onFocusOutside={(event) => event.preventDefault()}
                 >
                     <EmojiSuggestList
                         matches={emojiMatches}

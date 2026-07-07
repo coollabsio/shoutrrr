@@ -107,43 +107,63 @@ export function rankEmoji(
         }));
 }
 
-let indexPromise: Promise<EmojiEntry[]> | null = null;
+/** Abort emoji fetches that stall past this, so the promise rejects instead of
+ *  hanging forever (which would wedge the cache and never retry). */
+const FETCH_TIMEOUT_MS = 10_000;
+
+/** In-flight/resolved indexes keyed by source, so a different baseUrl/locale
+ *  doesn't reuse the first fetch. */
+const indexCache = new Map<string, Promise<EmojiEntry[]>>();
+
+async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
+    const response = await fetch(url, { signal });
+    if (!response.ok) {
+        throw new Error(`emoji fetch failed (${response.status}): ${url}`);
+    }
+
+    return response.json();
+}
 
 /**
- * Fetch and build the emoji index once (memoized). Data is self-hosted under
- * `${baseUrl}/${locale}/…` to satisfy the app CSP. Rejects on network failure;
- * callers must treat a rejection as "no matches" and never surface it to the editor.
+ * Fetch and build the emoji index once per source (memoized). Data is
+ * self-hosted under `${baseUrl}/${locale}/…` to satisfy the app CSP. Rejects on
+ * network failure or timeout — callers must treat a rejection as "no matches"
+ * and never surface it to the editor. A rejected/aborted attempt is evicted so
+ * a later open can retry.
  */
 export function loadEmojiIndex(
     baseUrl = '/emoji',
     locale = 'en',
 ): Promise<EmojiEntry[]> {
-    if (!indexPromise) {
-        indexPromise = Promise.all([
-            fetch(`${baseUrl}/${locale}/data.json`).then((r) => {
-                if (!r.ok) {
-                    throw new Error(`emoji data fetch failed: ${r.status}`);
-                }
-                return r.json();
-            }),
-            fetch(`${baseUrl}/${locale}/shortcodes/emojibase.json`).then(
-                (r) => {
-                    if (!r.ok) {
-                        throw new Error(
-                            `emoji shortcodes fetch failed: ${r.status}`,
-                        );
-                    }
-                    return r.json();
-                },
-            ),
-        ])
-            .then(([data, shortcodes]) => buildEmojiIndex(data, shortcodes))
-            .catch((error) => {
-                // Allow a later open to retry rather than caching the failure.
-                indexPromise = null;
-                throw error;
-            });
+    const key = `${baseUrl}\n${locale}`;
+    const cached = indexCache.get(key);
+    if (cached) {
+        return cached;
     }
 
-    return indexPromise;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    const promise = Promise.all([
+        fetchJson(`${baseUrl}/${locale}/data.json`, controller.signal),
+        fetchJson(
+            `${baseUrl}/${locale}/shortcodes/emojibase.json`,
+            controller.signal,
+        ),
+    ])
+        .then(([data, shortcodes]) =>
+            buildEmojiIndex(
+                data as RawEmoji[],
+                shortcodes as Record<string, string | string[]>,
+            ),
+        )
+        .catch((error: unknown) => {
+            indexCache.delete(key);
+            throw error;
+        })
+        .finally(() => clearTimeout(timeout));
+
+    indexCache.set(key, promise);
+
+    return promise;
 }

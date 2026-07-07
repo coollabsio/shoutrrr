@@ -21,16 +21,23 @@ export function useEmojiPreferences(): EmojiPreferences {
     const [recents, setRecents] = useState<string[]>([]);
     const [skinTone, setSkinToneState] = useState<EmojiSkinTone>('none');
 
-    // Hydrate once on mount (SSR-safe: localStorage is unavailable server-side).
+    // Hydrate once on mount. Guarded because localStorage access throws in
+    // some environments (private mode, disabled storage) as well as SSR.
     useEffect(() => {
-        setRecents(parseRecents(localStorage.getItem(RECENTS_KEY)));
-        setSkinToneState(parseSkinTone(localStorage.getItem(SKIN_TONE_KEY)));
+        try {
+            setRecents(parseRecents(localStorage.getItem(RECENTS_KEY)));
+            setSkinToneState(
+                parseSkinTone(localStorage.getItem(SKIN_TONE_KEY)),
+            );
+        } catch {
+            // Keep the in-memory defaults when storage is unavailable.
+        }
     }, []);
 
     function addRecent(emoji: string): void {
         setRecents((current) => {
             const next = pushRecent(current, emoji);
-            localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+            persist(RECENTS_KEY, JSON.stringify(next));
 
             return next;
         });
@@ -38,8 +45,17 @@ export function useEmojiPreferences(): EmojiPreferences {
 
     function setSkinTone(tone: EmojiSkinTone): void {
         setSkinToneState(tone);
-        localStorage.setItem(SKIN_TONE_KEY, tone);
+        persist(SKIN_TONE_KEY, tone);
     }
 
     return { recents, addRecent, skinTone, setSkinTone };
+}
+
+/** Write to localStorage, swallowing errors (quota/private-mode/disabled). */
+function persist(key: string, value: string): void {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        // Preference just won't persist this session; not worth surfacing.
+    }
 }

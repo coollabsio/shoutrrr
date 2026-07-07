@@ -1,5 +1,5 @@
-import { networkInterfaces } from 'node:os';
 import { cpSync } from 'node:fs';
+import { networkInterfaces } from 'node:os';
 
 import inertia from '@inertiajs/vite';
 import { wayfinder } from '@laravel/vite-plugin-wayfinder';
@@ -32,10 +32,19 @@ const hmrHost = process.env.VITE_HMR_HOST ?? tailscaleHost() ?? 'localhost';
 // typeahead fetch it same-origin. The app's CSP (connect-src 'self') blocks
 // Frimousse's default jsdelivr CDN, so the data must be served from our origin.
 function copyEmojiData() {
-    const copy = () =>
-        cpSync('node_modules/emojibase-data/en', 'public/emoji/en', {
-            recursive: true,
-        });
+    const copy = () => {
+        try {
+            cpSync('node_modules/emojibase-data/en', 'public/emoji/en', {
+                recursive: true,
+            });
+        } catch (error) {
+            throw new Error(
+                'copy-emoji-data: could not copy node_modules/emojibase-data/en ' +
+                    'to public/emoji/en. Run `bun install` to restore the ' +
+                    `emojibase-data dependency. (${(error as Error).message})`,
+            );
+        }
+    };
 
     return {
         name: 'copy-emoji-data',

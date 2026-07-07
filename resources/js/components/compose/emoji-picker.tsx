@@ -98,6 +98,7 @@ export default function EmojiPicker({
                         ),
                         Emoji: ({ emoji, ...props }) => (
                             <button
+                                type="button"
                                 className="flex h-8 w-full items-center justify-center rounded-md text-lg data-[active]:bg-muted"
                                 {...props}
                             >
