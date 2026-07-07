@@ -252,12 +252,16 @@ function EmojiPopover({
                         onOpenAutoFocus={(event) => event.preventDefault()}
                         className={cn(
                             'z-50 w-[336px] overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 outline-hidden dark:ring-foreground/10',
-                            // No enter/exit animation: this popover wraps a heavy
-                            // virtualized emoji grid, and scale/opacity-animating that
-                            // subtree is what felt laggy. Kept mounted (forceMount) and
-                            // toggled with `invisible` (preserves Frimousse's measured
-                            // width) so open + select-to-close are both instant.
-                            'data-[state=closed]:pointer-events-none data-[state=closed]:invisible',
+                            // Same fade+zoom feel as the notification bell, but driven
+                            // by a CSS transition instead of Radix's keyframe animate-in/
+                            // -out. The picker is forceMounted (kept warm) and prewarmed
+                            // while closed, so a keyframe `animate-out` would flash it on
+                            // that first hidden mount; a transition only runs on real
+                            // state changes. opacity/transform are GPU-composited, so it
+                            // stays smooth on the heavy virtualized grid.
+                            'origin-(--radix-popover-content-transform-origin) transition-[opacity,transform] duration-100 ease-out',
+                            'data-[state=open]:scale-100 data-[state=open]:opacity-100',
+                            'data-[state=closed]:pointer-events-none data-[state=closed]:scale-95 data-[state=closed]:opacity-0',
                         )}
                     >
                         <EmojiPicker
