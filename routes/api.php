@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\AccountSetsController;
+use App\Http\Controllers\Api\V1\CalendarController;
 use App\Http\Controllers\Api\V1\ConnectedAccountsController;
 use App\Http\Controllers\Api\V1\MediaController;
 use App\Http\Controllers\Api\V1\PostActionsController;
+use App\Http\Controllers\Api\V1\PostingScheduleController;
 use App\Http\Controllers\Api\V1\PostsController;
 use App\Http\Middleware\RecordApiUsage;
 use App\Http\Middleware\RequireWriteScope;
@@ -18,6 +20,8 @@ Route::middleware(['auth:api', ResolveApiWorkspace::class, 'throttle:api', Recor
         Route::get('posts', [PostsController::class, 'index']);
         Route::get('posts/{id}', [PostsController::class, 'show']);
         Route::get('account-sets', [AccountSetsController::class, 'index']);
+        Route::get('calendar', [CalendarController::class, 'index']);
+        Route::get('posting-schedule', [PostingScheduleController::class, 'show']);
 
         Route::middleware(RequireWriteScope::class)->group(function (): void {
             Route::post('posts', [PostsController::class, 'store']);
