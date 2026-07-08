@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\ConnectedAccountsController;
+use App\Http\Controllers\Api\V1\MediaController;
 use App\Http\Controllers\Api\V1\PostActionsController;
 use App\Http\Controllers\Api\V1\PostsController;
 use App\Http\Middleware\RecordApiUsage;
@@ -25,5 +26,8 @@ Route::middleware(['auth:api', ResolveApiWorkspace::class, 'throttle:api', Recor
             Route::post('posts/{id}/queue', [PostActionsController::class, 'queue']);
             Route::post('posts/{id}/publish', [PostActionsController::class, 'publish']);
             Route::post('posts/{id}/targets/{targetId}/retry', [PostActionsController::class, 'retry']);
+
+            Route::post('media', [MediaController::class, 'store']);
+            Route::delete('media/{mediaId}', [MediaController::class, 'destroy']);
         });
     });
