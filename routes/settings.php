@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\ApiKeysController;
 use App\Http\Controllers\Settings\ConnectionsController;
 use App\Http\Controllers\Settings\InstanceSettingsController;
 use App\Http\Controllers\Settings\NotificationPreferencesController;
@@ -23,6 +24,10 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('settings/workspace/members/{membership}', [WorkspaceSettingsController::class, 'updateMemberRole'])->name('settings.workspace.members.update');
     Route::delete('settings/workspace/members/{membership}', [WorkspaceSettingsController::class, 'removeMember'])->name('settings.workspace.members.remove');
     Route::delete('settings/workspace/invitations/{invitation}', [WorkspaceSettingsController::class, 'cancelInvitation'])->name('settings.workspace.invitations.cancel');
+
+    Route::get('settings/api-keys', [ApiKeysController::class, 'index'])->name('settings.api-keys');
+    Route::post('settings/api-keys', [ApiKeysController::class, 'store'])->name('settings.api-keys.store');
+    Route::delete('settings/api-keys/{apiKey}', [ApiKeysController::class, 'destroy'])->name('settings.api-keys.destroy');
 
     Route::get('settings/connections', [ConnectionsController::class, 'edit'])->name('connections.edit');
     Route::delete('settings/connections/{socialAccount}', [ConnectionsController::class, 'destroy'])->name('connections.destroy');
