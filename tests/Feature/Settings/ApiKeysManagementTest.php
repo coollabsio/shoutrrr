@@ -30,7 +30,7 @@ function ownerInWorkspaceForApiKeys(): array
 test('an owner can create an api key and sees the plaintext once', function () {
     [$user, $workspace] = ownerInWorkspaceForApiKeys();
 
-    $response = $this->actingAs($user)->post('/settings/api-keys', [
+    $response = $this->actingAs($user)->post('/settings/workspace/api-keys', [
         'name' => 'CI bot',
         'scope' => 'write',
     ]);
@@ -46,7 +46,7 @@ test('a member without settings.manage cannot create a key', function () {
     $workspace->members()->create(['user_id' => $user->id, 'role' => 'member']);
     $user->forceFill(['current_workspace_id' => $workspace->id])->save();
 
-    $this->actingAs($user)->post('/settings/api-keys', ['name' => 'x', 'scope' => 'read'])
+    $this->actingAs($user)->post('/settings/workspace/api-keys', ['name' => 'x', 'scope' => 'read'])
         ->assertForbidden();
 });
 
@@ -54,7 +54,7 @@ test('an owner can revoke a key', function () {
     [$user, $workspace] = ownerInWorkspaceForApiKeys();
     $apiKey = ApiKey::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $user->id]);
 
-    $this->actingAs($user)->delete("/settings/api-keys/{$apiKey->id}")->assertRedirect();
+    $this->actingAs($user)->delete("/settings/workspace/api-keys/{$apiKey->id}")->assertRedirect();
 
     expect($apiKey->fresh()->revoked_at)->not->toBeNull();
 });
@@ -63,14 +63,14 @@ test('keys from another workspace are not manageable', function () {
     [$user] = ownerInWorkspaceForApiKeys();
     $foreign = ApiKey::factory()->create(); // other workspace
 
-    $this->actingAs($user)->delete("/settings/api-keys/{$foreign->id}")->assertNotFound();
+    $this->actingAs($user)->delete("/settings/workspace/api-keys/{$foreign->id}")->assertNotFound();
 });
 
 test('the api-keys settings page renders for an owner', function () {
     [$user, $workspace] = ownerInWorkspaceForApiKeys();
     ApiKey::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $user->id, 'name' => 'Existing']);
 
-    $this->actingAs($user)->get('/settings/api-keys')
+    $this->actingAs($user)->get('/settings/workspace/api-keys')
         ->assertOk()
-        ->assertInertia(fn ($page) => $page->component('settings/api-keys')->has('apiKeys', 1));
+        ->assertInertia(fn ($page) => $page->component('settings/workspace/api-keys')->has('apiKeys', 1));
 });

@@ -41,7 +41,7 @@ class ApiKeysController extends Controller
                 'created_at' => $key->created_at->toIso8601String(),
             ]);
 
-        return Inertia::render('settings/api-keys', ['apiKeys' => $keys]);
+        return Inertia::render('settings/workspace/api-keys', ['apiKeys' => $keys]);
     }
 
     public function store(Request $request): RedirectResponse
