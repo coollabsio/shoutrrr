@@ -53,11 +53,11 @@ class AppServiceProvider extends ServiceProvider
         Passport::tokensExpireIn(now()->addHours(8));
         Passport::refreshTokensExpireIn(now()->addDays(30));
 
-        // API keys (personal access tokens) are for long-lived automation. The JWT
-        // envelope is deliberately long; the real per-key lifetime is enforced by
-        // api_keys.expires_at / revoked_at in ResolveApiWorkspace, and every key is
-        // user-revocable from workspace settings.
-        Passport::personalAccessTokensExpireIn(now()->addYears(5));
+        // API keys (personal access tokens) are for long-lived automation. This is
+        // just the default before ApiKeyManager::issue() overrides it per key with
+        // the honest expiry (or ~100 years for a non-expiring key); every key is
+        // also user-revocable from workspace settings.
+        Passport::personalAccessTokensExpireIn(now()->addYears(100));
 
         Passport::tokensCan([
             'read' => 'Read workspace data',

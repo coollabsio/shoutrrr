@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'user_id',
     'access_token_id',
     'name',
+    'last_four',
     'scope',
     'last_used_at',
     'expires_at',

@@ -34,6 +34,7 @@ class ApiKeysController extends Controller
             ->map(fn (ApiKey $key): array => [
                 'id' => $key->id,
                 'name' => $key->name,
+                'last_four' => $key->last_four,
                 'scope' => $key->scope,
                 'last_used_at' => $key->last_used_at?->toIso8601String(),
                 'expires_at' => $key->expires_at?->toIso8601String(),

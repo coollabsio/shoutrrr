@@ -21,6 +21,7 @@ return new class extends Migration
             // its own tables and we keep the api_keys row for audit even if pruned.
             $table->string('access_token_id')->unique();
             $table->string('name');
+            $table->string('last_four', 4)->nullable();
             $table->string('scope', 16); // 'read' | 'write'
             $table->timestamp('last_used_at')->nullable();
             $table->timestamp('expires_at')->nullable();

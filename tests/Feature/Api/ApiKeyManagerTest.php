@@ -52,6 +52,32 @@ test('a custom expiry is stored on the key', function () {
     expect($apiKey->expires_at->equalTo($expires))->toBeTrue();
 });
 
+test('last_four matches the last 4 characters of the plaintext token', function () {
+    [$apiKey, $plain] = $this->manager->issue($this->workspace, $this->user, 'CI bot', 'write', null);
+
+    expect($apiKey->last_four)->toBe(substr($plain, -4));
+});
+
+test('a key issued with a custom expiry produces a Passport token expiring at that instant', function () {
+    $expires = now()->addDays(7)->startOfSecond();
+
+    [$apiKey] = $this->manager->issue($this->workspace, $this->user, 'temp', 'read', $expires);
+
+    $token = Token::find($apiKey->access_token_id);
+
+    expect($token->expires_at->diffInMinutes($expires, absolute: true))->toBeLessThanOrEqual(1);
+    expect($apiKey->expires_at->diffInMinutes($expires, absolute: true))->toBeLessThanOrEqual(1);
+});
+
+test('a non-expiring key produces a Passport token expiring far in the future', function () {
+    [$apiKey] = $this->manager->issue($this->workspace, $this->user, 'forever', 'write', null);
+
+    $token = Token::find($apiKey->access_token_id);
+
+    expect($token->expires_at->diffInDays(now(), absolute: true))->toBeGreaterThanOrEqual(99 * 365);
+    expect($apiKey->expires_at)->toBeNull();
+});
+
 test('revoke marks the row revoked and revokes the passport token', function () {
     [$apiKey] = $this->manager->issue($this->workspace, $this->user, 'bot', 'write', null);
 

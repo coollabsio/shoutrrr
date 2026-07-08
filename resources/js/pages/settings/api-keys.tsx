@@ -29,6 +29,7 @@ import { apiKeys as apiKeysIndex } from '@/routes/settings';
 type ApiKey = {
     id: string;
     name: string;
+    last_four: string | null;
     scope: 'read' | 'write';
     last_used_at: string | null;
     expires_at: string | null;
@@ -177,7 +178,14 @@ export default function ApiKeys({ apiKeys }: Props) {
                                 {apiKeys.map((key) => (
                                     <TableRow key={key.id}>
                                         <TableCell className="font-medium">
-                                            {key.name}
+                                            <div className="flex items-center gap-2">
+                                                <span>{key.name}</span>
+                                                {key.last_four && (
+                                                    <span className="font-mono text-xs text-muted-foreground">
+                                                        ••••{key.last_four}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             <Badge

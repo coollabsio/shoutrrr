@@ -24,6 +24,7 @@ class ApiKeyFactory extends Factory
             'user_id' => User::factory(),
             'access_token_id' => (string) Str::uuid(),
             'name' => $this->faker->words(2, true),
+            'last_four' => $this->faker->regexify('[A-Za-z0-9]{4}'),
             'scope' => 'write',
             'last_used_at' => null,
             'expires_at' => null,
