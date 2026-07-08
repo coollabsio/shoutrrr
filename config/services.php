@@ -60,7 +60,7 @@ return [
         'client_id' => env('FACEBOOK_CLIENT_ID'),
         'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
         'redirect' => env('FACEBOOK_REDIRECT_URI'),
-        'graph_version' => env('FACEBOOK_GRAPH_VERSION', 'v21.0'),
+        'graph_version' => env('FACEBOOK_GRAPH_VERSION', 'v25.0'),
     ],
 
     'threads' => [
