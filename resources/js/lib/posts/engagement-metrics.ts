@@ -23,6 +23,11 @@ type Slot = { key: EngagementKey; label: string };
  * Each network's action bar, in its own order and vocabulary, so the numbers
  * land where a reader of that platform expects them. `views` is appended from
  * `impressions` only where the platform exposes it and we actually captured it.
+ *
+ * Facebook, Instagram, and Threads have no engagement feature yet (Phase 1
+ * plumbing only, engagement lands in Phases 3-5) so these layouts are
+ * placeholders to keep this map exhaustive, and should be revisited when
+ * their engagement connectors land.
  */
 const LAYOUT: Record<PlatformName, Slot[]> = {
     x: [
@@ -41,6 +46,20 @@ const LAYOUT: Record<PlatformName, Slot[]> = {
         { key: 'comments', label: 'comments' },
         { key: 'reposts', label: 'reposts' },
         { key: 'views', label: 'impressions' },
+    ],
+    facebook: [
+        { key: 'likes', label: 'likes' },
+        { key: 'comments', label: 'comments' },
+        { key: 'reposts', label: 'shares' },
+    ],
+    instagram: [
+        { key: 'likes', label: 'likes' },
+        { key: 'comments', label: 'comments' },
+    ],
+    threads: [
+        { key: 'likes', label: 'likes' },
+        { key: 'comments', label: 'replies' },
+        { key: 'reposts', label: 'reposts' },
     ],
 };
 

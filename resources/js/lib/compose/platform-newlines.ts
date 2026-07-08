@@ -10,11 +10,20 @@ import type { PlatformName } from '@/types/compose';
  * blank line; LinkedIn's feed keeps at most one blank line between paragraphs;
  * Bluesky stores and renders standard newlines untouched. Tune a value here if
  * a platform changes how it collapses spacing.
+ *
+ * Facebook, Instagram, and Threads have no connect/publish path yet (Phase 1
+ * plumbing only) so their real collapsing behaviour is unconfirmed; they are
+ * set to the same collapsing default as X/LinkedIn as a placeholder to keep
+ * this map exhaustive, and should be verified when their publish connectors
+ * land.
  */
 const MAX_CONSECUTIVE_NEWLINES: Record<PlatformName, number> = {
     x: 2,
     linkedin: 2,
     bluesky: Number.POSITIVE_INFINITY,
+    facebook: 2,
+    instagram: 2,
+    threads: 2,
 };
 
 /**

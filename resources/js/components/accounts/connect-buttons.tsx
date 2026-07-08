@@ -37,7 +37,14 @@ import type { Capability } from './types';
 export const COLLAPSIBLE_TRIGGER_ICON_CLASS =
     '[&[data-state=open]_svg]:rotate-180';
 
-const SUPPORTED_PLATFORM_ICONS = ['x', 'bluesky', 'linkedin'];
+const SUPPORTED_PLATFORM_ICONS = [
+    'x',
+    'bluesky',
+    'linkedin',
+    'facebook',
+    'instagram',
+    'threads',
+];
 
 export function isSupportedPlatformIcon(
     platform: string,

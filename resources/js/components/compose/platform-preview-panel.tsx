@@ -21,12 +21,18 @@ const PLATFORM_LABELS: Record<PlatformName, string> = {
     x: 'X',
     bluesky: 'Bluesky',
     linkedin: 'LinkedIn',
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    threads: 'Threads',
 };
 
 const PLATFORM_GLYPH_CLASS: Record<PlatformName, string> = {
     x: 'text-foreground',
     bluesky: 'text-sky-500',
     linkedin: 'text-blue-600',
+    facebook: 'text-[#1877F2]',
+    instagram: 'text-[#E4405F]',
+    threads: 'text-foreground',
 };
 
 function initials(name: string): string {
