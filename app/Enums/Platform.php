@@ -107,6 +107,22 @@ enum Platform: string
     }
 
     /**
+     * The subset of the Facebook-Login-driven Meta platforms (Facebook,
+     * Instagram) that are launched — used to gate the shared
+     * `MetaConnectionController` flow and to scope the Facebook Login
+     * request to only the permissions a launched platform actually needs.
+     *
+     * @return list<self>
+     */
+    public static function launchedMetaGraphPlatforms(): array
+    {
+        return array_values(array_filter(
+            [self::Facebook, self::Instagram],
+            fn (self $platform): bool => $platform->isLaunched(),
+        ));
+    }
+
+    /**
      * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, configured: bool, launched: bool}>
      */
     public static function capabilities(): array
