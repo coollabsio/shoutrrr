@@ -32,3 +32,17 @@ test('revokes a share', function () {
         ->assertOk()
         ->assertJsonPath('revoked', true);
 });
+
+test('cannot revoke a share by pairing it with the wrong post', function () {
+    [$user, $workspace, $token] = issuedKey();
+    $postA = Post::factory()->for($workspace)->create(['author_id' => $user->id]);
+    $postB = Post::factory()->for($workspace)->create(['author_id' => $user->id]);
+    $id = $this->withToken($token)->postJson("/api/v1/posts/{$postB->id}/shares")->json('id');
+
+    $this->withToken($token)->deleteJson("/api/v1/posts/{$postA->id}/shares/{$id}")
+        ->assertNotFound();
+
+    $this->withToken($token)->getJson("/api/v1/posts/{$postB->id}/shares")
+        ->assertOk()
+        ->assertJsonCount(1, 'shares');
+});
