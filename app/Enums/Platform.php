@@ -92,7 +92,22 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, configured: bool}>
+     * Whether this platform's connect + publishing flow is fully implemented
+     * and safe to expose. New platforms are registered in this enum (for limits,
+     * branding, and phased rollout) before their connectors exist; until then
+     * connecting must stay disabled even when credentials are configured. Flip a
+     * platform to `true` when its publish/engagement/metrics connectors land.
+     */
+    public function isLaunched(): bool
+    {
+        return match ($this) {
+            self::X, self::Bluesky, self::LinkedIn => true,
+            self::Facebook, self::Instagram, self::Threads => false,
+        };
+    }
+
+    /**
+     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, configured: bool, launched: bool}>
      */
     public static function capabilities(): array
     {
@@ -102,6 +117,7 @@ enum Platform: string
             'supportsOAuth' => $platform->supportsOAuth(),
             'supportsAppPassword' => $platform->supportsAppPassword(),
             'configured' => $platform->isConfigured(),
+            'launched' => $platform->isLaunched(),
         ], self::cases());
     }
 

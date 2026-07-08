@@ -61,7 +61,16 @@ test('capabilities array exposes one entry per platform for the frontend', funct
     $caps = Platform::capabilities();
 
     expect($caps)->toHaveCount(6)
-        ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'configured']);
+        ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'configured', 'launched']);
+});
+
+test('only platforms with implemented connectors are launched', function () {
+    expect(Platform::X->isLaunched())->toBeTrue()
+        ->and(Platform::Bluesky->isLaunched())->toBeTrue()
+        ->and(Platform::LinkedIn->isLaunched())->toBeTrue()
+        ->and(Platform::Facebook->isLaunched())->toBeFalse()
+        ->and(Platform::Instagram->isLaunched())->toBeFalse()
+        ->and(Platform::Threads->isLaunched())->toBeFalse();
 });
 
 test('meta platforms report oauth capability and no app password', function () {

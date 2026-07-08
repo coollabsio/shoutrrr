@@ -133,7 +133,7 @@ class OAuthConnectionController extends Controller
     {
         $resolved = Platform::tryFrom($platform);
 
-        if (! $resolved instanceof Platform || ! $resolved->supportsOAuth() || ! $resolved->isConfigured()) {
+        if (! $resolved instanceof Platform || ! $resolved->supportsOAuth() || ! $resolved->isConfigured() || ! $resolved->isLaunched()) {
             abort(404);
         }
 

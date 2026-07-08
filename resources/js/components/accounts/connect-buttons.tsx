@@ -429,7 +429,7 @@ export function ConnectButtons({
                     return <BlueskyConnectDialog key={capability.platform} />;
                 }
 
-                if (!capability.configured) {
+                if (!capability.launched || !capability.configured) {
                     return (
                         <Button
                             key={capability.platform}

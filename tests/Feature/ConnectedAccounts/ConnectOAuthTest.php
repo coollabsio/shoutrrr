@@ -82,6 +82,17 @@ test('redirect 404s for an unknown or app-password platform', function () {
     test()->get('/accounts/connect/myspace')->assertNotFound();
 });
 
+test('redirect 404s for a configured but not-yet-launched platform', function () {
+    // Facebook is registered in the Platform enum (for limits/branding) and
+    // supports OAuth, but its publish/engagement/metrics connectors don't
+    // exist yet. Configuring credentials must not be enough to go live.
+    config()->set('services.facebook.client_id', 'cid');
+    config()->set('services.facebook.client_secret', 'secret');
+    ownerActingIn();
+
+    test()->get('/accounts/connect/facebook')->assertNotFound();
+});
+
 test('callback persists an active X account with an encrypted token', function () {
     config()->set('services.x.client_id', 'cid');
     config()->set('services.x.client_secret', 'secret');
