@@ -27,6 +27,19 @@ test('creates an account set with scoped members', function () {
         ->assertJsonPath('connected_account_ids.0', $account->id);
 });
 
+test('silently drops connected account ids from another workspace', function () {
+    [, $workspace, $token] = issuedKey();
+    $mine = ConnectedAccount::factory()->for($workspace)->create();
+    $foreign = ConnectedAccount::factory()->create();
+
+    $this->withToken($token)->postJson('/api/v1/account-sets', [
+        'name' => 'Launch',
+        'connected_account_ids' => [$mine->id, $foreign->id],
+    ])
+        ->assertCreated()
+        ->assertJsonPath('connected_account_ids', [$mine->id]);
+});
+
 test('updates an account set', function () {
     [, $workspace, $token] = issuedKey();
     $set = AccountSet::factory()->for($workspace)->create(['name' => 'Old']);
