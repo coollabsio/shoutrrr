@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\AccountSetsController;
 use App\Http\Controllers\Api\V1\ConnectedAccountsController;
 use App\Http\Controllers\Api\V1\MediaController;
 use App\Http\Controllers\Api\V1\PostActionsController;
@@ -16,6 +17,7 @@ Route::middleware(['auth:api', ResolveApiWorkspace::class, 'throttle:api', Recor
         Route::get('connected-accounts', [ConnectedAccountsController::class, 'index']);
         Route::get('posts', [PostsController::class, 'index']);
         Route::get('posts/{id}', [PostsController::class, 'show']);
+        Route::get('account-sets', [AccountSetsController::class, 'index']);
 
         Route::middleware(RequireWriteScope::class)->group(function (): void {
             Route::post('posts', [PostsController::class, 'store']);
@@ -29,5 +31,9 @@ Route::middleware(['auth:api', ResolveApiWorkspace::class, 'throttle:api', Recor
 
             Route::post('media', [MediaController::class, 'store']);
             Route::delete('media/{mediaId}', [MediaController::class, 'destroy']);
+
+            Route::post('account-sets', [AccountSetsController::class, 'store']);
+            Route::patch('account-sets/{set}', [AccountSetsController::class, 'update']);
+            Route::delete('account-sets/{set}', [AccountSetsController::class, 'destroy']);
         });
     });
