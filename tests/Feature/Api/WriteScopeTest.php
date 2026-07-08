@@ -1,7 +1,5 @@
 <?php
 
-use function issuedKey;
-
 test('a read-only key is 403 on a write endpoint', function () {
     [, , $token] = issuedKey('read');
 

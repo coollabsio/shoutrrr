@@ -4,8 +4,6 @@ use App\Models\PostMedia;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-use function issuedKey;
-
 test('uploads an image file to the media library', function () {
     Storage::fake('public');
     [, , $token] = issuedKey();

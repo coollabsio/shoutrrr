@@ -2,8 +2,6 @@
 
 use App\Models\Post;
 
-use function issuedKey;
-
 test('creates a share link', function () {
     [$user, $workspace, $token] = issuedKey();
     $post = Post::factory()->for($workspace)->create(['author_id' => $user->id]);

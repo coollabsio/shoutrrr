@@ -5,8 +5,6 @@ use App\Models\Post;
 use App\Models\PostTarget;
 use Illuminate\Support\Facades\Queue;
 
-use function issuedKey;
-
 test('schedules a post for a future time', function () {
     [$user, $workspace, $token] = issuedKey();
     $post = Post::factory()->for($workspace)->create(['author_id' => $user->id]);

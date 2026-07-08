@@ -2,8 +2,6 @@
 
 use App\Models\Post;
 
-use function issuedKey;
-
 test('returns scheduled posts for a month', function () {
     [$user, $workspace, $token] = issuedKey();
     $post = Post::factory()->for($workspace)->create([

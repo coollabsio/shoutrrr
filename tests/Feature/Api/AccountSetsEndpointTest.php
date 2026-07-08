@@ -3,8 +3,6 @@
 use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
 
-use function issuedKey;
-
 test('lists account sets', function () {
     [, $workspace, $token] = issuedKey();
     $set = AccountSet::factory()->for($workspace)->create();
