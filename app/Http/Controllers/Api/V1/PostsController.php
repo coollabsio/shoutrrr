@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Dto\Post\DraftData;
 use App\Enums\PostStatus;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesWorkspacePost;
 use App\Http\Controllers\Controller;
 use App\Jobs\DeletePostTarget;
 use App\Models\Post;
@@ -23,6 +24,8 @@ use Illuminate\Validation\Rule;
 
 class PostsController extends Controller
 {
+    use ResolvesWorkspacePost;
+
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -90,6 +93,7 @@ class PostsController extends Controller
     public function update(Request $request, string $id, DraftService $drafts): JsonResponse
     {
         $model = $this->findPostOrFail($id);
+        $this->authorize('update', $model);
 
         $validated = $request->validate([
             'base_text' => ['present', 'nullable', 'string'],
@@ -148,10 +152,5 @@ class PostsController extends Controller
         $model->forceFill(['status' => PostStatus::Deleted->value, 'deleted_at' => now()])->save();
 
         return response()->json(['deleted' => true, 'remote' => true, 'message' => 'Remote deletion queued for published targets.']);
-    }
-
-    protected function findPostOrFail(string $id): Post
-    {
-        return Post::query()->whereKey($id)->firstOr(fn () => abort(404, 'No post with that id exists in this workspace.'));
     }
 }

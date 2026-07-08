@@ -54,6 +54,7 @@ class AccountSetsController extends Controller
     {
         $model = AccountSet::query()->whereKey($set)
             ->firstOr(fn () => abort(404, 'No account set with that id exists in this workspace.'));
+        $this->authorize('update', $model);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -62,7 +63,13 @@ class AccountSetsController extends Controller
         ]);
 
         $model->update(['name' => $validated['name']]);
-        $model->accounts()->sync($this->scopedAccountIds($model->workspace_id, $validated['connected_account_ids'] ?? []));
+
+        // PATCH semantics: only touch membership when the client actually sent
+        // connected_account_ids. Omitting it leaves existing members intact;
+        // sending an empty array explicitly clears them.
+        if ($request->has('connected_account_ids')) {
+            $model->accounts()->sync($this->scopedAccountIds($model->workspace_id, $validated['connected_account_ids']));
+        }
 
         return response()->json($this->view($model->fresh()));
     }
@@ -71,6 +78,7 @@ class AccountSetsController extends Controller
     {
         $model = AccountSet::query()->whereKey($set)
             ->firstOr(fn () => abort(404, 'No account set with that id exists in this workspace.'));
+        $this->authorize('delete', $model);
 
         $id = $model->id;
         $model->delete();
@@ -85,7 +93,7 @@ class AccountSetsController extends Controller
     private function scopedAccountIds(string $workspaceId, array $ids): array
     {
         return array_values(
-            ConnectedAccount::withoutGlobalScopes()
+            ConnectedAccount::withoutGlobalScope('workspace')
                 ->where('workspace_id', $workspaceId)
                 ->whereIn('id', $ids)
                 ->pluck('id')

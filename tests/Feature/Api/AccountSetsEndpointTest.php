@@ -57,3 +57,31 @@ test('deletes an account set', function () {
 
     expect(AccountSet::whereKey($set->id)->exists())->toBeFalse();
 });
+
+test('a name-only PATCH preserves existing members', function () {
+    [, $workspace, $token] = issuedKey();
+    $account = ConnectedAccount::factory()->for($workspace)->create();
+    $set = AccountSet::factory()->for($workspace)->create(['name' => 'Old']);
+    $set->accounts()->sync([$account->id]);
+
+    $this->withToken($token)->patchJson("/api/v1/account-sets/{$set->id}", ['name' => 'New'])
+        ->assertOk()
+        ->assertJsonPath('name', 'New')
+        ->assertJsonPath('connected_account_ids.0', $account->id);
+
+    expect($set->fresh()->accounts()->count())->toBe(1);
+});
+
+test('an explicit empty connected_account_ids clears members', function () {
+    [, $workspace, $token] = issuedKey();
+    $account = ConnectedAccount::factory()->for($workspace)->create();
+    $set = AccountSet::factory()->for($workspace)->create();
+    $set->accounts()->sync([$account->id]);
+
+    $this->withToken($token)->patchJson("/api/v1/account-sets/{$set->id}", [
+        'name' => 'Cleared',
+        'connected_account_ids' => [],
+    ])->assertOk();
+
+    expect($set->fresh()->accounts()->count())->toBe(0);
+});

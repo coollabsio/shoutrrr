@@ -34,3 +34,12 @@ test('a read-only key cannot upload', function () {
         'file' => UploadedFile::fake()->image('pic.png'),
     ])->assertForbidden();
 });
+
+test('cannot delete media belonging to another workspace', function () {
+    [, , $token] = issuedKey();
+    $foreign = PostMedia::factory()->create(); // its own (different) workspace
+
+    $this->withToken($token)->deleteJson("/api/v1/media/{$foreign->id}")->assertNotFound();
+
+    expect(PostMedia::withoutGlobalScopes()->whereKey($foreign->id)->exists())->toBeTrue();
+});

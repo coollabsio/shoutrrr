@@ -17,9 +17,9 @@ class CalendarController extends Controller
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'month' => ['required', 'string', 'regex:/^\d{4}-\d{2}$/'],
+            'month' => ['required', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
         ], [
-            'month.regex' => 'Provide the month as YYYY-MM, for example 2026-06.',
+            'month.regex' => 'Provide the month as YYYY-MM (01–12), for example 2026-06.',
         ]);
 
         $anchor = CarbonImmutable::createFromFormat('Y-m-d', "{$validated['month']}-01")->startOfMonth();

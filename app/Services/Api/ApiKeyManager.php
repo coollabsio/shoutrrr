@@ -8,6 +8,7 @@ use App\Models\ApiKey;
 use App\Models\User;
 use App\Models\Workspace;
 use Carbon\CarbonInterface;
+use InvalidArgumentException;
 use Laravel\Passport\Passport;
 use Laravel\Passport\Token;
 
@@ -18,10 +19,15 @@ class ApiKeyManager
      * workspace binding + metadata. Returns [ApiKey, plaintextToken]; the
      * plaintext is shown to the user exactly once.
      *
+     * @param  'read'|'write'  $scope
      * @return array{0: ApiKey, 1: string}
      */
     public function issue(Workspace $workspace, User $user, string $name, string $scope, ?CarbonInterface $expiresAt): array
     {
+        if (! in_array($scope, ['read', 'write'], true)) {
+            throw new InvalidArgumentException("Invalid API key scope [{$scope}]; expected 'read' or 'write'.");
+        }
+
         $scopes = $scope === 'write' ? ['read', 'write'] : ['read'];
 
         // The JWT `exp` claim is baked in at mint time from this global, so it

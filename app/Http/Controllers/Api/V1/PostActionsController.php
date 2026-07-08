@@ -6,9 +6,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\PostStatus;
 use App\Enums\PostTargetStatus;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesWorkspacePost;
 use App\Http\Controllers\Controller;
 use App\Jobs\PublishPostTarget;
-use App\Models\Post;
 use App\Models\PostTarget;
 use App\Models\Workspace;
 use App\Services\Posts\NextSlotResolver;
@@ -21,9 +21,12 @@ use Illuminate\Support\Facades\Context;
 
 class PostActionsController extends Controller
 {
+    use ResolvesWorkspacePost;
+
     public function schedule(Request $request, string $id): JsonResponse
     {
         $model = $this->findPostOrFail($id);
+        $this->authorize('update', $model);
 
         $validated = $request->validate([
             'scheduled_at' => ['nullable', 'date', 'after:now'],
@@ -46,6 +49,7 @@ class PostActionsController extends Controller
     public function queue(string $id, NextSlotResolver $resolver): JsonResponse
     {
         $model = $this->findPostOrFail($id);
+        $this->authorize('update', $model);
         $workspace = Workspace::query()->whereKey(Context::get('workspace_id'))->firstOrFail();
 
         $slot = $resolver->resolve($workspace);
@@ -105,10 +109,5 @@ class PostActionsController extends Controller
             'status' => 'queued',
             'post' => PostView::make($model->fresh(['targets.account', 'media'])),
         ], 202);
-    }
-
-    protected function findPostOrFail(string $id): Post
-    {
-        return Post::query()->whereKey($id)->firstOr(fn () => abort(404, 'No post with that id exists in this workspace.'));
     }
 }

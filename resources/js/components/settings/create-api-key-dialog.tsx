@@ -124,17 +124,15 @@ export default function CreateApiKeyDialog() {
                                             (optional)
                                         </span>
                                     </Label>
-                                    <input
-                                        type="hidden"
-                                        name="expires_at"
-                                        value={
-                                            expiresAt
-                                                ? dayjs(expiresAt).format(
-                                                      'YYYY-MM-DD',
-                                                  )
-                                                : ''
-                                        }
-                                    />
+                                    {expiresAt && (
+                                        <input
+                                            type="hidden"
+                                            name="expires_at"
+                                            value={dayjs(expiresAt).format(
+                                                'YYYY-MM-DD',
+                                            )}
+                                        />
+                                    )}
                                     <Popover
                                         open={dateOpen}
                                         onOpenChange={setDateOpen}

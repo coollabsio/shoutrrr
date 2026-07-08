@@ -44,3 +44,14 @@ test('cannot revoke a share by pairing it with the wrong post', function () {
         ->assertOk()
         ->assertJsonCount(1, 'data');
 });
+
+test('a read-only key cannot create or revoke shares', function () {
+    [$user, $workspace, $token] = issuedKey('read');
+    $post = Post::factory()->for($workspace)->create(['author_id' => $user->id]);
+
+    $this->withToken($token)->postJson("/api/v1/posts/{$post->id}/shares")
+        ->assertForbidden();
+
+    $this->withToken($token)->deleteJson("/api/v1/posts/{$post->id}/shares/does-not-matter")
+        ->assertForbidden();
+});

@@ -71,11 +71,21 @@ function expiryMeta(iso: string | null): { text: string; expired: boolean } {
 function NewKeyReveal({ token }: { token: string }) {
     const [copied, setCopied] = useState(false);
 
-    function copy() {
-        void navigator.clipboard?.writeText(token);
-        setCopied(true);
-        toast.success('Copied to clipboard');
-        setTimeout(() => setCopied(false), 2000);
+    async function copy() {
+        if (!navigator.clipboard) {
+            toast.error(
+                'Copy is unavailable here — select the key and copy it manually.',
+            );
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(token);
+            setCopied(true);
+            toast.success('Copied to clipboard');
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            toast.error('Copy failed — select the key and copy it manually.');
+        }
     }
 
     return (

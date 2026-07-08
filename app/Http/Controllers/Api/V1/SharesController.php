@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Api\V1\Concerns\ResolvesWorkspacePost;
 use App\Http\Controllers\Controller;
-use App\Models\Post;
 use App\Models\PostShare;
 use App\Models\User;
 use App\Services\Posts\ShareService;
@@ -16,6 +16,8 @@ use Illuminate\Http\Request;
 
 class SharesController extends Controller
 {
+    use ResolvesWorkspacePost;
+
     public function index(Request $request, string $id): JsonResponse
     {
         $model = $this->findPostOrFail($id);
@@ -69,13 +71,8 @@ class SharesController extends Controller
             abort(404, 'No share with that id exists for this post.');
         }
 
-        $postShare->forceFill(['revoked_at' => now()])->save();
+        $postShare->update(['revoked_at' => now()]);
 
         return response()->json(['revoked' => true]);
-    }
-
-    protected function findPostOrFail(string $id): Post
-    {
-        return Post::query()->whereKey($id)->firstOr(fn () => abort(404, 'No post with that id exists in this workspace.'));
     }
 }
