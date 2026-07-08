@@ -65,3 +65,12 @@ test('keys from another workspace are not manageable', function () {
 
     $this->actingAs($user)->delete("/settings/api-keys/{$foreign->id}")->assertNotFound();
 });
+
+test('the api-keys settings page renders for an owner', function () {
+    [$user, $workspace] = ownerInWorkspaceForApiKeys();
+    ApiKey::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $user->id, 'name' => 'Existing']);
+
+    $this->actingAs($user)->get('/settings/api-keys')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('settings/api-keys')->has('apiKeys', 1));
+});

@@ -11,12 +11,16 @@ import { edit as editConnections } from '@/routes/connections';
 import { preferences as notificationPreferences } from '@/routes/notifications';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
+import { apiKeys } from '@/routes/settings';
 import type { NavItem } from '@/types';
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
-    const { socialite } = usePage().props;
+    const { socialite, workspaces } = usePage().props;
     const hasSocialProviders = socialite.providers.length > 0;
+    const canManageWorkspaceSettings = (
+        workspaces.current?.permissions ?? []
+    ).includes('workspace.settings.manage');
 
     const sidebarNavItems: NavItem[] = [
         {
@@ -48,6 +52,15 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
             href: notificationPreferences(),
             icon: null,
         },
+        ...(canManageWorkspaceSettings
+            ? [
+                  {
+                      title: 'API keys',
+                      href: apiKeys(),
+                      icon: null,
+                  },
+              ]
+            : []),
     ];
 
     return (

@@ -22,4 +22,5 @@ export type WorkspacesData = {
 export type FlashData = {
     success: string | null;
     error: string | null;
+    plainTextApiKey: string | null;
 };
