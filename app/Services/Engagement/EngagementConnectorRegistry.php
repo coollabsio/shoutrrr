@@ -18,6 +18,9 @@ class EngagementConnectorRegistry
             Platform::X => app(XEngagementConnector::class),
             Platform::Bluesky => app(BlueskyEngagementConnector::class),
             Platform::LinkedIn => app(LinkedInEngagementConnector::class),
+            Platform::Facebook, Platform::Instagram, Platform::Threads => throw new \LogicException(
+                "Engagement connector for {$platform->value} is not implemented yet.",
+            ),
         };
     }
 }

@@ -13,10 +13,19 @@ test('per-platform video limits match the spec', function (): void {
 });
 
 test('video byte ceiling is the largest per-platform cap', function (): void {
-    expect(Platform::maxVideoBytesCeiling())->toBe(536_870_912);
+    expect(Platform::maxVideoBytesCeiling())->toBe(1_073_741_824);
 });
 
 test('limits payload exposes video fields', function (): void {
     expect(Platform::X->limits())
         ->toHaveKeys(['allowedVideoMime', 'maxVideoBytes', 'maxVideoDurationSeconds']);
+});
+
+test('meta platform video limits are set', function (): void {
+    expect(Platform::Facebook->maxVideoBytes())->toBe(1_073_741_824)
+        ->and(Platform::Facebook->maxVideoDurationSeconds())->toBe(1200)
+        ->and(Platform::Instagram->maxVideoBytes())->toBe(1_073_741_824)
+        ->and(Platform::Instagram->maxVideoDurationSeconds())->toBe(900)
+        ->and(Platform::Threads->maxVideoBytes())->toBe(1_073_741_824)
+        ->and(Platform::Threads->maxVideoDurationSeconds())->toBe(300);
 });

@@ -18,6 +18,9 @@ class MetricsConnectorRegistry
             Platform::X => app(XMetricsConnector::class),
             Platform::Bluesky => app(BlueskyMetricsConnector::class),
             Platform::LinkedIn => app(LinkedInMetricsConnector::class),
+            Platform::Facebook, Platform::Instagram, Platform::Threads => throw new \LogicException(
+                "Metrics connector for {$platform->value} is not implemented yet.",
+            ),
         };
     }
 }

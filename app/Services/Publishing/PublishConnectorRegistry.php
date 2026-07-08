@@ -18,6 +18,9 @@ class PublishConnectorRegistry
             Platform::X => app(XConnector::class),
             Platform::Bluesky => app(BlueskyPublishConnector::class),
             Platform::LinkedIn => app(LinkedInConnector::class),
+            Platform::Facebook, Platform::Instagram, Platform::Threads => throw new \LogicException(
+                "Publish connector for {$platform->value} is not implemented yet.",
+            ),
         };
     }
 }
