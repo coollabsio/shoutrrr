@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Enums\UsageCategory;
+use App\Models\ApiKey;
 use App\Models\McpGrantWorkspace;
 use App\Services\Usage\UsageRecorder;
 use App\Support\InstanceSettings;
@@ -47,9 +48,15 @@ class RecordApiUsage
                 return;
             }
 
-            $workspaceId = McpGrantWorkspace::query()
-                ->where('access_token_id', $accessToken->oauth_access_token_id)
-                ->value('workspace_id');
+            $tokenId = $accessToken->oauth_access_token_id;
+
+            if ($request->is('api/*')) {
+                $workspaceId = ApiKey::query()->where('access_token_id', $tokenId)->value('workspace_id');
+                $operation = UsageOperation::API_REQUEST;
+            } else {
+                $workspaceId = McpGrantWorkspace::query()->where('access_token_id', $tokenId)->value('workspace_id');
+                $operation = UsageOperation::MCP_REQUEST;
+            }
 
             if ($workspaceId === null) {
                 return;
@@ -57,7 +64,7 @@ class RecordApiUsage
 
             $this->recorder->record(
                 category: UsageCategory::ApiRequest,
-                operation: UsageOperation::MCP_REQUEST,
+                operation: $operation,
                 workspaceId: (string) $workspaceId,
                 succeeded: $response->getStatusCode() < 400,
                 meta: ['status' => $response->getStatusCode()],

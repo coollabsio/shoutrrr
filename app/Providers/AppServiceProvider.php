@@ -52,10 +52,23 @@ class AppServiceProvider extends ServiceProvider
         // effectively permanent.
         Passport::tokensExpireIn(now()->addHours(8));
         Passport::refreshTokensExpireIn(now()->addDays(30));
-        Passport::personalAccessTokensExpireIn(now()->addDays(30));
+
+        // API keys (personal access tokens) are for long-lived automation. This is
+        // just the default before ApiKeyManager::issue() overrides it per key with
+        // the honest expiry (or ~100 years for a non-expiring key); every key is
+        // also user-revocable from workspace settings.
+        Passport::personalAccessTokensExpireIn(now()->addYears(100));
+
+        Passport::tokensCan([
+            'read' => 'Read workspace data',
+            'write' => 'Create and modify workspace data',
+        ]);
 
         RateLimiter::for('mcp', fn ($request) => Limit::perMinute(60)
             ->by($request->user()?->id ?: $request->ip()));
+
+        RateLimiter::for('api', fn ($request) => Limit::perMinute(60)
+            ->by($request->user()?->currentAccessToken()?->oauth_access_token_id ?: $request->ip()));
 
         // Per-platform throttle for outbound metrics-capture jobs so a large
         // account/post list can't trip the platforms' own rate limits.

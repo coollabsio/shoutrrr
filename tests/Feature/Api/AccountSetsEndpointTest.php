@@ -1,0 +1,87 @@
+<?php
+
+use App\Models\AccountSet;
+use App\Models\ConnectedAccount;
+
+test('lists account sets', function () {
+    [, $workspace, $token] = issuedKey();
+    $set = AccountSet::factory()->for($workspace)->create();
+
+    $this->withToken($token)->getJson('/api/v1/account-sets')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $set->id);
+});
+
+test('creates an account set with scoped members', function () {
+    [, $workspace, $token] = issuedKey();
+    $account = ConnectedAccount::factory()->for($workspace)->create();
+
+    $this->withToken($token)->postJson('/api/v1/account-sets', [
+        'name' => 'Launch',
+        'connected_account_ids' => [$account->id],
+    ])
+        ->assertCreated()
+        ->assertJsonPath('name', 'Launch')
+        ->assertJsonPath('connected_account_ids.0', $account->id);
+});
+
+test('silently drops connected account ids from another workspace', function () {
+    [, $workspace, $token] = issuedKey();
+    $mine = ConnectedAccount::factory()->for($workspace)->create();
+    $foreign = ConnectedAccount::factory()->create();
+
+    $this->withToken($token)->postJson('/api/v1/account-sets', [
+        'name' => 'Launch',
+        'connected_account_ids' => [$mine->id, $foreign->id],
+    ])
+        ->assertCreated()
+        ->assertJsonPath('connected_account_ids', [$mine->id]);
+});
+
+test('updates an account set', function () {
+    [, $workspace, $token] = issuedKey();
+    $set = AccountSet::factory()->for($workspace)->create(['name' => 'Old']);
+
+    $this->withToken($token)->patchJson("/api/v1/account-sets/{$set->id}", ['name' => 'New'])
+        ->assertOk()
+        ->assertJsonPath('name', 'New');
+});
+
+test('deletes an account set', function () {
+    [, $workspace, $token] = issuedKey();
+    $set = AccountSet::factory()->for($workspace)->create();
+
+    $this->withToken($token)->deleteJson("/api/v1/account-sets/{$set->id}")
+        ->assertOk()
+        ->assertJsonPath('deleted', true);
+
+    expect(AccountSet::whereKey($set->id)->exists())->toBeFalse();
+});
+
+test('a name-only PATCH preserves existing members', function () {
+    [, $workspace, $token] = issuedKey();
+    $account = ConnectedAccount::factory()->for($workspace)->create();
+    $set = AccountSet::factory()->for($workspace)->create(['name' => 'Old']);
+    $set->accounts()->sync([$account->id]);
+
+    $this->withToken($token)->patchJson("/api/v1/account-sets/{$set->id}", ['name' => 'New'])
+        ->assertOk()
+        ->assertJsonPath('name', 'New')
+        ->assertJsonPath('connected_account_ids.0', $account->id);
+
+    expect($set->fresh()->accounts()->count())->toBe(1);
+});
+
+test('an explicit empty connected_account_ids clears members', function () {
+    [, $workspace, $token] = issuedKey();
+    $account = ConnectedAccount::factory()->for($workspace)->create();
+    $set = AccountSet::factory()->for($workspace)->create();
+    $set->accounts()->sync([$account->id]);
+
+    $this->withToken($token)->patchJson("/api/v1/account-sets/{$set->id}", [
+        'name' => 'Cleared',
+        'connected_account_ids' => [],
+    ])->assertOk();
+
+    expect($set->fresh()->accounts()->count())->toBe(0);
+});
