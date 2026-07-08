@@ -4,14 +4,15 @@ use App\Models\ApiKey;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Artisan;
-use Laravel\Passport\Client;
 
 beforeEach(function () {
     if (! file_exists(storage_path('oauth-private.key'))) {
         Artisan::call('passport:keys', ['--no-interaction' => true]);
     }
 
-    Client::factory()->asPersonalAccessTokenClient()->create(['provider' => 'users']);
+    // No personal access client is seeded here on purpose: the
+    // create_personal_access_client migration provides it, so this test also
+    // guards that a fresh environment can mint API keys out of the box.
 });
 
 /**
