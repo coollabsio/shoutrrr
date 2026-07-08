@@ -18,7 +18,7 @@ test('lists active shares', function () {
 
     $this->withToken($token)->getJson("/api/v1/posts/{$post->id}/shares")
         ->assertOk()
-        ->assertJsonCount(1, 'shares');
+        ->assertJsonCount(1, 'data');
 });
 
 test('revokes a share', function () {
@@ -42,5 +42,5 @@ test('cannot revoke a share by pairing it with the wrong post', function () {
 
     $this->withToken($token)->getJson("/api/v1/posts/{$postB->id}/shares")
         ->assertOk()
-        ->assertJsonCount(1, 'shares');
+        ->assertJsonCount(1, 'data');
 });

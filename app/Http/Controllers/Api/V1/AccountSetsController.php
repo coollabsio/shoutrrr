@@ -7,25 +7,30 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
+use App\Support\CursorPage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Context;
 
 class AccountSetsController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $sets = AccountSet::query()
+        $validated = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $paginator = AccountSet::query()
             ->with('accounts:id')
-            ->latest()
-            ->get()
-            ->map(fn (AccountSet $set): array => [
+            ->orderBy('id', 'desc')
+            ->cursorPaginate($validated['per_page'] ?? 25)
+            ->through(fn (AccountSet $set): array => [
                 'id' => $set->id,
                 'name' => $set->name,
                 'connected_account_ids' => $set->accounts->pluck('id')->all(),
             ]);
 
-        return response()->json(['account_sets' => $sets]);
+        return response()->json(CursorPage::make($paginator));
     }
 
     public function store(Request $request): JsonResponse

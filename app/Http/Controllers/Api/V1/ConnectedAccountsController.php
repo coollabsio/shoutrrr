@@ -6,16 +6,22 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
+use App\Support\CursorPage;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ConnectedAccountsController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $accounts = ConnectedAccount::query()
-            ->latest()
-            ->get()
-            ->map(fn (ConnectedAccount $account): array => [
+        $validated = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $paginator = ConnectedAccount::query()
+            ->orderBy('id', 'desc')
+            ->cursorPaginate($validated['per_page'] ?? 25)
+            ->through(fn (ConnectedAccount $account): array => [
                 'id' => $account->id,
                 'platform' => $account->platform->value,
                 'platform_label' => $account->platform->label(),
@@ -26,6 +32,6 @@ class ConnectedAccountsController extends Controller
                 'token_expires_at' => $account->token_expires_at?->toIso8601String(),
             ]);
 
-        return response()->json(['accounts' => $accounts]);
+        return response()->json(CursorPage::make($paginator));
     }
 }

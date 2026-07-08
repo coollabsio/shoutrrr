@@ -13,6 +13,7 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Services\Posts\DraftService;
 use App\Services\Posts\PostStaleWriteException;
+use App\Support\CursorPage;
 use App\Support\PostListItem;
 use App\Support\PostView;
 use Illuminate\Http\JsonResponse;
@@ -27,19 +28,18 @@ class PostsController extends Controller
         $validated = $request->validate([
             'status' => ['nullable', 'string', 'in:draft,scheduled,publishing,published,partial,failed,deleted'],
             'q' => ['nullable', 'string', 'max:200'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $posts = Post::query()
+        $paginator = Post::query()
             ->with(['author:id,name', 'targets'])
             ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($validated['q'] ?? null, fn ($query, $q) => $query->where('base_text', 'like', "%{$q}%"))
-            ->latest()
-            ->limit($validated['limit'] ?? 20)
-            ->get()
-            ->map(fn (Post $post): array => PostListItem::make($post));
+            ->orderBy('id', 'desc')
+            ->cursorPaginate($validated['per_page'] ?? 25)
+            ->through(fn (Post $post): array => PostListItem::make($post));
 
-        return response()->json(['posts' => $posts]);
+        return response()->json(CursorPage::make($paginator));
     }
 
     public function show(string $id): JsonResponse

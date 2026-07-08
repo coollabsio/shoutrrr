@@ -9,28 +9,33 @@ use App\Models\Post;
 use App\Models\PostShare;
 use App\Models\User;
 use App\Services\Posts\ShareService;
+use App\Support\CursorPage;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SharesController extends Controller
 {
-    public function index(string $id): JsonResponse
+    public function index(Request $request, string $id): JsonResponse
     {
         $model = $this->findPostOrFail($id);
 
-        $shares = $model->shares()
+        $validated = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $paginator = $model->shares()
             ->whereNull('revoked_at')
             ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            ->latest()
-            ->get()
-            ->map(fn (PostShare $s): array => [
+            ->orderBy('id', 'desc')
+            ->cursorPaginate($validated['per_page'] ?? 25)
+            ->through(fn (PostShare $s): array => [
                 'id' => $s->id,
                 'expires_at' => $s->expires_at?->toIso8601String(),
                 'created_at' => $s->created_at->toIso8601String(),
             ]);
 
-        return response()->json(['shares' => $shares]);
+        return response()->json(CursorPage::make($paginator));
     }
 
     public function store(Request $request, string $id, ShareService $shares): JsonResponse

@@ -9,7 +9,7 @@ test('lists account sets', function () {
 
     $this->withToken($token)->getJson('/api/v1/account-sets')
         ->assertOk()
-        ->assertJsonPath('account_sets.0.id', $set->id);
+        ->assertJsonPath('data.0.id', $set->id);
 });
 
 test('creates an account set with scoped members', function () {
