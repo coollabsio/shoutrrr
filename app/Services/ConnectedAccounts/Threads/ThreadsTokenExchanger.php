@@ -32,7 +32,7 @@ class ThreadsTokenExchanger
         ]);
 
         if ($response->failed()) {
-            throw new TokenRefreshException('Threads long-lived token exchange failed.');
+            throw new TokenRefreshException('Threads long-lived token exchange failed: '.$this->errorDetail($response));
         }
 
         return $this->tokenPayload($response);
@@ -53,10 +53,27 @@ class ThreadsTokenExchanger
         ]);
 
         if ($response->failed()) {
-            throw new TokenRefreshException('Threads token refresh failed.');
+            throw new TokenRefreshException('Threads token refresh failed: '.$this->errorDetail($response));
         }
 
         return $this->tokenPayload($response);
+    }
+
+    /**
+     * Surface the Graph API's own error text (`error_description` / `error`)
+     * in the exception so token failures are debuggable in production.
+     */
+    private function errorDetail(Response $response): string
+    {
+        // Meta returns `error` as either a string or a nested object
+        // (`{"error": {"message": ...}}`); normalize both to a string.
+        $error = $response->json('error');
+
+        if (is_array($error)) {
+            $error = $error['message'] ?? null;
+        }
+
+        return (string) ($response->json('error_description') ?? $error ?? $response->body());
     }
 
     /**

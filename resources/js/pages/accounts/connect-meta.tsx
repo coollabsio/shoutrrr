@@ -70,7 +70,7 @@ export default function ConnectMeta({ assets }: Props) {
 
     return (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-6 pb-16 sm:px-6">
-            <Head title="Connect Facebook" />
+            <Head title="Connect Meta" />
 
             <Heading
                 title="Choose Pages to connect"
@@ -138,7 +138,9 @@ export default function ConnectMeta({ assets }: Props) {
                                         />
                                     )}
                                     <span className="text-sm text-muted-foreground">
-                                        @{asset.igUsername}
+                                        {asset.igUsername
+                                            ? `@${asset.igUsername}`
+                                            : 'Instagram account'}
                                     </span>
                                 </label>
                             )}

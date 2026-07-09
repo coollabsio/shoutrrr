@@ -5,6 +5,7 @@ use App\Enums\Platform;
 use App\Jobs\CaptureAccountMetrics;
 use App\Jobs\CapturePostTargetMetrics;
 use App\Models\ConnectedAccount;
+use App\Models\ConnectedAccountSecret;
 use App\Models\PostTarget;
 use Illuminate\Support\Facades\Http;
 
@@ -41,6 +42,43 @@ test('account job appends a snapshot row', function () {
     expect($account->metrics()->count())->toBe(1);
     expect($account->metrics()->first()->followers)->toBe(99);
     expect($account->refresh()->metrics_status)->toBe(MetricsStatus::Ok);
+});
+
+test('post job resolves and forwards the facebook page token to the graph api', function () {
+    // Regression: the metrics job gated credential resolution to X only, so
+    // Facebook/Instagram/Threads reached their Graph connectors with an empty
+    // token. Prove Facebook now resolves its stored Page token end-to-end.
+    Http::fake([
+        'graph.facebook.com/*/insights*' => Http::response(['data' => []]),
+        'graph.facebook.com/*' => Http::response([
+            'id' => '123_456',
+            'likes' => ['summary' => ['total_count' => 4]],
+            'comments' => ['summary' => ['total_count' => 1]],
+            'shares' => ['count' => 0],
+        ]),
+    ]);
+
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Facebook,
+        'token_expires_at' => null,
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'page-token',
+    ]);
+
+    $target = PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Facebook,
+        'remote_id' => '123_456',
+    ]);
+
+    CapturePostTargetMetrics::dispatchSync($target);
+
+    expect($target->refresh()->metrics_status)->toBe(MetricsStatus::Ok)
+        ->and($target->likes)->toBe(4);
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'access_token=page-token'));
 });
 
 test('jobs no-op when feature disabled', function () {

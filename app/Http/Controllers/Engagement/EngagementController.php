@@ -306,7 +306,7 @@ class EngagementController extends Controller
         }
 
         try {
-            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn], true)
+            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn, Platform::Facebook, Platform::Instagram, Platform::Threads], true)
                 ? $tokens->fresh($account)
                 : [];
         } catch (TokenRefreshException) {
@@ -473,7 +473,7 @@ class EngagementController extends Controller
      */
     private function credentialsFor(ConnectedAccount $account, TokenManager $tokens): array
     {
-        return in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn], true)
+        return in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn, Platform::Facebook, Platform::Instagram, Platform::Threads], true)
             ? $tokens->fresh($account)
             : [];
     }

@@ -28,6 +28,8 @@ class MetaAssetEnumerator
             'fb_exchange_token' => $shortLivedToken,
         ]);
 
+        $response->throw();
+
         $expiresIn = $response->json('expires_in');
 
         return [
@@ -54,6 +56,8 @@ class MetaAssetEnumerator
 
         while ($url !== null) {
             $response = $this->http->get($url, $query);
+
+            $response->throw();
 
             /** @var array{data?: list<array<string, mixed>>, paging?: array{next?: string}} $body */
             $body = (array) $response->json();

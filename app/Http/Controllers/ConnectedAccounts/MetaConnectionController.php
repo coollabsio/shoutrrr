@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Laravel\Socialite\Facades\Socialite;
@@ -98,8 +99,17 @@ class MetaConnectionController extends Controller
             return $this->failed("We couldn't read your Facebook profile. Please try again.");
         }
 
-        $longLived = $this->enumerator->exchangeForLongLivedToken((string) $oauthUser->token);
-        $assets = $this->enumerator->listPages($longLived['token']);
+        try {
+            $longLived = $this->enumerator->exchangeForLongLivedToken((string) $oauthUser->token);
+            $assets = $this->enumerator->listPages($longLived['token']);
+        } catch (Throwable $exception) {
+            Log::warning('Meta Graph API call failed.', [
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return $this->failed("We couldn't retrieve your Facebook Pages. Please try again.");
+        }
 
         $stashedAssets = [];
         foreach ($assets as $asset) {
@@ -147,6 +157,17 @@ class MetaConnectionController extends Controller
         foreach ($validated['selected'] as $selection) {
             $asset = $stashedAssets[$selection['assetKey']];
             $platform = Platform::from($selection['platform']);
+
+            // The asset must actually support the chosen platform — a linked IG
+            // account is required for Instagram. The frontend only offers the
+            // valid pairs (`availablePlatformsFor`), but a crafted request could
+            // pick `instagram` for a Page with no linked IG account, which would
+            // otherwise persist a ghost account with an empty remote id.
+            if (! in_array($platform->value, $this->availablePlatformsFor($asset), true)) {
+                throw ValidationException::withMessages([
+                    'selected' => "{$platform->label()} is not available for the selected Page.",
+                ]);
+            }
 
             $this->connections->store(self::buildAccountData($asset, $platform), $request->user());
             $created++;

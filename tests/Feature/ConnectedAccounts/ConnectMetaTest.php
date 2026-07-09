@@ -131,6 +131,47 @@ test('callback surfaces a friendly message when facebook denies the connection',
     expect(ConnectedAccount::withoutGlobalScopes()->count())->toBe(0);
 });
 
+test('callback surfaces a friendly message when the graph api fails', function () {
+    metaOwnerActingIn();
+    fakeFacebookOAuthUser();
+    config()->set('services.facebook.graph_version', 'v25.0');
+
+    Http::fake([
+        '*/oauth/access_token*' => Http::response(['error' => ['message' => 'rate limited']], 429),
+    ]);
+
+    test()->get(route('accounts.meta.callback'))
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('error', fn (string $message): bool => str_contains($message, "couldn't retrieve"));
+
+    expect(session('accounts.meta.connect'))->toBeNull()
+        ->and(ConnectedAccount::withoutGlobalScopes()->count())->toBe(0);
+});
+
+test('store rejects instagram for a page with no linked instagram account', function () {
+    metaOwnerActingIn();
+
+    test()->withSession(['accounts.meta.connect' => [
+        'assets' => [
+            'PAGE1' => [
+                'pageId' => 'PAGE1',
+                'pageName' => 'My Page',
+                'pageAccessToken' => 'PGT1',
+                'igUserId' => null,
+                'igUsername' => null,
+                'igAvatarUrl' => null,
+            ],
+        ],
+        'userTokenExpiresAt' => null,
+    ]])->post(route('accounts.meta.store'), [
+        'selected' => [
+            ['assetKey' => 'PAGE1', 'platform' => 'instagram'],
+        ],
+    ])->assertSessionHasErrors('selected');
+
+    expect(ConnectedAccount::withoutGlobalScopes()->count())->toBe(0);
+});
+
 test('store creates a facebook connected account now that facebook is launched', function () {
     expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook, Platform::Instagram]);
 

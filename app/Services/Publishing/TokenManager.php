@@ -18,6 +18,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Date;
+use Throwable;
 
 class TokenManager
 {
@@ -54,6 +55,17 @@ class TokenManager
 
         if ($account->platform === Platform::Threads) {
             return $this->threadsCredentials($account, $secret, $force);
+        }
+
+        // Facebook/Instagram authenticate with a Page access token minted from a
+        // long-lived user token, which does not expire (stored with a null
+        // `token_expires_at`). They have no OAuth refresh token, so they must not
+        // fall through to the generic refresh path below — that treats null
+        // expiry as "needs refresh" and would POST an empty refresh_token to the
+        // LinkedIn token endpoint, 400 the request, and flip the account to
+        // needs-attention. Hand back the stored Page token directly.
+        if ($account->platform === Platform::Facebook || $account->platform === Platform::Instagram) {
+            return ['access_token' => $secret->access_token];
         }
 
         if (! $force && ! $this->needsRefresh($account)) {
@@ -144,7 +156,7 @@ class TokenManager
     {
         try {
             $refreshed = $this->threadsExchanger->refresh((string) $secret->access_token);
-        } catch (TokenRefreshException $exception) {
+        } catch (Throwable $exception) {
             $account->forceFill([
                 'status' => ConnectedAccountStatus::NeedsAttention->value,
                 'refresh_failed_at' => Date::now(),

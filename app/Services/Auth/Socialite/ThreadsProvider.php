@@ -70,6 +70,8 @@ class ThreadsProvider extends AbstractProvider
     {
         $response = Http::asForm()->post($this->getTokenUrl(), $this->getTokenFields($code));
 
+        $response->throw();
+
         return (array) $response->json();
     }
 
@@ -84,6 +86,8 @@ class ThreadsProvider extends AbstractProvider
             'access_token' => $token,
         ]);
 
+        $response->throw();
+
         return (array) $response->json();
     }
 
@@ -93,7 +97,7 @@ class ThreadsProvider extends AbstractProvider
     protected function mapUserToObject(array $user): User
     {
         return (new User)->setRaw($user)->map([
-            'id' => $user['id'],
+            'id' => $user['id'] ?? null,
             'nickname' => $user['username'] ?? null,
             'name' => $user['username'] ?? null,
             'avatar' => $user['threads_profile_picture_url'] ?? null,

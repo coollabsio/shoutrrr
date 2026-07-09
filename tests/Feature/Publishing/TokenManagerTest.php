@@ -26,6 +26,47 @@ test('fresh returns existing credentials when token is not near expiry', functio
     Http::assertNothingSent();
 });
 
+test('fresh returns the stored facebook page token without attempting a refresh', function () {
+    // Page tokens don't expire and have no refresh token, so a null expiry must
+    // NOT fall through to the generic OAuth refresh path (which would POST an
+    // empty refresh_token to the LinkedIn endpoint and flip the account).
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Facebook->value,
+        'token_expires_at' => null,
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'page-token',
+    ]);
+
+    Http::fake();
+
+    $creds = app(TokenManager::class)->fresh($account->fresh(), force: true);
+
+    expect($creds['access_token'])->toBe('page-token')
+        ->and($account->fresh()->status)->not->toBe(ConnectedAccountStatus::NeedsAttention);
+    Http::assertNothingSent();
+});
+
+test('fresh returns the stored instagram page token without attempting a refresh', function () {
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Instagram->value,
+        'token_expires_at' => null,
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'ig-page-token',
+    ]);
+
+    Http::fake();
+
+    $creds = app(TokenManager::class)->fresh($account->fresh(), force: true);
+
+    expect($creds['access_token'])->toBe('ig-page-token')
+        ->and($account->fresh()->status)->not->toBe(ConnectedAccountStatus::NeedsAttention);
+    Http::assertNothingSent();
+});
+
 test('fresh refreshes an expired oauth token and persists it', function () {
     $account = ConnectedAccount::factory()->create([
         'platform' => Platform::X->value,
