@@ -82,6 +82,35 @@ it('filters by text query on base_text', function (): void {
                 ->where('posts.data.0.base_text', 'launch announcement')));
 });
 
+it('orders the all tab by the published time for published posts', function (): void {
+    $base = now()->subDays(10);
+
+    Post::factory()->for($this->workspace)->create([
+        'author_id' => $this->user->id,
+        'base_text' => 'older direct post',
+        'status' => PostStatus::Published->value,
+        'published_at' => $base,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    Post::factory()->for($this->workspace)->create([
+        'author_id' => $this->user->id,
+        'base_text' => 'newer direct post',
+        'status' => PostStatus::Published->value,
+        'published_at' => $base->copy()->addDay(),
+        'created_at' => now()->subHour(),
+        'updated_at' => now()->subHour(),
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('posts.index'))
+        ->assertInertia(fn ($page) => $page
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->where('posts.data.0.base_text', 'newer direct post')
+                ->where('posts.data.1.base_text', 'older direct post')));
+});
+
 it('cursor paginates more than one page of posts', function (): void {
     $base = now()->subHour();
 

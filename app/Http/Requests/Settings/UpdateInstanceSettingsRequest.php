@@ -31,15 +31,16 @@ class UpdateInstanceSettingsRequest extends FormRequest
             'workspace_creation_enabled' => ['required', 'boolean'],
             'usage_tracking_enabled' => ['required', 'boolean'],
             'quote_tweets_enabled' => ['required', 'boolean'],
+            'external_posts_sync_lookback_days' => ['required', 'integer', 'min:1', 'max:365'],
         ];
     }
 
     /**
-     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool}
+     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool, external_posts_sync_lookback_days: int}
      */
     public function instanceSettings(): array
     {
-        /** @var array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool} $settings */
+        /** @var array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool, external_posts_sync_lookback_days: int} $settings */
         $settings = $this->validated();
 
         if (! (bool) config('kit.workspaces.enabled')) {

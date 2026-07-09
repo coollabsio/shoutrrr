@@ -30,6 +30,15 @@ test('regular users cannot view instance settings', function () {
         ->assertForbidden();
 });
 
+test('instance settings expose the external post sync lookback default', function () {
+    $owner = User::factory()->instanceOwner()->create();
+
+    $this->actingAs($owner)
+        ->get(route('instance-settings.edit'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('settings.external_posts_sync_lookback_days', 90));
+});
+
 test('instance owner can update instance settings', function () {
     $owner = User::factory()->instanceOwner()->create();
 
@@ -39,11 +48,29 @@ test('instance owner can update instance settings', function () {
             'workspace_creation_enabled' => false,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
+            'external_posts_sync_lookback_days' => 90,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->registrationsEnabled())->toBeFalse()
-        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
+        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse()
+        ->and(app(InstanceSettings::class)->externalPostsSyncLookbackDays())->toBe(90);
+});
+
+test('instance owner can update the external post sync lookback', function () {
+    $owner = User::factory()->instanceOwner()->create();
+
+    $this->actingAs($owner)
+        ->put(route('instance-settings.update'), [
+            'registrations_enabled' => false,
+            'workspace_creation_enabled' => true,
+            'usage_tracking_enabled' => false,
+            'quote_tweets_enabled' => false,
+            'external_posts_sync_lookback_days' => 45,
+        ])
+        ->assertRedirect();
+
+    expect(app(InstanceSettings::class)->externalPostsSyncLookbackDays())->toBe(45);
 });
 
 test('workspace creation setting is disabled when workspaces are globally disabled', function () {
@@ -72,6 +99,7 @@ test('workspace creation setting cannot be enabled when workspaces are globally 
             'workspace_creation_enabled' => true,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
+            'external_posts_sync_lookback_days' => 90,
         ])
         ->assertRedirect();
 

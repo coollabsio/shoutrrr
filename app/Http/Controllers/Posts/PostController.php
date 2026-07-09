@@ -76,7 +76,7 @@ class PostController extends Controller
                     ->when($status !== '' && $status !== 'all', fn ($query) => $query->where('status', $status))
             )
                 ->select('posts.*')
-                ->selectRaw('COALESCE(scheduled_at, created_at) as list_sort_at')
+                ->selectRaw('COALESCE(published_at, scheduled_at, created_at) as list_sort_at')
                 ->orderByDesc('list_sort_at')
                 ->orderByDesc('id')
                 ->cursorPaginate(20)

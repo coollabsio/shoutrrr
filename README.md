@@ -193,7 +193,7 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI="${APP_URL}/auth/google/callback"
 ```
 
-> **Heads up:** publishing, scheduling, engagement polling, and analytics capture rely on a running queue worker and scheduler. The provided Docker setups start both for you. Metrics and engagement are enabled by default and can be disabled with `METRICS_ENABLED=false` / `ENGAGEMENT_ENABLED=false` (see `config/metrics.php` and `config/engagement.php`).
+> **Heads up:** publishing, scheduling, engagement polling, external X post sync, and analytics capture rely on a running queue worker and scheduler. The provided Docker setups start both for you. Metrics and engagement are enabled by default and can be disabled with `METRICS_ENABLED=false` / `ENGAGEMENT_ENABLED=false` (see `config/metrics.php` and `config/engagement.php`). X accounts that opt into external post sync import only the configured recent window, defaulting to 90 days; set `INSTANCE_EXTERNAL_POSTS_SYNC_LOOKBACK_DAYS` or update Instance Settings to change it.
 
 ## Development
 

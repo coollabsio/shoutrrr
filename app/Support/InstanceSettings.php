@@ -65,6 +65,11 @@ class InstanceSettings
         return $this->platformEnabledValues('platforms_enabled');
     }
 
+    public function externalPostsSyncLookbackDays(): int
+    {
+        return $this->integer('external_posts_sync_lookback_days');
+    }
+
     public function registrationsAllowed(?string $invitationToken = null): bool
     {
         if (! $this->ownerExists()) {
@@ -93,7 +98,7 @@ class InstanceSettings
     }
 
     /**
-     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool}
+     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool, external_posts_sync_lookback_days: int}
      */
     public function all(): array
     {
@@ -102,6 +107,7 @@ class InstanceSettings
             'workspace_creation_enabled' => $this->workspaceCreationEnabled(),
             'usage_tracking_enabled' => $this->usageTrackingEnabled(),
             'quote_tweets_enabled' => $this->quoteTweetsEnabled(),
+            'external_posts_sync_lookback_days' => $this->externalPostsSyncLookbackDays(),
         ];
     }
 
@@ -149,7 +155,7 @@ class InstanceSettings
     }
 
     /**
-     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, engagement_polling_enabled?: bool|array<string, bool>, post_metrics_polling_enabled?: bool|array<string, bool>, account_metrics_polling_enabled?: bool|array<string, bool>, engagement_poll_interval_minutes?: array<string, int>, post_metrics_poll_interval_minutes?: array<string, int>, account_metrics_poll_interval_minutes?: array<string, int>}  $values
+     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, external_posts_sync_lookback_days?: int, engagement_polling_enabled?: bool|array<string, bool>, post_metrics_polling_enabled?: bool|array<string, bool>, account_metrics_polling_enabled?: bool|array<string, bool>, engagement_poll_interval_minutes?: array<string, int>, post_metrics_poll_interval_minutes?: array<string, int>, account_metrics_poll_interval_minutes?: array<string, int>}  $values
      */
     public function update(array $values): void
     {
@@ -244,5 +250,16 @@ class InstanceSettings
             ->all());
 
         return $settings;
+    }
+
+    private function integer(string $key): int
+    {
+        /** @var array<string, mixed> $settings */
+        $settings = Cache::rememberForever(self::CacheKey, fn (): array => InstanceSetting::query()
+            ->get()
+            ->mapWithKeys(fn (InstanceSetting $setting): array => [$setting->key => $setting->value])
+            ->all());
+
+        return max(1, (int) ($settings[$key] ?? config("instance.defaults.{$key}")));
     }
 }

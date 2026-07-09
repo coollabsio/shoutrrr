@@ -13,6 +13,7 @@ use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostTarget;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -27,7 +28,10 @@ class XExternalPostImporter
 
     private const string BASE = 'https://api.twitter.com/2';
 
-    public function __construct(private readonly HttpFactory $http) {}
+    public function __construct(
+        private readonly HttpFactory $http,
+        private readonly InstanceSettings $settings,
+    ) {}
 
     /**
      * Import recent original posts authored directly on X for a connected account.
@@ -40,6 +44,8 @@ class XExternalPostImporter
             return 0;
         }
 
+        $startTime = $this->syncStartTime();
+
         try {
             $response = $this->http
                 ->withToken((string) ($credentials['access_token'] ?? ''))
@@ -47,6 +53,7 @@ class XExternalPostImporter
                 ->get(self::BASE.'/users/'.$account->remote_account_id.'/tweets', [
                     'exclude' => 'retweets,replies',
                     'max_results' => 100,
+                    'start_time' => $startTime->toIso8601ZuluString(),
                     'tweet.fields' => 'created_at,public_metrics',
                 ]);
         } catch (ConnectionException $exception) {
@@ -73,6 +80,10 @@ class XExternalPostImporter
 
         $imported = 0;
         foreach ((array) $response->json('data', []) as $tweet) {
+            if ($this->tweetIsBeforeStartTime((array) $tweet, $startTime)) {
+                continue;
+            }
+
             if ($this->importTweet($account, (array) $tweet)) {
                 $imported++;
             }
@@ -169,5 +180,24 @@ class XExternalPostImporter
             'metrics_status' => MetricsStatus::Ok->value,
             'metrics_captured_at' => Date::now(),
         ])->save();
+    }
+
+    private function syncStartTime(): CarbonImmutable
+    {
+        return CarbonImmutable::instance(Date::now())
+            ->subDays($this->settings->externalPostsSyncLookbackDays())
+            ->utc();
+    }
+
+    /**
+     * @param  array<string, mixed>  $tweet
+     */
+    private function tweetIsBeforeStartTime(array $tweet, CarbonImmutable $startTime): bool
+    {
+        if (! isset($tweet['created_at'])) {
+            return false;
+        }
+
+        return CarbonImmutable::parse((string) $tweet['created_at'])->lt($startTime);
     }
 }

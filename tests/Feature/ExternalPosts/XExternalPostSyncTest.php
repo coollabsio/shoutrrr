@@ -14,6 +14,8 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use App\Services\ExternalPosts\XExternalPostImporter;
+use App\Support\InstanceSettings;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 
@@ -30,6 +32,10 @@ function externalSyncOwner(): array
 
     return [$owner, $workspace];
 }
+
+afterEach(function (): void {
+    Date::setTestNow();
+});
 
 test('x external post sync imports unseen account posts as published targets', function () {
     [$owner, $workspace] = externalSyncOwner();
@@ -125,6 +131,50 @@ test('x external post sync updates known post metrics without duplicating record
         ->and(PostTarget::query()->count())->toBe(1)
         ->and($target->fresh()->likes)->toBe(8)
         ->and($target->fresh()->comments)->toBe(1);
+});
+
+test('x external post sync uses the configured lookback window', function () {
+    Date::setTestNow('2026-07-09 12:00:00');
+    app(InstanceSettings::class)->update(['external_posts_sync_lookback_days' => 30]);
+
+    [$owner, $workspace] = externalSyncOwner();
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'connected_by_user_id' => $owner->id,
+        'remote_account_id' => '123',
+        'sync_external_posts' => true,
+    ]);
+
+    Http::fake([
+        'https://api.twitter.com/2/users/123/tweets*' => Http::response([
+            'data' => [
+                [
+                    'id' => 'old-remote-post',
+                    'text' => 'too old',
+                    'created_at' => '2026-05-01T10:00:00.000Z',
+                    'public_metrics' => [],
+                ],
+                [
+                    'id' => 'recent-remote-post',
+                    'text' => 'recent enough',
+                    'created_at' => '2026-07-01T10:00:00.000Z',
+                    'public_metrics' => [],
+                ],
+            ],
+        ]),
+    ]);
+
+    $imported = app(XExternalPostImporter::class)->import($account, ['access_token' => 'token']);
+
+    expect($imported)->toBe(1)
+        ->and(Post::query()->count())->toBe(1)
+        ->and(Post::query()->firstOrFail()->base_text)->toBe('recent enough');
+
+    Http::assertSent(function ($request): bool {
+        parse_str(parse_url($request->url(), PHP_URL_QUERY) ?: '', $query);
+
+        return ($query['start_time'] ?? null) === '2026-06-09T12:00:00Z';
+    });
 });
 
 test('external post sync command dispatches only enabled active x accounts', function () {
