@@ -133,7 +133,16 @@ class OAuthConnectionController extends Controller
     {
         $resolved = Platform::tryFrom($platform);
 
-        if (! $resolved instanceof Platform || ! $resolved->supportsOAuth() || ! $resolved->isConfigured() || ! $resolved->isLaunched()) {
+        if (
+            ! $resolved instanceof Platform
+            || ! $resolved->supportsOAuth()
+            || ! $resolved->isConfigured()
+            || ! $resolved->isLaunched()
+            // Facebook/Instagram always go through the dedicated
+            // MetaConnectionController Page-selection flow, never this
+            // generic single-step route — even once launched.
+            || $resolved->usesMetaConnectionFlow()
+        ) {
             abort(404);
         }
 

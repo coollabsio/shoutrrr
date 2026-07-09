@@ -74,15 +74,17 @@ test('redirect 404s when facebook is not configured', function () {
     test()->get(route('accounts.meta.redirect'))->assertNotFound();
 });
 
-// TODO(Task 8): becomes 200 once Facebook is launched.
-test('redirect 404s when no meta platform is launched', function () {
+test('redirect sends the user into the facebook oauth dance now that facebook is launched', function () {
     config()->set('services.facebook.client_id', 'cid');
     config()->set('services.facebook.client_secret', 'secret');
     metaOwnerActingIn();
 
-    expect(Platform::launchedMetaGraphPlatforms())->toBe([]);
+    expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook]);
 
-    test()->get(route('accounts.meta.redirect'))->assertNotFound();
+    fakeFacebookOAuthUser();
+
+    test()->get(route('accounts.meta.redirect'))
+        ->assertRedirect('https://facebook.test/oauth');
 });
 
 test('callback stashes assets server-side and renders a browser-safe projection', function () {
@@ -129,8 +131,8 @@ test('callback surfaces a friendly message when facebook denies the connection',
     expect(ConnectedAccount::withoutGlobalScopes()->count())->toBe(0);
 });
 
-test('store rejects a facebook selection while facebook is unlaunched', function () {
-    expect(Platform::launchedMetaGraphPlatforms())->toBe([]);
+test('store creates a facebook connected account now that facebook is launched', function () {
+    expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook]);
 
     metaOwnerActingIn();
 
@@ -149,6 +151,33 @@ test('store rejects a facebook selection while facebook is unlaunched', function
     ]])->post(route('accounts.meta.store'), [
         'selected' => [
             ['assetKey' => 'PAGE1', 'platform' => 'facebook'],
+        ],
+    ])->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('success', '1 account connected.');
+
+    $account = ConnectedAccount::withoutGlobalScopes()->sole();
+    expect($account->platform)->toBe(Platform::Facebook)
+        ->and($account->remote_account_id)->toBe('PAGE1');
+});
+
+test('store rejects an instagram selection while instagram is unlaunched', function () {
+    metaOwnerActingIn();
+
+    test()->withSession(['accounts.meta.connect' => [
+        'assets' => [
+            'PAGE1' => [
+                'pageId' => 'PAGE1',
+                'pageName' => 'My Page',
+                'pageAccessToken' => 'PGT1',
+                'igUserId' => 'IG1',
+                'igUsername' => 'myig',
+                'igAvatarUrl' => null,
+            ],
+        ],
+        'userTokenExpiresAt' => null,
+    ]])->post(route('accounts.meta.store'), [
+        'selected' => [
+            ['assetKey' => 'PAGE1', 'platform' => 'instagram'],
         ],
     ])->assertSessionHasErrors('selected.0.platform');
 

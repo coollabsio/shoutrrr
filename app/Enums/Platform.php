@@ -50,7 +50,7 @@ enum Platform: string
             self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'media.write', 'offline.access'],
             self::LinkedIn => ['openid', 'profile', 'email', 'w_member_social'],
             self::Bluesky => [],
-            self::Facebook => ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'business_management', 'read_insights'],
+            self::Facebook => ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_read_user_content', 'pages_manage_engagement', 'read_insights', 'business_management'],
             self::Instagram => ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'pages_show_list', 'business_management'],
             self::Threads => ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights'],
         };
@@ -101,8 +101,8 @@ enum Platform: string
     public function isLaunched(): bool
     {
         return match ($this) {
-            self::X, self::Bluesky, self::LinkedIn => true,
-            self::Facebook, self::Instagram, self::Threads => false,
+            self::X, self::Bluesky, self::LinkedIn, self::Facebook => true,
+            self::Instagram, self::Threads => false,
         };
     }
 
@@ -120,6 +120,18 @@ enum Platform: string
             [self::Facebook, self::Instagram],
             fn (self $platform): bool => $platform->isLaunched(),
         ));
+    }
+
+    /**
+     * Facebook and Instagram share a single Facebook Login flow with a
+     * Page/asset-selection step, driven by `MetaConnectionController`. The
+     * generic per-platform `OAuthConnectionController` (a single-step
+     * socialite-user-to-account mapping) must never handle them — even once
+     * launched — because it has no notion of picking a Page.
+     */
+    public function usesMetaConnectionFlow(): bool
+    {
+        return $this === self::Facebook || $this === self::Instagram;
     }
 
     /**

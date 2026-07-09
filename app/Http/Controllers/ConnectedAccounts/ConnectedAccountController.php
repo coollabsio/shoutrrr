@@ -101,6 +101,12 @@ class ConnectedAccountController extends Controller
                     ->with('error', "{$account->platform->label()} is not configured for reconnection.");
             }
 
+            // Facebook/Instagram reconnect by re-running the shared Meta
+            // Login + Page-selection flow, not the generic per-platform route.
+            if ($account->platform->usesMetaConnectionFlow()) {
+                return redirect()->route('accounts.meta.redirect');
+            }
+
             return redirect()->route('accounts.connect', ['platform' => $account->platform->value]);
         }
 

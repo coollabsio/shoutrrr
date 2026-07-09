@@ -68,9 +68,21 @@ test('only platforms with implemented connectors are launched', function () {
     expect(Platform::X->isLaunched())->toBeTrue()
         ->and(Platform::Bluesky->isLaunched())->toBeTrue()
         ->and(Platform::LinkedIn->isLaunched())->toBeTrue()
-        ->and(Platform::Facebook->isLaunched())->toBeFalse()
+        ->and(Platform::Facebook->isLaunched())->toBeTrue()
         ->and(Platform::Instagram->isLaunched())->toBeFalse()
         ->and(Platform::Threads->isLaunched())->toBeFalse();
+});
+
+test('facebook scopes cover the reconciled facebook-login set', function () {
+    expect(Platform::Facebook->scopes())->toBe([
+        'pages_show_list',
+        'pages_read_engagement',
+        'pages_manage_posts',
+        'pages_read_user_content',
+        'pages_manage_engagement',
+        'read_insights',
+        'business_management',
+    ]);
 });
 
 test('meta platforms report oauth capability and no app password', function () {
