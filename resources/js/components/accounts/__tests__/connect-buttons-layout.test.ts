@@ -18,6 +18,7 @@ function capability(overrides: Partial<Capability>): Capability {
         supportsAppPassword: false,
         configured: true,
         launched: false,
+        enabled: true,
         ...overrides,
     };
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
+use App\Support\InstanceSettings;
+
 enum Platform: string
 {
     case X = 'x';
@@ -123,6 +125,24 @@ enum Platform: string
     }
 
     /**
+     * The launched Meta-Graph platforms (Facebook, Instagram) that are ALSO
+     * enabled instance-wide — used to gate the shared Meta connect flow and the
+     * per-asset platform list so an owner can freeze Facebook or Instagram
+     * independently.
+     *
+     * @return list<self>
+     */
+    public static function availableMetaGraphPlatforms(): array
+    {
+        $enabled = app(InstanceSettings::class)->platformsEnabled();
+
+        return array_values(array_filter(
+            [self::Facebook, self::Instagram],
+            fn (self $platform): bool => $platform->isLaunched() && ($enabled[$platform->value] ?? true),
+        ));
+    }
+
+    /**
      * Facebook and Instagram share a single Facebook Login flow with a
      * Page/asset-selection step, driven by `MetaConnectionController`. The
      * generic per-platform `OAuthConnectionController` (a single-step
@@ -135,10 +155,12 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, configured: bool, launched: bool}>
+     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, configured: bool, launched: bool, enabled: bool}>
      */
     public static function capabilities(): array
     {
+        $enabled = app(InstanceSettings::class)->platformsEnabled();
+
         return array_map(fn (self $platform): array => [
             'platform' => $platform->value,
             'label' => $platform->label(),
@@ -146,6 +168,7 @@ enum Platform: string
             'supportsAppPassword' => $platform->supportsAppPassword(),
             'configured' => $platform->isConfigured(),
             'launched' => $platform->isLaunched(),
+            'enabled' => $enabled[$platform->value] ?? true,
         ], self::cases());
     }
 

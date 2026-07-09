@@ -64,7 +64,7 @@ class MetaConnectionController extends Controller
      */
     private function abortUnlessMetaFlowAvailable(): void
     {
-        if (! Platform::Facebook->isConfigured() || Platform::launchedMetaGraphPlatforms() === []) {
+        if (! Platform::Facebook->isConfigured() || Platform::availableMetaGraphPlatforms() === []) {
             abort(404);
         }
     }
@@ -267,9 +267,14 @@ class MetaConnectionController extends Controller
      */
     private function availablePlatformsFor(array $asset): array
     {
-        $platforms = [Platform::Facebook->value];
+        $available = Platform::availableMetaGraphPlatforms();
+        $platforms = [];
 
-        if (Platform::Instagram->isLaunched() && $asset['igUserId'] !== null) {
+        if (in_array(Platform::Facebook, $available, true)) {
+            $platforms[] = Platform::Facebook->value;
+        }
+
+        if (in_array(Platform::Instagram, $available, true) && $asset['igUserId'] !== null) {
             $platforms[] = Platform::Instagram->value;
         }
 

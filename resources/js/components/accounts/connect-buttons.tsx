@@ -481,6 +481,10 @@ export function ConnectButtons({
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     {platforms.map((capability) => {
+                        if (!capability.enabled) {
+                            return null;
+                        }
+
                         const label =
                             capability.platform === 'facebook'
                                 ? metaConnectLabel(capabilities)
