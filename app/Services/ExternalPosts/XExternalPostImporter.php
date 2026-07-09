@@ -59,7 +59,7 @@ class XExternalPostImporter
                     'max_results' => 100,
                     'media.fields' => 'media_key,type,url,preview_image_url,alt_text,width,height,duration_ms',
                     'start_time' => $startTime->toIso8601ZuluString(),
-                    'tweet.fields' => 'attachments,author_id,created_at,public_metrics,referenced_tweets',
+                    'tweet.fields' => 'attachments,author_id,created_at,entities,public_metrics,referenced_tweets',
                     'user.fields' => 'id,name,username,profile_image_url',
                 ]);
         } catch (ConnectionException $exception) {
@@ -121,7 +121,7 @@ class XExternalPostImporter
             $this->applyMetrics($existing, (array) ($tweet['public_metrics'] ?? []));
             $post = $existing->post()->first();
             if ($post !== null) {
-                $this->enrichPost($post, $tweet, $includes);
+                $this->enrichPost($post, $existing, $tweet, $includes);
             }
 
             return false;
@@ -138,7 +138,7 @@ class XExternalPostImporter
             return false;
         }
 
-        $text = (string) ($tweet['text'] ?? '');
+        $text = $this->cleanTweetText($tweet);
         $postedAt = isset($tweet['created_at'])
             ? CarbonImmutable::parse((string) $tweet['created_at'])
             : CarbonImmutable::instance(Date::now());
@@ -189,12 +189,21 @@ class XExternalPostImporter
      * @param  array<string, mixed>  $tweet
      * @param  array{media: array<string, array<string, mixed>>, tweets: array<string, array<string, mixed>>, users: array<string, array<string, mixed>>}  $includes
      */
-    private function enrichPost(Post $post, array $tweet, array $includes): void
+    private function enrichPost(Post $post, PostTarget $target, array $tweet, array $includes): void
     {
+        $text = $this->cleanTweetText($tweet);
         $externalContext = $this->externalContext($tweet, $includes);
+        $postUpdates = [
+            'base_text' => $text,
+            'segments' => [$text],
+        ];
+
         if ($externalContext !== null) {
-            $post->forceFill(['external_context' => $externalContext])->save();
+            $postUpdates['external_context'] = $externalContext;
         }
+
+        $post->forceFill($postUpdates)->save();
+        $target->forceFill(['sections' => [$text]])->save();
 
         $this->attachTweetMedia($post, $tweet, $includes);
     }
@@ -264,7 +273,7 @@ class XExternalPostImporter
             'x' => [
                 'quoted_tweet' => [
                     'id' => $quotedTweetId,
-                    'text' => (string) ($quotedTweet['text'] ?? ''),
+                    'text' => $quotedTweet === [] ? '' : $this->cleanTweetText($quotedTweet),
                     'author_name' => isset($author['name']) ? (string) $author['name'] : null,
                     'author_username' => isset($author['username']) ? (string) $author['username'] : null,
                     'author_avatar_url' => isset($author['profile_image_url']) ? (string) $author['profile_image_url'] : null,
@@ -394,6 +403,150 @@ class XExternalPostImporter
         }
 
         return $indexed;
+    }
+
+    /**
+     * X includes generated t.co URLs in the text for attached media and quoted
+     * tweets. Keep real user links, but remove those generated card URLs.
+     *
+     * @param  array<string, mixed>  $tweet
+     */
+    private function cleanTweetText(array $tweet): string
+    {
+        $text = (string) ($tweet['text'] ?? '');
+        if ($text === '') {
+            return '';
+        }
+
+        $ranges = $this->removableUrlRanges($tweet, $text);
+        if ($ranges === []) {
+            return $this->fallbackCleanTrailingCardUrls($tweet, $text);
+        }
+
+        usort(
+            $ranges,
+            static fn (array $a, array $b): int => $b['start'] <=> $a['start'],
+        );
+
+        foreach ($ranges as $range) {
+            $text = mb_substr($text, 0, $range['start'])
+                .mb_substr($text, $range['end']);
+        }
+
+        return $this->normalizeImportedText($text);
+    }
+
+    /**
+     * @param  array<string, mixed>  $tweet
+     * @return list<array{start: int, end: int}>
+     */
+    private function removableUrlRanges(array $tweet, string $text): array
+    {
+        $urls = $tweet['entities']['urls'] ?? [];
+        if (! is_array($urls)) {
+            return [];
+        }
+
+        $ranges = [];
+        $trimmedLength = mb_strlen(rtrim($text));
+        foreach ($urls as $url) {
+            if (
+                ! is_array($url)
+                || ! isset($url['start'], $url['end'])
+                || ! is_numeric($url['start'])
+                || ! is_numeric($url['end'])
+            ) {
+                continue;
+            }
+
+            $start = (int) $url['start'];
+            $end = (int) $url['end'];
+            if ($start < 0 || $end <= $start || $end > mb_strlen($text)) {
+                continue;
+            }
+
+            if ($this->isGeneratedCardUrl($tweet, $url, $end, $trimmedLength)) {
+                $ranges[] = ['start' => $start, 'end' => $end];
+            }
+        }
+
+        return $ranges;
+    }
+
+    /**
+     * @param  array<string, mixed>  $tweet
+     * @param  array<string, mixed>  $url
+     */
+    private function isGeneratedCardUrl(array $tweet, array $url, int $end, int $trimmedLength): bool
+    {
+        $displayUrl = strtolower((string) ($url['display_url'] ?? ''));
+        $expandedUrl = strtolower((string) ($url['expanded_url'] ?? ''));
+        $shortUrl = strtolower((string) ($url['url'] ?? ''));
+
+        if (
+            str_starts_with($displayUrl, 'pic.x.com/')
+            || str_starts_with($displayUrl, 'pic.twitter.com/')
+            || str_contains($expandedUrl, '/photo/')
+            || str_contains($expandedUrl, '/video/')
+        ) {
+            return true;
+        }
+
+        $quotedTweetId = $this->quotedTweetId($tweet);
+        if (
+            $quotedTweetId !== null
+            && (
+                str_contains($expandedUrl, '/status/'.$quotedTweetId)
+                || str_contains($expandedUrl, '/i/web/status/'.$quotedTweetId)
+            )
+        ) {
+            return true;
+        }
+
+        return $end === $trimmedLength
+            && str_starts_with($shortUrl, 'https://t.co/')
+            && ($this->tweetHasMedia($tweet) || $quotedTweetId !== null)
+            && (
+                str_contains($displayUrl, 'x.com/')
+                || str_contains($displayUrl, 'twitter.com/')
+                || str_contains($expandedUrl, 'x.com/')
+                || str_contains($expandedUrl, 'twitter.com/')
+            );
+    }
+
+    /**
+     * @param  array<string, mixed>  $tweet
+     */
+    private function fallbackCleanTrailingCardUrls(array $tweet, string $text): string
+    {
+        if (! $this->tweetHasMedia($tweet) && $this->quotedTweetId($tweet) === null) {
+            return $this->normalizeImportedText($text);
+        }
+
+        return $this->normalizeImportedText(
+            (string) preg_replace('/(?:\s+https:\/\/t\.co\/\S+)+\s*$/u', '', $text),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $tweet
+     */
+    private function tweetHasMedia(array $tweet): bool
+    {
+        $attachments = $tweet['attachments'] ?? [];
+
+        return is_array($attachments)
+            && isset($attachments['media_keys'])
+            && is_array($attachments['media_keys'])
+            && $attachments['media_keys'] !== [];
+    }
+
+    private function normalizeImportedText(string $text): string
+    {
+        $text = (string) preg_replace('/[ \t]+\n/u', "\n", $text);
+        $text = (string) preg_replace('/\n{3,}/u', "\n\n", $text);
+
+        return trim($text);
     }
 
     /**

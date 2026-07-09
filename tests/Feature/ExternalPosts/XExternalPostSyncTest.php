@@ -40,6 +40,29 @@ function externalSyncPng(): string
     return (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
 }
 
+/**
+ * @param  array<string, array<string, string>>  $urls
+ * @return array{urls: list<array<string, mixed>>}
+ */
+function externalSyncEntities(string $text, array $urls): array
+{
+    $entities = [];
+    foreach ($urls as $shortUrl => $metadata) {
+        $start = mb_strpos($text, $shortUrl);
+        if ($start === false) {
+            throw new InvalidArgumentException("Could not find {$shortUrl} in test tweet text.");
+        }
+
+        $entities[] = array_merge([
+            'start' => $start,
+            'end' => $start + mb_strlen($shortUrl),
+            'url' => $shortUrl,
+        ], $metadata);
+    }
+
+    return ['urls' => $entities];
+}
+
 afterEach(function (): void {
     Date::setTestNow();
 });
@@ -102,6 +125,7 @@ test('x external post sync imports unseen account posts as published targets', f
         return str_contains($request->url(), '/2/users/123/tweets')
             && str_contains($expansions, 'attachments.media_keys')
             && str_contains($expansions, 'referenced_tweets.id')
+            && str_contains((string) ($query['tweet.fields'] ?? ''), 'entities')
             && ($query['media.fields'] ?? null) !== null;
     });
 });
@@ -117,14 +141,31 @@ test('x external post sync imports media and quoted tweet context', function () 
         'sync_external_posts' => true,
     ]);
 
+    $tweetText = 'A quote with link https://t.co/blog https://t.co/main https://t.co/quote';
+    $quotedText = 'quoted post body https://t.co/qmedia';
+
     Http::fake([
         'https://api.twitter.com/2/users/123/tweets*' => Http::response([
             'data' => [[
                 'id' => '9002',
-                'text' => 'A quote with my own image',
+                'text' => $tweetText,
                 'created_at' => '2026-07-09T10:00:00.000Z',
                 'attachments' => ['media_keys' => ['3_main']],
                 'referenced_tweets' => [['type' => 'quoted', 'id' => '8001']],
+                'entities' => externalSyncEntities($tweetText, [
+                    'https://t.co/blog' => [
+                        'expanded_url' => 'https://example.com/blog',
+                        'display_url' => 'example.com/blog',
+                    ],
+                    'https://t.co/main' => [
+                        'expanded_url' => 'https://x.com/selfhosted_ai/status/9002/photo/1',
+                        'display_url' => 'pic.x.com/main',
+                    ],
+                    'https://t.co/quote' => [
+                        'expanded_url' => 'https://x.com/tibo_maker/status/8001',
+                        'display_url' => 'x.com/tibo_maker/status/8001',
+                    ],
+                ]),
                 'public_metrics' => [],
             ]],
             'includes' => [
@@ -148,9 +189,15 @@ test('x external post sync imports media and quoted tweet context', function () 
                 ],
                 'tweets' => [[
                     'id' => '8001',
-                    'text' => 'quoted post body',
+                    'text' => $quotedText,
                     'author_id' => 'quoted-user',
                     'attachments' => ['media_keys' => ['3_quote']],
+                    'entities' => externalSyncEntities($quotedText, [
+                        'https://t.co/qmedia' => [
+                            'expanded_url' => 'https://x.com/tibo_maker/status/8001/video/1',
+                            'display_url' => 'pic.x.com/qmedia',
+                        ],
+                    ]),
                 ]],
                 'users' => [[
                     'id' => 'quoted-user',
@@ -167,11 +214,14 @@ test('x external post sync imports media and quoted tweet context', function () 
 
     $post = Post::query()->firstOrFail();
     $media = PostMedia::query()->firstOrFail();
+    $target = PostTarget::query()->firstOrFail();
     $quotedTweet = $post->external_context['x']['quoted_tweet'];
 
     expect($imported)->toBe(1)
         ->and(Post::query()->count())->toBe(1)
         ->and(PostMedia::query()->count())->toBe(1)
+        ->and($post->base_text)->toBe('A quote with link https://t.co/blog')
+        ->and($target->sections)->toBe(['A quote with link https://t.co/blog'])
         ->and($media->post_id)->toBe($post->id)
         ->and($media->alt_text)->toBe('main alt')
         ->and($media->position)->toBe(0)
@@ -256,14 +306,26 @@ test('x external post sync enriches known imported posts with media and quote co
         'imported_from_remote' => true,
     ]);
 
+    $tweetText = 'known remote post https://t.co/main https://t.co/quote';
+
     Http::fake([
         'https://api.twitter.com/2/users/123/tweets*' => Http::response([
             'data' => [[
                 'id' => '9001',
-                'text' => 'known remote post',
+                'text' => $tweetText,
                 'created_at' => '2026-07-09T10:00:00.000Z',
                 'attachments' => ['media_keys' => ['3_main']],
                 'referenced_tweets' => [['type' => 'quoted', 'id' => '8001']],
+                'entities' => externalSyncEntities($tweetText, [
+                    'https://t.co/main' => [
+                        'expanded_url' => 'https://x.com/selfhosted_ai/status/9001/photo/1',
+                        'display_url' => 'pic.x.com/main',
+                    ],
+                    'https://t.co/quote' => [
+                        'expanded_url' => 'https://x.com/quoted_user/status/8001',
+                        'display_url' => 'x.com/quoted_user/status/8001',
+                    ],
+                ]),
                 'public_metrics' => ['like_count' => 3],
             ]],
             'includes' => [
@@ -295,6 +357,8 @@ test('x external post sync enriches known imported posts with media and quote co
         ->and(Post::query()->count())->toBe(1)
         ->and(PostTarget::query()->count())->toBe(1)
         ->and(PostMedia::query()->count())->toBe(1)
+        ->and($post->base_text)->toBe('known remote post')
+        ->and($post->targets()->firstOrFail()->sections)->toBe(['known remote post'])
         ->and($post->external_context['x']['quoted_tweet']['id'])->toBe('8001')
         ->and($post->external_context['x']['quoted_tweet']['author_username'])->toBe('quoted_user');
 });

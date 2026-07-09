@@ -94,7 +94,7 @@ function MediaGrid({ media }: { media: MediaView[] }) {
     return (
         <div
             className={cn(
-                'mt-3 grid overflow-hidden rounded-2xl border border-border bg-muted/40',
+                'mt-3 grid w-full max-w-[560px] overflow-hidden rounded-2xl border border-border bg-muted/40',
                 media.length === 1 ? 'grid-cols-1' : 'grid-cols-2',
             )}
         >
@@ -140,7 +140,7 @@ function QuotedTweetCard({ quote }: { quote: ExternalQuotedTweet }) {
             href={quotedTweetPermalink(quote)}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-3 block overflow-hidden rounded-2xl border border-border bg-background/80 transition-colors hover:bg-muted/30"
+            className="mt-3 block w-full max-w-[560px] overflow-hidden rounded-2xl border border-border bg-background/80 transition-colors hover:bg-muted/30"
         >
             <div className="flex gap-2.5 p-3">
                 <Avatar className="size-8 bg-background">
@@ -322,7 +322,7 @@ function PublishedCard({
     const isThread = sections.length > 1;
 
     return (
-        <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm ring-1 ring-foreground/5">
+        <article className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card shadow-sm ring-1 ring-foreground/5">
             <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2">
                 <span
                     className={cn(
