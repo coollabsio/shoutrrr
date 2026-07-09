@@ -14,6 +14,7 @@ use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 
@@ -78,7 +79,30 @@ class DraftService
                 ->pluck('id'),
         };
 
+        $frozen = $this->frozenPlatformValues();
+
+        $ids = $frozen === []
+            ? $ids
+            : ConnectedAccount::withoutGlobalScopes()
+                ->whereKey($ids->all())
+                ->whereNotIn('platform', $frozen)
+                ->pluck('id');
+
         return $this->defaultFirst($workspaceId, $ids->map(static fn (mixed $id): string => (string) $id)->all());
+    }
+
+    /**
+     * The platform values that are frozen instance-wide, so draft targeting
+     * never snapshots an account whose platform is disabled.
+     *
+     * @return list<string>
+     */
+    private function frozenPlatformValues(): array
+    {
+        return array_keys(array_filter(
+            app(InstanceSettings::class)->platformsEnabled(),
+            static fn (bool $enabled): bool => ! $enabled,
+        ));
     }
 
     /**
