@@ -53,6 +53,10 @@ export default function ConnectedAccounts({
     capabilities,
     canManage,
 }: Props) {
+    const disabledPlatforms = new Set(
+        capabilities.filter((c) => !c.enabled).map((c) => c.platform),
+    );
+
     const disconnect = (account: Account) => {
         // The controller flashes a success message which FlashListener turns into
         // a toast — don't toast again here or it fires twice.
@@ -160,6 +164,7 @@ export default function ConnectedAccounts({
                                 key={account.id}
                                 account={account}
                                 canManage={canManage}
+                                frozen={disabledPlatforms.has(account.platform)}
                                 onReconnectOAuth={reconnectOAuth}
                                 onDisconnect={disconnect}
                             />
