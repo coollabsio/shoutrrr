@@ -9,6 +9,7 @@ use App\Services\Publishing\Connectors\BlueskyPublishConnector;
 use App\Services\Publishing\Connectors\FacebookConnector;
 use App\Services\Publishing\Connectors\InstagramConnector;
 use App\Services\Publishing\Connectors\LinkedInConnector;
+use App\Services\Publishing\Connectors\ThreadsConnector;
 use App\Services\Publishing\Connectors\XConnector;
 use App\Services\Publishing\Contracts\PublishConnector;
 
@@ -22,9 +23,7 @@ class PublishConnectorRegistry
             Platform::LinkedIn => app(LinkedInConnector::class),
             Platform::Facebook => app(FacebookConnector::class),
             Platform::Instagram => app(InstagramConnector::class),
-            Platform::Threads => throw new \LogicException(
-                "Publish connector for {$platform->value} is not implemented yet.",
-            ),
+            Platform::Threads => app(ThreadsConnector::class),
         };
     }
 }
