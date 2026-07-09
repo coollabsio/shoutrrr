@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Dto\Post\DraftData;
 use App\Enums\PostStatus;
+use App\Enums\PostTargetStatus;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesWorkspacePost;
 use App\Http\Controllers\Controller;
 use App\Jobs\DeletePostTarget;
@@ -145,11 +146,22 @@ class PostsController extends Controller
             return response()->json(['deleted' => true, 'remote' => false]);
         }
 
+        $targetsToDelete = $model->targets
+            ->filter(fn (PostTarget $t): bool => $t->remote_id !== null || ($t->remote_ids ?? []) !== [])
+            ->values();
+        $targetIdsToDelete = $targetsToDelete->modelKeys();
+
         $model->targets
-            ->filter(fn (PostTarget $t): bool => $t->remote_id !== null)
-            ->each(fn (PostTarget $t) => DeletePostTarget::dispatch($t));
+            ->reject(fn (PostTarget $t): bool => in_array($t->getKey(), $targetIdsToDelete, true))
+            ->each(fn (PostTarget $t) => $t->forceFill(['status' => PostTargetStatus::Deleted->value])->save());
+
+        $targetsToDelete->each(fn (PostTarget $t) => DeletePostTarget::dispatch($t));
 
         $model->forceFill(['status' => PostStatus::Deleted->value, 'deleted_at' => now()])->save();
+
+        if ($targetsToDelete->isEmpty()) {
+            return response()->json(['deleted' => true, 'remote' => false]);
+        }
 
         return response()->json(['deleted' => true, 'remote' => true, 'message' => 'Remote deletion queued for published targets.']);
     }

@@ -91,6 +91,8 @@ class AppServiceProvider extends ServiceProvider
             RateLimiter::for("engagement-{$platform->value}", fn (): Limit => Limit::perMinute(10));
         }
 
+        RateLimiter::for('external-posts-x', fn (): Limit => Limit::perMinute(15));
+
         Gate::before(function (User $user, string $ability): ?bool {
             if (! str_starts_with($ability, 'workspace.')) {
                 return null;

@@ -76,6 +76,9 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware('throttle:30,1')
         ->name('accounts.toggle');
 
+    Route::patch('accounts/{account}/external-post-sync', [ConnectedAccountController::class, 'updateExternalPostSync'])
+        ->name('accounts.external-post-sync');
+
     Route::delete('accounts/{account}', [ConnectedAccountController::class, 'destroy'])
         ->name('accounts.destroy');
 });

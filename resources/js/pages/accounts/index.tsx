@@ -99,6 +99,14 @@ export default function ConnectedAccounts({
         );
     };
 
+    const toggleExternalPostSync = (account: Account) => {
+        router.patch(
+            ConnectedAccountController.updateExternalPostSync.url(account.id),
+            { sync_external_posts: !account.sync_external_posts },
+            { preserveScroll: true },
+        );
+    };
+
     const { flash } = usePage().props;
     const [dismissedError, setDismissedError] = useState<string | null>(null);
     // Connect/reconnect failures for every platform flash an `error`; surface it
@@ -210,6 +218,9 @@ export default function ConnectedAccounts({
                                 onReconnectOAuth={reconnectOAuth}
                                 onDisconnect={disconnect}
                                 onToggle={toggleEnabled}
+                                onToggleExternalPostSync={
+                                    toggleExternalPostSync
+                                }
                             />
                         ))}
                     </div>

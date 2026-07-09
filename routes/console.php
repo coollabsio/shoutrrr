@@ -8,6 +8,7 @@ use App\Console\Commands\PruneMcpBindings;
 use App\Console\Commands\PruneUsageEvents;
 use App\Console\Commands\ReconcileUsageCounters;
 use App\Console\Commands\RefreshExpiringTokens;
+use App\Console\Commands\SyncExternalPosts;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -18,6 +19,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command(DispatchDuePosts::class)->everyMinute()->withoutOverlapping();
 Schedule::command(RefreshExpiringTokens::class)->everyFifteenMinutes()->withoutOverlapping();
+Schedule::command(SyncExternalPosts::class)->everyFifteenMinutes()->withoutOverlapping();
 Schedule::command(PruneMcpBindings::class)->hourly();
 Schedule::command(PruneAbandonedUploads::class)->hourly();
 

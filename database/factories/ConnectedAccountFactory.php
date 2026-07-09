@@ -29,6 +29,8 @@ class ConnectedAccountFactory extends Factory
             'auth_method' => 'oauth',
             'connected_by_user_id' => User::factory(),
             'status' => ConnectedAccountStatus::Active->value,
+            'sync_external_posts' => false,
+            'external_posts_synced_at' => null,
             'token_expires_at' => null,
             'last_refreshed_at' => null,
             'refresh_failed_at' => null,

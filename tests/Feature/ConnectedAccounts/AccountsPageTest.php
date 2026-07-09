@@ -43,10 +43,46 @@ test('the accounts page lists accounts and exposes capabilities and canManage to
             ->has('accounts', 1)
             ->where('accounts.0.handle', '@listed')
             ->where('accounts.0.x_premium', true)
+            ->where('accounts.0.sync_external_posts', false)
+            ->where('accounts.0.external_posts_synced_at', null)
             ->where('accounts.0.max_text_length', 25_000)
             ->where('accounts.0.is_default', false)
             ->missing('accounts.0.secret'),
         );
+});
+
+test('owners can toggle external post sync for X accounts', function () {
+    $owner = User::factory()->create(['email_verified_at' => now()]);
+    $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $owner->id,
+    ]);
+    $owner->forceFill(['current_workspace_id' => $workspace->id])->save();
+    $account = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+
+    test()->actingAs($owner)
+        ->patch(route('accounts.external-post-sync', $account), ['sync_external_posts' => true])
+        ->assertRedirect();
+
+    expect($account->fresh()->sync_external_posts)->toBeTrue();
+});
+
+test('external post sync is only accepted for X accounts', function () {
+    $owner = User::factory()->create(['email_verified_at' => now()]);
+    $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $owner->id,
+    ]);
+    $owner->forceFill(['current_workspace_id' => $workspace->id])->save();
+    $account = ConnectedAccount::factory()->bluesky()->create(['workspace_id' => $workspace->id]);
+
+    test()->actingAs($owner)
+        ->patch(route('accounts.external-post-sync', $account), ['sync_external_posts' => true])
+        ->assertRedirect();
+
+    expect($account->fresh()->sync_external_posts)->toBeFalse();
 });
 
 test('the accounts page exposes a saved custom PDS so reconnect can replay it', function () {

@@ -12,6 +12,8 @@ export type Account = {
     token_expires_at: string | null;
     max_text_length: number;
     x_premium: boolean;
+    sync_external_posts: boolean;
+    external_posts_synced_at: string | null;
     is_default: boolean;
     disabled: boolean;
     pds_url: string | null;

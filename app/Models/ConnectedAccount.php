@@ -32,6 +32,8 @@ use Override;
  * @property string|null $connected_by_user_id
  * @property ConnectedAccountStatus $status
  * @property CarbonImmutable|null $disabled_at
+ * @property bool $sync_external_posts
+ * @property CarbonImmutable|null $external_posts_synced_at
  * @property array<string, mixed>|null $capabilities
  * @property CarbonImmutable|null $token_expires_at
  * @property CarbonImmutable|null $last_refreshed_at
@@ -51,6 +53,8 @@ use Override;
     'connected_by_user_id',
     'status',
     'disabled_at',
+    'sync_external_posts',
+    'external_posts_synced_at',
     'capabilities',
     'token_expires_at',
     'last_refreshed_at',
@@ -74,6 +78,8 @@ class ConnectedAccount extends Model
             'platform' => Platform::class,
             'status' => ConnectedAccountStatus::class,
             'disabled_at' => 'immutable_datetime',
+            'sync_external_posts' => 'boolean',
+            'external_posts_synced_at' => 'immutable_datetime',
             'capabilities' => 'array',
             'token_expires_at' => 'immutable_datetime',
             'last_refreshed_at' => 'immutable_datetime',

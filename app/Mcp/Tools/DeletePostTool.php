@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Mcp\Tools;
 
 use App\Enums\PostStatus;
+use App\Enums\PostTargetStatus;
 use App\Jobs\DeletePostTarget;
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\Post;
@@ -55,11 +56,22 @@ class DeletePostTool extends WorkspaceTool
             return Response::text(json_encode(['deleted' => true, 'remote' => false], JSON_THROW_ON_ERROR));
         }
 
+        $targetsToDelete = $post->targets
+            ->filter(fn (PostTarget $t): bool => $t->remote_id !== null || ($t->remote_ids ?? []) !== [])
+            ->values();
+        $targetIdsToDelete = $targetsToDelete->modelKeys();
+
         $post->targets
-            ->filter(fn (PostTarget $t): bool => $t->remote_id !== null)
-            ->each(fn (PostTarget $t) => DeletePostTarget::dispatch($t));
+            ->reject(fn (PostTarget $t): bool => in_array($t->getKey(), $targetIdsToDelete, true))
+            ->each(fn (PostTarget $t) => $t->forceFill(['status' => PostTargetStatus::Deleted->value])->save());
+
+        $targetsToDelete->each(fn (PostTarget $t) => DeletePostTarget::dispatch($t));
 
         $post->forceFill(['status' => PostStatus::Deleted->value, 'deleted_at' => now()])->save();
+
+        if ($targetsToDelete->isEmpty()) {
+            return Response::text(json_encode(['deleted' => true, 'remote' => false], JSON_THROW_ON_ERROR));
+        }
 
         return Response::text(json_encode(['deleted' => true, 'remote' => true, 'message' => 'Remote deletion queued for published targets.'], JSON_THROW_ON_ERROR));
     }
