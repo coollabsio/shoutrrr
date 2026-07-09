@@ -6,6 +6,7 @@ use App\Enums\Platform;
 use App\Listeners\BindWorkspaceToAccessToken;
 use App\Listeners\SetCurrentWorkspaceOnLogin;
 use App\Models\User;
+use App\Services\Auth\Socialite\ThreadsProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -22,6 +23,7 @@ use Inertia\ExceptionResponse;
 use Inertia\Inertia;
 use Laravel\Passport\Events\AccessTokenCreated;
 use Laravel\Passport\Passport;
+use Laravel\Socialite\Facades\Socialite;
 use Override;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -46,6 +48,14 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configureErrorPages();
         $this->configureTrustedProxies();
+
+        // Threads has no first-party Socialite driver (separate OAuth surface
+        // from the rest of Meta — authorizes at threads.net, token/API at
+        // graph.threads.net). Hand-rolled to match the app's bespoke approach.
+        Socialite::extend('threads', fn ($app) => Socialite::buildProvider(
+            ThreadsProvider::class,
+            config('services.threads'),
+        ));
 
         // OAuth tokens issued for the MCP/API integration. Without explicit
         // lifetimes Passport defaults to ~1 year, so a leaked bearer is
