@@ -9,6 +9,7 @@ use App\Enums\Platform;
 use App\Exceptions\TokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Services\Publishing\TokenManager;
+use App\Support\InstanceSettings;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Date;
 
@@ -20,8 +21,13 @@ class RefreshExpiringTokens extends Command
 
     public function handle(TokenManager $tokens): int
     {
+        $availablePlatforms = array_keys(array_filter(
+            app(InstanceSettings::class)->platformsEnabled(),
+        ));
+
         ConnectedAccount::query()
             ->withoutGlobalScopes()
+            ->whereIn('platform', $availablePlatforms)
             ->where(function ($query): void {
                 $query->where('platform', '!=', Platform::Bluesky->value)
                     ->orWhere(function ($query): void {
