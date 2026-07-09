@@ -22,6 +22,7 @@ use App\Services\Publishing\BackoffSchedule;
 use App\Services\Publishing\PostStatusRollup;
 use App\Services\Publishing\PublishConnectorRegistry;
 use App\Services\Publishing\TokenManager;
+use App\Support\InstanceSettings;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Date;
@@ -57,6 +58,7 @@ class PublishPostTarget implements ShouldQueue
 
     private const array TERMINAL = [
         PostTargetStatus::Published,
+        PostTargetStatus::Skipped,
         PostTargetStatus::Deleting,
         PostTargetStatus::Deleted,
     ];
@@ -77,6 +79,19 @@ class PublishPostTarget implements ShouldQueue
         // Guard against a stale delayed retry or a double dispatch firing after the
         // target already reached a terminal state: doing nothing keeps it a no-op.
         if (in_array($target->status, self::TERMINAL, true)) {
+            return;
+        }
+
+        if (! app(InstanceSettings::class)->platformAvailable($target->platform)) {
+            $target->forceFill([
+                'status' => PostTargetStatus::Skipped->value,
+                'error_kind' => null,
+                'error_message' => "{$target->platform->label()} is disabled on this instance.",
+                'next_attempt_at' => null,
+            ])->save();
+
+            $rollup->recompute($target->post()->firstOrFail());
+
             return;
         }
 

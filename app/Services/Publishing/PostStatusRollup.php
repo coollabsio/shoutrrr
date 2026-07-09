@@ -18,14 +18,18 @@ class PostStatusRollup
 
         $hasInFlight = $statuses->contains(fn (PostTargetStatus $s): bool => in_array($s, [PostTargetStatus::Pending, PostTargetStatus::Publishing], true));
         $published = $statuses->filter(fn (PostTargetStatus $s): bool => $s === PostTargetStatus::Published)->count();
-        $failed = $statuses->filter(fn (PostTargetStatus $s): bool => $s === PostTargetStatus::Failed)->count();
         $total = $statuses->count();
+
+        $hasTargets = $total > 0;
+        $allPublished = $published === $total;
+        $anyPublished = $published > 0;
 
         $status = match (true) {
             $hasInFlight => PostStatus::Publishing,
-            $published === $total && $total > 0 => PostStatus::Published,
-            $failed === $total && $total > 0 => PostStatus::Failed,
-            default => PostStatus::Partial,
+            $hasTargets && $allPublished => PostStatus::Published,
+            $hasTargets && $anyPublished => PostStatus::Partial, // some published, rest failed/skipped
+            $hasTargets => PostStatus::Failed,                   // nothing published (all failed/skipped)
+            default => PostStatus::Partial,                      // no targets — unchanged edge
         };
 
         $post->status = $status;

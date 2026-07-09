@@ -90,6 +90,7 @@ export type TargetStatus =
     | 'publishing'
     | 'published'
     | 'failed'
+    | 'skipped'
     | 'deleting'
     | 'deleted';
 

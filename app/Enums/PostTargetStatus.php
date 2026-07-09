@@ -10,6 +10,7 @@ enum PostTargetStatus: string
     case Publishing = 'publishing';
     case Published = 'published';
     case Failed = 'failed';
+    case Skipped = 'skipped';
     case Deleting = 'deleting';
     case Deleted = 'deleted';
 }
