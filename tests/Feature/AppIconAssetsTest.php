@@ -100,6 +100,8 @@ it('shows the React app logo without an extra background tile', function (): voi
     $component = file_get_contents(resource_path('js/components/layout/app-logo.tsx'));
 
     expect($component)
-        ->toContain('group-data-[collapsible=icon]:mr-1')
+        // The logo icon sits centered in its square slot (see the collapsed
+        // icon-rail centering), with no colored tile behind it.
+        ->toContain('items-center justify-center')
         ->not->toContain('bg-sidebar-primary');
 });
