@@ -24,12 +24,17 @@ it('shows disabled engagement platforms to end users', () => {
     expect(source).toContain('disabledPlatformLabels');
 });
 
-it('derives disabled platform labels from engagement enabled keys', () => {
+it('uses shared disabled platform label helpers', () => {
     const source = readFileSync(
         resolve(import.meta.dirname, 'index.tsx'),
         'utf8',
     );
+    const platformSource = readFileSync(
+        resolve(import.meta.dirname, '../../lib/platforms.ts'),
+        'utf8',
+    );
 
     expect(source).not.toContain('const engagementPlatforms');
-    expect(source).toContain('Object.keys(enabled)');
+    expect(source).toContain("from '@/lib/platforms'");
+    expect(platformSource).toContain('Object.keys(enabled)');
 });

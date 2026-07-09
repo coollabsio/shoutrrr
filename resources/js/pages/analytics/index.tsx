@@ -12,12 +12,11 @@ import {
     EmptyTitle,
 } from '@/components/ui/empty';
 import { dayjs } from '@/lib/datetime/dayjs';
-import { platformLabel } from '@/lib/posts/permalink';
+import { disabledPlatformLabels } from '@/lib/platforms';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { index as analyticsRoute } from '@/routes/analytics';
 import { show as postRoute } from '@/routes/posts';
-import type { PlatformName } from '@/types/compose';
 import type {
     AnalyticsPageProps,
     AnalyticsComparisonRow,
@@ -37,12 +36,6 @@ const RANGE_OPTIONS = [
 
 function allDisabled(enabled: Record<string, boolean>) {
     return Object.values(enabled).every((value) => !value);
-}
-
-function disabledPlatformLabels(enabled: Record<PlatformName, boolean>) {
-    return (Object.keys(enabled) as PlatformName[])
-        .filter((platform) => !enabled[platform])
-        .map((platform) => platformLabel(platform));
 }
 
 function DisabledMetricsNotice({

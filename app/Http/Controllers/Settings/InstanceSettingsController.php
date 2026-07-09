@@ -17,9 +17,11 @@ use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
 use App\Support\UsagePricing;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
@@ -278,15 +280,33 @@ class InstanceSettingsController extends Controller
             ], 422);
         }
 
-        $response = Http::withToken($bearerToken)
-            ->acceptJson()
-            ->timeout(10)
-            ->get('https://api.x.com/2/usage/tweets', [
-                'days' => (int) ($validated['days'] ?? 7),
-                'usage.fields' => 'cap_reset_day,daily_client_app_usage,daily_project_usage,project_cap,project_id,project_usage',
-            ]);
+        $days = (int) ($validated['days'] ?? 7);
+        $cacheKey = 'instance-settings:x-usage:tweets:'.sha1($bearerToken).":{$days}";
 
-        if ($response->failed()) {
+        try {
+            /** @var array{data: mixed, fetched_at: string, source: string} $usage */
+            $usage = Cache::remember($cacheKey, now()->addMinutes(2), function () use ($bearerToken, $days): array {
+                $response = Http::withToken($bearerToken)
+                    ->acceptJson()
+                    ->timeout(10)
+                    ->get('https://api.x.com/2/usage/tweets', [
+                        'days' => $days,
+                        'usage.fields' => 'cap_reset_day,daily_client_app_usage,daily_project_usage,project_cap,project_id,project_usage',
+                    ]);
+
+                if ($response->failed()) {
+                    $response->throw();
+                }
+
+                return [
+                    'data' => $response->json('data'),
+                    'fetched_at' => Date::now()->toIso8601String(),
+                    'source' => 'https://api.x.com/2/usage/tweets',
+                ];
+            });
+        } catch (RequestException $exception) {
+            $response = $exception->response;
+
             return response()->json([
                 'message' => 'Unable to fetch X API usage.',
                 'status' => $response->status(),
@@ -294,11 +314,7 @@ class InstanceSettingsController extends Controller
             ], 502);
         }
 
-        return response()->json([
-            'data' => $response->json('data'),
-            'fetched_at' => Date::now()->toIso8601String(),
-            'source' => 'https://api.x.com/2/usage/tweets',
-        ]);
+        return response()->json($usage);
     }
 
     private function estimateCountersCost(UsagePricing $pricing, mixed $counters): float

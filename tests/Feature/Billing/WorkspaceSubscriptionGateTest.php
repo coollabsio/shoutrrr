@@ -111,15 +111,15 @@ test('additional cloud workspaces must have an active subscription to publish', 
     expect(app(WorkspaceSubscriptionGate::class)->canPublish($workspace))->toBeFalse();
 });
 
-test('x publishing quota is five dollars worth of monthly requests', function () {
+test('x publishing quota is five dollars worth of worst case monthly requests', function () {
     Date::setTestNow('2026-06-15 12:00:00');
     $workspace = subscribedWorkspace();
     $gate = app(WorkspaceSubscriptionGate::class);
 
-    expect($gate->monthlyXPostLimit())->toBe(333)
-        ->and($gate->remainingXPosts($workspace))->toBe(333);
+    expect($gate->monthlyXPostLimit())->toBe(25)
+        ->and($gate->remainingXPosts($workspace))->toBe(25);
 
-    recordXPosts($workspace, 332);
+    recordXPosts($workspace, 24);
 
     expect($gate->remainingXPosts($workspace))->toBe(1)
         ->and($gate->canPublishX($workspace))->toBeTrue();
@@ -166,6 +166,30 @@ test('x publishing stops when cumulative x cost reaches the monthly budget', fun
     ]);
 
     expect($gate->remainingXBudgetMicrousd($workspace))->toBe(0)
+        ->and($gate->canPublishX($workspace))->toBeFalse();
+
+    Date::setTestNow();
+});
+
+test('x publishing reserves enough budget for url bearing tweets', function () {
+    Date::setTestNow('2026-06-15 12:00:00');
+    $workspace = subscribedWorkspace();
+
+    UsageEvent::factory()->create([
+        'workspace_id' => $workspace->id,
+        'category' => UsageCategory::ExternalApi->value,
+        'platform' => Platform::X->value,
+        'operation' => UsageOperation::MEDIA_UPLOAD,
+        'quota_weight' => 1,
+        'cost_weight_microusd' => 4_850_000,
+        'succeeded' => true,
+        'occurred_at' => Date::now(),
+    ]);
+
+    $gate = app(WorkspaceSubscriptionGate::class);
+
+    expect($gate->remainingXPosts($workspace))->toBe(25)
+        ->and($gate->remainingXBudgetMicrousd($workspace))->toBe(150_000)
         ->and($gate->canPublishX($workspace))->toBeFalse();
 
     Date::setTestNow();
@@ -228,7 +252,7 @@ test('a failed x publish does not consume quota because the job no longer pre-ch
     // Quota is now driven by the metering counters the publish connector increments
     // on success. A failed publish meters nothing, so the full quota remains.
     expect($connectorCalls)->toBe(1)
-        ->and(app(WorkspaceSubscriptionGate::class)->remainingXPosts($workspace))->toBe(333);
+        ->and(app(WorkspaceSubscriptionGate::class)->remainingXPosts($workspace))->toBe(25);
 
     Date::setTestNow();
 });
@@ -236,7 +260,7 @@ test('a failed x publish does not consume quota because the job no longer pre-ch
 test('x publishing stops before calling the connector when quota is exhausted', function () {
     Date::setTestNow('2026-06-15 12:00:00');
     $workspace = subscribedWorkspace();
-    recordXPosts($workspace, 333);
+    recordXPosts($workspace, 25);
     $post = Post::factory()->create([
         'workspace_id' => $workspace->id,
         'status' => PostStatus::Publishing,
@@ -358,7 +382,7 @@ test('url bearing tweets count toward the x post quota', function () {
     $gate = app(WorkspaceSubscriptionGate::class);
 
     expect($gate->currentXPostUsage($workspace))->toBe(5)
-        ->and($gate->remainingXPosts($workspace))->toBe(328);
+        ->and($gate->remainingXPosts($workspace))->toBe(20);
 
     Date::setTestNow();
 });
@@ -400,17 +424,20 @@ test('x quota period is anchored to the subscription date, not the calendar mont
     // Only the 2 posts since June 10 count, even though 5 happened in June and
     // a calendar-month reset on July 1 would have shown zero usage.
     expect($gate->currentXPostUsage($workspace))->toBe(2)
-        ->and($gate->remainingXPosts($workspace))->toBe(331);
+        ->and($gate->remainingXPosts($workspace))->toBe(23);
 
     Date::setTestNow('2026-07-11 12:00:00'); // next cycle started July 10
     expect($gate->currentXPostUsage($workspace))->toBe(0)
-        ->and($gate->remainingXPosts($workspace))->toBe(333);
+        ->and($gate->remainingXPosts($workspace))->toBe(25);
 
     Date::setTestNow();
 });
 
-test('a non positive x post cost means unlimited x publishing', function () {
-    config(['subscriptions.x_post_cost_cents' => 0]);
+test('non positive x publish pricing means unlimited x publishing', function () {
+    config([
+        'usage_pricing.platforms.x.resources.post_create.unit_cost_usd' => 0,
+        'usage_pricing.platforms.x.resources.post_create_with_url.unit_cost_usd' => 0,
+    ]);
     $workspace = subscribedWorkspace();
     $gate = app(WorkspaceSubscriptionGate::class);
 

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia;
@@ -281,6 +282,7 @@ test('instance usage includes x pricing estimates', function () {
 
 test('instance owner can fetch x api usage', function () {
     config()->set('services.x.bearer_token', 'x-bearer-token');
+    Cache::flush();
 
     $owner = User::factory()->instanceOwner()->create();
 
@@ -301,8 +303,15 @@ test('instance owner can fetch x api usage', function () {
         ->assertJsonPath('data.project_usage', 15420)
         ->assertJsonPath('source', 'https://api.x.com/2/usage/tweets');
 
+    $this->actingAs($owner)
+        ->getJson(route('instance-settings.usage.x'))
+        ->assertOk()
+        ->assertJsonPath('data.project_usage', 15420)
+        ->assertJsonPath('source', 'https://api.x.com/2/usage/tweets');
+
     Http::assertSent(fn ($request): bool => $request->url() === 'https://api.x.com/2/usage/tweets?days=7&usage.fields=cap_reset_day%2Cdaily_client_app_usage%2Cdaily_project_usage%2Cproject_cap%2Cproject_id%2Cproject_usage'
         && $request->hasHeader('Authorization', 'Bearer x-bearer-token'));
+    Http::assertSentCount(1);
 });
 
 test('x api usage fetch requires a configured bearer token', function () {

@@ -23,7 +23,12 @@ import {
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { platformLabel, postPermalink } from '@/lib/posts/permalink';
+import {
+    disabledPlatformLabels,
+    platformKeys,
+    platformLabel,
+} from '@/lib/platforms';
+import { postPermalink } from '@/lib/posts/permalink';
 import { cn } from '@/lib/utils';
 import {
     archive as archiveRoute,
@@ -54,16 +59,6 @@ type PageProps = {
     facets: { accounts: AccountFacet[]; posts: PostFacet[] };
     engagementEnabled: Record<PlatformName, boolean>;
 };
-
-function platformKeys(enabled: Record<PlatformName, boolean>): PlatformName[] {
-    return Object.keys(enabled) as PlatformName[];
-}
-
-function disabledPlatformLabels(enabled: Record<PlatformName, boolean>) {
-    return platformKeys(enabled)
-        .filter((platform) => !enabled[platform])
-        .map((platform) => platformLabel(platform));
-}
 
 function StreamSkeleton() {
     return (

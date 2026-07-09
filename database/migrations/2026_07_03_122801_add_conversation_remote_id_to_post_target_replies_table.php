@@ -31,6 +31,7 @@ return new class extends Migration
                         ->get(['id', 'remote_reply_id', 'parent_remote_id', 'conversation_remote_id']);
 
                     $conversationByRemoteId = [];
+                    $updates = [];
 
                     foreach ($replies as $reply) {
                         $conversationRemoteId = $reply->remote_reply_id;
@@ -44,13 +45,47 @@ return new class extends Migration
                         }
 
                         $conversationByRemoteId[$reply->remote_reply_id] = $conversationRemoteId;
+                        $updates[] = [
+                            'id' => $reply->id,
+                            'conversation_remote_id' => $conversationRemoteId,
+                        ];
+                    }
 
-                        DB::table('post_target_replies')
-                            ->where('id', $reply->id)
-                            ->update(['conversation_remote_id' => $conversationRemoteId]);
+                    foreach (array_chunk($updates, 500) as $updateChunk) {
+                        $this->updateConversationRemoteIds($updateChunk);
                     }
                 }
             }, 'id');
+    }
+
+    /**
+     * @param  list<array{id: string, conversation_remote_id: string}>  $updates
+     */
+    private function updateConversationRemoteIds(array $updates): void
+    {
+        if ($updates === []) {
+            return;
+        }
+
+        $connection = DB::connection();
+        $grammar = $connection->getQueryGrammar();
+        $table = $grammar->wrapTable('post_target_replies');
+        $idColumn = $grammar->wrap('id');
+        $conversationColumn = $grammar->wrap('conversation_remote_id');
+        $cases = implode(' ', array_fill(0, count($updates), 'when ? then ?'));
+        $ids = array_column($updates, 'id');
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+        $bindings = [];
+
+        foreach ($updates as $update) {
+            $bindings[] = $update['id'];
+            $bindings[] = $update['conversation_remote_id'];
+        }
+
+        DB::update(
+            "update {$table} set {$conversationColumn} = case {$idColumn} {$cases} end where {$idColumn} in ({$placeholders})",
+            [...$bindings, ...$ids],
+        );
     }
 
     public function down(): void

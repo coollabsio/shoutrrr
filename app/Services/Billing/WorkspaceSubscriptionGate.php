@@ -54,7 +54,7 @@ class WorkspaceSubscriptionGate
 
         return $this->canPublish($workspace)
             && $this->remainingXPosts($workspace) > 0
-            && $this->remainingXBudgetMicrousd($workspace) >= $this->xPostCostMicrousd();
+            && $this->remainingXBudgetMicrousd($workspace) >= $this->xPublishCostMicrousd();
     }
 
     /**
@@ -63,14 +63,13 @@ class WorkspaceSubscriptionGate
      */
     public function monthlyXPostLimit(): ?int
     {
-        $budgetCents = (int) config('subscriptions.monthly_x_budget_cents');
-        $postCostCents = (float) config('subscriptions.x_post_cost_cents');
+        $publishCostMicrousd = $this->xPublishCostMicrousd();
 
-        if ($postCostCents <= 0.0) {
+        if ($publishCostMicrousd <= 0) {
             return null;
         }
 
-        return (int) floor($budgetCents / $postCostCents);
+        return (int) floor($this->monthlyXBudgetMicrousd() / $publishCostMicrousd);
     }
 
     public function remainingXPosts(Workspace $workspace): int
@@ -139,9 +138,14 @@ class WorkspaceSubscriptionGate
         return $count;
     }
 
-    private function xPostCostMicrousd(): int
+    private function xPublishCostMicrousd(): int
     {
-        return $this->pricing->costWeightMicrousd(Platform::X->value, UsageOperation::POST, 1);
+        $costs = array_map(
+            fn (string $operation): int => $this->pricing->costWeightMicrousd(Platform::X->value, $operation, 1),
+            self::X_PUBLISH_OPERATIONS,
+        );
+
+        return max($costs);
     }
 
     /**
