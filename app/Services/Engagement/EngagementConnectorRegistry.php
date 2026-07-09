@@ -9,6 +9,7 @@ use App\Services\Engagement\Connectors\BlueskyEngagementConnector;
 use App\Services\Engagement\Connectors\FacebookEngagementConnector;
 use App\Services\Engagement\Connectors\InstagramEngagementConnector;
 use App\Services\Engagement\Connectors\LinkedInEngagementConnector;
+use App\Services\Engagement\Connectors\ThreadsEngagementConnector;
 use App\Services\Engagement\Connectors\XEngagementConnector;
 use App\Services\Engagement\Contracts\EngagementConnector;
 
@@ -22,9 +23,7 @@ class EngagementConnectorRegistry
             Platform::LinkedIn => app(LinkedInEngagementConnector::class),
             Platform::Facebook => app(FacebookEngagementConnector::class),
             Platform::Instagram => app(InstagramEngagementConnector::class),
-            Platform::Threads => throw new \LogicException(
-                "Engagement connector for {$platform->value} is not implemented yet.",
-            ),
+            Platform::Threads => app(ThreadsEngagementConnector::class),
         };
     }
 }
