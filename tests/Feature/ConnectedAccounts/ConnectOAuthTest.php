@@ -82,10 +82,10 @@ test('redirect 404s for an unknown or app-password platform', function () {
     test()->get('/accounts/connect/myspace')->assertNotFound();
 });
 
-test('redirect 404s for a configured but not-yet-launched platform', function () {
-    // Instagram is registered in the Platform enum (for limits/branding) and
-    // supports OAuth, but its publish/engagement/metrics connectors don't
-    // exist yet. Configuring credentials must not be enough to go live.
+test('redirect 404s for instagram on the generic route even though it is launched', function () {
+    // Instagram is launched, but it shares a single Facebook Login + Page
+    // selection flow with Facebook via MetaConnectionController. The
+    // generic single-step per-platform route must never handle it.
     config()->set('services.facebook.client_id', 'cid');
     config()->set('services.facebook.client_secret', 'secret');
     ownerActingIn();

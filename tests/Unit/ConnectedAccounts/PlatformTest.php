@@ -69,7 +69,7 @@ test('only platforms with implemented connectors are launched', function () {
         ->and(Platform::Bluesky->isLaunched())->toBeTrue()
         ->and(Platform::LinkedIn->isLaunched())->toBeTrue()
         ->and(Platform::Facebook->isLaunched())->toBeTrue()
-        ->and(Platform::Instagram->isLaunched())->toBeFalse()
+        ->and(Platform::Instagram->isLaunched())->toBeTrue()
         ->and(Platform::Threads->isLaunched())->toBeFalse();
 });
 

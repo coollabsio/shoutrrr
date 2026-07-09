@@ -101,8 +101,8 @@ enum Platform: string
     public function isLaunched(): bool
     {
         return match ($this) {
-            self::X, self::Bluesky, self::LinkedIn, self::Facebook => true,
-            self::Instagram, self::Threads => false,
+            self::X, self::Bluesky, self::LinkedIn, self::Facebook, self::Instagram => true,
+            self::Threads => false,
         };
     }
 

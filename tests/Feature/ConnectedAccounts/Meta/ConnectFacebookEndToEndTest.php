@@ -35,7 +35,7 @@ function facebookOwnerActingIn(): array
 test('posting a stashed page selection creates a facebook connected account and secret', function () {
     facebookOwnerActingIn();
 
-    expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook]);
+    expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook, Platform::Instagram]);
 
     test()->withSession(['accounts.meta.connect' => [
         'assets' => [

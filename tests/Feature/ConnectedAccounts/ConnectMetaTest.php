@@ -79,7 +79,7 @@ test('redirect sends the user into the facebook oauth dance now that facebook is
     config()->set('services.facebook.client_secret', 'secret');
     metaOwnerActingIn();
 
-    expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook]);
+    expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook, Platform::Instagram]);
 
     fakeFacebookOAuthUser();
 
@@ -106,9 +106,9 @@ test('callback stashes assets server-side and renders a browser-safe projection'
             ->where('assets.0.igUserId', 'IG1')
             ->where('assets.0.igUsername', 'myig')
             ->where('assets.0.igAvatarUrl', 'https://x/a.jpg')
-            // Instagram is unlaunched (Phase 2), so it must not appear even
-            // though this asset has a linked IG Professional account.
-            ->where('assets.0.platforms', ['facebook'])
+            // Instagram is launched (Task 6), so a Page with a linked IG
+            // Professional account offers both platforms.
+            ->where('assets.0.platforms', ['facebook', 'instagram'])
             ->missing('assets.0.pageAccessToken')
         );
 
@@ -132,7 +132,7 @@ test('callback surfaces a friendly message when facebook denies the connection',
 });
 
 test('store creates a facebook connected account now that facebook is launched', function () {
-    expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook]);
+    expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook, Platform::Instagram]);
 
     metaOwnerActingIn();
 
@@ -160,7 +160,9 @@ test('store creates a facebook connected account now that facebook is launched',
         ->and($account->remote_account_id)->toBe('PAGE1');
 });
 
-test('store rejects an instagram selection while instagram is unlaunched', function () {
+test('store creates an instagram connected account now that instagram is launched', function () {
+    expect(Platform::launchedMetaGraphPlatforms())->toBe([Platform::Facebook, Platform::Instagram]);
+
     metaOwnerActingIn();
 
     test()->withSession(['accounts.meta.connect' => [
@@ -178,6 +180,33 @@ test('store rejects an instagram selection while instagram is unlaunched', funct
     ]])->post(route('accounts.meta.store'), [
         'selected' => [
             ['assetKey' => 'PAGE1', 'platform' => 'instagram'],
+        ],
+    ])->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('success', '1 account connected.');
+
+    $account = ConnectedAccount::withoutGlobalScopes()->sole();
+    expect($account->platform)->toBe(Platform::Instagram)
+        ->and($account->remote_account_id)->toBe('IG1');
+});
+
+test('store rejects a threads selection while threads is unlaunched', function () {
+    metaOwnerActingIn();
+
+    test()->withSession(['accounts.meta.connect' => [
+        'assets' => [
+            'PAGE1' => [
+                'pageId' => 'PAGE1',
+                'pageName' => 'My Page',
+                'pageAccessToken' => 'PGT1',
+                'igUserId' => 'IG1',
+                'igUsername' => 'myig',
+                'igAvatarUrl' => null,
+            ],
+        ],
+        'userTokenExpiresAt' => null,
+    ]])->post(route('accounts.meta.store'), [
+        'selected' => [
+            ['assetKey' => 'PAGE1', 'platform' => 'threads'],
         ],
     ])->assertSessionHasErrors('selected.0.platform');
 

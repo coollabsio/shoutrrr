@@ -3,10 +3,9 @@
 use App\Enums\Platform;
 use App\Http\Controllers\ConnectedAccounts\MetaConnectionController;
 
-// Facebook is launched (Task 8); Instagram remains gated out of
-// launchedMetaGraphPlatforms() until its own launch task. buildAccountData()
-// is extracted as a pure, statically-callable method so the FB/IG mapping
-// logic can be proven directly without going through the HTTP flow.
+// Facebook and Instagram are both launched. buildAccountData() is extracted
+// as a pure, statically-callable method so the FB/IG mapping logic can be
+// proven directly without going through the HTTP flow.
 test('builds facebook account data from a stashed page asset', function () {
     $data = MetaConnectionController::buildAccountData([
         'pageId' => 'PAGE1',
