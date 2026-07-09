@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\Platform;
 use App\Enums\PostStatus;
 use App\Enums\PostTargetStatus;
 use App\Enums\WorkspaceRole;
@@ -9,6 +10,7 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Bus;
 
 function publishingMember(): array
@@ -80,6 +82,46 @@ test('per-target retry redirects after an Inertia retry request', function () {
 
     expect($target->refresh()->status)->toBe(PostTargetStatus::Pending);
     Bus::assertDispatched(PublishPostTarget::class, fn (PublishPostTarget $job): bool => $job->target->is($target));
+});
+
+test('per-target retry resets a skipped target to pending and dispatches it', function () {
+    Bus::fake();
+    [$user, $workspace] = publishingMember();
+    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'status' => PostStatus::Partial]);
+    $target = PostTarget::factory()->for($post)->create([
+        'status' => PostTargetStatus::Skipped->value,
+        'error_message' => 'X is disabled on this instance.',
+    ]);
+
+    test()->postJson("/posts/{$post->id}/targets/{$target->id}/retry")
+        ->assertOk()
+        ->assertJsonPath('post.id', $post->id);
+
+    $target->refresh();
+    expect($target->status)->toBe(PostTargetStatus::Pending)
+        ->and($target->error_kind)->toBeNull()
+        ->and($target->error_message)->toBeNull();
+
+    Bus::assertDispatched(PublishPostTarget::class, fn (PublishPostTarget $job): bool => $job->target->is($target));
+});
+
+test('retrying a skipped target whose platform is still frozen re-skips it instead of erroring', function () {
+    [$user, $workspace] = publishingMember();
+    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'status' => PostStatus::Partial]);
+    $target = PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'status' => PostTargetStatus::Skipped->value,
+        'error_message' => 'X is disabled on this instance.',
+    ]);
+
+    app(InstanceSettings::class)->update(['platforms_enabled' => ['x' => false]]);
+
+    // Sync queue runs the retried job inline, so the terminal + freeze guards in
+    // PublishPostTarget::handle() execute within this request.
+    test()->postJson("/posts/{$post->id}/targets/{$target->id}/retry")
+        ->assertOk();
+
+    expect($target->fresh()->status)->toBe(PostTargetStatus::Skipped);
 });
 
 test('retry rejects a non-failed target with 409 and dispatches nothing', function () {
