@@ -1,4 +1,4 @@
-import { Deferred, useHttp, usePage } from '@inertiajs/react';
+import { Deferred, usePage } from '@inertiajs/react';
 import {
     CheckCircle2,
     ExternalLink,
@@ -6,15 +6,12 @@ import {
     Heart,
     MessageCircle,
     Repeat2,
-    RefreshCw,
 } from 'lucide-react';
 import { useState } from 'react';
 
-import PostMetricsRefreshController from '@/actions/App/Http/Controllers/Posts/PostMetricsRefreshController';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { TargetStatusChips } from '@/components/compose/target-status-chips';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { dayjs } from '@/lib/datetime/dayjs';
@@ -371,16 +368,12 @@ function SummaryStrip({
     stats,
     showMetrics,
     loading,
-    onRefresh,
-    refreshing,
 }: {
     post: PostView;
     platformCount: number;
     stats: PostStatsPayload | null;
     showMetrics: boolean;
     loading: boolean;
-    onRefresh: () => void;
-    refreshing: boolean;
 }) {
     const when = post.published_at ? dayjs(post.published_at).fromNow() : null;
     const dotClass =
@@ -424,22 +417,6 @@ function SummaryStrip({
                                 Synced {synced}
                             </span>
                         )}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-                            onClick={onRefresh}
-                            disabled={refreshing || loading}
-                            aria-label="Refresh metrics"
-                        >
-                            <RefreshCw
-                                className={cn(
-                                    'size-3',
-                                    refreshing && 'animate-spin',
-                                )}
-                            />
-                            Refresh
-                        </Button>
                     </div>
                 )}
             </div>
@@ -497,21 +474,11 @@ function PublishedBody({
     );
     const otherTargets = post.targets.filter((t) => t.status !== 'published');
 
-    const [localStats, setLocalStats] = useState<PostStatsPayload | null>(null);
     const [selectedId, setSelectedId] = useState(publishedTargets[0]?.id ?? '');
-    const stats = localStats ?? rawStats ?? null;
+    const stats = rawStats ?? null;
     const statsById = new Map(
         (stats?.targets ?? []).map((t) => [t.id, t] as const),
     );
-
-    const http = useHttp<Record<string, never>, PostStatsPayload>({});
-
-    function handleRefresh() {
-        http.transform(() => ({}));
-        void http.post(PostMetricsRefreshController.store(post.id).url, {
-            onSuccess: (payload) => setLocalStats(payload),
-        });
-    }
 
     const selectedTarget =
         publishedTargets.find((t) => t.id === selectedId) ??
@@ -525,8 +492,6 @@ function PublishedBody({
                 stats={stats}
                 showMetrics={showMetrics}
                 loading={loading}
-                onRefresh={handleRefresh}
-                refreshing={http.processing}
             />
 
             {publishedTargets.length > 1 && (

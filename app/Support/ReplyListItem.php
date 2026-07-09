@@ -17,7 +17,7 @@ final class ReplyListItem
 
         return [
             'id' => $reply->id,
-            'platform' => $reply->platform->value,
+            'platform' => $target?->platform->value ?? $reply->platform->value,
             'remote_reply_id' => $reply->remote_reply_id,
             'author_handle' => $reply->author_handle,
             'author_name' => $reply->author_name,
@@ -31,6 +31,7 @@ final class ReplyListItem
             'status' => $reply->status->value,
             'post_target_id' => $reply->post_target_id,
             'post_id' => $target?->post_id,
+            'post_remote_id' => $target?->remote_id,
             'post_excerpt' => $target?->post?->excerpt(),
             'account_handle' => $target?->account?->handle,
             'account_max_text_length' => $target?->account?->maxTextLength(),

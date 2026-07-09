@@ -25,6 +25,7 @@ use Override;
  * @property string $remote_reply_id
  * @property string|null $remote_cid
  * @property string|null $parent_remote_id
+ * @property string|null $conversation_remote_id
  * @property string $author_handle
  * @property string|null $author_name
  * @property string|null $author_avatar_url
@@ -46,6 +47,7 @@ use Override;
     'remote_reply_id',
     'remote_cid',
     'parent_remote_id',
+    'conversation_remote_id',
     'author_handle',
     'author_name',
     'author_avatar_url',
@@ -66,6 +68,14 @@ class PostTargetReply extends Model
     use HasFactory, HasUuids;
 
     use HasWorkspaceScope;
+
+    /**
+     * The conversation root a direct child of this reply belongs to.
+     */
+    public function conversationRemoteIdForChild(): string
+    {
+        return $this->conversation_remote_id ?? $this->remote_reply_id;
+    }
 
     /**
      * @return array<string, string>

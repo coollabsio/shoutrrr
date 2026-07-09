@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\Settings\ApiKeysController;
 use App\Http\Controllers\Settings\ConnectionsController;
 use App\Http\Controllers\Settings\InstanceSettingsController;
@@ -37,12 +38,20 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/instance', [InstanceSettingsController::class, 'edit'])->name('instance-settings.edit');
     Route::put('settings/instance', [InstanceSettingsController::class, 'update'])->name('instance-settings.update');
+    Route::get('settings/instance/polling', [InstanceSettingsController::class, 'polling'])->name('instance-settings.polling');
+    Route::put('settings/instance/polling', [InstanceSettingsController::class, 'updatePolling'])->name('instance-settings.polling.update');
+    Route::get('settings/instance/usage', [InstanceSettingsController::class, 'usage'])->name('instance-settings.usage');
+    Route::get('settings/instance/usage/x', [InstanceSettingsController::class, 'xUsage'])->name('instance-settings.usage.x');
     Route::get('settings/instance/admins', [InstanceSettingsController::class, 'admins'])->name('instance-settings.admins');
     Route::post('settings/instance/admins', [InstanceSettingsController::class, 'storeAdmin'])->name('instance-settings.admins.store');
     Route::delete('settings/instance/admins/{owner}', [InstanceSettingsController::class, 'destroyAdmin'])->name('instance-settings.admins.destroy');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('settings/workspace/subscription', [BillingController::class, 'index'])->name('billing.index');
+    Route::post('billing/checkout', [BillingController::class, 'checkout'])->name('billing.checkout');
+    Route::post('billing/portal', [BillingController::class, 'portal'])->name('billing.portal');
+
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('settings/security', [SecurityController::class, 'edit'])

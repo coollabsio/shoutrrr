@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\MetricsStatus;
+use App\Enums\Platform;
 use App\Enums\PostStatus;
 use App\Models\AccountMetric;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostTarget;
+use App\Support\InstanceSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Date;
@@ -19,7 +21,7 @@ use Inertia\Response;
 
 class AnalyticsController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, InstanceSettings $settings): Response
     {
         abort_unless($request->user()->can('viewAny', Post::class), 403);
 
@@ -28,6 +30,18 @@ class AnalyticsController extends Controller
         return Inertia::render('analytics/index', [
             ...$this->buildPayload($days),
             'rangeDays' => $days,
+            'polling' => [
+                'post_metrics_enabled' => collect(Platform::cases())
+                    ->mapWithKeys(fn (Platform $platform): array => [
+                        $platform->value => $settings->postMetricsPollingEnabled($platform),
+                    ])
+                    ->all(),
+                'account_metrics_enabled' => collect(Platform::cases())
+                    ->mapWithKeys(fn (Platform $platform): array => [
+                        $platform->value => $settings->accountMetricsPollingEnabled($platform),
+                    ])
+                    ->all(),
+            ],
         ]);
     }
 

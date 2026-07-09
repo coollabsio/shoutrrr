@@ -70,6 +70,32 @@ test('responding posts the reply and records our row', function (): void {
     expect(PostTargetReply::withoutGlobalScopes()->where('is_ours', true)->where('remote_reply_id', 'at://mine')->exists())->toBeTrue();
 });
 
+test('our outgoing reply joins the conversation of the reply it answers', function (): void {
+    fakePostReply(ReplyPostResult::ok('at://mine', 'cidmine'));
+
+    $this->reply->forceFill(['conversation_remote_id' => 'at://base'])->save();
+
+    $this->post(route('engagement.respond', $this->reply), ['text' => 'thank you!'])
+        ->assertRedirect();
+
+    $ourRow = PostTargetReply::withoutGlobalScopes()->where('remote_reply_id', 'at://mine')->firstOrFail();
+
+    expect($ourRow->conversation_remote_id)->toBe('at://base');
+});
+
+test('our outgoing reply starts the conversation when it answers a base reply', function (): void {
+    fakePostReply(ReplyPostResult::ok('at://mine', 'cidmine'));
+
+    $this->reply->forceFill(['conversation_remote_id' => null])->save();
+
+    $this->post(route('engagement.respond', $this->reply), ['text' => 'thank you!'])
+        ->assertRedirect();
+
+    $ourRow = PostTargetReply::withoutGlobalScopes()->where('remote_reply_id', 'at://mine')->firstOrFail();
+
+    expect($ourRow->conversation_remote_id)->toBe($this->reply->remote_reply_id);
+});
+
 test('responding rejects over-length text', function (): void {
     fakePostReply(ReplyPostResult::ok('at://mine'));
 

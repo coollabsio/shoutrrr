@@ -88,6 +88,11 @@ export function ReplyStream({ replies, selectedId, onSelect }: Props) {
                                 </p>
 
                                 <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                                    {(reply.reply_count ?? 1) > 1 ? (
+                                        <span className="font-medium">
+                                            {reply.reply_count} replies
+                                        </span>
+                                    ) : null}
                                     {reply.status === 'responded' ? (
                                         <span className="flex items-center gap-1 font-medium text-primary">
                                             <CheckCheck className="size-3" />

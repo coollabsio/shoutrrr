@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
 
+import BillingController from '@/actions/App/Http/Controllers/BillingController';
 import ApiKeysController from '@/actions/App/Http/Controllers/Settings/ApiKeysController';
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import Heading from '@/components/common/heading';
@@ -14,10 +15,14 @@ export default function WorkspaceSettingsLayout({
     children,
 }: PropsWithChildren) {
     const { isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
-    const { workspaces } = usePage().props;
-    const canManageWorkspaceSettings = (
-        workspaces.current?.permissions ?? []
-    ).includes('workspace.settings.manage');
+    const { features, workspaces } = usePage().props;
+    const workspacePermissions = workspaces.current?.permissions ?? [];
+    const canManageWorkspaceSettings = workspacePermissions.includes(
+        'workspace.settings.manage',
+    );
+    const canManageBilling = workspacePermissions.includes(
+        'workspace.billing.manage',
+    );
 
     const sidebarNavItems: NavItem[] = [
         {
@@ -35,6 +40,15 @@ export default function WorkspaceSettingsLayout({
                   {
                       title: 'API keys',
                       href: ApiKeysController.index(),
+                      icon: null,
+                  },
+              ]
+            : []),
+        ...(features?.billing && canManageBilling
+            ? [
+                  {
+                      title: 'Subscription',
+                      href: BillingController.index(),
                       icon: null,
                   },
               ]

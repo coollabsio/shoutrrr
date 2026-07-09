@@ -24,6 +24,14 @@ ARG GROUP_ID
 RUN docker-php-serversideup-set-id www-data ${USER_ID}:${GROUP_ID} \
     && docker-php-serversideup-set-file-permissions --owner ${USER_ID}:${GROUP_ID}
 
+# Required by moneyphp/money via laravel/cashier during Composer install.
+RUN install-php-extensions bcmath
+
+# git lets Composer fall back to source checkouts when GitHub dist downloads
+# fail; single-request Composer downloads avoid intermittent codeload failures.
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /var/www/html
 
 COPY --chown=www-data:www-data composer.json composer.lock ./
@@ -37,11 +45,21 @@ COPY --chown=www-data:www-data database ./database
 COPY --chown=www-data:www-data storage ./storage
 
 # Full install (with dev) so Wayfinder/artisan can run
-RUN composer install --no-interaction --no-plugins --no-scripts --prefer-dist
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+        COMPOSER_MAX_PARALLEL_HTTP=1 composer install --no-interaction --no-plugins --no-scripts --prefer-install=auto && break; \
+        if [ "$attempt" = 5 ]; then exit 1; fi; \
+        sleep $((attempt * 5)); \
+    done
 RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views
 RUN php artisan wayfinder:generate --with-form
 # Re-install without dev for the production vendor dir
-RUN composer install --no-dev --no-interaction --no-plugins --no-scripts --prefer-dist
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+        COMPOSER_MAX_PARALLEL_HTTP=1 composer install --no-dev --no-interaction --no-plugins --no-scripts --prefer-install=auto && break; \
+        if [ "$attempt" = 5 ]; then exit 1; fi; \
+        sleep $((attempt * 5)); \
+    done
 
 USER www-data
 
@@ -96,7 +114,8 @@ RUN docker-php-serversideup-set-id www-data ${USER_ID}:${GROUP_ID} \
 
 # Redis extension for optional Redis cache/queue (pdo_pgsql ships in the image)
 # gd + exif: required by intervention/image for runtime image compression
-RUN install-php-extensions redis gd exif
+# bcmath: required by moneyphp/money via laravel/cashier
+RUN install-php-extensions redis gd exif bcmath
 
 # System packages + Bun (needed when SSR is toggled on: inertia:start-ssr --runtime=bun)
 RUN apt-get update && apt-get install -y --no-install-recommends \

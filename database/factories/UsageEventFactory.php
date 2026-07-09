@@ -25,6 +25,7 @@ class UsageEventFactory extends Factory
             'operation' => UsageOperation::POST,
             'platform' => Platform::X->value,
             'quota_weight' => 1,
+            'cost_weight_microusd' => 15_000,
             'succeeded' => true,
             'meta' => null,
             'occurred_at' => Date::now(),

@@ -30,6 +30,7 @@ class UsagePeriodCounterFactory extends Factory
             'operation' => UsageOperation::POST,
             'event_count' => 0,
             'total_quota' => 0,
+            'total_cost_microusd' => 0,
         ];
     }
 }

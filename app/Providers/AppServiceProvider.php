@@ -6,6 +6,7 @@ use App\Enums\Platform;
 use App\Listeners\BindWorkspaceToAccessToken;
 use App\Listeners\SetCurrentWorkspaceOnLogin;
 use App\Models\User;
+use App\Models\Workspace;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -20,6 +21,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Inertia\ExceptionResponse;
 use Inertia\Inertia;
+use Laravel\Cashier\Cashier;
 use Laravel\Passport\Events\AccessTokenCreated;
 use Laravel\Passport\Passport;
 use Override;
@@ -46,6 +48,8 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configureErrorPages();
         $this->configureTrustedProxies();
+        $this->guardAgainstMisconfiguredStripe();
+        Cashier::useCustomerModel(Workspace::class);
 
         // OAuth tokens issued for the MCP/API integration. Without explicit
         // lifetimes Passport defaults to ~1 year, so a leaked bearer is
@@ -74,6 +78,7 @@ class AppServiceProvider extends ServiceProvider
         // account/post list can't trip the platforms' own rate limits.
         foreach (Platform::cases() as $platform) {
             RateLimiter::for("metrics-{$platform->value}", fn (): Limit => Limit::perMinute(30));
+            RateLimiter::for("engagement-{$platform->value}", fn (): Limit => Limit::perMinute(10));
         }
 
         Gate::before(function (User $user, string $ability): ?bool {
@@ -101,6 +106,33 @@ class AppServiceProvider extends ServiceProvider
             }
         );
 
+    }
+
+    /**
+     * A cloud instance (SELF_HOSTED=false) sells subscriptions through Stripe, so
+     * booting without the full Stripe configuration must fail fast. In particular,
+     * a missing STRIPE_WEBHOOK_SECRET would make Cashier accept unsigned webhooks —
+     * anyone could forge a subscription event and unlock the app for free.
+     */
+    protected function guardAgainstMisconfiguredStripe(): void
+    {
+        if (! (bool) config('subscriptions.enabled')) {
+            return;
+        }
+
+        $required = [
+            'cashier.key' => 'STRIPE_KEY',
+            'cashier.secret' => 'STRIPE_SECRET',
+            'cashier.webhook.secret' => 'STRIPE_WEBHOOK_SECRET',
+        ];
+
+        foreach ($required as $configKey => $envKey) {
+            if ((string) config($configKey) === '') {
+                throw new RuntimeException(
+                    "Workspace subscriptions are enabled (SELF_HOSTED=false) but {$envKey} is not set. Refusing to boot."
+                );
+            }
+        }
     }
 
     /**

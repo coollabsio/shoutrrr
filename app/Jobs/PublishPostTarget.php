@@ -9,6 +9,7 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\ErrorKind;
+use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
 use App\Exceptions\TokenRefreshException;
 use App\Models\PostTarget;
@@ -16,6 +17,7 @@ use App\Models\PostTargetAttempt;
 use App\Notifications\AccountNeedsAttentionNotification;
 use App\Notifications\PostPublishedNotification;
 use App\Notifications\PublishFailedNotification;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Publishing\BackoffSchedule;
 use App\Services\Publishing\PostStatusRollup;
 use App\Services\Publishing\PublishConnectorRegistry;
@@ -66,7 +68,9 @@ class PublishPostTarget implements ShouldQueue
         TokenManager $tokens,
         PostStatusRollup $rollup,
         BackoffSchedule $backoff,
+        ?WorkspaceSubscriptionGate $subscriptions = null,
     ): void {
+        $subscriptions ??= app(WorkspaceSubscriptionGate::class);
         $target = $this->target->fresh() ?? $this->target;
         $this->target = $target;
 
@@ -96,7 +100,21 @@ class PublishPostTarget implements ShouldQueue
 
         $account = $target->account()->firstOrFail();
 
-        if ($account->status === ConnectedAccountStatus::NeedsAttention) {
+        $workspace = $target->post()->firstOrFail()->workspace()->firstOrFail();
+
+        if (! $subscriptions->canPublish($workspace)) {
+            $result = PublishResult::failure(
+                ErrorKind::BillingRequired,
+                'An active Shoutrrr subscription is required to publish posts.',
+            );
+        } elseif ($target->platform === Platform::X && ! $subscriptions->canPublishX($workspace)) {
+            $result = PublishResult::failure(
+                ErrorKind::BillingRequired,
+                $subscriptions->remainingXPosts($workspace) > 0
+                    ? 'Monthly X API budget exceeded. Upgrade or wait for the next billing period.'
+                    : 'Monthly X publishing quota exceeded. Upgrade or wait for the next billing period.',
+            );
+        } elseif ($account->status === ConnectedAccountStatus::NeedsAttention) {
             $result = PublishResult::failure(
                 ErrorKind::AuthExpired,
                 "{$account->platform->label()} account needs attention. Reconnect it before publishing.",

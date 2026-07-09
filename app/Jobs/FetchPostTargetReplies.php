@@ -106,6 +106,8 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        $target->forceFill(['reply_fetched_at' => Date::now()])->save();
+
         $inserted = [];
 
         foreach ($result->replies as $fetched) {
@@ -130,7 +132,48 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
             }
         }
 
+        $this->recalculateConversations($target);
+
         $this->notify($target, $inserted);
+    }
+
+    private function recalculateConversations(PostTarget $target): void
+    {
+        $replies = PostTargetReply::withoutGlobalScopes()
+            ->where('post_target_id', $target->id)
+            ->get(['id', 'post_target_id', 'remote_reply_id', 'parent_remote_id', 'conversation_remote_id']);
+
+        $byRemoteId = $replies->keyBy('remote_reply_id');
+        $resolved = [];
+
+        $conversationFor = function (PostTargetReply $reply, array $visited = []) use (&$conversationFor, &$resolved, $byRemoteId, $target): string {
+            if (isset($resolved[$reply->remote_reply_id])) {
+                return $resolved[$reply->remote_reply_id];
+            }
+
+            if (
+                $reply->parent_remote_id === null
+                || $reply->parent_remote_id === $target->remote_id
+                || in_array($reply->parent_remote_id, $visited, true)
+                || ! $byRemoteId->has($reply->parent_remote_id)
+            ) {
+                return $resolved[$reply->remote_reply_id] = $reply->remote_reply_id;
+            }
+
+            $visited[] = $reply->remote_reply_id;
+
+            return $resolved[$reply->remote_reply_id] = $conversationFor($byRemoteId->get($reply->parent_remote_id), $visited);
+        };
+
+        $replies->each(function (PostTargetReply $reply) use ($conversationFor): void {
+            $conversationRemoteId = $conversationFor($reply);
+
+            if ($reply->conversation_remote_id === $conversationRemoteId) {
+                return;
+            }
+
+            $reply->forceFill(['conversation_remote_id' => $conversationRemoteId])->saveQuietly();
+        });
     }
 
     /**

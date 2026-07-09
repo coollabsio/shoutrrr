@@ -24,6 +24,10 @@ return new class extends Migration
 
             $table->index(['workspace_id', 'occurred_at']);
             $table->index(['platform', 'operation', 'occurred_at']);
+            $table->index(
+                ['workspace_id', 'platform', 'operation', 'succeeded', 'occurred_at'],
+                'usage_events_count_since_index',
+            );
             $table->index('occurred_at'); // prune scans by age
         });
 

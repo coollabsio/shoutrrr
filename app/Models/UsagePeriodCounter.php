@@ -22,8 +22,9 @@ use Override;
  * @property string $operation
  * @property int $event_count
  * @property int $total_quota
+ * @property int $total_cost_microusd
  */
-#[Fillable(['workspace_id', 'period_start', 'period_end', 'category', 'platform', 'operation', 'event_count', 'total_quota'])]
+#[Fillable(['workspace_id', 'period_start', 'period_end', 'category', 'platform', 'operation', 'event_count', 'total_quota', 'total_cost_microusd'])]
 class UsagePeriodCounter extends Model
 {
     /** @use HasFactory<UsagePeriodCounterFactory> */
@@ -41,6 +42,7 @@ class UsagePeriodCounter extends Model
         return [
             'event_count' => 'integer',
             'total_quota' => 'integer',
+            'total_cost_microusd' => 'integer',
         ];
     }
 

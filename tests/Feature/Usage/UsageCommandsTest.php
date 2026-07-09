@@ -11,15 +11,15 @@ it('reconcile heals a drifted counter from raw succeeded events', function () {
 
     UsageEvent::factory()->count(2)->create([
         'workspace_id' => $workspace->id, 'category' => 'publish', 'platform' => 'x',
-        'operation' => 'post', 'quota_weight' => 1, 'succeeded' => true, 'occurred_at' => Date::now(),
+        'operation' => 'post', 'quota_weight' => 1, 'cost_weight_microusd' => 15_000, 'succeeded' => true, 'occurred_at' => Date::now(),
     ]);
     UsageEvent::factory()->create([
         'workspace_id' => $workspace->id, 'category' => 'publish', 'platform' => 'x',
-        'operation' => 'post', 'quota_weight' => 5, 'succeeded' => false, 'occurred_at' => Date::now(),
+        'operation' => 'post', 'quota_weight' => 5, 'cost_weight_microusd' => 75_000, 'succeeded' => false, 'occurred_at' => Date::now(),
     ]);
     // Deliberately-wrong counter:
     UsagePeriodCounter::factory()->create([
-        'workspace_id' => $workspace->id, 'platform' => 'x', 'operation' => 'post', 'event_count' => 99, 'total_quota' => 99,
+        'workspace_id' => $workspace->id, 'platform' => 'x', 'operation' => 'post', 'event_count' => 99, 'total_quota' => 99, 'total_cost_microusd' => 99,
     ]);
 
     $this->artisan('usage:reconcile')->assertSuccessful();
@@ -27,7 +27,9 @@ it('reconcile heals a drifted counter from raw succeeded events', function () {
     expect(UsagePeriodCounter::count())->toBe(1); // no duplicate spawned
 
     $counter = UsagePeriodCounter::firstOrFail();
-    expect($counter->event_count)->toBe(2)->and($counter->total_quota)->toBe(2); // failed event excluded
+    expect($counter->event_count)->toBe(2)
+        ->and($counter->total_quota)->toBe(2)
+        ->and($counter->total_cost_microusd)->toBe(30_000); // failed event excluded
 });
 
 it('prune deletes events older than the retention window', function () {

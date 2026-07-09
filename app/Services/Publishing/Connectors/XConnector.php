@@ -116,7 +116,12 @@ class XConnector implements PublishConnector
                     ->acceptJson()
                     ->post(self::TWEETS_URL, $body);
 
-                $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
+                $this->meter(
+                    UsageCategory::Publish,
+                    $this->postOperation($text),
+                    $context->account,
+                    $response,
+                );
 
                 if ($response->failed()) {
                     return $this->mapFailure($response);
@@ -178,6 +183,13 @@ class XConnector implements PublishConnector
         $stripped = trim((string) preg_replace('/\s{2,}/', ' ', $stripped));
 
         return [$stripped, $quoteTweetId];
+    }
+
+    private function postOperation(string $text): string
+    {
+        return preg_match('~https?://\S+~i', $text) === 1
+            ? UsageOperation::POST_WITH_URL
+            : UsageOperation::POST;
     }
 
     public function delete(PostTarget $target, array $credentials): void

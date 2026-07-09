@@ -100,6 +100,8 @@ it('shows the React app logo without an extra background tile', function (): voi
     $component = file_get_contents(resource_path('js/components/layout/app-logo.tsx'));
 
     expect($component)
-        ->toContain('group-data-[collapsible=icon]:mr-1')
+        ->toContain('items-center justify-center')
+        ->toContain('group-data-[collapsible=icon]:hidden')
+        ->not->toContain('group-data-[collapsible=icon]:mr-1')
         ->not->toContain('bg-sidebar-primary');
 });

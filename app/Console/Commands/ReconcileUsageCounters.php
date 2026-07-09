@@ -31,7 +31,7 @@ class ReconcileUsageCounters extends Command
             ->where('succeeded', true)
             ->whereNotNull('workspace_id')
             ->whereBetween('occurred_at', [$periodStart, $periodEnd->endOfDay()])
-            ->selectRaw("workspace_id, category, coalesce(platform, 'none') as platform, operation, count(*) as event_count, sum(quota_weight) as total_quota")
+            ->selectRaw("workspace_id, category, coalesce(platform, 'none') as platform, operation, count(*) as event_count, sum(quota_weight) as total_quota, sum(cost_weight_microusd) as total_cost_microusd")
             ->groupBy('workspace_id', 'category', 'platform', 'operation')
             ->toBase()
             ->get();
@@ -49,6 +49,7 @@ class ReconcileUsageCounters extends Command
                     'period_end' => $periodEnd->toDateString(),
                     'event_count' => (int) $row->event_count,
                     'total_quota' => (int) $row->total_quota,
+                    'total_cost_microusd' => (int) $row->total_cost_microusd,
                 ],
             );
         }
