@@ -52,3 +52,39 @@ test('all failed rolls up to Failed', function () {
     expect($post->refresh()->status)->toBe(PostStatus::Failed)
         ->and($post->published_at)->toBeNull();
 });
+
+test('all skipped rolls up to Failed', function () {
+    $post = rollupPost([PostTargetStatus::Skipped, PostTargetStatus::Skipped]);
+
+    app(PostStatusRollup::class)->recompute($post);
+
+    expect($post->refresh()->status)->toBe(PostStatus::Failed)
+        ->and($post->published_at)->toBeNull();
+});
+
+test('failed and skipped with nothing published rolls up to Failed', function () {
+    $post = rollupPost([PostTargetStatus::Failed, PostTargetStatus::Skipped]);
+
+    app(PostStatusRollup::class)->recompute($post);
+
+    expect($post->refresh()->status)->toBe(PostStatus::Failed)
+        ->and($post->published_at)->toBeNull();
+});
+
+test('published alongside skipped rolls up to Partial', function () {
+    $post = rollupPost([PostTargetStatus::Published, PostTargetStatus::Skipped]);
+
+    app(PostStatusRollup::class)->recompute($post);
+
+    expect($post->refresh()->status)->toBe(PostStatus::Partial)
+        ->and($post->published_at)->not->toBeNull();
+});
+
+test('failed alongside deleted rolls up to Partial, not Failed', function () {
+    $post = rollupPost([PostTargetStatus::Failed, PostTargetStatus::Deleted]);
+
+    app(PostStatusRollup::class)->recompute($post);
+
+    expect($post->refresh()->status)->toBe(PostStatus::Partial)
+        ->and($post->published_at)->not->toBeNull();
+});
