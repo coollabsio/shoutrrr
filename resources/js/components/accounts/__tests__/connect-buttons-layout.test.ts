@@ -6,7 +6,21 @@ import { describe, expect, it } from 'vitest';
 import {
     COLLAPSIBLE_TRIGGER_ICON_CLASS,
     isSupportedPlatformIcon,
+    metaConnectLabel,
 } from '../connect-buttons';
+import type { Capability } from '../types';
+
+function capability(overrides: Partial<Capability>): Capability {
+    return {
+        platform: 'facebook',
+        label: 'Facebook',
+        supportsOAuth: true,
+        supportsAppPassword: false,
+        configured: true,
+        launched: false,
+        ...overrides,
+    };
+}
 
 describe('Bluesky connect dialog layout', () => {
     it('marks the collapsible trigger icon as a visible expandable control', () => {
@@ -89,5 +103,39 @@ describe('Bluesky connect dialog layout', () => {
         );
 
         expect(source).toContain('<DialogFooter className="pt-4">');
+    });
+});
+
+describe('Meta connect entry point', () => {
+    it('folds Facebook and Instagram into a single button', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/accounts/connect-buttons.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain("capability.platform === 'instagram'");
+        expect(source).toContain("capability.platform === 'facebook'");
+        expect(source).toContain('MetaConnectionController.redirect.url()');
+    });
+
+    it('labels the button Facebook-only until Instagram launches', () => {
+        expect(
+            metaConnectLabel([
+                capability({ platform: 'facebook', launched: false }),
+                capability({ platform: 'instagram', launched: false }),
+            ]),
+        ).toBe('Facebook');
+    });
+
+    it('mentions Instagram once it is launched', () => {
+        expect(
+            metaConnectLabel([
+                capability({ platform: 'facebook', launched: false }),
+                capability({ platform: 'instagram', launched: true }),
+            ]),
+        ).toBe('Facebook / Instagram');
     });
 });

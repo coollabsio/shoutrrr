@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import BlueskyConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyConnectionController';
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
+import MetaConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/MetaConnectionController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import InputError from '@/components/common/input-error';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -417,6 +418,18 @@ function BlueskyConnectDialog() {
     );
 }
 
+/**
+ * Facebook and Instagram share a single Facebook Login flow
+ * (`MetaConnectionController`), so they get one combined entry point instead
+ * of two separate buttons. The label mentions Instagram only once it's
+ * launched — Phase 2 ships with only Facebook launched.
+ */
+export function metaConnectLabel(capabilities: Capability[]): string {
+    const instagram = capabilities.find((c) => c.platform === 'instagram');
+
+    return instagram?.launched ? 'Facebook / Instagram' : 'Facebook';
+}
+
 export function ConnectButtons({
     capabilities,
 }: {
@@ -427,6 +440,43 @@ export function ConnectButtons({
             {capabilities.map((capability) => {
                 if (capability.supportsAppPassword) {
                     return <BlueskyConnectDialog key={capability.platform} />;
+                }
+
+                // Instagram is folded into the Facebook entry below.
+                if (capability.platform === 'instagram') {
+                    return null;
+                }
+
+                if (capability.platform === 'facebook') {
+                    const label = metaConnectLabel(capabilities);
+
+                    if (!capability.launched || !capability.configured) {
+                        return (
+                            <Button
+                                key={capability.platform}
+                                variant="outline"
+                                disabled
+                                className="w-full justify-center sm:w-auto"
+                            >
+                                {platformIcon(capability.platform)}
+                                Connect {label}
+                            </Button>
+                        );
+                    }
+
+                    return (
+                        <Button
+                            key={capability.platform}
+                            variant="outline"
+                            asChild
+                            className="w-full justify-center sm:w-auto"
+                        >
+                            <a href={MetaConnectionController.redirect.url()}>
+                                {platformIcon(capability.platform)}
+                                Connect {label}
+                            </a>
+                        </Button>
+                    );
                 }
 
                 if (!capability.launched || !capability.configured) {
