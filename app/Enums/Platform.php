@@ -151,7 +151,8 @@ enum Platform: string
 
     /**
      * The primary length budget, in each platform's native counting unit
-     * (X: UTF-16 code units, Bluesky: graphemes, LinkedIn: characters).
+     * (X: UTF-16 code units, Bluesky: graphemes; LinkedIn, Facebook, Instagram,
+     * and Threads: characters via mb_strlen).
      */
     public function maxLength(): int
     {

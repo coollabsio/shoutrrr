@@ -422,7 +422,7 @@ function BlueskyConnectDialog() {
  * Facebook and Instagram share a single Facebook Login flow
  * (`MetaConnectionController`), so they get one combined entry point instead
  * of two separate buttons. The label mentions Instagram only once it's
- * launched — Phase 2 ships with only Facebook launched.
+ * launched.
  */
 export function metaConnectLabel(capabilities: Capability[]): string {
     const instagram = capabilities.find((c) => c.platform === 'instagram');
