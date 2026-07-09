@@ -8,6 +8,7 @@ use App\Models\Post;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Facades\Context;
 
 beforeEach(function (): void {
@@ -79,4 +80,42 @@ it('filters by text query on base_text', function (): void {
             ->loadDeferredProps(fn ($reload) => $reload
                 ->has('posts.data', 1)
                 ->where('posts.data.0.base_text', 'launch announcement')));
+});
+
+it('cursor paginates more than one page of posts', function (): void {
+    $base = now()->subHour();
+
+    for ($i = 0; $i < 25; $i++) {
+        Post::factory()->for($this->workspace)->create([
+            'author_id' => $this->user->id,
+            'base_text' => "Imported post {$i}",
+            'created_at' => $base->copy()->addMinute($i),
+            'updated_at' => $base->copy()->addMinute($i),
+        ]);
+    }
+
+    $initialPage = $this->actingAs($this->user)
+        ->get(route('posts.index'))
+        ->assertOk()
+        ->inertiaPage();
+
+    $headers = [
+        'X-Inertia-Version' => $initialPage['version'],
+        'X-Inertia-Partial-Component' => 'posts/index',
+        'X-Inertia-Partial-Data' => 'posts',
+    ];
+
+    $firstPage = $this->actingAs($this->user)
+        ->get(route('posts.index'), $headers)
+        ->assertOk()
+        ->inertiaProps('posts');
+
+    expect($firstPage['data'])->toHaveCount(20);
+    expect($firstPage['next_page_url'])->toBeString()->not->toBe('');
+
+    parse_str(parse_url($firstPage['next_page_url'], PHP_URL_QUERY) ?: '', $query);
+
+    $cursor = Cursor::fromEncoded($query['cursor'] ?? null);
+
+    expect($cursor?->parameter('list_sort_at'))->toBeString()->not->toBe('');
 });

@@ -16,6 +16,7 @@ final class PostListItem
     {
         return [
             'id' => $post->id,
+            'list_sort_at' => $post->getAttribute('list_sort_at'),
             'base_text' => $post->base_text,
             'status' => $post->status->value,
             'status_label' => $post->status->label(),
