@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Publishing\Connectors;
 
+use App\Dto\Publishing\MediaUploadState;
 use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
@@ -61,10 +62,8 @@ class FacebookConnector implements PublishConnector
 
         $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
 
-        // TODO(Task 5): native video publishing via the resumable /{page-id}/videos
-        // chunked upload protocol. Until then, refuse rather than silently drop media.
         if ($videoMedia !== []) {
-            return PublishResult::failure(ErrorKind::Validation, 'Facebook video publishing not yet implemented');
+            return $this->publishVideo($context, $videoMedia[0], $pageId, $text, $token);
         }
 
         $images = array_slice($context->media, 0, Platform::Facebook->maxMedia());
@@ -163,6 +162,116 @@ class FacebookConnector implements PublishConnector
         }
 
         return $this->http->asForm()->post($this->baseUrl().'/'.$pageId.'/feed', $body);
+    }
+
+    /**
+     * Publish a single video via the native resumable `/{page-id}/videos` chunked
+     * protocol: start → transfer (looped, streamed from disk) → finish. Progress
+     * (`upload_session_id`/`video_id`/offsets) is persisted on the target after every
+     * phase so a retry resumes the same session instead of starting a new one.
+     */
+    private function publishVideo(PublishContext $context, PostMedia $media, string $pageId, string $text, string $token): PublishResult
+    {
+        $state = new MediaUploadState($context->target->media_upload_state);
+        $videoId = $state->remoteRef($media->id);
+        $blob = $state->blob($media->id);
+        $sessionId = is_string($blob['upload_session_id'] ?? null) ? $blob['upload_session_id'] : null;
+
+        $disk = Storage::disk($media->disk);
+        $totalSize = (int) $disk->size($media->path);
+        $url = $this->baseUrl().'/'.$pageId.'/videos';
+
+        try {
+            if ($sessionId === null || $videoId === null) {
+                $start = $this->http->asForm()->post($url, [
+                    'upload_phase' => 'start',
+                    'file_size' => $totalSize,
+                    'access_token' => $token,
+                ]);
+
+                $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $context->account, $start);
+
+                if ($start->failed()) {
+                    throw new FacebookRequestFailed($start);
+                }
+
+                $sessionId = (string) $start->json('upload_session_id');
+                $videoId = (string) $start->json('video_id');
+                $startOffset = (int) $start->json('start_offset', 0);
+                $endOffset = (int) $start->json('end_offset', 0);
+
+                $state->markUploaded($media->id, $videoId);
+                $state->setBlob($media->id, [
+                    'upload_session_id' => $sessionId,
+                    'start_offset' => $startOffset,
+                    'end_offset' => $endOffset,
+                ]);
+                $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
+            } else {
+                $startOffset = (int) ($blob['start_offset'] ?? 0);
+                $endOffset = (int) ($blob['end_offset'] ?? 0);
+            }
+
+            // Stream each chunk's byte range from disk; never hold the whole file.
+            $stream = $disk->readStream($media->path);
+            try {
+                while ($startOffset !== $endOffset) {
+                    fseek($stream, $startOffset);
+                    $chunk = (string) stream_get_contents($stream, $endOffset - $startOffset);
+
+                    $transfer = $this->http
+                        ->asMultipart()
+                        ->attach('video_file_chunk', $chunk, basename($media->path))
+                        ->post($url, [
+                            'upload_phase' => 'transfer',
+                            'upload_session_id' => $sessionId,
+                            'start_offset' => (string) $startOffset,
+                            'access_token' => $token,
+                        ]);
+
+                    $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $context->account, $transfer);
+
+                    if ($transfer->failed()) {
+                        throw new FacebookRequestFailed($transfer);
+                    }
+
+                    $startOffset = (int) $transfer->json('start_offset', $startOffset);
+                    $endOffset = (int) $transfer->json('end_offset', $endOffset);
+
+                    $state->setBlob($media->id, [
+                        'upload_session_id' => $sessionId,
+                        'start_offset' => $startOffset,
+                        'end_offset' => $endOffset,
+                    ]);
+                    $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
+                }
+            } finally {
+                fclose($stream);
+            }
+
+            $finish = $this->http->asForm()->post($url, [
+                'upload_phase' => 'finish',
+                'upload_session_id' => $sessionId,
+                'description' => $text,
+                'access_token' => $token,
+            ]);
+
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $context->account, $finish);
+
+            if ($finish->failed()) {
+                throw new FacebookRequestFailed($finish);
+            }
+
+            if ($finish->json('success') !== true) {
+                return PublishResult::failure(ErrorKind::ServerError, 'Facebook did not confirm the video upload finished.');
+            }
+        } catch (FacebookRequestFailed $e) {
+            return $this->mapFailure($e->response);
+        } catch (ConnectionException $e) {
+            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+        }
+
+        return PublishResult::success([$videoId]);
     }
 
     private function firstUrl(string $text): ?string

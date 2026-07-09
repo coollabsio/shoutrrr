@@ -149,16 +149,3 @@ test('facebook resume guard returns success without making any http calls', func
 
     Http::assertNothingSent();
 });
-
-test('facebook rejects video media for now', function () {
-    Http::fake();
-
-    $media = PostMedia::factory()->video()->create();
-
-    $result = app(FacebookConnector::class)->publish(fbContext(['with video'], [$media]));
-
-    expect($result->isSuccessful())->toBeFalse()
-        ->and($result->errorKind)->toBe(ErrorKind::Validation);
-
-    Http::assertNothingSent();
-});
