@@ -85,7 +85,20 @@ class OAuthConnectionController extends Controller
         }
 
         if ($resolved === Platform::Threads) {
-            $long = $this->threadsExchanger->exchangeForLongLived((string) $data->accessToken);
+            // The short-lived Threads token is useless for publishing, so a failed
+            // long-lived exchange is a failed connection — redirect with a friendly
+            // message rather than letting the exception escape as a 500.
+            try {
+                $long = $this->threadsExchanger->exchangeForLongLived((string) $data->accessToken);
+            } catch (Throwable $exception) {
+                Log::warning('Threads long-lived token exchange failed.', [
+                    'exception' => $exception::class,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                return $this->failed($this->failureMessage($resolved, $exception));
+            }
+
             $data = $data->withLongLivedToken($long['token'], $long['expiresAt']);
         }
 
