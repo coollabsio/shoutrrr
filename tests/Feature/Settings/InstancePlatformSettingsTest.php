@@ -1,6 +1,8 @@
 <?php
 
+use App\Enums\InstanceRole;
 use App\Enums\Platform;
+use App\Models\User;
 use App\Support\InstanceSettings;
 
 it('defaults every platform to available', function () {
@@ -33,4 +35,42 @@ it('stops polling for a frozen platform regardless of the polling toggle', funct
     ]);
 
     expect($settings->engagementPollingEnabled(Platform::X))->toBeFalse();
+});
+
+it('lets an owner view the platforms page', function () {
+    $owner = User::factory()->create(['instance_role' => InstanceRole::Owner->value]);
+
+    $this->actingAs($owner)
+        ->get(route('instance-settings.platforms'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/instance-platforms')
+            ->has('platforms', 6));
+});
+
+it('forbids a non-owner from the platforms page', function () {
+    $user = User::factory()->create(['instance_role' => null]);
+
+    $this->actingAs($user)
+        ->get(route('instance-settings.platforms'))
+        ->assertForbidden();
+});
+
+it('persists platform toggles for an owner', function () {
+    $owner = User::factory()->create(['instance_role' => InstanceRole::Owner->value]);
+
+    $this->actingAs($owner)
+        ->put(route('instance-settings.updatePlatforms'), [
+            'platforms' => [
+                'x' => false,
+                'bluesky' => true,
+                'linkedin' => true,
+                'facebook' => true,
+                'instagram' => true,
+                'threads' => true,
+            ],
+        ])
+        ->assertRedirect();
+
+    expect(app(InstanceSettings::class)->platformAvailable(Platform::X))->toBeFalse();
 });

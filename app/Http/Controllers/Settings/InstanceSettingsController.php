@@ -7,6 +7,7 @@ use App\Enums\Platform;
 use App\Enums\UsageCategory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\StoreInstanceOwnerRequest;
+use App\Http\Requests\Settings\UpdateInstancePlatformsRequest;
 use App\Http\Requests\Settings\UpdateInstancePollingSettingsRequest;
 use App\Http\Requests\Settings\UpdateInstanceSettingsRequest;
 use App\Models\UsageEvent;
@@ -99,6 +100,31 @@ class InstanceSettingsController extends Controller
         return Inertia::render('settings/instance-polling', [
             'settings' => $settings->polling(),
         ]);
+    }
+
+    public function platforms(Request $request, InstanceSettings $settings): Response
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+        abort_unless($user?->isInstanceOwner(), 403);
+
+        $enabled = $settings->platformsEnabled();
+
+        return Inertia::render('settings/instance-platforms', [
+            'platforms' => array_map(fn (Platform $platform): array => [
+                'platform' => $platform->value,
+                'label' => $platform->label(),
+                'enabled' => $enabled[$platform->value] ?? true,
+                'configured' => $platform->isConfigured(),
+            ], Platform::cases()),
+        ]);
+    }
+
+    public function updatePlatforms(UpdateInstancePlatformsRequest $request, InstanceSettings $settings): RedirectResponse
+    {
+        $settings->update(['platforms_enabled' => $request->platformsEnabled()]);
+
+        return back()->with('success', 'Platform settings updated.');
     }
 
     public function usage(Request $request, UsagePricing $pricing): Response

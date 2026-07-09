@@ -40,6 +40,8 @@ Route::middleware(['auth'])->group(function () {
     Route::put('settings/instance', [InstanceSettingsController::class, 'update'])->name('instance-settings.update');
     Route::get('settings/instance/polling', [InstanceSettingsController::class, 'polling'])->name('instance-settings.polling');
     Route::put('settings/instance/polling', [InstanceSettingsController::class, 'updatePolling'])->name('instance-settings.polling.update');
+    Route::get('settings/instance/platforms', [InstanceSettingsController::class, 'platforms'])->name('instance-settings.platforms');
+    Route::put('settings/instance/platforms', [InstanceSettingsController::class, 'updatePlatforms'])->name('instance-settings.updatePlatforms');
     Route::get('settings/instance/usage', [InstanceSettingsController::class, 'usage'])->name('instance-settings.usage');
     Route::get('settings/instance/usage/x', [InstanceSettingsController::class, 'xUsage'])->name('instance-settings.usage.x');
     Route::get('settings/instance/admins', [InstanceSettingsController::class, 'admins'])->name('instance-settings.admins');
