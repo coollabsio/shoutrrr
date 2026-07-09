@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import type { PlatformName } from '@/types/compose';
 
-type PlatformRow = {
+type PlatformToggle = {
     platform: PlatformName;
     label: string;
     enabled: boolean;
@@ -21,21 +21,21 @@ type PlatformRow = {
 };
 
 type Props = {
-    platforms: PlatformRow[];
+    platforms: PlatformToggle[];
 };
 
 export default function InstancePlatforms({ platforms }: Props) {
-    function setPlatformEnabled(platform: PlatformName, enabled: boolean) {
-        const values: Record<string, boolean> = {};
-
-        for (const row of platforms) {
-            values[row.platform] =
-                row.platform === platform ? enabled : row.enabled;
-        }
+    function setEnabled(platform: PlatformName, enabled: boolean) {
+        const next = Object.fromEntries(
+            platforms.map((p) => [
+                p.platform,
+                p.platform === platform ? enabled : p.enabled,
+            ]),
+        );
 
         router.put(
             InstanceSettingsController.updatePlatforms().url,
-            { platforms: values },
+            { platforms: next },
             { preserveScroll: true },
         );
     }
@@ -48,39 +48,38 @@ export default function InstancePlatforms({ platforms }: Props) {
                 <Heading
                     variant="small"
                     title="Platforms"
-                    description="Freeze a platform instance-wide to stop publishing, polling, and new connections for it."
+                    description="Turn a social platform on or off for everyone on this instance. Disabling a platform hides it from the composer, blocks new connections, and skips any scheduled posts to it."
                 />
 
                 <Card>
                     <CardHeader>
                         <CardTitle>Available platforms</CardTitle>
                         <CardDescription>
-                            Disabling a platform here overrides every workspace
-                            on this instance.
+                            A disabled platform is frozen instance-wide.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {platforms.map((row) => (
+                        {platforms.map((platform) => (
                             <div
-                                key={row.platform}
+                                key={platform.platform}
                                 className="flex items-center gap-2"
                             >
                                 <Checkbox
-                                    id={`platform-${row.platform}-enabled`}
-                                    checked={row.enabled}
+                                    id={`platform-${platform.platform}`}
+                                    checked={platform.enabled}
                                     onCheckedChange={(checked) =>
-                                        setPlatformEnabled(
-                                            row.platform,
+                                        setEnabled(
+                                            platform.platform,
                                             checked === true,
                                         )
                                     }
                                 />
                                 <Label
-                                    htmlFor={`platform-${row.platform}-enabled`}
+                                    htmlFor={`platform-${platform.platform}`}
                                 >
-                                    {row.label}
+                                    {platform.label}
                                 </Label>
-                                {!row.configured && (
+                                {!platform.configured && (
                                     <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
                                         Not configured
                                     </span>
