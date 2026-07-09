@@ -15,7 +15,12 @@ test('it serializes a post with targets, media, and advisory issues', function (
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
     Context::add('workspace_id', $workspace->id);
 
-    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'author_id' => $user->id, 'base_text' => 'hi']);
+    $post = Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'author_id' => $user->id,
+        'base_text' => 'hi',
+        'external_context' => ['x' => ['quoted_tweet' => ['id' => '9001']]],
+    ]);
     $account = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value, 'handle' => '@ada']);
     PostTarget::factory()->create([
         'post_id' => $post->id,
@@ -27,9 +32,10 @@ test('it serializes a post with targets, media, and advisory issues', function (
 
     $view = PostView::make($post->fresh(['targets.account', 'media']));
 
-    expect($view)->toHaveKeys(['id', 'base_text', 'status', 'updated_at', 'destination', 'targets', 'media'])
+    expect($view)->toHaveKeys(['id', 'base_text', 'external_context', 'status', 'updated_at', 'destination', 'targets', 'media'])
         ->and($view['targets'][0]['handle'])->toBe('@ada')
         ->and($view['targets'][0]['issues'])->toContain('section_too_long')
+        ->and($view['external_context']['x']['quoted_tweet']['id'])->toBe('9001')
         ->and($view['media'])->toHaveCount(1)
         ->and($view)->not->toHaveKey('secret');
 });

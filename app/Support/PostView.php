@@ -26,6 +26,7 @@ final class PostView
             'base_text' => $post->base_text,
             'segments' => $post->segments,
             'mentions' => $post->mentions ?? [],
+            'external_context' => $post->external_context,
             'status' => $post->status->value,
             'scheduled_at' => $post->scheduled_at?->toIso8601String(),
             'published_at' => $post->published_at?->toIso8601String(),
