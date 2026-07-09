@@ -19,6 +19,7 @@ import {
     type OptimisticSubmit,
 } from '@/lib/compose/publish-status';
 import { cn } from '@/lib/utils';
+import { index as billingRoute } from '@/routes/billing';
 import { publish, queue } from '@/routes/posts';
 import type { PostView } from '@/types/compose';
 
@@ -149,6 +150,15 @@ export function SubmitBar({
             onServerPost(post);
             router.visit(ComposerController.show(id).url);
         };
+        const handleSubmitException = (
+            response: { status: number },
+            revert: () => void,
+        ) => {
+            revert();
+            if (response.status === 402) {
+                router.visit(billingRoute().url);
+            }
+        };
 
         if (tray.mode === 'now') {
             // Flip the chips to "Publishing" instantly; revert if the call fails.
@@ -156,7 +166,8 @@ export function SubmitBar({
             http.transform(() => ({}));
             await http.post(publish(id).url, {
                 onSuccess,
-                onHttpException: revert,
+                onHttpException: (response) =>
+                    handleSubmitException(response, revert),
                 onNetworkError: revert,
             });
 
@@ -173,7 +184,7 @@ export function SubmitBar({
                 onSuccess,
                 // 422 = no open slot in the workspace posting schedule.
                 onHttpException: (response) => {
-                    revert();
+                    handleSubmitException(response, revert);
                     if (response.status === 422) {
                         setNoSlot(true);
                     }
@@ -191,7 +202,7 @@ export function SubmitBar({
             onSuccess,
             // 422 = the chosen time is in the past (server guard).
             onHttpException: (response) => {
-                revert();
+                handleSubmitException(response, revert);
                 if (response.status === 422) {
                     setPastTime(true);
                 }

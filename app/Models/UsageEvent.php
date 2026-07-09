@@ -20,11 +20,12 @@ use Override;
  * @property string $operation
  * @property string|null $platform
  * @property int $quota_weight
+ * @property int $cost_weight_microusd
  * @property bool $succeeded
  * @property array<string, mixed>|null $meta
  * @property CarbonImmutable $occurred_at
  */
-#[Fillable(['workspace_id', 'category', 'operation', 'platform', 'quota_weight', 'succeeded', 'meta', 'occurred_at'])]
+#[Fillable(['workspace_id', 'category', 'operation', 'platform', 'quota_weight', 'cost_weight_microusd', 'succeeded', 'meta', 'occurred_at'])]
 class UsageEvent extends Model
 {
     /** @use HasFactory<UsageEventFactory> */
@@ -36,6 +37,7 @@ class UsageEvent extends Model
     {
         return [
             'quota_weight' => 'integer',
+            'cost_weight_microusd' => 'integer',
             'succeeded' => 'boolean',
             'meta' => 'array',
             'occurred_at' => 'immutable_datetime',

@@ -100,6 +100,12 @@ class WorkspaceController extends Controller
             return back()->withErrors(['workspace' => 'Create or join another workspace before deleting this one.']);
         }
 
+        // The initial workspace anchors the cloud billing exemption; deleting it
+        // would silently move the free tier to the next-oldest workspace.
+        if ($workspace->is_initial && (bool) config('subscriptions.enabled')) {
+            return back()->withErrors(['workspace' => 'The initial workspace of this instance cannot be deleted.']);
+        }
+
         DB::transaction(function () use ($workspace): void {
             // Reassign current workspace for any member who had this as their current,
             // BEFORE the nullOnDelete FK cascade fires, so they land on another of their

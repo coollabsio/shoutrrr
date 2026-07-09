@@ -1,5 +1,8 @@
 export type ReplyItem = {
     id: string;
+    conversation_key?: string;
+    reply_count?: number;
+    unread_count?: number;
     platform: 'x' | 'bluesky' | 'linkedin';
     remote_reply_id: string;
     author_handle: string;
@@ -14,6 +17,7 @@ export type ReplyItem = {
     status: 'pending' | 'responded' | 'archived';
     post_target_id: string;
     post_id: string | null;
+    post_remote_id: string | null;
     post_excerpt: string | null;
     account_handle: string | null;
     account_max_text_length: number | null;
@@ -37,4 +41,5 @@ export type EngagementFilters = {
     target: string;
     post: string;
     unread: boolean;
+    archived: boolean;
 };

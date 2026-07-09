@@ -33,6 +33,11 @@ class WorkspaceSettingsController extends Controller
         $schedule = PostingSchedule::query()->where('workspace_id', $workspace->id)->first();
         $timezone = $schedule !== null ? $schedule->timezone : 'UTC';
 
+        $hasAnotherWorkspace = $user->workspaceMemberships()
+            ->where('workspace_id', '!=', $workspace->id)
+            ->exists();
+        $isProtectedInitialWorkspace = $workspace->is_initial && (bool) config('subscriptions.enabled');
+
         return Inertia::render('settings/workspace/overview', [
             'workspace' => [
                 'id' => $workspace->id,
@@ -43,9 +48,12 @@ class WorkspaceSettingsController extends Controller
             ],
             'canManage' => $user->hasAllPermissions(['workspace.settings.manage'], $workspace->id),
             'isOwner' => $user->isOwnerOfWorkspace($workspace->id),
-            'canDelete' => $user->workspaceMemberships()
-                ->where('workspace_id', '!=', $workspace->id)
-                ->exists(),
+            'canDelete' => $hasAnotherWorkspace && ! $isProtectedInitialWorkspace,
+            'deleteDisabledReason' => match (true) {
+                ! $hasAnotherWorkspace => 'You can’t delete your only workspace.',
+                $isProtectedInitialWorkspace => 'The initial workspace of this instance cannot be deleted.',
+                default => null,
+            },
             'timezone' => $timezone,
             'timezones' => timezone_identifiers_list(),
         ]);

@@ -61,6 +61,7 @@ test('the job inserts fetched replies with the workspace id', function () {
     $reply = PostTargetReply::withoutGlobalScopes()->first();
     expect($reply->remote_reply_id)->toBe('at://r1');
     expect($reply->workspace_id)->toBe($target->post->workspace_id);
+    expect($target->fresh()->reply_fetched_at)->not->toBeNull();
 });
 
 test('re-running the job does not duplicate replies', function () {
@@ -74,4 +75,33 @@ test('re-running the job does not duplicate replies', function () {
     (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
 
     expect(PostTargetReply::withoutGlobalScopes()->count())->toBe(1);
+});
+
+test('a failed fetch does not stamp reply_fetched_at', function () {
+    $target = targetWithPost();
+
+    $connector = Mockery::mock(EngagementConnector::class);
+    $connector->shouldReceive('fetchReplies')->andReturn(ReplyFetchResult::failed('boom'));
+    $registry = Mockery::mock(EngagementConnectorRegistry::class);
+    $registry->shouldReceive('for')->andReturn($connector);
+    app()->instance(EngagementConnectorRegistry::class, $registry);
+
+    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+
+    expect($target->fresh()->reply_fetched_at)->toBeNull();
+});
+
+test('the job stores the base conversation id when fetched replies are out of order', function (): void {
+    $target = targetWithPost();
+
+    fakeFetch([
+        new FetchedReply('at://child', 'c2', 'at://base', 'fan', 'Fan', null, 'child', CarbonImmutable::now()),
+        new FetchedReply('at://base', 'c1', 'at://root', 'fan', 'Fan', null, 'base', CarbonImmutable::now()->subMinute()),
+    ]);
+
+    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+
+    $child = PostTargetReply::withoutGlobalScopes()->where('remote_reply_id', 'at://child')->firstOrFail();
+
+    expect($child->conversation_remote_id)->toBe('at://base');
 });

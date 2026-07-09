@@ -41,9 +41,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware('engagement.enabled')->name('engagement.archive');
     Route::post('engagement/{reply}/reply', [EngagementController::class, 'respond'])
         ->middleware(['engagement.enabled', 'throttle:30,1'])->name('engagement.respond');
-    Route::post('engagement/posts/{target}/refresh', [EngagementController::class, 'refresh'])
-        ->middleware('engagement.enabled')->name('engagement.refresh');
-
     Route::middleware(['engagement.enabled', 'throttle:60,1'])->group(function (): void {
         Route::post('engagement/{reply}/like', [EngagementController::class, 'like'])->name('engagement.like');
         Route::delete('engagement/{reply}/like', [EngagementController::class, 'unlike'])->name('engagement.unlike');

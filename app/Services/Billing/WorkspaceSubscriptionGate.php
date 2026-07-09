@@ -1,0 +1,176 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\Billing;
+
+use App\Enums\Platform;
+use App\Models\Workspace;
+use App\Services\Usage\UsageMeter;
+use App\Support\UsageOperation;
+use App\Support\UsagePricing;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Date;
+
+class WorkspaceSubscriptionGate
+{
+    /**
+     * Operations that count as an X publish. XConnector meters URL-bearing
+     * tweets under a pricier operation, so both must count toward the quota.
+     *
+     * @var list<string>
+     */
+    private const array X_PUBLISH_OPERATIONS = [UsageOperation::POST, UsageOperation::POST_WITH_URL];
+
+    public function __construct(
+        private readonly UsageMeter $usageMeter,
+        private readonly UsagePricing $pricing,
+    ) {}
+
+    public function isEnabled(): bool
+    {
+        return (bool) config('subscriptions.enabled');
+    }
+
+    public function canPublish(Workspace $workspace): bool
+    {
+        return $this->canUseWorkspace($workspace);
+    }
+
+    public function canUseWorkspace(Workspace $workspace): bool
+    {
+        if (! $this->isEnabled()) {
+            return true;
+        }
+
+        return $workspace->is_initial || $workspace->subscribed('default');
+    }
+
+    public function canPublishX(Workspace $workspace): bool
+    {
+        if (! $this->isEnabled() || $workspace->is_initial) {
+            return true;
+        }
+
+        return $this->canPublish($workspace)
+            && $this->remainingXPosts($workspace) > 0
+            && $this->remainingXBudgetMicrousd($workspace) >= $this->xPublishCostMicrousd();
+    }
+
+    /**
+     * Monthly X publish quota, or null when unlimited (a non-positive per-post
+     * cost means X publishing is not billed).
+     */
+    public function monthlyXPostLimit(): ?int
+    {
+        $publishCostMicrousd = $this->xPublishCostMicrousd();
+
+        if ($publishCostMicrousd <= 0) {
+            return null;
+        }
+
+        return (int) floor($this->monthlyXBudgetMicrousd() / $publishCostMicrousd);
+    }
+
+    public function remainingXPosts(Workspace $workspace): int
+    {
+        if (! $this->isEnabled() || $workspace->is_initial) {
+            return PHP_INT_MAX;
+        }
+
+        $limit = $this->monthlyXPostLimit();
+
+        if ($limit === null) {
+            return PHP_INT_MAX;
+        }
+
+        return max(0, $limit - $this->currentXPostUsage($workspace));
+    }
+
+    public function monthlyXBudgetMicrousd(): int
+    {
+        return (int) config('subscriptions.monthly_x_budget_cents') * 10_000;
+    }
+
+    public function remainingXBudgetMicrousd(Workspace $workspace): int
+    {
+        if (! $this->isEnabled() || $workspace->is_initial) {
+            return PHP_INT_MAX;
+        }
+
+        return max(0, $this->monthlyXBudgetMicrousd() - $this->currentXCostMicrousd($workspace));
+    }
+
+    /**
+     * Total X API spend in the current billing period across every metered
+     * operation (publishes, media uploads, reply sends, metrics fetches), not
+     * only publishes: every X call bills against the same monthly budget.
+     */
+    public function currentXCostMicrousd(Workspace $workspace): int
+    {
+        $periodStart = $this->billingPeriodStart($workspace);
+
+        if ($periodStart !== null) {
+            return $this->usageMeter->costSinceMicrousd($workspace->id, $periodStart, Platform::X);
+        }
+
+        return $this->usageMeter->currentPeriodCostMicrousd($workspace->id, Platform::X);
+    }
+
+    /**
+     * X publishes in the current billing period. For a subscribed workspace the
+     * period is anchored to the subscription date (matching when Stripe renews),
+     * so it counts successful publish events since the last cycle start. Without
+     * a subscription it falls back to the calendar-month metering counters.
+     */
+    public function currentXPostUsage(Workspace $workspace): int
+    {
+        $periodStart = $this->billingPeriodStart($workspace);
+
+        $count = 0;
+
+        foreach (self::X_PUBLISH_OPERATIONS as $operation) {
+            $count += $periodStart !== null
+                ? $this->usageMeter->countSince($workspace->id, $periodStart, Platform::X, $operation)
+                : $this->usageMeter->currentPeriodCount($workspace->id, Platform::X, $operation);
+        }
+
+        return $count;
+    }
+
+    private function xPublishCostMicrousd(): int
+    {
+        $costs = array_map(
+            fn (string $operation): int => $this->pricing->costWeightMicrousd(Platform::X->value, $operation, 1),
+            self::X_PUBLISH_OPERATIONS,
+        );
+
+        return max($costs);
+    }
+
+    /**
+     * Start of the workspace's current billing cycle: the subscription creation
+     * date advanced by whole months (no overflow, mirroring Stripe's anchor
+     * behavior on short months). Null when the workspace has no subscription.
+     */
+    private function billingPeriodStart(Workspace $workspace): ?CarbonImmutable
+    {
+        $subscription = $workspace->subscription('default');
+
+        if ($subscription === null || $subscription->created_at === null) {
+            return null;
+        }
+
+        $anchor = CarbonImmutable::instance($subscription->created_at);
+        $now = CarbonImmutable::instance(Date::now());
+
+        $elapsedMonths = (int) $anchor->diffInMonths($now);
+        $periodStart = $anchor->addMonthsNoOverflow($elapsedMonths);
+
+        if ($periodStart->greaterThan($now)) {
+            $periodStart = $anchor->addMonthsNoOverflow($elapsedMonths - 1);
+        }
+
+        return $periodStart;
+    }
+}

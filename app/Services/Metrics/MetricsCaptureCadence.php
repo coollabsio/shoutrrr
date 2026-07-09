@@ -6,21 +6,31 @@ namespace App\Services\Metrics;
 
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
+use App\Support\InstanceSettings;
 use Carbon\CarbonImmutable;
 
 class MetricsCaptureCadence
 {
     /** Sampling interval (seconds) for a post of the given age, or null once polling stops. */
-    public function postIntervalSeconds(CarbonImmutable $postedAt, CarbonImmutable $now): ?int
+    public function postIntervalSeconds(PostTarget $target, CarbonImmutable $now): ?int
     {
+        if (! app(InstanceSettings::class)->postMetricsPollingEnabled($target->platform)) {
+            return null;
+        }
+
+        if ($target->posted_at === null) {
+            return null;
+        }
+
+        $postedAt = $target->posted_at;
         $ageHours = $postedAt->diffInHours($now);
 
-        /** @var list<array{max_age_hours: int, interval_minutes: int}> $bands */
+        /** @var list<array{max_age_hours: int}> $bands */
         $bands = config('metrics.post_refresh');
 
         foreach ($bands as $band) {
             if ($ageHours < $band['max_age_hours']) {
-                return $band['interval_minutes'] * 60;
+                return app(InstanceSettings::class)->postMetricsPollIntervalMinutes($target->platform) * 60;
             }
         }
 
@@ -37,7 +47,7 @@ class MetricsCaptureCadence
             return false;
         }
 
-        $interval = $this->postIntervalSeconds($target->posted_at, $now);
+        $interval = $this->postIntervalSeconds($target, $now);
 
         if ($interval === null) {
             return false;
@@ -52,6 +62,10 @@ class MetricsCaptureCadence
 
     public function accountDue(ConnectedAccount $account, CarbonImmutable $now): bool
     {
+        if (! app(InstanceSettings::class)->accountMetricsPollingEnabled($account->platform)) {
+            return false;
+        }
+
         if ($account->metrics_status !== null && ! $account->metrics_status->isPollable()) {
             return false;
         }
@@ -60,7 +74,7 @@ class MetricsCaptureCadence
             return true;
         }
 
-        $interval = (int) config('metrics.account_interval_minutes') * 60;
+        $interval = app(InstanceSettings::class)->accountMetricsPollIntervalMinutes($account->platform) * 60;
 
         return $account->metrics_captured_at->addSeconds($interval)->lte($now);
     }

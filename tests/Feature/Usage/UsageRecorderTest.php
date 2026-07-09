@@ -45,6 +45,7 @@ it('records an event and increments the counter on success', function () {
     expect(UsageEvent::count())->toBe(1);
     $counter = UsagePeriodCounter::firstOrFail();
     expect($counter->total_quota)->toBe(2)
+        ->and($counter->total_cost_microusd)->toBe(30_000)
         ->and($counter->event_count)->toBe(1)
         ->and($counter->platform)->toBe('x');
 });
@@ -69,7 +70,9 @@ it('accumulates repeated successes into one counter row', function () {
 
     expect(UsagePeriodCounter::count())->toBe(1);
     $counter = UsagePeriodCounter::firstOrFail();
-    expect($counter->event_count)->toBe(3)->and($counter->total_quota)->toBe(3);
+    expect($counter->event_count)->toBe(3)
+        ->and($counter->total_quota)->toBe(3)
+        ->and($counter->total_cost_microusd)->toBe(45_000);
 });
 
 it('stores the none sentinel for platform-less operations', function () {
@@ -80,5 +83,6 @@ it('stores the none sentinel for platform-less operations', function () {
     recordUsage(['workspaceId' => $workspace->id, 'category' => UsageCategory::ApiRequest, 'operation' => UsageOperation::MCP_REQUEST, 'platform' => null]);
 
     expect(UsagePeriodCounter::count())->toBe(1)
-        ->and(UsagePeriodCounter::firstOrFail()->platform)->toBe('none');
+        ->and(UsagePeriodCounter::firstOrFail()->platform)->toBe('none')
+        ->and(UsagePeriodCounter::firstOrFail()->total_cost_microusd)->toBe(0);
 });

@@ -9,20 +9,23 @@ use App\Support\UsageOperation;
 it('sums quota for the current period, filtered by platform + operation', function () {
     $workspace = Workspace::factory()->create();
     UsagePeriodCounter::factory()->create([
-        'workspace_id' => $workspace->id, 'platform' => 'x', 'operation' => UsageOperation::POST, 'total_quota' => 7, 'event_count' => 4,
+        'workspace_id' => $workspace->id, 'platform' => 'x', 'operation' => UsageOperation::POST, 'total_quota' => 7, 'total_cost_microusd' => 105_000, 'event_count' => 4,
     ]);
 
     $meter = app(UsageMeter::class);
 
     expect($meter->currentPeriodQuota($workspace->id, Platform::X, UsageOperation::POST))->toBe(7)
+        ->and($meter->currentPeriodCostMicrousd($workspace->id, Platform::X, UsageOperation::POST))->toBe(105_000)
         ->and($meter->currentPeriodCount($workspace->id, Platform::X, UsageOperation::POST))->toBe(4)
-        ->and($meter->remaining($workspace->id, 10, Platform::X, UsageOperation::POST))->toBe(3);
+        ->and($meter->remaining($workspace->id, 10, Platform::X, UsageOperation::POST))->toBe(3)
+        ->and($meter->remainingCostMicrousd($workspace->id, 120_000, Platform::X, UsageOperation::POST))->toBe(15_000);
 });
 
 it('returns zero / full remaining for an unknown workspace', function () {
     $meter = app(UsageMeter::class);
 
     expect($meter->currentPeriodQuota('missing-id'))->toBe(0)
+        ->and($meter->currentPeriodCostMicrousd('missing-id'))->toBe(0)
         ->and($meter->remaining('missing-id', 5))->toBe(5);
 });
 

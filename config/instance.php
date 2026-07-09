@@ -13,5 +13,22 @@ return [
         ),
         'usage_tracking_enabled' => env('INSTANCE_USAGE_TRACKING_ENABLED', false),
         'quote_tweets_enabled' => env('INSTANCE_QUOTE_TWEETS_ENABLED', false),
+        'polling' => [
+            'engagement' => [
+                'x' => 360,
+                'bluesky' => 15,
+                'linkedin' => 15,
+            ],
+            'post_metrics' => [
+                'x' => 360,
+                'bluesky' => 15,
+                'linkedin' => 15,
+            ],
+            'account_metrics' => [
+                'x' => 1440,
+                'bluesky' => 1440,
+                'linkedin' => 1440,
+            ],
+        ],
     ],
 ];

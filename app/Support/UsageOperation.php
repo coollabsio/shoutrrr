@@ -12,6 +12,8 @@ final class UsageOperation
 {
     public const string POST = 'post';
 
+    public const string POST_WITH_URL = 'post_with_url';
+
     public const string DELETE = 'delete';
 
     public const string METRICS_FETCH_POST = 'metrics_fetch_post';

@@ -4,6 +4,7 @@ import {
     ArrowUpRight,
     Inbox,
     MessagesSquare,
+    PauseCircle,
     SearchX,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -22,7 +23,13 @@ import {
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { platformLabel } from '@/lib/posts/permalink';
+import {
+    disabledPlatformLabels,
+    platformKeys,
+    platformLabel,
+} from '@/lib/platforms';
+import { postPermalink } from '@/lib/posts/permalink';
+import { cn } from '@/lib/utils';
 import {
     archive as archiveRoute,
     destroy as destroyRoute,
@@ -32,6 +39,7 @@ import {
     thread as threadRoute,
     unlike as unlikeRoute,
 } from '@/routes/engagement';
+import type { PlatformName } from '@/types/compose';
 
 import { QuickReplyBox } from './components/quick-reply-box';
 import { ReplyFilters } from './components/reply-filters';
@@ -49,6 +57,7 @@ type PageProps = {
     replies?: { data: ReplyItem[] };
     filters: EngagementFilters;
     facets: { accounts: AccountFacet[]; posts: PostFacet[] };
+    engagementEnabled: Record<PlatformName, boolean>;
 };
 
 function StreamSkeleton() {
@@ -80,7 +89,7 @@ function StreamEmpty({ filtered }: { filtered: boolean }) {
                 <EmptyDescription>
                     {filtered
                         ? 'Try clearing a filter to see more of your inbox.'
-                        : 'Replies to your published posts land here within ~15 minutes. Publish a post and check back.'}
+                        : 'Replies to your published posts land here after periodic checks. Publish a post and check back later.'}
                 </EmptyDescription>
             </EmptyHeader>
         </Empty>
@@ -104,12 +113,64 @@ function ConversationPrompt() {
     );
 }
 
+function EngagementDisabledNotice() {
+    return (
+        <Empty className="h-full">
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <PauseCircle />
+                </EmptyMedia>
+                <EmptyTitle>Engagement temporarily disabled</EmptyTitle>
+                <EmptyDescription>
+                    Reply polling is paused by your instance admin. Existing
+                    replies remain visible, but new replies will not sync until
+                    polling is enabled again.
+                </EmptyDescription>
+            </EmptyHeader>
+        </Empty>
+    );
+}
+
+function EngagementDisabledBanner({
+    disabledPlatforms,
+}: {
+    disabledPlatforms: string[];
+}) {
+    if (disabledPlatforms.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+            <div className="flex items-start gap-2">
+                <PauseCircle className="mt-0.5 size-4 shrink-0" />
+                <p>
+                    Reply polling is temporarily disabled for{' '}
+                    <span className="font-medium">
+                        {disabledPlatforms.join(', ')}
+                    </span>
+                    . Existing replies remain visible, but new replies for{' '}
+                    {disabledPlatforms.length === 1
+                        ? 'that platform'
+                        : 'those platforms'}{' '}
+                    will not sync until polling is enabled again.
+                </p>
+            </div>
+        </div>
+    );
+}
+
 type RightPaneProps = {
     selected: ReplyItem;
     onArchived: () => void;
+    reserveCloseButtonSpace?: boolean;
 };
 
-function RightPane({ selected, onArchived }: RightPaneProps) {
+function RightPane({
+    selected,
+    onArchived,
+    reserveCloseButtonSpace = false,
+}: RightPaneProps) {
     const [thread, setThread] = useState<ReplyItem[]>([]);
     const [postExcerpt, setPostExcerpt] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -239,7 +300,12 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
 
     return (
         <div className="flex h-full flex-col">
-            <header className="flex items-center gap-2.5 border-b px-4 py-3">
+            <header
+                className={cn(
+                    'flex items-center gap-2.5 border-b px-4 py-3',
+                    reserveCloseButtonSpace && 'pr-14',
+                )}
+            >
                 <div className="relative shrink-0">
                     <Avatar className="size-8">
                         {selected.author_avatar_url ? (
@@ -302,7 +368,12 @@ function RightPane({ selected, onArchived }: RightPaneProps) {
 
             <ReplyThread
                 postExcerpt={postExcerpt}
-                postId={selected.post_id}
+                postUrl={postPermalink(
+                    selected.platform,
+                    selected.account_handle,
+                    selected.post_remote_id,
+                )}
+                platform={selected.platform}
                 thread={thread}
                 loading={loading}
                 onToggleLike={toggleLike}
@@ -324,13 +395,18 @@ export default function EngagementIndex({
     replies,
     filters,
     facets,
+    engagementEnabled,
 }: PageProps) {
     const isMobile = useIsMobile();
     const [selected, setSelected] = useState<ReplyItem | null>(null);
 
     const items = replies?.data ?? [];
+    const disabledPlatforms = disabledPlatformLabels(engagementEnabled);
+    const allEngagementDisabled =
+        disabledPlatforms.length === platformKeys(engagementEnabled).length;
     const filtered =
         filters.unread ||
+        filters.archived ||
         filters.platform !== '' ||
         filters.account !== '' ||
         filters.post !== '' ||
@@ -347,6 +423,9 @@ export default function EngagementIndex({
             <div className="grid h-full grid-cols-1 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                 {/* Left: triage column */}
                 <div className="flex min-h-0 flex-col border-r">
+                    <EngagementDisabledBanner
+                        disabledPlatforms={disabledPlatforms}
+                    />
                     <ReplyFilters
                         filters={filters}
                         accounts={facets.accounts}
@@ -354,7 +433,9 @@ export default function EngagementIndex({
                     />
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         <Deferred data="replies" fallback={<StreamSkeleton />}>
-                            {items.length === 0 ? (
+                            {allEngagementDisabled && items.length === 0 ? (
+                                <EngagementDisabledNotice />
+                            ) : items.length === 0 ? (
                                 <StreamEmpty filtered={filtered} />
                             ) : (
                                 <ReplyStream
@@ -375,6 +456,8 @@ export default function EngagementIndex({
                                 selected={selected}
                                 onArchived={clearSelection}
                             />
+                        ) : allEngagementDisabled ? (
+                            <EngagementDisabledNotice />
                         ) : (
                             <ConversationPrompt />
                         )}
@@ -403,6 +486,7 @@ export default function EngagementIndex({
                             <RightPane
                                 selected={selected}
                                 onArchived={clearSelection}
+                                reserveCloseButtonSpace
                             />
                         ) : null}
                     </SheetContent>

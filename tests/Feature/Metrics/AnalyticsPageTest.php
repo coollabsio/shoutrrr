@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MetricsStatus;
+use App\Enums\Platform;
 use App\Enums\PostStatus;
 use App\Enums\WorkspaceRole;
 use App\Models\AccountMetric;
@@ -10,6 +11,7 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Date;
 
@@ -34,6 +36,38 @@ test('analytics page renders with accounts and range', function (): void {
             ->has('posts')
             ->has('comparison')
             ->where('rangeDays', 90));
+});
+
+test('analytics polling settings are keyed by platform enum values', function (): void {
+    app(InstanceSettings::class)->update([
+        'post_metrics_polling_enabled' => [
+            Platform::X->value => false,
+            Platform::Bluesky->value => true,
+            Platform::LinkedIn->value => true,
+        ],
+        'account_metrics_polling_enabled' => [
+            Platform::X->value => true,
+            Platform::Bluesky->value => false,
+            Platform::LinkedIn->value => true,
+        ],
+    ]);
+
+    $expectedPlatforms = collect(Platform::cases())
+        ->mapWithKeys(fn (Platform $platform): array => [$platform->value => true])
+        ->all();
+
+    $this->actingAs($this->user)
+        ->get(route('analytics.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('polling.post_metrics_enabled', [
+                ...$expectedPlatforms,
+                Platform::X->value => false,
+            ])
+            ->where('polling.account_metrics_enabled', [
+                ...$expectedPlatforms,
+                Platform::Bluesky->value => false,
+            ]));
 });
 
 test('range is clamped to 365', function (): void {

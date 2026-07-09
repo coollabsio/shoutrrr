@@ -9,6 +9,7 @@ use App\Enums\UsageCategory;
 use App\Models\UsageEvent;
 use App\Models\UsagePeriodCounter;
 use App\Support\InstanceSettings;
+use App\Support\UsagePricing;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,10 @@ use Throwable;
 
 class UsageRecorder
 {
-    public function __construct(private readonly InstanceSettings $settings) {}
+    public function __construct(
+        private readonly InstanceSettings $settings,
+        private readonly UsagePricing $pricing,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $meta
@@ -33,28 +37,38 @@ class UsageRecorder
         array $meta = [],
     ): void {
         try {
-            if (! $this->settings->usageTrackingEnabled()) {
+            // Record when metering is explicitly enabled, or when workspace
+            // subscriptions are active — the billing gate reads these counters
+            // (e.g. the monthly X publish limit) and must not silently no-op on a
+            // cloud instance that leaves the metering toggle off.
+            if (! $this->settings->usageTrackingEnabled() && ! (bool) config('subscriptions.enabled')) {
                 return;
             }
 
             DB::transaction(function () use ($category, $operation, $workspaceId, $platform, $quotaWeight, $succeeded, $meta): void {
+                $costWeightMicrousd = $this->costWeightMicrousd($platform, $operation, $quotaWeight);
+
                 UsageEvent::query()->create([
                     'workspace_id' => $workspaceId,
                     'category' => $category->value,
                     'operation' => $operation,
                     'platform' => $platform?->value,
                     'quota_weight' => $quotaWeight,
+                    'cost_weight_microusd' => $costWeightMicrousd,
                     'succeeded' => $succeeded,
                     'meta' => $meta === [] ? null : $meta,
                     'occurred_at' => Date::now(),
                 ]);
 
                 if ($succeeded) {
-                    $this->incrementCounter($category, $operation, $workspaceId, $platform, $quotaWeight);
+                    $this->incrementCounter($category, $operation, $workspaceId, $platform, $quotaWeight, $costWeightMicrousd);
                 }
             });
         } catch (Throwable $e) {
-            // Metering must never break the caller (a publish/fetch). Swallow + log.
+            // Metering must never break the caller (a publish/fetch), but a silent
+            // failure means billed usage goes uncounted — report to the exception
+            // handler (monitoring) in addition to the log line.
+            report($e);
             Log::error('Usage recording failed.', ['message' => $e->getMessage()]);
         }
     }
@@ -65,6 +79,7 @@ class UsageRecorder
         string $workspaceId,
         ?Platform $platform,
         int $quotaWeight,
+        int $costWeightMicrousd,
     ): void {
         $now = CarbonImmutable::instance(Date::now());
 
@@ -85,14 +100,24 @@ class UsageRecorder
             'period_end' => $now->endOfMonth()->toDateString(),
             'event_count' => 0,
             'total_quota' => 0,
+            'total_cost_microusd' => 0,
             'created_at' => $now,
             'updated_at' => $now,
         ]);
 
         // Atomic increment: compiles to `SET col = col + ?` on every driver.
         UsagePeriodCounter::query()->where($keys)->incrementEach(
-            ['total_quota' => $quotaWeight, 'event_count' => 1],
+            ['total_quota' => $quotaWeight, 'total_cost_microusd' => $costWeightMicrousd, 'event_count' => 1],
             ['updated_at' => $now],
         );
+    }
+
+    private function costWeightMicrousd(?Platform $platform, string $operation, int $quotaWeight): int
+    {
+        if ($platform === null) {
+            return 0;
+        }
+
+        return $this->pricing->costWeightMicrousd($platform->value, $operation, $quotaWeight);
     }
 }

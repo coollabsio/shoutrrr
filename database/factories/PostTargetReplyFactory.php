@@ -30,6 +30,7 @@ class PostTargetReplyFactory extends Factory
             'remote_reply_id' => 'at://reply/'.Str::random(8),
             'remote_cid' => 'cid-'.Str::random(8),
             'parent_remote_id' => null,
+            'conversation_remote_id' => fn (array $attributes): string => $attributes['remote_reply_id'],
             'author_handle' => '@'.fake()->userName(),
             'author_name' => fake()->name(),
             'author_avatar_url' => fake()->imageUrl(),

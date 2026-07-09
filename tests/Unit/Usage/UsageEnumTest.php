@@ -12,6 +12,7 @@ it('exposes the four usage categories with stable values', function () {
 
 it('exposes the built operation constants', function () {
     expect(UsageOperation::POST)->toBe('post')
+        ->and(UsageOperation::POST_WITH_URL)->toBe('post_with_url')
         ->and(UsageOperation::TOKEN_REFRESH)->toBe('token_refresh')
         ->and(UsageOperation::MCP_REQUEST)->toBe('mcp_request');
 });

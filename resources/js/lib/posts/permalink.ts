@@ -1,3 +1,4 @@
+import { platformLabel } from '@/lib/platforms';
 import type { PlatformName } from '@/types/compose';
 
 function cleanHandle(handle: string): string {
@@ -38,12 +39,4 @@ export function postPermalink(
     }
 }
 
-const PLATFORM_LABELS: Record<string, string> = {
-    x: 'X',
-    bluesky: 'Bluesky',
-    linkedin: 'LinkedIn',
-};
-
-export function platformLabel(platform: string): string {
-    return PLATFORM_LABELS[platform] ?? platform;
-}
+export { platformLabel };

@@ -117,6 +117,21 @@ test('PUT /posts/{post}/schedule redirects after an Inertia reschedule request',
     expect($post->scheduled_at->toIso8601String())->toBe('2030-01-01T09:00:00+00:00');
 });
 
+test('PUT /posts/{post}/schedule returns 404 when the user has no current workspace', function () {
+    [$user, $workspace] = schedulingMember();
+    $post = Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'status' => PostStatus::Draft,
+    ]);
+    $user->forceFill(['current_workspace_id' => null])->save();
+
+    test()->putJson("/posts/{$post->id}/schedule", [
+        'scheduled_at' => '2030-01-01T09:00:00+00:00',
+    ])->assertNotFound();
+
+    expect($post->refresh()->status)->toBe(PostStatus::Draft);
+});
+
 test('a member cannot schedule a post in another workspace', function () {
     [$user, $workspace] = schedulingMember();
     $foreign = Post::factory()->create(); // different workspace

@@ -39,3 +39,30 @@ it('records a post event when X publishes a tweet', function () {
         ->and($event->workspace_id)->toBe($workspace->id)
         ->and($event->succeeded)->toBeTrue();
 });
+
+it('records a higher cost post_with_url event when X publishes a tweet with a URL', function () {
+    config()->set('instance.defaults.usage_tracking_enabled', true);
+
+    $workspace = Workspace::factory()->create();
+    $account = ConnectedAccount::factory()->for($workspace)->create(['platform' => Platform::X->value]);
+
+    Http::fake([
+        'api.twitter.com/2/tweets' => Http::response(['data' => ['id' => '111']], 200),
+    ]);
+
+    $context = new PublishContext(
+        target: makePublishTarget($account),
+        segments: ['read this https://example.com/story'],
+        media: [],
+        account: $account,
+        credentials: ['access_token' => 'tok'],
+    );
+
+    app(XConnector::class)->publish($context);
+
+    $event = UsageEvent::where('operation', 'post_with_url')->firstOrFail();
+    expect($event->platform)->toBe('x')
+        ->and($event->workspace_id)->toBe($workspace->id)
+        ->and($event->cost_weight_microusd)->toBe(200_000)
+        ->and($event->succeeded)->toBeTrue();
+});
