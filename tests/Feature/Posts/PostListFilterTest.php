@@ -147,4 +147,11 @@ it('cursor paginates more than one page of posts', function (): void {
     $cursor = Cursor::fromEncoded($query['cursor'] ?? null);
 
     expect($cursor?->parameter('list_sort_at'))->toBeString()->not->toBe('');
+
+    $secondPage = $this->actingAs($this->user)
+        ->get($firstPage['next_page_url'], $headers)
+        ->assertOk()
+        ->inertiaProps('posts');
+
+    expect($secondPage['data'])->toHaveCount(5);
 });
