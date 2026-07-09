@@ -116,7 +116,9 @@ describe('Meta connect entry point', () => {
             'utf8',
         );
 
-        expect(source).toContain("capability.platform === 'instagram'");
+        // Instagram is filtered out as its own row — it connects through the
+        // Facebook (Meta) entry, which points at the Meta Page-selection flow.
+        expect(source).toContain("c.platform !== 'instagram'");
         expect(source).toContain("capability.platform === 'facebook'");
         expect(source).toContain('MetaConnectionController.redirect.url()');
     });
