@@ -41,9 +41,7 @@ class MetaConnectionController extends Controller
 
     public function redirect(Request $request): Response
     {
-        if (! Platform::Facebook->isConfigured() || Platform::launchedMetaGraphPlatforms() === []) {
-            abort(404);
-        }
+        $this->abortUnlessMetaFlowAvailable();
 
         $request->user()->can('create', ConnectedAccount::class) ?: abort(403);
 
@@ -51,6 +49,23 @@ class MetaConnectionController extends Controller
             ->scopes($this->scopes())
             ->redirectUrl(route('accounts.meta.callback'))
             ->redirect();
+    }
+
+    /**
+     * The user-facing entry point (`redirect`) is gated here so the Meta flow is
+     * never advertised until Facebook is configured and launched. `callback` and
+     * `store` are deliberately NOT gated on `isLaunched()`: they must stay
+     * exercisable by tests while Facebook is built-but-unlaunched, and `store`
+     * independently blocks any account creation for a non-launched platform
+     * (`Rule::in(launchedMetaGraphPlatforms)`), so reaching them early can stash
+     * tokens in the caller's own session but can never mutate data. The gate is
+     * re-evaluated on the launch task, when it becomes a no-op anyway.
+     */
+    private function abortUnlessMetaFlowAvailable(): void
+    {
+        if (! Platform::Facebook->isConfigured() || Platform::launchedMetaGraphPlatforms() === []) {
+            abort(404);
+        }
     }
 
     public function callback(Request $request): RedirectResponse|InertiaResponse
