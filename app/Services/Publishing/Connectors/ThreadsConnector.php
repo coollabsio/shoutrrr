@@ -59,7 +59,14 @@ class ThreadsConnector implements PublishConnector
         ));
 
         if ($segments === []) {
-            return PublishResult::failure(ErrorKind::Validation, 'Threads requires at least one non-empty segment');
+            // A caption-less media post is valid on Threads (an IMAGE/VIDEO/CAROUSEL
+            // container with empty text), matching Facebook/Instagram — only a post
+            // with neither text nor media is a real error.
+            if ($context->media === []) {
+                return PublishResult::failure(ErrorKind::Validation, 'Threads requires text or media');
+            }
+
+            $segments = [''];
         }
 
         $remoteIds = $context->target->remote_ids ?? [];

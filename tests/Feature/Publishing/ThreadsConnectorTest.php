@@ -131,6 +131,37 @@ test('threads publishes a single image as an IMAGE container', function () {
         && $request['text'] === 'look at this');
 });
 
+test('threads publishes a caption-less image as an IMAGE container with empty text', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/pic.jpg', 'jpg-bytes');
+
+    $media = PostMedia::factory()->create(['disk' => 'public', 'path' => 'media/pic.jpg', 'mime' => 'image/jpeg']);
+
+    Http::fake([
+        'https://graph.threads.net/v1.0/threads123/threads' => Http::response(['id' => 'container-1']),
+        'https://graph.threads.net/v1.0/container-1*' => Http::response(['status' => 'FINISHED']),
+        'https://graph.threads.net/v1.0/threads123/threads_publish' => Http::response(['id' => 'post-1']),
+    ]);
+
+    // Blank segment + media: valid on Threads, must not be rejected as empty.
+    $result = app(ThreadsConnector::class)->publish(threadsContext([''], [$media]));
+
+    expect($result->isSuccessful())->toBeTrue()
+        ->and($result->remoteIds)->toBe(['post-1']);
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/threads123/threads')
+        && ! str_contains($request->url(), 'threads_publish')
+        && $request['media_type'] === 'IMAGE'
+        && $request['text'] === '');
+});
+
+test('threads rejects a post with neither text nor media', function () {
+    $result = app(ThreadsConnector::class)->publish(threadsContext(['']));
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::Validation);
+});
+
 test('threads returns a MediaProcessing failure while the container status is IN_PROGRESS, polling with fields=status', function () {
     Http::fake([
         'https://graph.threads.net/v1.0/threads123/threads' => Http::response(['id' => 'container-1']),
