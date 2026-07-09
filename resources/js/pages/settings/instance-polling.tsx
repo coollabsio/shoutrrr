@@ -34,6 +34,9 @@ const platforms: { key: PlatformName; label: string }[] = [
     { key: 'x', label: 'X' },
     { key: 'bluesky', label: 'Bluesky' },
     { key: 'linkedin', label: 'LinkedIn' },
+    { key: 'facebook', label: 'Facebook' },
+    { key: 'instagram', label: 'Instagram' },
+    { key: 'threads', label: 'Threads' },
 ];
 
 export function pollingWithMinutes(

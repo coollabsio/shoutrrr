@@ -114,11 +114,9 @@ test('it skips only disabled engagement platforms', function () {
 test('it does not dispatch fetch jobs when all engagement platforms are disabled', function () {
     Queue::fake();
     app(InstanceSettings::class)->update([
-        'engagement_polling_enabled' => [
-            'x' => false,
-            'bluesky' => false,
-            'linkedin' => false,
-        ],
+        'engagement_polling_enabled' => collect(Platform::cases())
+            ->mapWithKeys(fn (Platform $platform): array => [$platform->value => false])
+            ->all(),
     ]);
 
     foreach (Platform::cases() as $platform) {

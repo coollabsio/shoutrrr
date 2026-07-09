@@ -118,10 +118,15 @@ export default function ConnectedAccounts({
                         <EmptyTitle>No accounts connected</EmptyTitle>
                         <EmptyDescription>
                             {canManage
-                                ? 'Connect X, LinkedIn, or Bluesky to get started.'
+                                ? 'Connect a social account to start scheduling and publishing posts.'
                                 : 'Ask an admin to connect one.'}
                         </EmptyDescription>
                     </EmptyHeader>
+                    {canManage && (
+                        <div className="mt-4 flex justify-center">
+                            <ConnectButtons capabilities={capabilities} />
+                        </div>
+                    )}
                 </Empty>
             ) : (
                 <div className="flex flex-col gap-4">

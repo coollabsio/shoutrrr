@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import PostMediaController from '@/actions/App/Http/Controllers/Posts/PostMediaController';
 import PostVideoUploadController from '@/actions/App/Http/Controllers/Posts/PostVideoUploadController';
+import { convertToJpeg, needsJpegConversion } from '@/lib/compose/to-jpeg';
 import {
     minVideoBytes,
     putWithProgress,
@@ -18,6 +19,12 @@ type Options = {
     media: MediaView[];
     /** Limits for the selected platforms, used to validate a video before upload. */
     videoLimits: PlatformLimits[];
+    /**
+     * Whether a selected destination requires JPEG images (Instagram). When true,
+     * a non-JPEG upload is converted to JPEG in the browser before it is sent —
+     * one file shared by every destination, so no server or database change.
+     */
+    requiresJpeg?: boolean;
     /** Guarantee a persisted post id before uploading; returns the post id. */
     onEnsurePost: () => Promise<string>;
     /** Append a finished upload to the composer's media. */
@@ -46,6 +53,7 @@ type MediaUploads = {
 export function useMediaUploads({
     media,
     videoLimits,
+    requiresJpeg = false,
     onEnsurePost,
     onAddMedia,
     endpoints,
@@ -172,8 +180,15 @@ export function useMediaUploads({
             return failUpload(tempId);
         }
 
+        // Instagram needs JPEG: convert a non-JPEG upload in the browser and send
+        // that instead. Best-effort — a failed encode falls back to the original.
+        let finalFile = file;
+        if (requiresJpeg && needsJpegConversion(file)) {
+            finalFile = (await convertToJpeg(file)) ?? file;
+        }
+
         // transform injects the file at submit time (multipart upload).
-        imageHttp.transform(() => ({ file }));
+        imageHttp.transform(() => ({ file: finalFile }));
         try {
             const { media: result } = await imageHttp.post(ep.imageStore(id), {
                 onNetworkError: () => undefined,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\ConnectedAccounts\BlueskyConnectionController;
 use App\Http\Controllers\ConnectedAccounts\BlueskyOAuthController;
 use App\Http\Controllers\ConnectedAccounts\ConnectedAccountController;
+use App\Http\Controllers\ConnectedAccounts\MetaConnectionController;
 use App\Http\Controllers\ConnectedAccounts\OAuthConnectionController;
 use App\Http\Controllers\OAuth\BlueskyClientMetadataController;
 use App\Models\ConnectedAccount;
@@ -36,6 +37,26 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware('throttle:10,1')
         ->name('accounts.bluesky.oauth.callback');
 
+    Route::post('accounts/connect/bluesky', [BlueskyConnectionController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.bluesky.store');
+
+    // These bespoke `accounts/{connect,callback}/meta` routes must be registered
+    // before the generic `{platform}` wildcard routes below — Laravel matches
+    // routes in registration order, and Platform::tryFrom('meta') is null, so
+    // the wildcard route's resolveOAuthPlatform() would otherwise 404 first.
+    Route::get('accounts/connect/meta', [MetaConnectionController::class, 'redirect'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.meta.redirect');
+
+    Route::get('accounts/callback/meta', [MetaConnectionController::class, 'callback'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.meta.callback');
+
+    Route::post('accounts/connect/meta', [MetaConnectionController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.meta.store');
+
     Route::get('accounts/connect/{platform}', [OAuthConnectionController::class, 'redirect'])
         ->middleware('throttle:10,1')
         ->name('accounts.connect');
@@ -43,10 +64,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('accounts/callback/{platform}', [OAuthConnectionController::class, 'callback'])
         ->middleware('throttle:10,1')
         ->name('accounts.callback');
-
-    Route::post('accounts/connect/bluesky', [BlueskyConnectionController::class, 'store'])
-        ->middleware('throttle:10,1')
-        ->name('accounts.bluesky.store');
 
     Route::post('accounts/{account}/reconnect', [ConnectedAccountController::class, 'reconnect'])
         ->middleware('throttle:10,1')

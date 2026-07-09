@@ -6,7 +6,14 @@ export type MentionPlaceholder = {
     handles: Partial<Record<PlatformName, string>>;
 };
 
-const PLATFORMS: PlatformName[] = ['x', 'bluesky', 'linkedin'];
+const PLATFORMS: PlatformName[] = [
+    'x',
+    'bluesky',
+    'linkedin',
+    'facebook',
+    'instagram',
+    'threads',
+];
 const MENTION_PLATFORMS = new Set<PlatformName>(['x', 'bluesky']);
 const HANDLE_PATTERN = /(^|\s)@([a-zA-Z0-9_.-]{0,50})(?=\s|$|[.,!?;:])/g;
 

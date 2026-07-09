@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ConnectedAccountStatus;
+use App\Enums\Platform;
 use App\Enums\WorkspaceRole;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
@@ -83,6 +84,22 @@ test('reconnect is rejected when the submitted credentials resolve to a differen
         'identifier' => 'someone.bsky.social',
         'app_password' => 'pass',
     ])->assertRedirect()->assertSessionHasErrors('identifier');
+});
+
+test('reconnecting a facebook account restarts the shared meta login flow, not the generic route', function () {
+    [$user, $workspace] = ownerWithWorkspace();
+    config()->set('services.facebook.client_id', 'cid');
+    config()->set('services.facebook.client_secret', 'secret');
+
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::Facebook->value,
+        'connected_by_user_id' => $user->id,
+    ]);
+    ConnectedAccountSecret::factory()->create(['connected_account_id' => $account->id]);
+
+    test()->post("/accounts/{$account->id}/reconnect")
+        ->assertRedirect(route('accounts.meta.redirect'));
 });
 
 test('disconnect removes both the account and its secret row', function () {

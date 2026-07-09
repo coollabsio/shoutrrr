@@ -60,6 +60,63 @@ test('capabilities array exposes one entry per platform for the frontend', funct
 
     $caps = Platform::capabilities();
 
-    expect($caps)->toHaveCount(3)
-        ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'configured']);
+    expect($caps)->toHaveCount(6)
+        ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'configured', 'launched']);
+});
+
+test('every platform is launched', function () {
+    expect(Platform::X->isLaunched())->toBeTrue()
+        ->and(Platform::Bluesky->isLaunched())->toBeTrue()
+        ->and(Platform::LinkedIn->isLaunched())->toBeTrue()
+        ->and(Platform::Facebook->isLaunched())->toBeTrue()
+        ->and(Platform::Instagram->isLaunched())->toBeTrue()
+        ->and(Platform::Threads->isLaunched())->toBeTrue();
+});
+
+test('facebook scopes cover the reconciled facebook-login set', function () {
+    expect(Platform::Facebook->scopes())->toBe([
+        'pages_show_list',
+        'pages_read_engagement',
+        'pages_manage_posts',
+        'pages_read_user_content',
+        'pages_manage_engagement',
+        'read_insights',
+        'business_management',
+    ]);
+});
+
+test('meta platforms report oauth capability and no app password', function () {
+    foreach ([Platform::Facebook, Platform::Instagram, Platform::Threads] as $platform) {
+        expect($platform->supportsOAuth())->toBeTrue()
+            ->and($platform->supportsAppPassword())->toBeFalse();
+    }
+});
+
+test('meta socialite drivers and config keys are wired', function () {
+    expect(Platform::Facebook->socialiteDriver())->toBe('facebook')
+        ->and(Platform::Instagram->socialiteDriver())->toBe('facebook')
+        ->and(Platform::Threads->socialiteDriver())->toBe('threads')
+        ->and(Platform::Facebook->configKey())->toBe('services.facebook')
+        ->and(Platform::Instagram->configKey())->toBe('services.facebook')
+        ->and(Platform::Threads->configKey())->toBe('services.threads');
+});
+
+test('meta text limits and threading match the spec', function () {
+    expect(Platform::Facebook->maxLength())->toBe(63_206)
+        ->and(Platform::Instagram->maxLength())->toBe(2_200)
+        ->and(Platform::Threads->maxLength())->toBe(500)
+        ->and(Platform::Facebook->threadMax())->toBe(1)
+        ->and(Platform::Instagram->threadMax())->toBe(1)
+        ->and(Platform::Threads->threadMax())->toBeNull()
+        ->and(Platform::Threads->measure('héllo'))->toBe(5);
+});
+
+test('instagram is configured off the shared facebook credentials', function () {
+    config()->set('services.facebook.client_id', 'cid');
+    config()->set('services.facebook.client_secret', 'secret');
+    expect(Platform::Facebook->isConfigured())->toBeTrue()
+        ->and(Platform::Instagram->isConfigured())->toBeTrue();
+
+    config()->set('services.facebook.client_id', '');
+    expect(Platform::Instagram->isConfigured())->toBeFalse();
 });

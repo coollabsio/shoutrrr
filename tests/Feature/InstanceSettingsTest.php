@@ -405,36 +405,55 @@ test('instance owner can update polling settings', function () {
         ])
         ->assertRedirect();
 
+    // Platforms not included in the update keep their defaults (enabled, 15 min).
     expect(app(InstanceSettings::class)->polling())->toMatchArray([
         'engagement' => [
             'enabled' => [
                 'x' => false,
                 'bluesky' => true,
                 'linkedin' => true,
+                'facebook' => true,
+                'instagram' => true,
+                'threads' => true,
             ],
             'x' => 720,
             'bluesky' => 30,
             'linkedin' => 120,
+            'facebook' => 15,
+            'instagram' => 15,
+            'threads' => 15,
         ],
         'post_metrics' => [
             'enabled' => [
                 'x' => false,
                 'bluesky' => true,
                 'linkedin' => true,
+                'facebook' => true,
+                'instagram' => true,
+                'threads' => true,
             ],
             'x' => 1440,
             'bluesky' => 45,
             'linkedin' => 180,
+            'facebook' => 15,
+            'instagram' => 15,
+            'threads' => 15,
         ],
         'account_metrics' => [
             'enabled' => [
                 'x' => false,
                 'bluesky' => true,
                 'linkedin' => true,
+                'facebook' => true,
+                'instagram' => true,
+                'threads' => true,
             ],
             'x' => 1440,
             'bluesky' => 240,
             'linkedin' => 480,
+            'facebook' => 15,
+            'instagram' => 15,
+            'threads' => 15,
         ],
     ]);
 });

@@ -57,4 +57,17 @@ return [
         'api_version' => env('LINKEDIN_API_VERSION', LinkedInConnector::DEFAULT_VERSION),
     ],
 
+    'facebook' => [
+        'client_id' => env('FACEBOOK_CLIENT_ID'),
+        'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
+        'redirect' => env('FACEBOOK_REDIRECT_URI'),
+        'graph_version' => env('FACEBOOK_GRAPH_VERSION', 'v25.0'),
+    ],
+
+    'threads' => [
+        'client_id' => env('THREADS_CLIENT_ID'),
+        'client_secret' => env('THREADS_CLIENT_SECRET'),
+        'redirect' => env('THREADS_REDIRECT_URI'),
+    ],
+
 ];

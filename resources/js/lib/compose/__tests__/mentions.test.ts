@@ -61,6 +61,9 @@ describe('mention helpers', () => {
             x: '@Guest',
             bluesky: '@Guest',
             linkedin: 'Guest',
+            facebook: 'Guest',
+            instagram: 'Guest',
+            threads: 'Guest',
         });
         expect(mentionToken(mention.id)).toBe(`{{mention:${mention.id}}}`);
     });
@@ -206,6 +209,9 @@ describe('syncMentionsFromText', () => {
                     x: '@guest',
                     bluesky: '@guest',
                     linkedin: 'guest',
+                    facebook: 'guest',
+                    instagram: 'guest',
+                    threads: 'guest',
                 },
             },
         ]);
@@ -222,6 +228,9 @@ describe('syncMentionsFromText', () => {
                     x: '@',
                     bluesky: '@',
                     linkedin: '',
+                    facebook: '',
+                    instagram: '',
+                    threads: '',
                 },
             },
         ]);
@@ -239,6 +248,9 @@ describe('syncMentionsFromText', () => {
                     x: '@guest',
                     bluesky: '@guest',
                     linkedin: 'guest',
+                    facebook: 'guest',
+                    instagram: 'guest',
+                    threads: 'guest',
                 },
             },
         ]);

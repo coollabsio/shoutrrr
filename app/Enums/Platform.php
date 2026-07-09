@@ -9,6 +9,9 @@ enum Platform: string
     case X = 'x';
     case Bluesky = 'bluesky';
     case LinkedIn = 'linkedin';
+    case Facebook = 'facebook';
+    case Instagram = 'instagram';
+    case Threads = 'threads';
 
     public function label(): string
     {
@@ -16,6 +19,9 @@ enum Platform: string
             self::X => 'X',
             self::Bluesky => 'Bluesky',
             self::LinkedIn => 'LinkedIn',
+            self::Facebook => 'Facebook',
+            self::Instagram => 'Instagram',
+            self::Threads => 'Threads',
         };
     }
 
@@ -25,6 +31,8 @@ enum Platform: string
             self::X => 'x',
             self::LinkedIn => 'linkedin-openid',
             self::Bluesky => null,
+            self::Facebook, self::Instagram => 'facebook',
+            self::Threads => 'threads',
         };
     }
 
@@ -42,6 +50,9 @@ enum Platform: string
             self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'media.write', 'offline.access'],
             self::LinkedIn => ['openid', 'profile', 'email', 'w_member_social'],
             self::Bluesky => [],
+            self::Facebook => ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_read_user_content', 'pages_manage_engagement', 'read_insights', 'business_management'],
+            self::Instagram => ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'pages_show_list', 'business_management'],
+            self::Threads => ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights'],
         };
     }
 
@@ -51,6 +62,8 @@ enum Platform: string
             self::X => 'services.x',
             self::LinkedIn => 'services.linkedin-openid',
             self::Bluesky => null,
+            self::Facebook, self::Instagram => 'services.facebook',
+            self::Threads => 'services.threads',
         };
     }
 
@@ -79,7 +92,50 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, configured: bool}>
+     * Whether this platform's connect + publishing flow is fully implemented
+     * and safe to expose. New platforms are registered in this enum (for limits,
+     * branding, and phased rollout) before their connectors exist; until then
+     * connecting must stay disabled even when credentials are configured. Flip a
+     * platform to `true` when its publish/engagement/metrics connectors land.
+     *
+     * All six platforms (X, Bluesky, LinkedIn, Facebook, Instagram, Threads)
+     * are launched as of Threads shipping in Phase 4.
+     */
+    public function isLaunched(): bool
+    {
+        return true;
+    }
+
+    /**
+     * The subset of the Facebook-Login-driven Meta platforms (Facebook,
+     * Instagram) that are launched — used to gate the shared
+     * `MetaConnectionController` flow and to scope the Facebook Login
+     * request to only the permissions a launched platform actually needs.
+     *
+     * @return list<self>
+     */
+    public static function launchedMetaGraphPlatforms(): array
+    {
+        return array_values(array_filter(
+            [self::Facebook, self::Instagram],
+            fn (self $platform): bool => $platform->isLaunched(),
+        ));
+    }
+
+    /**
+     * Facebook and Instagram share a single Facebook Login flow with a
+     * Page/asset-selection step, driven by `MetaConnectionController`. The
+     * generic per-platform `OAuthConnectionController` (a single-step
+     * socialite-user-to-account mapping) must never handle them — even once
+     * launched — because it has no notion of picking a Page.
+     */
+    public function usesMetaConnectionFlow(): bool
+    {
+        return $this === self::Facebook || $this === self::Instagram;
+    }
+
+    /**
+     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, configured: bool, launched: bool}>
      */
     public static function capabilities(): array
     {
@@ -89,12 +145,14 @@ enum Platform: string
             'supportsOAuth' => $platform->supportsOAuth(),
             'supportsAppPassword' => $platform->supportsAppPassword(),
             'configured' => $platform->isConfigured(),
+            'launched' => $platform->isLaunched(),
         ], self::cases());
     }
 
     /**
      * The primary length budget, in each platform's native counting unit
-     * (X: UTF-16 code units, Bluesky: graphemes, LinkedIn: characters).
+     * (X: UTF-16 code units, Bluesky: graphemes; LinkedIn, Facebook, Instagram,
+     * and Threads: characters via mb_strlen).
      */
     public function maxLength(): int
     {
@@ -102,6 +160,9 @@ enum Platform: string
             self::X => 280,
             self::Bluesky => 300,
             self::LinkedIn => 3000,
+            self::Facebook => 63_206,
+            self::Instagram => 2_200,
+            self::Threads => 500,
         };
     }
 
@@ -122,7 +183,7 @@ enum Platform: string
     public function threadMax(): ?int
     {
         return match ($this) {
-            self::LinkedIn => 1,
+            self::LinkedIn, self::Facebook, self::Instagram => 1,
             default => null,
         };
     }
@@ -132,6 +193,7 @@ enum Platform: string
         return match ($this) {
             self::X, self::Bluesky => 4,
             self::LinkedIn => 9,
+            self::Facebook, self::Instagram, self::Threads => 10,
         };
     }
 
@@ -141,6 +203,8 @@ enum Platform: string
             self::Bluesky => 2_000_000,
             self::X => 5_242_880,
             self::LinkedIn => 8_388_608,
+            self::Facebook => 4_194_304,
+            self::Instagram, self::Threads => 8_388_608,
         };
     }
 
@@ -152,6 +216,9 @@ enum Platform: string
         return match ($this) {
             self::X, self::Bluesky => ['image/jpeg', 'image/png', 'image/webp'],
             self::LinkedIn => ['image/jpeg', 'image/png', 'image/gif'],
+            self::Facebook => ['image/jpeg', 'image/png', 'image/gif'],
+            self::Instagram => ['image/jpeg'],
+            self::Threads => ['image/jpeg', 'image/png'],
         };
     }
 
@@ -164,6 +231,8 @@ enum Platform: string
             self::Bluesky => ['width' => 2000, 'height' => 2000],
             self::X => ['width' => 8192, 'height' => 8192],
             self::LinkedIn => ['width' => 7680, 'height' => 4320],
+            self::Facebook => ['width' => 8192, 'height' => 8192],
+            self::Instagram, self::Threads => ['width' => 1440, 'height' => 1800],
         };
     }
 
@@ -182,6 +251,7 @@ enum Platform: string
             self::X => 536_870_912,        // 512 MB
             self::LinkedIn => 524_288_000, // 500 MB (organic feed)
             self::Bluesky => 100_000_000,
+            self::Facebook, self::Instagram, self::Threads => 1_073_741_824,
         };
     }
 
@@ -191,6 +261,9 @@ enum Platform: string
             self::X => 140,
             self::LinkedIn => 1800,
             self::Bluesky => 180,
+            self::Facebook => 1200,
+            self::Instagram => 900,
+            self::Threads => 300,
         };
     }
 
@@ -212,6 +285,7 @@ enum Platform: string
             self::X => intdiv(strlen((string) mb_convert_encoding($text, 'UTF-16LE', 'UTF-8')), 2),
             self::Bluesky => grapheme_strlen($text) ?: 0,
             self::LinkedIn => mb_strlen($text),
+            self::Facebook, self::Instagram, self::Threads => mb_strlen($text),
         };
     }
 

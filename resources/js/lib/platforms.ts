@@ -4,6 +4,9 @@ const PLATFORM_LABELS: Record<string, string> = {
     x: 'X',
     bluesky: 'Bluesky',
     linkedin: 'LinkedIn',
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    threads: 'Threads',
 };
 
 export function platformLabel(platform: string): string {

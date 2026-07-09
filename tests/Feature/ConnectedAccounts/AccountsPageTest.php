@@ -39,7 +39,7 @@ test('the accounts page lists accounts and exposes capabilities and canManage to
         ->assertInertia(fn (Assert $page) => $page
             ->component('accounts/index')
             ->where('canManage', true)
-            ->has('capabilities', 3)
+            ->has('capabilities', 6)
             ->has('accounts', 1)
             ->where('accounts.0.handle', '@listed')
             ->where('accounts.0.x_premium', true)

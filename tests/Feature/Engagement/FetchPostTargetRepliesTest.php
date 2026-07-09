@@ -77,6 +77,43 @@ test('re-running the job does not duplicate replies', function () {
     expect(PostTargetReply::withoutGlobalScopes()->count())->toBe(1);
 });
 
+test('the job resolves credentials for threads instead of passing an empty token', function () {
+    // Regression: the reply-fetch job gated credential resolution to
+    // X/Bluesky/LinkedIn, so Threads (and Facebook/Instagram) reached their
+    // Graph connectors with `[]` and authenticated with an empty token.
+    $post = Post::factory()->create();
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Threads->value,
+        'token_expires_at' => now()->addDays(30),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'threads-token',
+    ]);
+    $target = PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Threads,
+        'remote_id' => 'th-root',
+        'remote_ids' => ['th-root'],
+    ]);
+
+    $captured = null;
+    $connector = Mockery::mock(EngagementConnector::class);
+    $connector->shouldReceive('fetchReplies')
+        ->andReturnUsing(function ($account, $target, $credentials) use (&$captured) {
+            $captured = $credentials;
+
+            return ReplyFetchResult::ok([]);
+        });
+    $registry = Mockery::mock(EngagementConnectorRegistry::class);
+    $registry->shouldReceive('for')->andReturn($connector);
+    app()->instance(EngagementConnectorRegistry::class, $registry);
+
+    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+
+    expect($captured)->toBe(['access_token' => 'threads-token']);
+});
+
 test('a failed fetch does not stamp reply_fetched_at', function () {
     $target = targetWithPost();
 

@@ -41,6 +41,9 @@ const PLATFORM_ACCENT: Record<PlatformName, string> = {
     x: 'text-foreground',
     bluesky: 'text-sky-500',
     linkedin: 'text-blue-600',
+    facebook: 'text-[#1877F2]',
+    instagram: 'text-[#E4405F]',
+    threads: 'text-foreground',
 };
 
 const METRIC_ICON: Record<EngagementKey, typeof Heart> = {

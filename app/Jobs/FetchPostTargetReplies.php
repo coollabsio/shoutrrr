@@ -83,7 +83,7 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
         }
 
         try {
-            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn], true)
+            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn, Platform::Facebook, Platform::Instagram, Platform::Threads], true)
                 ? $tokens->fresh($account)
                 : [];
         } catch (TokenRefreshException) {

@@ -82,6 +82,28 @@ test('redirect 404s for an unknown or app-password platform', function () {
     test()->get('/accounts/connect/myspace')->assertNotFound();
 });
 
+test('redirect 404s for instagram on the generic route even though it is launched', function () {
+    // Instagram is launched, but it shares a single Facebook Login + Page
+    // selection flow with Facebook via MetaConnectionController. The
+    // generic single-step per-platform route must never handle it.
+    config()->set('services.facebook.client_id', 'cid');
+    config()->set('services.facebook.client_secret', 'secret');
+    ownerActingIn();
+
+    test()->get('/accounts/connect/instagram')->assertNotFound();
+});
+
+test('redirect 404s for facebook on the generic route even though it is launched', function () {
+    // Facebook is launched, but it shares a single Facebook Login + Page
+    // selection flow with Instagram via MetaConnectionController. The
+    // generic single-step per-platform route must never handle it.
+    config()->set('services.facebook.client_id', 'cid');
+    config()->set('services.facebook.client_secret', 'secret');
+    ownerActingIn();
+
+    test()->get('/accounts/connect/facebook')->assertNotFound();
+});
+
 test('callback persists an active X account with an encrypted token', function () {
     config()->set('services.x.client_id', 'cid');
     config()->set('services.x.client_secret', 'secret');

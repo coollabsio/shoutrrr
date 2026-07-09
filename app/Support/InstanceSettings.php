@@ -90,10 +90,13 @@ class InstanceSettings
     }
 
     /**
+     * Each section is a map of `enabled` (a per-platform bool map) plus one
+     * poll-interval-in-minutes entry keyed by each platform value.
+     *
      * @return array{
-     *     engagement: array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int},
-     *     post_metrics: array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int},
-     *     account_metrics: array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int}
+     *     engagement: array<string, array<string, bool>|int>,
+     *     post_metrics: array<string, array<string, bool>|int>,
+     *     account_metrics: array<string, array<string, bool>|int>
      * }
      */
     public function polling(): array
@@ -130,7 +133,7 @@ class InstanceSettings
     }
 
     /**
-     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, engagement_polling_enabled?: bool|array{x: bool, bluesky: bool, linkedin: bool}, post_metrics_polling_enabled?: bool|array{x: bool, bluesky: bool, linkedin: bool}, account_metrics_polling_enabled?: bool|array{x: bool, bluesky: bool, linkedin: bool}, engagement_poll_interval_minutes?: array{x: int, bluesky: int, linkedin: int}, post_metrics_poll_interval_minutes?: array{x: int, bluesky: int, linkedin: int}, account_metrics_poll_interval_minutes?: array{x: int, bluesky: int, linkedin: int}}  $values
+     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, engagement_polling_enabled?: bool|array<string, bool>, post_metrics_polling_enabled?: bool|array<string, bool>, account_metrics_polling_enabled?: bool|array<string, bool>, engagement_poll_interval_minutes?: array<string, int>, post_metrics_poll_interval_minutes?: array<string, int>, account_metrics_poll_interval_minutes?: array<string, int>}  $values
      */
     public function update(array $values): void
     {
@@ -161,42 +164,56 @@ class InstanceSettings
     }
 
     /**
-     * @return array{x: bool, bluesky: bool, linkedin: bool}
+     * @return array<string, bool>
      */
     private function platformEnabledValues(string $key): array
     {
         $stored = $this->settings()[$key] ?? true;
 
         if (is_bool($stored)) {
-            return [
-                Platform::X->value => $stored,
-                Platform::Bluesky->value => $stored,
-                Platform::LinkedIn->value => $stored,
-            ];
+            return array_reduce(
+                Platform::cases(),
+                function (array $values, Platform $platform) use ($stored): array {
+                    $values[$platform->value] = $stored;
+
+                    return $values;
+                },
+                [],
+            );
         }
 
         $stored = (array) $stored;
 
-        return [
-            Platform::X->value => (bool) ($stored[Platform::X->value] ?? true),
-            Platform::Bluesky->value => (bool) ($stored[Platform::Bluesky->value] ?? true),
-            Platform::LinkedIn->value => (bool) ($stored[Platform::LinkedIn->value] ?? true),
-        ];
+        return array_reduce(
+            Platform::cases(),
+            function (array $values, Platform $platform) use ($stored): array {
+                $values[$platform->value] = (bool) ($stored[$platform->value] ?? true);
+
+                return $values;
+            },
+            [],
+        );
     }
 
     /**
-     * @return array{x: int, bluesky: int, linkedin: int}
+     * @return array<string, int>
      */
     private function platformMinutes(string $key, string $defaultKey): array
     {
         $stored = (array) ($this->settings()[$key] ?? []);
         $defaults = (array) config("instance.defaults.polling.{$defaultKey}", []);
 
-        return [
-            Platform::X->value => max(1, (int) ($stored[Platform::X->value] ?? $defaults[Platform::X->value] ?? 360)),
-            Platform::Bluesky->value => max(1, (int) ($stored[Platform::Bluesky->value] ?? $defaults[Platform::Bluesky->value] ?? 15)),
-            Platform::LinkedIn->value => max(1, (int) ($stored[Platform::LinkedIn->value] ?? $defaults[Platform::LinkedIn->value] ?? 15)),
-        ];
+        return array_reduce(
+            Platform::cases(),
+            function (array $values, Platform $platform) use ($stored, $defaults): array {
+                // X polls least often (strict rate limits / API cost); the rest default to 15 min.
+                $fallback = $platform === Platform::X ? 360 : 15;
+                $values[$platform->value] = max(1, (int) ($stored[$platform->value] ?? $defaults[$platform->value] ?? $fallback));
+
+                return $values;
+            },
+            [],
+        );
     }
 
     /**

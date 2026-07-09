@@ -42,6 +42,20 @@ const LAYOUT: Record<PlatformName, Slot[]> = {
         { key: 'reposts', label: 'reposts' },
         { key: 'views', label: 'impressions' },
     ],
+    facebook: [
+        { key: 'likes', label: 'likes' },
+        { key: 'comments', label: 'comments' },
+        { key: 'reposts', label: 'shares' },
+    ],
+    instagram: [
+        { key: 'likes', label: 'likes' },
+        { key: 'comments', label: 'comments' },
+    ],
+    threads: [
+        { key: 'likes', label: 'likes' },
+        { key: 'comments', label: 'replies' },
+        { key: 'reposts', label: 'reposts' },
+    ],
 };
 
 /**

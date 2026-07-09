@@ -1,9 +1,10 @@
 import { Form } from '@inertiajs/react';
-import { AtSign, ChevronDown, Loader2 } from 'lucide-react';
+import { AtSign, ChevronDown, Loader2, Plus } from 'lucide-react';
 import { useState } from 'react';
 
 import BlueskyConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyConnectionController';
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
+import MetaConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/MetaConnectionController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import InputError from '@/components/common/input-error';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -20,8 +21,15 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
     InputGroup,
@@ -37,7 +45,14 @@ import type { Capability } from './types';
 export const COLLAPSIBLE_TRIGGER_ICON_CLASS =
     '[&[data-state=open]_svg]:rotate-180';
 
-const SUPPORTED_PLATFORM_ICONS = ['x', 'bluesky', 'linkedin'];
+const SUPPORTED_PLATFORM_ICONS = [
+    'x',
+    'bluesky',
+    'linkedin',
+    'facebook',
+    'instagram',
+    'threads',
+];
 
 export function isSupportedPlatformIcon(
     platform: string,
@@ -53,8 +68,13 @@ function platformIcon(platform: string) {
     return <PlatformGlyph platform={platform} size={16} className="size-4" />;
 }
 
-function BlueskyConnectDialog() {
-    const [open, setOpen] = useState(false);
+function BlueskyConnectDialog({
+    open,
+    onOpenChange,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
     const [appPasswordOpen, setAppPasswordOpen] = useState(false);
     const [oauthServiceOpen, setOauthServiceOpen] = useState(false);
     const [appPasswordServiceOpen, setAppPasswordServiceOpen] = useState(false);
@@ -63,16 +83,7 @@ function BlueskyConnectDialog() {
     const resolver = useBlueskyHandleResolver();
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button
-                    variant="outline"
-                    className="w-full justify-center sm:w-auto"
-                >
-                    {platformIcon('bluesky')}
-                    Connect Bluesky
-                </Button>
-            </DialogTrigger>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Connect a Bluesky account</DialogTitle>
@@ -290,7 +301,7 @@ function BlueskyConnectDialog() {
                             {...BlueskyConnectionController.store.form()}
                             options={{ preserveScroll: true }}
                             resetOnSuccess
-                            onSuccess={() => setOpen(false)}
+                            onSuccess={() => onOpenChange(false)}
                         >
                             {({ errors, processing }) => (
                                 <>
@@ -387,7 +398,7 @@ function BlueskyConnectDialog() {
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            onClick={() => setOpen(false)}
+                                            onClick={() => onOpenChange(false)}
                                         >
                                             Cancel
                                         </Button>
@@ -410,50 +421,125 @@ function BlueskyConnectDialog() {
     );
 }
 
+/**
+ * Facebook and Instagram share a single Facebook Login flow
+ * (`MetaConnectionController`), so they get one combined entry point instead
+ * of two separate buttons. The label mentions Instagram only once it's
+ * launched.
+ */
+export function metaConnectLabel(capabilities: Capability[]): string {
+    const instagram = capabilities.find((c) => c.platform === 'instagram');
+
+    return instagram?.launched ? 'Facebook / Instagram' : 'Facebook';
+}
+
+/**
+ * Where a platform's connect flow lives: Facebook (and its folded-in Instagram)
+ * go through the Meta Page-selection flow; everyone else shares the generic
+ * OAuth redirect. Bluesky is handled separately — it opens a dialog, not a link.
+ */
+function connectHref(capability: Capability): string {
+    return capability.platform === 'facebook'
+        ? MetaConnectionController.redirect.url()
+        : OAuthConnectionController.redirect.url({
+              platform: capability.platform,
+          });
+}
+
+/**
+ * A single "Connect account" button that opens a menu of every platform, instead
+ * of a row of per-platform buttons that wraps once there are more than a few.
+ * Platforms with no OAuth credentials on this instance stay visible but dimmed
+ * with a reason, so an admin knows why they can't be connected yet.
+ */
 export function ConnectButtons({
     capabilities,
 }: {
     capabilities: Capability[];
 }) {
+    const [blueskyOpen, setBlueskyOpen] = useState(false);
+
+    // Instagram connects through the Facebook (Meta) entry, so it isn't its own row.
+    const platforms = capabilities.filter((c) => c.platform !== 'instagram');
+
     return (
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {capabilities.map((capability) => {
-                if (capability.supportsAppPassword) {
-                    return <BlueskyConnectDialog key={capability.platform} />;
-                }
-
-                if (!capability.configured) {
-                    return (
-                        <Button
-                            key={capability.platform}
-                            variant="outline"
-                            disabled
-                            className="w-full justify-center sm:w-auto"
-                        >
-                            {platformIcon(capability.platform)}
-                            Connect {capability.label}
-                        </Button>
-                    );
-                }
-
-                return (
-                    <Button
-                        key={capability.platform}
-                        variant="outline"
-                        asChild
-                        className="w-full justify-center sm:w-auto"
-                    >
-                        <a
-                            href={OAuthConnectionController.redirect.url({
-                                platform: capability.platform,
-                            })}
-                        >
-                            {platformIcon(capability.platform)}
-                            Connect {capability.label}
-                        </a>
+        <>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button className="w-full justify-center sm:w-auto [&[data-state=open]>svg:last-of-type]:rotate-180">
+                        <Plus className="size-4" />
+                        Connect account
+                        <ChevronDown
+                            className="size-4 opacity-70 transition-transform"
+                            aria-hidden
+                        />
                     </Button>
-                );
-            })}
-        </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuLabel className="text-muted-foreground">
+                        Connect a social account
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {platforms.map((capability) => {
+                        const label =
+                            capability.platform === 'facebook'
+                                ? metaConnectLabel(capabilities)
+                                : capability.label;
+
+                        // Bluesky authenticates via a handle / app-password dialog.
+                        if (capability.supportsAppPassword) {
+                            return (
+                                <DropdownMenuItem
+                                    key={capability.platform}
+                                    className="gap-2.5"
+                                    onSelect={(e) => {
+                                        e.preventDefault();
+                                        setBlueskyOpen(true);
+                                    }}
+                                >
+                                    {platformIcon(capability.platform)}
+                                    {label}
+                                </DropdownMenuItem>
+                            );
+                        }
+
+                        if (!capability.launched || !capability.configured) {
+                            return (
+                                <DropdownMenuItem
+                                    key={capability.platform}
+                                    disabled
+                                    className="gap-2.5"
+                                >
+                                    {platformIcon(capability.platform)}
+                                    <span className="flex-1 truncate">
+                                        {label}
+                                    </span>
+                                    <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                        Not set up
+                                    </span>
+                                </DropdownMenuItem>
+                            );
+                        }
+
+                        return (
+                            <DropdownMenuItem
+                                key={capability.platform}
+                                asChild
+                                className="gap-2.5"
+                            >
+                                <a href={connectHref(capability)}>
+                                    {platformIcon(capability.platform)}
+                                    {label}
+                                </a>
+                            </DropdownMenuItem>
+                        );
+                    })}
+                </DropdownMenuContent>
+            </DropdownMenu>
+            <BlueskyConnectDialog
+                open={blueskyOpen}
+                onOpenChange={setBlueskyOpen}
+            />
+        </>
     );
 }

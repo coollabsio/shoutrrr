@@ -2,7 +2,13 @@ import type { EditSettings } from '@/lib/image-editor/settings';
 
 export const BASE_TAB = '__base__';
 
-export type PlatformName = 'x' | 'bluesky' | 'linkedin';
+export type PlatformName =
+    | 'x'
+    | 'bluesky'
+    | 'linkedin'
+    | 'facebook'
+    | 'instagram'
+    | 'threads';
 
 export type WorkspaceMention = {
     id: string;
