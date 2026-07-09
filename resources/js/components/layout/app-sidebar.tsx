@@ -95,7 +95,7 @@ export function AppSidebar() {
                     <SidebarMenuItem className="flex items-center gap-1">
                         <SidebarMenuButton
                             asChild
-                            className="h-8 min-w-0 flex-1"
+                            className="h-8 min-w-0 flex-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
                         >
                             <Link href={composeHref}>
                                 <AppLogo />

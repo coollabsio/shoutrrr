@@ -1,0 +1,77 @@
+<?php
+
+use App\Models\ApiKey;
+use App\Models\User;
+use App\Models\Workspace;
+use Illuminate\Support\Facades\Artisan;
+
+beforeEach(function () {
+    if (! file_exists(storage_path('oauth-private.key'))) {
+        Artisan::call('passport:keys', ['--no-interaction' => true]);
+    }
+
+    // No personal access client is seeded here on purpose: the
+    // create_personal_access_client migration provides it, so this test also
+    // guards that a fresh environment can mint API keys out of the box.
+});
+
+/**
+ * @return array{0: User, 1: Workspace}
+ */
+function ownerInWorkspaceForApiKeys(): array
+{
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create();
+    $workspace->members()->create(['user_id' => $user->id, 'role' => 'owner']);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+
+    return [$user, $workspace];
+}
+
+test('an owner can create an api key and sees the plaintext once', function () {
+    [$user, $workspace] = ownerInWorkspaceForApiKeys();
+
+    $response = $this->actingAs($user)->post('/settings/workspace/api-keys', [
+        'name' => 'CI bot',
+        'scope' => 'write',
+    ]);
+
+    $response->assertRedirect();
+    $this->assertDatabaseHas('api_keys', ['workspace_id' => $workspace->id, 'name' => 'CI bot', 'scope' => 'write']);
+    expect(session('flash.plainTextApiKey'))->toBeString()->not->toBeEmpty();
+});
+
+test('a member without settings.manage cannot create a key', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create();
+    $workspace->members()->create(['user_id' => $user->id, 'role' => 'member']);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+
+    $this->actingAs($user)->post('/settings/workspace/api-keys', ['name' => 'x', 'scope' => 'read'])
+        ->assertForbidden();
+});
+
+test('an owner can revoke a key', function () {
+    [$user, $workspace] = ownerInWorkspaceForApiKeys();
+    $apiKey = ApiKey::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $user->id]);
+
+    $this->actingAs($user)->delete("/settings/workspace/api-keys/{$apiKey->id}")->assertRedirect();
+
+    expect($apiKey->fresh()->revoked_at)->not->toBeNull();
+});
+
+test('keys from another workspace are not manageable', function () {
+    [$user] = ownerInWorkspaceForApiKeys();
+    $foreign = ApiKey::factory()->create(); // other workspace
+
+    $this->actingAs($user)->delete("/settings/workspace/api-keys/{$foreign->id}")->assertNotFound();
+});
+
+test('the api-keys settings page renders for an owner', function () {
+    [$user, $workspace] = ownerInWorkspaceForApiKeys();
+    ApiKey::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $user->id, 'name' => 'Existing']);
+
+    $this->actingAs($user)->get('/settings/workspace/api-keys')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('settings/workspace/api-keys')->has('apiKeys', 1));
+});
