@@ -9,6 +9,7 @@ use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
+use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\ConnectedAccounts\XAccountCapabilities;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class OAuthConnectionController extends Controller
     public function __construct(
         private readonly AccountConnectionService $connections,
         private readonly XAccountCapabilities $xCapabilities,
+        private readonly ThreadsTokenExchanger $threadsExchanger,
     ) {}
 
     public function redirect(Request $request, string $platform): Response
@@ -80,6 +82,11 @@ class OAuthConnectionController extends Controller
 
         if ($resolved === Platform::X) {
             $data = $data->withCapabilities($this->xCapabilities->forAccessToken($data->accessToken));
+        }
+
+        if ($resolved === Platform::Threads) {
+            $long = $this->threadsExchanger->exchangeForLongLived((string) $data->accessToken);
+            $data = $data->withLongLivedToken($long['token'], $long['expiresAt']);
         }
 
         $this->connections->store($data, $request->user());

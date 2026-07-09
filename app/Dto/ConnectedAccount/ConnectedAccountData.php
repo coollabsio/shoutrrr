@@ -69,6 +69,28 @@ final readonly class ConnectedAccountData
         );
     }
 
+    /**
+     * Replace the access token and its expiry with a long-lived pair — e.g.
+     * after exchanging Threads' short-lived callback token for a 60-day one.
+     */
+    public function withLongLivedToken(string $token, CarbonImmutable $expiresAt): self
+    {
+        return new self(
+            platform: $this->platform,
+            remoteAccountId: $this->remoteAccountId,
+            handle: $this->handle,
+            displayName: $this->displayName,
+            avatarUrl: $this->avatarUrl,
+            authMethod: $this->authMethod,
+            accessToken: $token,
+            refreshToken: $this->refreshToken,
+            appPassword: $this->appPassword,
+            session: $this->session,
+            capabilities: $this->capabilities,
+            tokenExpiresAt: $expiresAt,
+        );
+    }
+
     private static function resolveHandle(Platform $platform, SocialiteUser $user): string
     {
         $nickname = $user->getNickname();

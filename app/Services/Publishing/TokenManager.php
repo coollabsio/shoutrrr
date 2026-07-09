@@ -11,6 +11,7 @@ use App\Exceptions\TokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
+use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -29,6 +30,7 @@ class TokenManager
     public function __construct(
         private readonly HttpFactory $http,
         private readonly DPoP $dpop,
+        private readonly ThreadsTokenExchanger $threadsExchanger,
     ) {}
 
     /**
@@ -48,6 +50,10 @@ class TokenManager
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'oauth') {
             return $this->blueskyOAuthCredentials($account, $secret, $force);
+        }
+
+        if ($account->platform === Platform::Threads) {
+            return $this->threadsCredentials($account, $secret, $force);
         }
 
         if (! $force && ! $this->needsRefresh($account)) {
@@ -103,6 +109,62 @@ class TokenManager
 
                 return $this->refreshOAuth($freshAccount, $freshSecret);
             });
+    }
+
+    /**
+     * Threads refresh does not fit the shared `refreshOAuth()` path: it's a GET
+     * with `th_refresh_token`, no client credentials, and no separate refresh
+     * token — the long-lived access token refreshes itself.
+     *
+     * @return array<string, mixed>
+     */
+    private function threadsCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret, bool $force): array
+    {
+        if (! $force && ! $this->needsRefresh($account)) {
+            return ['access_token' => $secret->access_token];
+        }
+
+        return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
+            ->block(10, function () use ($account, $force): array {
+                $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
+                $freshSecret = $freshAccount->secret()->firstOrFail();
+
+                if (! $force && ! $this->needsRefresh($freshAccount)) {
+                    return ['access_token' => $freshSecret->access_token];
+                }
+
+                return $this->refreshThreads($freshAccount, $freshSecret);
+            });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function refreshThreads(ConnectedAccount $account, ConnectedAccountSecret $secret): array
+    {
+        try {
+            $refreshed = $this->threadsExchanger->refresh((string) $secret->access_token);
+        } catch (TokenRefreshException $exception) {
+            $account->forceFill([
+                'status' => ConnectedAccountStatus::NeedsAttention->value,
+                'refresh_failed_at' => Date::now(),
+                'refresh_failure_reason' => $exception->getMessage(),
+            ])->save();
+
+            throw $exception;
+        }
+
+        $secret->forceFill(['access_token' => $refreshed['token']])->save();
+
+        $account->forceFill([
+            'token_expires_at' => $refreshed['expiresAt'],
+            'last_refreshed_at' => Date::now(),
+            'status' => ConnectedAccountStatus::Active->value,
+            'refresh_failed_at' => null,
+            'refresh_failure_reason' => null,
+        ])->save();
+
+        return ['access_token' => $refreshed['token']];
     }
 
     /**

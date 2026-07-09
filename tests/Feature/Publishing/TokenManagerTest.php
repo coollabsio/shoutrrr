@@ -230,6 +230,72 @@ test('fresh falls back to an app-password login when the refresh token has lapse
         && $request['password'] === 'app-pass');
 });
 
+test('fresh refreshes a threads token via refresh_access_token and persists the new expiry', function () {
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Threads->value,
+        'token_expires_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'old-long-token',
+    ]);
+
+    Http::fake([
+        'https://graph.threads.net/refresh_access_token*' => Http::response([
+            'access_token' => 'new-long-token',
+            'expires_in' => 5183944,
+        ]),
+    ]);
+
+    $creds = app(TokenManager::class)->fresh($account->fresh());
+
+    expect($creds['access_token'])->toBe('new-long-token');
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=old-long-token');
+
+    $account->refresh();
+    expect($account->secret->access_token)->toBe('new-long-token')
+        ->and($account->status)->toBe(ConnectedAccountStatus::Active)
+        ->and($account->last_refreshed_at)->not->toBeNull()
+        ->and($account->token_expires_at->diffInDays(now(), true))->toBeGreaterThan(59);
+});
+
+test('fresh does not refresh a threads token that is not near expiry', function () {
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Threads->value,
+        'token_expires_at' => now()->addDays(30),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'still-good-long-token',
+    ]);
+
+    Http::fake();
+
+    $creds = app(TokenManager::class)->fresh($account->fresh());
+
+    expect($creds['access_token'])->toBe('still-good-long-token');
+    Http::assertNothingSent();
+});
+
+test('fresh flips a threads account to needs-attention and throws on refresh failure', function () {
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Threads->value,
+        'token_expires_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'stale-long-token',
+    ]);
+
+    Http::fake(['https://graph.threads.net/refresh_access_token*' => Http::response([], 400)]);
+
+    expect(fn () => app(TokenManager::class)->fresh($account->fresh()))
+        ->toThrow(TokenRefreshException::class);
+
+    expect($account->fresh()->status)->toBe(ConnectedAccountStatus::NeedsAttention);
+});
+
 test('fresh flags the bluesky account for attention when both refresh and login fail', function () {
     $account = ConnectedAccount::factory()->bluesky()->create([
         'token_expires_at' => null,
