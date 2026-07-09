@@ -189,7 +189,10 @@ test('store creates an instagram connected account now that instagram is launche
         ->and($account->remote_account_id)->toBe('IG1');
 });
 
-test('store rejects a threads selection while threads is unlaunched', function () {
+test('store rejects a threads selection since threads never uses the shared meta flow', function () {
+    // Threads connects through the generic single-step OAuthConnectionController
+    // (Task 6), not this Facebook-Login Page-selection flow — Threads is never a
+    // member of launchedMetaGraphPlatforms(), regardless of its own launch state.
     metaOwnerActingIn();
 
     test()->withSession(['accounts.meta.connect' => [

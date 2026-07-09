@@ -64,13 +64,13 @@ test('capabilities array exposes one entry per platform for the frontend', funct
         ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'configured', 'launched']);
 });
 
-test('only platforms with implemented connectors are launched', function () {
+test('every platform is launched', function () {
     expect(Platform::X->isLaunched())->toBeTrue()
         ->and(Platform::Bluesky->isLaunched())->toBeTrue()
         ->and(Platform::LinkedIn->isLaunched())->toBeTrue()
         ->and(Platform::Facebook->isLaunched())->toBeTrue()
         ->and(Platform::Instagram->isLaunched())->toBeTrue()
-        ->and(Platform::Threads->isLaunched())->toBeFalse();
+        ->and(Platform::Threads->isLaunched())->toBeTrue();
 });
 
 test('facebook scopes cover the reconciled facebook-login set', function () {

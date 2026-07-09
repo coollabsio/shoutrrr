@@ -97,13 +97,13 @@ enum Platform: string
      * branding, and phased rollout) before their connectors exist; until then
      * connecting must stay disabled even when credentials are configured. Flip a
      * platform to `true` when its publish/engagement/metrics connectors land.
+     *
+     * All six platforms (X, Bluesky, LinkedIn, Facebook, Instagram, Threads)
+     * are launched as of Threads shipping in Phase 4.
      */
     public function isLaunched(): bool
     {
-        return match ($this) {
-            self::X, self::Bluesky, self::LinkedIn, self::Facebook, self::Instagram => true,
-            self::Threads => false,
-        };
+        return true;
     }
 
     /**
