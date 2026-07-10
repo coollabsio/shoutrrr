@@ -8,7 +8,8 @@ export type PlatformName =
     | 'linkedin'
     | 'facebook'
     | 'instagram'
-    | 'threads';
+    | 'threads'
+    | 'discord';
 
 export type WorkspaceMention = {
     id: string;

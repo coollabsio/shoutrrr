@@ -22,6 +22,7 @@ export type Capability = {
     label: string;
     supportsOAuth: boolean;
     supportsAppPassword: boolean;
+    supportsWebhook: boolean;
     configured: boolean;
     launched: boolean;
     enabled: boolean;

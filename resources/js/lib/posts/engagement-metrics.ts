@@ -56,6 +56,8 @@ const LAYOUT: Record<PlatformName, Slot[]> = {
         { key: 'comments', label: 'replies' },
         { key: 'reposts', label: 'reposts' },
     ],
+    // Discord webhooks are write-only — there's no engagement data to show.
+    discord: [],
 };
 
 /**
