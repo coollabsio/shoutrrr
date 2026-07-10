@@ -149,12 +149,24 @@ ARG AUTORUN_LARAVEL_ROUTE_CACHE=true
 ARG AUTORUN_LARAVEL_VIEW_CACHE=true
 ARG AUTORUN_LARAVEL_STORAGE_LINK=true
 ARG PHP_OPCACHE_ENABLE=1
+# The local-disk video-upload path uses a signed raw PUT through Laravel.
+# Laravel validates CONTENT_LENGTH against post_max_size for that request too,
+# so the base image's 100M default would reject supported platform videos
+# before they reach storage. Keep this aligned with the 512 MiB app ceiling.
+ARG PHP_POST_MAX_SIZE=512M
+ARG PHP_UPLOAD_MAX_FILE_SIZE=512M
+# Local temporary uploads are read by Laravel before being written to storage;
+# leave headroom above the largest accepted video for the app and request body.
+ARG PHP_MEMORY_LIMIT=768M
 ARG SSL_MODE=off
 # Number of queue worker processes supervisord runs (numprocs in laravel.conf).
 # Must be a non-empty integer or supervisord fails to start.
 ARG QUEUE_WORKER_COUNT=1
 
 ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
+    PHP_POST_MAX_SIZE=${PHP_POST_MAX_SIZE} \
+    PHP_UPLOAD_MAX_FILE_SIZE=${PHP_UPLOAD_MAX_FILE_SIZE} \
+    PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT} \
     AUTORUN_ENABLED=${AUTORUN_ENABLED} \
     AUTORUN_LARAVEL_CONFIG_CACHE=${AUTORUN_LARAVEL_CONFIG_CACHE} \
     AUTORUN_LARAVEL_EVENT_CACHE=${AUTORUN_LARAVEL_EVENT_CACHE} \
