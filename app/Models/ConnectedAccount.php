@@ -11,6 +11,7 @@ use App\Enums\Platform;
 use Carbon\CarbonImmutable;
 use Database\Factories\ConnectedAccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -30,6 +31,7 @@ use Override;
  * @property string $auth_method
  * @property string|null $connected_by_user_id
  * @property ConnectedAccountStatus $status
+ * @property CarbonImmutable|null $disabled_at
  * @property array<string, mixed>|null $capabilities
  * @property CarbonImmutable|null $token_expires_at
  * @property CarbonImmutable|null $last_refreshed_at
@@ -48,6 +50,7 @@ use Override;
     'auth_method',
     'connected_by_user_id',
     'status',
+    'disabled_at',
     'capabilities',
     'token_expires_at',
     'last_refreshed_at',
@@ -70,6 +73,7 @@ class ConnectedAccount extends Model
         return [
             'platform' => Platform::class,
             'status' => ConnectedAccountStatus::class,
+            'disabled_at' => 'immutable_datetime',
             'capabilities' => 'array',
             'token_expires_at' => 'immutable_datetime',
             'last_refreshed_at' => 'immutable_datetime',
@@ -88,6 +92,19 @@ class ConnectedAccount extends Model
     {
         return $this->platform === Platform::X
             && (bool) ($this->capabilities['x_premium'] ?? false);
+    }
+
+    public function isDisabled(): bool
+    {
+        return $this->disabled_at !== null;
+    }
+
+    /**
+     * @param  Builder<ConnectedAccount>  $query
+     */
+    public function scopeEnabled(Builder $query): void
+    {
+        $query->whereNull('disabled_at');
     }
 
     /**

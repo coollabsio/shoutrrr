@@ -51,4 +51,11 @@ class ConnectedAccountFactory extends Factory
             'status' => ConnectedAccountStatus::NeedsAttention->value,
         ]);
     }
+
+    public function disabled(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'disabled_at' => now()->subDay(),
+        ]);
+    }
 }
