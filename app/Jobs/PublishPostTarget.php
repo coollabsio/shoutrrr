@@ -97,6 +97,19 @@ class PublishPostTarget implements ShouldQueue
             return;
         }
 
+        if ($target->account()->first()?->isDisabled()) {
+            $target->forceFill([
+                'status' => PostTargetStatus::Skipped->value,
+                'error_kind' => null,
+                'error_message' => 'This account is disabled in the workspace.',
+                'next_attempt_at' => null,
+            ])->save();
+
+            $rollup->recompute($target->post()->firstOrFail());
+
+            return;
+        }
+
         $attempt = DB::transaction(function () use ($target): PostTargetAttempt {
             $target->forceFill([
                 'status' => PostTargetStatus::Publishing->value,
