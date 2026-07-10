@@ -31,6 +31,12 @@ class InstanceSettings
 
     public function engagementPollingEnabled(?Platform $platform = null): bool
     {
+        // Discord (and any future write-only platform) has no engagement connector;
+        // never report it as pollable so the reply-fetch dispatcher skips it.
+        if ($platform !== null && ! $platform->supportsEngagement()) {
+            return false;
+        }
+
         return $this->platformAvailable($platform)
             && $this->platformEnabled('engagement_polling_enabled', $platform);
     }
