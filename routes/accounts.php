@@ -73,6 +73,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->name('accounts.default');
 
     Route::patch('accounts/{account}/toggle', [ConnectedAccountController::class, 'toggle'])
+        ->middleware('throttle:30,1')
         ->name('accounts.toggle');
 
     Route::delete('accounts/{account}', [ConnectedAccountController::class, 'destroy'])

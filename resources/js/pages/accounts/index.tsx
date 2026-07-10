@@ -106,8 +106,15 @@ export default function ConnectedAccounts({
     const connectError =
         flash?.error && flash.error !== dismissedError ? flash.error : null;
 
-    const connectedCount = accounts.filter((a) => a.status === 'active').length;
-    const attentionCount = accounts.length - connectedCount;
+    // A disabled account is neither "connected" nor "needs attention" — it's a
+    // third, dormant bucket, so each account lands in exactly one count.
+    const connectedCount = accounts.filter(
+        (a) => a.status === 'active' && !a.disabled,
+    ).length;
+    const attentionCount = accounts.filter(
+        (a) => a.status !== 'active' && !a.disabled,
+    ).length;
+    const disabledCount = accounts.filter((a) => a.disabled).length;
 
     return (
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-6 pb-16 sm:px-6">
@@ -177,6 +184,17 @@ export default function ConnectedAccounts({
                                 <span className="text-muted-foreground">
                                     need{attentionCount === 1 ? 's' : ''}{' '}
                                     attention
+                                </span>
+                            </span>
+                        )}
+                        {disabledCount > 0 && (
+                            <span className="flex items-center gap-1.5">
+                                <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+                                <span className="font-medium tabular-nums">
+                                    {disabledCount}
+                                </span>
+                                <span className="text-muted-foreground">
+                                    disabled
                                 </span>
                             </span>
                         )}
