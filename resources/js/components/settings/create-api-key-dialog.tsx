@@ -56,11 +56,9 @@ export default function CreateApiKeyDialog() {
                 }
             }}
         >
-            <DialogTrigger asChild>
-                <Button size="sm">
-                    <Plus className="size-4" />
-                    Create key
-                </Button>
+            <DialogTrigger render={<Button size="sm" />}>
+                <Plus className="size-4" />
+                Create key
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
@@ -137,23 +135,25 @@ export default function CreateApiKeyDialog() {
                                         open={dateOpen}
                                         onOpenChange={setDateOpen}
                                     >
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                className="w-full justify-start font-normal"
-                                            >
-                                                <CalendarIcon className="size-4 text-muted-foreground" />
-                                                {expiresAt ? (
-                                                    dayjs(expiresAt).format(
-                                                        'MMM D, YYYY',
-                                                    )
-                                                ) : (
-                                                    <span className="text-muted-foreground">
-                                                        Never expires
-                                                    </span>
-                                                )}
-                                            </Button>
+                                        <PopoverTrigger
+                                            render={
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    className="w-full justify-start font-normal"
+                                                />
+                                            }
+                                        >
+                                            <CalendarIcon className="size-4 text-muted-foreground" />
+                                            {expiresAt ? (
+                                                dayjs(expiresAt).format(
+                                                    'MMM D, YYYY',
+                                                )
+                                            ) : (
+                                                <span className="text-muted-foreground">
+                                                    Never expires
+                                                </span>
+                                            )}
                                         </PopoverTrigger>
                                         <PopoverContent
                                             align="start"

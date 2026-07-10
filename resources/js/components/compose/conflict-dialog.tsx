@@ -90,13 +90,19 @@ export function ConflictDialog({
     const diff = wordDiff(myBaseText, serverPost.base_text);
 
     return (
-        <Dialog open={open}>
-            <DialogContent
-                className="max-w-2xl"
-                showCloseButton={false}
-                onEscapeKeyDown={(e) => e.preventDefault()}
-                onPointerDownOutside={(e) => e.preventDefault()}
-            >
+        <Dialog
+            open={open}
+            onOpenChange={(next, details) => {
+                // The conflict must be resolved by choosing a side. There is no
+                // trigger, so `next` is only ever false here (an Escape / outside
+                // -press dismissal attempt); explicitly cancel it. The parent
+                // closes this dialog by resolving the conflict and unmounting.
+                if (!next) {
+                    details.cancel();
+                }
+            }}
+        >
+            <DialogContent className="max-w-2xl" showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle className="text-[15px] font-semibold">
                         Someone else updated this post

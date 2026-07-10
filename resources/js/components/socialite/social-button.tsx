@@ -14,11 +14,14 @@ export default function SocialButton({ provider, label, invitation }: Props) {
     });
 
     return (
-        <Button variant="outline" className="w-full" asChild>
-            <a href={href}>
-                <ProviderIcon provider={provider} className="h-4 w-4" />
-                Continue with {label}
-            </a>
+        <Button
+            variant="outline"
+            className="w-full"
+            nativeButton={false}
+            render={<a href={href} />}
+        >
+            <ProviderIcon provider={provider} className="h-4 w-4" />
+            Continue with {label}
         </Button>
     );
 }

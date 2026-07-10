@@ -259,20 +259,20 @@ export default function ApiKeys({ apiKeys }: Props) {
                                                 <TableCell className="text-right">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger
-                                                            asChild
+                                                            render={
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    aria-label={`Actions for ${key.name}`}
+                                                                />
+                                                            }
                                                         >
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                aria-label={`Actions for ${key.name}`}
-                                                            >
-                                                                <MoreHorizontal className="size-4" />
-                                                            </Button>
+                                                            <MoreHorizontal className="size-4" />
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem
                                                                 variant="destructive"
-                                                                onSelect={() =>
+                                                                onClick={() =>
                                                                     revokeKey(
                                                                         key,
                                                                     )

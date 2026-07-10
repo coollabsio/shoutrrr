@@ -54,7 +54,7 @@ describe('pick-time tz helpers', () => {
         expect(source).toContain('const browserTz = userTz();');
         expect(source).toContain('const showBrowserTz = browserTz !== tz;');
         expect(source).toContain('{showBrowserTz && (');
-        expect(source).toContain('Your browser is');
+        expect(source).toContain('Your timezone looks like');
         expect(source).toContain('workspace settings');
         expect(source).toContain('href={workspaceSettings().url}');
     });

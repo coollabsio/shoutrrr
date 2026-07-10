@@ -43,7 +43,7 @@ import type { PlatformName } from '@/types/compose';
 import type { Capability } from './types';
 
 export const COLLAPSIBLE_TRIGGER_ICON_CLASS =
-    '[&[data-state=open]_svg]:rotate-180';
+    '[&[data-panel-open]_svg]:rotate-180';
 
 const SUPPORTED_PLATFORM_ICONS = [
     'x',
@@ -218,20 +218,22 @@ function BlueskyConnectDialog({
                         open={oauthServiceOpen}
                         onOpenChange={setOauthServiceOpen}
                     >
-                        <CollapsibleTrigger asChild>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className={`px-0 text-muted-foreground ${COLLAPSIBLE_TRIGGER_ICON_CLASS}`}
-                            >
-                                Choose Bluesky instance
-                                <ChevronDown
-                                    aria-hidden="true"
-                                    data-icon="inline-end"
-                                    className="size-4 text-muted-foreground transition-transform"
+                        <CollapsibleTrigger
+                            render={
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={`px-0 text-muted-foreground ${COLLAPSIBLE_TRIGGER_ICON_CLASS}`}
                                 />
-                            </Button>
+                            }
+                        >
+                            Choose Bluesky instance
+                            <ChevronDown
+                                aria-hidden="true"
+                                data-icon="inline-end"
+                                className="size-4 text-muted-foreground transition-transform"
+                            />
                         </CollapsibleTrigger>
                         <CollapsibleContent className="grid gap-2 pt-2">
                             <Label htmlFor="oauth_pds_url">Service URL</Label>
@@ -265,20 +267,22 @@ function BlueskyConnectDialog({
                 >
                     <div className="flex items-center gap-3 py-1 text-[11px] tracking-wide text-muted-foreground uppercase">
                         <span className="h-px flex-1 bg-border" />
-                        <CollapsibleTrigger asChild>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className={COLLAPSIBLE_TRIGGER_ICON_CLASS}
-                            >
-                                Use app password instead
-                                <ChevronDown
-                                    aria-hidden="true"
-                                    data-icon="inline-end"
-                                    className="size-4 text-muted-foreground transition-transform"
+                        <CollapsibleTrigger
+                            render={
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={COLLAPSIBLE_TRIGGER_ICON_CLASS}
                                 />
-                            </Button>
+                            }
+                        >
+                            Use app password instead
+                            <ChevronDown
+                                aria-hidden="true"
+                                data-icon="inline-end"
+                                className="size-4 text-muted-foreground transition-transform"
+                            />
                         </CollapsibleTrigger>
                         <span className="h-px flex-1 bg-border" />
                     </div>
@@ -351,20 +355,22 @@ function BlueskyConnectDialog({
                                                 setAppPasswordServiceOpen
                                             }
                                         >
-                                            <CollapsibleTrigger asChild>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className={`px-0 text-muted-foreground ${COLLAPSIBLE_TRIGGER_ICON_CLASS}`}
-                                                >
-                                                    Choose Bluesky instance
-                                                    <ChevronDown
-                                                        aria-hidden="true"
-                                                        data-icon="inline-end"
-                                                        className="size-4 text-muted-foreground transition-transform"
+                                            <CollapsibleTrigger
+                                                render={
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className={`px-0 text-muted-foreground ${COLLAPSIBLE_TRIGGER_ICON_CLASS}`}
                                                     />
-                                                </Button>
+                                                }
+                                            >
+                                                Choose Bluesky instance
+                                                <ChevronDown
+                                                    aria-hidden="true"
+                                                    data-icon="inline-end"
+                                                    className="size-4 text-muted-foreground transition-transform"
+                                                />
                                             </CollapsibleTrigger>
                                             <CollapsibleContent className="grid gap-2 pt-2">
                                                 <Label htmlFor="app_password_pds_url">
@@ -465,15 +471,17 @@ export function ConnectButtons({
     return (
         <>
             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button className="w-full justify-center sm:w-auto [&[data-state=open]>svg:last-of-type]:rotate-180">
-                        <Plus className="size-4" />
-                        Connect account
-                        <ChevronDown
-                            className="size-4 opacity-70 transition-transform"
-                            aria-hidden
-                        />
-                    </Button>
+                <DropdownMenuTrigger
+                    render={
+                        <Button className="w-full justify-center sm:w-auto [&[data-popup-open]>svg:last-of-type]:rotate-180" />
+                    }
+                >
+                    <Plus className="size-4" />
+                    Connect account
+                    <ChevronDown
+                        className="size-4 opacity-70 transition-transform"
+                        aria-hidden
+                    />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
                     <DropdownMenuLabel className="text-muted-foreground">
@@ -496,10 +504,7 @@ export function ConnectButtons({
                                 <DropdownMenuItem
                                     key={capability.platform}
                                     className="gap-2.5"
-                                    onSelect={(e) => {
-                                        e.preventDefault();
-                                        setBlueskyOpen(true);
-                                    }}
+                                    onClick={() => setBlueskyOpen(true)}
                                 >
                                     {platformIcon(capability.platform)}
                                     {label}
@@ -528,13 +533,11 @@ export function ConnectButtons({
                         return (
                             <DropdownMenuItem
                                 key={capability.platform}
-                                asChild
                                 className="gap-2.5"
+                                render={<a href={connectHref(capability)} />}
                             >
-                                <a href={connectHref(capability)}>
-                                    {platformIcon(capability.platform)}
-                                    {label}
-                                </a>
+                                {platformIcon(capability.platform)}
+                                {label}
                             </DropdownMenuItem>
                         );
                     })}

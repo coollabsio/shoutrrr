@@ -11,11 +11,7 @@ import {
 
 import EmojiSuggestPopover from '@/components/compose/emoji-suggest-popover';
 import MentionPicker from '@/components/compose/mention-picker';
-import {
-    Popover,
-    PopoverAnchor,
-    PopoverContent,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent } from '@/components/ui/popover';
 import { useEmojiTypeahead } from '@/hooks/compose/use-emoji-typeahead';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { mentionInputValue, updateMentionName } from '@/lib/compose/mentions';
@@ -457,30 +453,30 @@ function EditorBodyInner(
                     !!(editable && onMentionsChange && activeMention) &&
                     mentionAnchorReady
                 }
-                onOpenChange={(open) => {
+                onOpenChange={(open, eventDetails) => {
+                    if (!open && eventDetails.reason === 'escape-key') {
+                        eventDetails.cancel();
+                        handleMentionEscape();
+                        return;
+                    }
                     if (!open) {
                         setActiveMentionId(null);
                     }
                 }}
             >
-                <PopoverAnchor asChild>
-                    <div
-                        ref={mentionAnchorRef}
-                        aria-hidden
-                        className="pointer-events-none absolute w-0"
-                    />
-                </PopoverAnchor>
+                <div
+                    ref={mentionAnchorRef}
+                    aria-hidden
+                    className="pointer-events-none absolute w-0"
+                />
                 {activeMention && (
                     <PopoverContent
+                        anchor={mentionAnchorRef}
                         align="start"
                         side="bottom"
                         sideOffset={8}
                         className="w-80 gap-0 rounded-2xl p-2"
-                        onOpenAutoFocus={(event) => event.preventDefault()}
-                        onEscapeKeyDown={(event) => {
-                            event.preventDefault();
-                            handleMentionEscape();
-                        }}
+                        initialFocus={false}
                     >
                         <MentionPicker
                             activeMention={activeMention}

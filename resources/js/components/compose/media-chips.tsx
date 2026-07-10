@@ -173,121 +173,122 @@ export function MediaChips({
 
                 return (
                     <Tooltip key={m.id}>
-                        <TooltipTrigger asChild>
-                            <div
-                                className="group/chip relative"
-                                draggable
-                                onDragStart={() => {
-                                    dragged.current = true;
-                                    setDragIdx(idx);
+                        <TooltipTrigger
+                            render={
+                                <div
+                                    className="group/chip relative"
+                                    draggable
+                                    onDragStart={() => {
+                                        dragged.current = true;
+                                        setDragIdx(idx);
+                                    }}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        if (dragIdx !== null) {
+                                            reorder(dragIdx, idx);
+                                        }
+                                        setDragIdx(null);
+                                    }}
+                                    onDragEnd={() => setDragIdx(null)}
+                                />
+                            }
+                        >
+                            <button
+                                type="button"
+                                aria-label={
+                                    canEdit
+                                        ? `Edit media ${idx + 1}`
+                                        : `Media ${idx + 1}`
+                                }
+                                onPointerDown={() => {
+                                    dragged.current = false;
                                 }}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    if (dragIdx !== null) {
-                                        reorder(dragIdx, idx);
+                                onClick={() => {
+                                    // Skip the click that ends a reorder drag.
+                                    if (dragged.current || !canEdit) {
+                                        return;
                                     }
-                                    setDragIdx(null);
+                                    // Click the thumbnail to (re)open its editor —
+                                    // same gesture for images and videos.
+                                    if (m.kind === 'video') {
+                                        onVideoClick?.(m.id);
+                                    } else {
+                                        onImageClick?.(m.id);
+                                    }
                                 }}
-                                onDragEnd={() => setDragIdx(null)}
+                                className={cn(
+                                    'block size-7 overflow-hidden rounded-md border border-border',
+                                    'transition-[opacity,transform]',
+                                    canEdit
+                                        ? 'cursor-pointer'
+                                        : 'cursor-default',
+                                    excluded &&
+                                        'opacity-40 ring-1 ring-destructive/50',
+                                    dragIdx === idx && 'scale-95 opacity-50',
+                                )}
                             >
+                                <MediaThumb media={m} />
+                            </button>
+                            <CornerButton
+                                label="Remove"
+                                onClick={() => onRemove(m.id)}
+                            >
+                                <X
+                                    className="size-2.5 text-black"
+                                    aria-hidden="true"
+                                />
+                            </CornerButton>
+                            {/* Per-platform include/exclude — top-left, kept
+                                visible so the toggle is glanceable rather than
+                                hidden behind a hover. */}
+                            {activePlatform && (
                                 <button
                                     type="button"
                                     aria-label={
-                                        canEdit
-                                            ? `Edit media ${idx + 1}`
-                                            : `Media ${idx + 1}`
+                                        excluded
+                                            ? `Include on ${activePlatform}`
+                                            : `Exclude on ${activePlatform}`
                                     }
-                                    onPointerDown={() => {
-                                        dragged.current = false;
-                                    }}
-                                    onClick={() => {
-                                        // Skip the click that ends a reorder drag.
-                                        if (dragged.current || !canEdit) {
-                                            return;
-                                        }
-                                        // Click the thumbnail to (re)open its editor —
-                                        // same gesture for images and videos.
-                                        if (m.kind === 'video') {
-                                            onVideoClick?.(m.id);
-                                        } else {
-                                            onImageClick?.(m.id);
-                                        }
+                                    aria-pressed={excluded}
+                                    title={
+                                        excluded
+                                            ? `Hidden on ${activePlatform} — click to include`
+                                            : `Shown on ${activePlatform} — click to exclude`
+                                    }
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onToggleExclude(m.id);
                                     }}
                                     className={cn(
-                                        'block size-7 overflow-hidden rounded-md border border-border',
-                                        'transition-[opacity,transform]',
-                                        canEdit
-                                            ? 'cursor-pointer'
-                                            : 'cursor-default',
-                                        excluded &&
-                                            'opacity-40 ring-1 ring-destructive/50',
-                                        dragIdx === idx &&
-                                            'scale-95 opacity-50',
+                                        'absolute -top-1.5 -left-1.5 z-10 grid size-4 place-items-center rounded-full',
+                                        'border shadow-sm transition-colors',
+                                        excluded
+                                            ? 'border-background bg-foreground text-background'
+                                            : 'border-border bg-background text-muted-foreground hover:text-foreground',
                                     )}
                                 >
-                                    <MediaThumb media={m} />
-                                </button>
-                                <CornerButton
-                                    label="Remove"
-                                    onClick={() => onRemove(m.id)}
-                                >
-                                    <X
-                                        className="size-2.5 text-black"
-                                        aria-hidden="true"
-                                    />
-                                </CornerButton>
-                                {/* Per-platform include/exclude — top-left, kept
-                                    visible so the toggle is glanceable rather than
-                                    hidden behind a hover. */}
-                                {activePlatform && (
-                                    <button
-                                        type="button"
-                                        aria-label={
-                                            excluded
-                                                ? `Include on ${activePlatform}`
-                                                : `Exclude on ${activePlatform}`
-                                        }
-                                        aria-pressed={excluded}
-                                        title={
-                                            excluded
-                                                ? `Hidden on ${activePlatform} — click to include`
-                                                : `Shown on ${activePlatform} — click to exclude`
-                                        }
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onToggleExclude(m.id);
-                                        }}
-                                        className={cn(
-                                            'absolute -top-1.5 -left-1.5 z-10 grid size-4 place-items-center rounded-full',
-                                            'border shadow-sm transition-colors',
-                                            excluded
-                                                ? 'border-background bg-foreground text-background'
-                                                : 'border-border bg-background text-muted-foreground hover:text-foreground',
-                                        )}
-                                    >
-                                        {excluded ? (
-                                            <EyeOff
-                                                className="size-2.5"
-                                                aria-hidden="true"
-                                            />
-                                        ) : (
-                                            <Eye
-                                                className="size-2.5"
-                                                aria-hidden="true"
-                                            />
-                                        )}
-                                    </button>
-                                )}
-                                {blueskyGif && (
-                                    <span className="absolute -right-1 -bottom-1 z-10 grid size-4 place-items-center rounded-full border border-background bg-amber-500 text-white shadow-sm">
-                                        <Film
+                                    {excluded ? (
+                                        <EyeOff
                                             className="size-2.5"
                                             aria-hidden="true"
                                         />
-                                    </span>
-                                )}
-                            </div>
+                                    ) : (
+                                        <Eye
+                                            className="size-2.5"
+                                            aria-hidden="true"
+                                        />
+                                    )}
+                                </button>
+                            )}
+                            {blueskyGif && (
+                                <span className="absolute -right-1 -bottom-1 z-10 grid size-4 place-items-center rounded-full border border-background bg-amber-500 text-white shadow-sm">
+                                    <Film
+                                        className="size-2.5"
+                                        aria-hidden="true"
+                                    />
+                                </span>
+                            )}
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[11px]">
                             {blueskyGif
@@ -306,77 +307,77 @@ export function MediaChips({
 
                 return (
                     <Tooltip key={p.tempId}>
-                        <TooltipTrigger asChild>
-                            <div
-                                className="group/chip relative"
-                                aria-label={
-                                    p.status === 'processing'
-                                        ? 'Compressing media'
-                                        : p.status === 'uploading'
-                                          ? 'Uploading media'
-                                          : 'Failed upload'
-                                }
-                            >
+                        <TooltipTrigger
+                            render={
                                 <div
-                                    className={cn(
-                                        'relative size-7 overflow-hidden rounded-md border border-border',
-                                        p.status === 'error' &&
-                                            'ring-1 ring-destructive/60',
-                                    )}
-                                >
-                                    {p.previewUrl ? (
-                                        p.kind === 'video' ? (
-                                            <video
-                                                src={p.previewUrl}
-                                                muted
-                                                playsInline
-                                                preload="metadata"
-                                                className={cn(
-                                                    'size-full object-cover',
-                                                    inFlight && 'opacity-50',
-                                                )}
-                                            />
-                                        ) : (
-                                            <img
-                                                src={p.previewUrl}
-                                                alt=""
-                                                draggable={false}
-                                                className={cn(
-                                                    'size-full object-cover',
-                                                    inFlight && 'opacity-50',
-                                                )}
-                                            />
-                                        )
-                                    ) : (
-                                        <div className="size-full bg-muted" />
-                                    )}
-                                    {inFlight && (
-                                        <div className="absolute inset-0 grid place-items-center bg-background/30">
-                                            {p.progress !== undefined ? (
-                                                <span className="font-mono text-[7px] leading-none font-semibold text-foreground">
-                                                    {p.progress}%
-                                                </span>
-                                            ) : (
-                                                <span className="size-3 animate-spin rounded-full border-2 border-foreground/70 border-t-transparent" />
+                                    className="group/chip relative"
+                                    aria-label={
+                                        p.status === 'processing'
+                                            ? 'Compressing media'
+                                            : p.status === 'uploading'
+                                              ? 'Uploading media'
+                                              : 'Failed upload'
+                                    }
+                                />
+                            }
+                        >
+                            <div
+                                className={cn(
+                                    'relative size-7 overflow-hidden rounded-md border border-border',
+                                    p.status === 'error' &&
+                                        'ring-1 ring-destructive/60',
+                                )}
+                            >
+                                {p.previewUrl ? (
+                                    p.kind === 'video' ? (
+                                        <video
+                                            src={p.previewUrl}
+                                            muted
+                                            playsInline
+                                            preload="metadata"
+                                            className={cn(
+                                                'size-full object-cover',
+                                                inFlight && 'opacity-50',
                                             )}
-                                        </div>
-                                    )}
-                                </div>
-                                {p.status === 'error' && (
-                                    <CornerButton
-                                        label="Dismiss failed upload"
-                                        onClick={() =>
-                                            onDismissPending(p.tempId)
-                                        }
-                                        always
-                                    >
-                                        <X
-                                            className="size-2.5 text-black"
-                                            aria-hidden="true"
                                         />
-                                    </CornerButton>
+                                    ) : (
+                                        <img
+                                            src={p.previewUrl}
+                                            alt=""
+                                            draggable={false}
+                                            className={cn(
+                                                'size-full object-cover',
+                                                inFlight && 'opacity-50',
+                                            )}
+                                        />
+                                    )
+                                ) : (
+                                    <div className="size-full bg-muted" />
+                                )}
+                                {inFlight && (
+                                    <div className="absolute inset-0 grid place-items-center bg-background/30">
+                                        {p.progress !== undefined ? (
+                                            <span className="font-mono text-[7px] leading-none font-semibold text-foreground">
+                                                {p.progress}%
+                                            </span>
+                                        ) : (
+                                            <span className="size-3 animate-spin rounded-full border-2 border-foreground/70 border-t-transparent" />
+                                        )}
+                                    </div>
                                 )}
                             </div>
+                            {p.status === 'error' && (
+                                <CornerButton
+                                    label="Dismiss failed upload"
+                                    onClick={() => onDismissPending(p.tempId)}
+                                    always
+                                >
+                                    <X
+                                        className="size-2.5 text-black"
+                                        aria-hidden="true"
+                                    />
+                                </CornerButton>
+                            )}
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[11px]">
                             {p.status === 'processing'

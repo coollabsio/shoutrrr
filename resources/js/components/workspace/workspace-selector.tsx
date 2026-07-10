@@ -47,39 +47,41 @@ export function WorkspaceSelector() {
             <SidebarMenu>
                 <SidebarMenuItem>
                     <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <SidebarMenuButton
-                                size="lg"
-                                disabled={loading}
-                                className="data-[state=open]:bg-sidebar-accent"
-                            >
-                                <div className="flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sidebar-accent text-[12.5px] font-semibold text-sidebar-accent-foreground">
-                                    {current?.logo ? (
-                                        <img
-                                            alt={current.name}
-                                            src={current.logo}
-                                            className="size-8 rounded-lg object-cover"
-                                        />
-                                    ) : current?.name ? (
-                                        getInitials(current.name)
-                                    ) : (
-                                        <Users className="size-4" />
-                                    )}
-                                </div>
-                                <div className="grid flex-1 text-left text-sm leading-tight">
-                                    <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-                                        Workspace
-                                    </span>
-                                    <span className="truncate font-medium">
-                                        {current?.name ?? 'Select workspace'}
-                                    </span>
-                                </div>
-                                {loading ? (
-                                    <Loader2 className="ml-auto size-4 animate-spin" />
+                        <DropdownMenuTrigger
+                            render={
+                                <SidebarMenuButton
+                                    size="lg"
+                                    disabled={loading}
+                                    className="data-[popup-open]:bg-sidebar-accent"
+                                />
+                            }
+                        >
+                            <div className="flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sidebar-accent text-[12.5px] font-semibold text-sidebar-accent-foreground">
+                                {current?.logo ? (
+                                    <img
+                                        alt={current.name}
+                                        src={current.logo}
+                                        className="size-8 rounded-lg object-cover"
+                                    />
+                                ) : current?.name ? (
+                                    getInitials(current.name)
                                 ) : (
-                                    <ChevronsUpDown className="ml-auto size-4" />
+                                    <Users className="size-4" />
                                 )}
-                            </SidebarMenuButton>
+                            </div>
+                            <div className="grid flex-1 text-left text-sm leading-tight">
+                                <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                                    Workspace
+                                </span>
+                                <span className="truncate font-medium">
+                                    {current?.name ?? 'Select workspace'}
+                                </span>
+                            </div>
+                            {loading ? (
+                                <Loader2 className="ml-auto size-4 animate-spin" />
+                            ) : (
+                                <ChevronsUpDown className="ml-auto size-4" />
+                            )}
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                             align="start"
@@ -90,7 +92,7 @@ export function WorkspaceSelector() {
                                       ? 'right'
                                       : 'bottom'
                             }
-                            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                            className="w-(--anchor-width) min-w-56 rounded-lg"
                         >
                             {workspaces.all.map((workspace) => (
                                 <DropdownMenuItem

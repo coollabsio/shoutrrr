@@ -132,18 +132,20 @@ export function PickTimePopover({ value, onChange, tz }: Props) {
 
     return (
         <Popover>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1.5 text-[12.5px] font-medium"
-                >
-                    <CalendarClock
-                        className="size-3.5 text-muted-foreground"
-                        aria-hidden="true"
+            <PopoverTrigger
+                render={
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 text-[12.5px] font-medium"
                     />
-                    {label}
-                </Button>
+                }
+            >
+                <CalendarClock
+                    className="size-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                />
+                {label}
             </PopoverTrigger>
             <PopoverContent align="start" className="w-auto gap-0 p-0">
                 <Calendar

@@ -45,18 +45,23 @@ export default function McpLanding() {
                     </div>
 
                     <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                        <Button asChild size="lg">
-                            <a href={DOCS_URL}>
-                                <BookText />
-                                Read the MCP docs
-                                <ArrowUpRight />
-                            </a>
+                        <Button
+                            nativeButton={false}
+                            size="lg"
+                            render={<a href={DOCS_URL} />}
+                        >
+                            <BookText />
+                            Read the MCP docs
+                            <ArrowUpRight />
                         </Button>
-                        <Button asChild variant="outline" size="lg">
-                            <Link href={home().url}>
-                                <Home />
-                                Back to Shoutrrr
-                            </Link>
+                        <Button
+                            nativeButton={false}
+                            variant="outline"
+                            size="lg"
+                            render={<Link href={home().url} />}
+                        >
+                            <Home />
+                            Back to Shoutrrr
                         </Button>
                     </div>
                 </div>

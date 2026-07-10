@@ -321,23 +321,25 @@ function TimezoneSection({
             <div className="grid max-w-xs gap-2">
                 <Label htmlFor="posting-timezone">Timezone</Label>
                 <Popover open={open} onOpenChange={setOpen}>
-                    <PopoverTrigger asChild>
-                        <Button
-                            id="posting-timezone"
-                            type="button"
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={open}
-                            disabled={!canManage}
-                            className="justify-between font-normal"
-                        >
-                            <span className="truncate">
-                                {value || 'Select a timezone'}
-                            </span>
-                            <ChevronsUpDown className="opacity-50" />
-                        </Button>
+                    <PopoverTrigger
+                        render={
+                            <Button
+                                id="posting-timezone"
+                                type="button"
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={open}
+                                disabled={!canManage}
+                                className="justify-between font-normal"
+                            />
+                        }
+                    >
+                        <span className="truncate">
+                            {value || 'Select a timezone'}
+                        </span>
+                        <ChevronsUpDown className="opacity-50" />
                     </PopoverTrigger>
-                    <PopoverContent className="w-(--radix-popover-trigger-width) p-0">
+                    <PopoverContent className="w-(--anchor-width) p-0">
                         <Command>
                             <CommandInput placeholder="Search timezones..." />
                             <CommandList>

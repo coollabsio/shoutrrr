@@ -120,18 +120,20 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
                                 )}
                             >
                                 <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <button
-                                            type="button"
-                                            className={cn(
-                                                'inline-block max-w-full cursor-help truncate border-0 bg-transparent p-0 text-left font-[inherit] text-inherit underline decoration-dotted underline-offset-2',
-                                                isFailed
-                                                    ? 'decoration-destructive/40'
-                                                    : 'decoration-muted-foreground/40',
-                                            )}
-                                        >
-                                            {errorMessage}
-                                        </button>
+                                    <TooltipTrigger
+                                        render={
+                                            <button
+                                                type="button"
+                                                className={cn(
+                                                    'inline-block max-w-full cursor-help truncate border-0 bg-transparent p-0 text-left font-[inherit] text-inherit underline decoration-dotted underline-offset-2',
+                                                    isFailed
+                                                        ? 'decoration-destructive/40'
+                                                        : 'decoration-muted-foreground/40',
+                                                )}
+                                            />
+                                        }
+                                    >
+                                        {errorMessage}
                                     </TooltipTrigger>
                                     <TooltipContent
                                         side="top"

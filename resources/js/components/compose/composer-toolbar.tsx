@@ -1,5 +1,5 @@
+import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { Image as ImageIcon, Shuffle, Smile, Split } from 'lucide-react';
-import { Popover as PopoverPrimitive } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -199,10 +199,10 @@ function EmojiPopover({
     const [open, setOpen] = useState(false);
     // Mount the picker once and keep it alive. Frimousse re-reads and re-parses
     // the ~775KB emoji dataset and rebuilds its store on every fresh mount, so
-    // unmounting on close (Radix's default) made each reopen — and the select
+    // unmounting on close (the default) made each reopen — and the select
     // that closes it — sluggish. We warm it during browser idle (never on the
-    // click, which the parse would block) and `forceMount` keeps it alive; when
-    // closed it's hidden with `invisible`, not unmounted.
+    // click, which the parse would block) and Portal `keepMounted` keeps it
+    // alive; when closed it's hidden via a transition, not unmounted.
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
         if (mounted) {
@@ -229,58 +229,64 @@ function EmojiPopover({
 
     return (
         <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-            <PopoverPrimitive.Trigger asChild>
-                <button
-                    type="button"
-                    title="Emoji"
-                    data-active={open}
-                    className={cn(
-                        'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
-                        'hover:border-border hover:bg-background hover:text-foreground',
-                        'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
-                    )}
-                >
-                    <Smile className="size-3.5" aria-hidden="true" />
-                    <span>Emoji</span>
-                </button>
+            <PopoverPrimitive.Trigger
+                render={
+                    <button
+                        type="button"
+                        title="Emoji"
+                        data-active={open}
+                        className={cn(
+                            'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
+                            'hover:border-border hover:bg-background hover:text-foreground',
+                            'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
+                        )}
+                    />
+                }
+            >
+                <Smile className="size-3.5" aria-hidden="true" />
+                <span>Emoji</span>
             </PopoverPrimitive.Trigger>
             {mounted && (
-                <PopoverPrimitive.Portal forceMount>
-                    <PopoverPrimitive.Content
-                        forceMount
-                        // Marks this as a kept-warm (force-mounted) popover so a
-                        // global rule can make Radix's popper wrapper click-through
-                        // while closed — otherwise the invisible wrapper, positioned
-                        // over the composer, swallows clicks. See app.css.
-                        data-keep-warm=""
+                <PopoverPrimitive.Portal keepMounted>
+                    <PopoverPrimitive.Positioner
                         align="end"
                         side="top"
                         sideOffset={8}
-                        onOpenAutoFocus={(event) => event.preventDefault()}
-                        className={cn(
-                            'z-50 w-[336px] overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 outline-hidden dark:ring-foreground/10',
-                            // Same fade+zoom feel as the notification bell, but driven
-                            // by a CSS transition instead of Radix's keyframe animate-in/
-                            // -out. The picker is forceMounted (kept warm) and prewarmed
-                            // while closed, so a keyframe `animate-out` would flash it on
-                            // that first hidden mount; a transition only runs on real
-                            // state changes. opacity/transform are GPU-composited, so it
-                            // stays smooth on the heavy virtualized grid.
-                            'origin-(--radix-popover-content-transform-origin) transition-[opacity,transform] duration-100 ease-out',
-                            'data-[state=open]:scale-100 data-[state=open]:opacity-100',
-                            'data-[state=closed]:pointer-events-none data-[state=closed]:scale-95 data-[state=closed]:opacity-0',
-                        )}
+                        // While closed the kept-warm popover stays mounted and
+                        // positioned over the composer; make the positioner
+                        // click-through so it doesn't swallow clicks on the tab
+                        // strip / controls beneath it.
+                        className="isolate z-50 data-closed:pointer-events-none"
                     >
-                        <EmojiPicker
-                            recents={recents}
-                            skinTone={skinTone}
-                            onSkinToneChange={onSkinToneChange}
-                            onSelect={(emoji) => {
-                                onSelect(emoji);
-                                setOpen(false);
-                            }}
-                        />
-                    </PopoverPrimitive.Content>
+                        <PopoverPrimitive.Popup
+                            data-keep-warm=""
+                            initialFocus={false}
+                            className={cn(
+                                'z-50 w-[336px] overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 outline-hidden dark:ring-foreground/10',
+                                // Same fade+zoom feel as the notification bell, but
+                                // driven by a CSS transition instead of a keyframe
+                                // animate-in/-out. The picker is kept warm and
+                                // prewarmed while closed, so a keyframe `animate-out`
+                                // would flash it on that first hidden mount; a
+                                // transition only runs on real state changes.
+                                // opacity/transform are GPU-composited, so it stays
+                                // smooth on the heavy virtualized grid.
+                                'origin-(--transform-origin) transition-[opacity,transform] duration-100 ease-out',
+                                'data-open:scale-100 data-open:opacity-100',
+                                'data-closed:pointer-events-none data-closed:scale-95 data-closed:opacity-0',
+                            )}
+                        >
+                            <EmojiPicker
+                                recents={recents}
+                                skinTone={skinTone}
+                                onSkinToneChange={onSkinToneChange}
+                                onSelect={(emoji) => {
+                                    onSelect(emoji);
+                                    setOpen(false);
+                                }}
+                            />
+                        </PopoverPrimitive.Popup>
+                    </PopoverPrimitive.Positioner>
                 </PopoverPrimitive.Portal>
             )}
         </PopoverPrimitive.Root>

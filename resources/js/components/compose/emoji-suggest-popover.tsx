@@ -1,10 +1,6 @@
 import { type RefObject } from 'react';
 
-import {
-    Popover,
-    PopoverAnchor,
-    PopoverContent,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent } from '@/components/ui/popover';
 import type { EmojiMatch } from '@/lib/compose/emoji/types';
 
 import EmojiSuggestList from './emoji-suggest-list';
@@ -37,26 +33,28 @@ export default function EmojiSuggestPopover({
     return (
         <Popover
             open={open}
-            onOpenChange={(next) => {
+            onOpenChange={(next, eventDetails) => {
+                if (!next && eventDetails.reason === 'focus-out') {
+                    eventDetails.cancel();
+                    return;
+                }
                 if (!next) {
                     onDismiss();
                 }
             }}
         >
-            <PopoverAnchor asChild>
-                <div
-                    ref={anchorRef}
-                    aria-hidden
-                    className="pointer-events-none absolute w-0"
-                />
-            </PopoverAnchor>
+            <div
+                ref={anchorRef}
+                aria-hidden
+                className="pointer-events-none absolute w-0"
+            />
             <PopoverContent
+                anchor={anchorRef}
                 align="start"
                 side="bottom"
                 sideOffset={8}
                 className="w-auto rounded-xl p-0"
-                onOpenAutoFocus={(event) => event.preventDefault()}
-                onFocusOutside={(event) => event.preventDefault()}
+                initialFocus={false}
             >
                 <EmojiSuggestList
                     matches={matches}

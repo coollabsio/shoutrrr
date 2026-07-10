@@ -50,18 +50,23 @@ export default function WorkspaceInvitation({
                 </div>
 
                 <div className="space-y-3">
-                    <Button asChild className="w-full">
-                        <Link href={loginUrl}>
-                            {userExists
-                                ? 'Sign in & join'
-                                : 'I already have an account'}
-                        </Link>
+                    <Button
+                        nativeButton={false}
+                        className="w-full"
+                        render={<Link href={loginUrl} />}
+                    >
+                        {userExists
+                            ? 'Sign in & join'
+                            : 'I already have an account'}
                     </Button>
                     {!userExists && (
-                        <Button asChild variant="outline" className="w-full">
-                            <Link href={registerUrl}>
-                                Create account & join
-                            </Link>
+                        <Button
+                            nativeButton={false}
+                            variant="outline"
+                            className="w-full"
+                            render={<Link href={registerUrl} />}
+                        >
+                            Create account & join
                         </Button>
                     )}
                 </div>

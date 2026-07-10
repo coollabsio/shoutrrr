@@ -75,19 +75,21 @@ export function CalendarHeader({
                 </Button>
 
                 <Popover open={open} onOpenChange={setOpen}>
-                    <PopoverTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label="Jump to date"
-                            className="h-8 flex-1 justify-center gap-1.5 px-2 text-[15px] font-semibold tracking-tight tabular-nums hover:bg-muted/60 sm:ml-1 sm:h-7 sm:flex-none sm:justify-start"
-                        >
-                            <CalendarIcon
-                                className="size-3.5 text-muted-foreground"
-                                aria-hidden
+                    <PopoverTrigger
+                        render={
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label="Jump to date"
+                                className="h-8 flex-1 justify-center gap-1.5 px-2 text-[15px] font-semibold tracking-tight tabular-nums hover:bg-muted/60 sm:ml-1 sm:h-7 sm:flex-none sm:justify-start"
                             />
-                            {label}
-                        </Button>
+                        }
+                    >
+                        <CalendarIcon
+                            className="size-3.5 text-muted-foreground"
+                            aria-hidden
+                        />
+                        {label}
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-auto p-0">
                         <Calendar
@@ -109,11 +111,11 @@ export function CalendarHeader({
                     {tz}
                 </span>
                 <ToggleGroup
-                    type="single"
-                    value={view}
+                    value={[view]}
                     size="sm"
                     variant="outline"
-                    onValueChange={(v) => {
+                    onValueChange={(value) => {
+                        const v = value[0];
                         if (v === 'month' || v === 'week') onSetView(v);
                     }}
                     className="h-8 w-full sm:h-7 sm:w-auto"

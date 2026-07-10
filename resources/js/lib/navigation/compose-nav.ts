@@ -20,7 +20,7 @@ export function composeButtonClassName(collapsed: boolean): string {
     return cn(
         'h-9 justify-between gap-2 bg-primary font-medium text-primary-foreground shadow-sm ring-1 ring-primary/20 transition-all select-none',
         'hover:bg-primary/90 hover:text-primary-foreground hover:shadow active:scale-[0.98]',
-        'data-[active=true]:bg-primary data-[active=true]:text-primary-foreground',
+        'data-active:bg-primary data-active:text-primary-foreground',
         collapsed && 'justify-center',
     );
 }

@@ -274,10 +274,15 @@ export function SubmitBar({
                     focusable span that carries the tooltip explaining the block. */}
                 {uploading ? (
                     <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span tabIndex={0} className="flex-1 sm:flex-none">
-                                {submitButton}
-                            </span>
+                        <TooltipTrigger
+                            render={
+                                <span
+                                    tabIndex={0}
+                                    className="flex-1 sm:flex-none"
+                                />
+                            }
+                        >
+                            {submitButton}
                         </TooltipTrigger>
                         <TooltipContent side="top">
                             Wait for media to finish uploading.

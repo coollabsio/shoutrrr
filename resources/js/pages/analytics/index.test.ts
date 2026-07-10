@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { disabledPlatformLabels } from '@/lib/platforms';
+
 const source = readFileSync(resolve(import.meta.dirname, 'index.tsx'), 'utf8');
 
 describe('analytics disabled metric notices', () => {
@@ -18,10 +20,33 @@ describe('analytics disabled metric notices', () => {
     });
 
     it('derives disabled platform labels from the polling payload keys', () => {
+        // The notices are built via disabledPlatformLabels, which derives the
+        // set from the payload keys instead of a hardcoded platform list.
         expect(source).not.toContain(
             "const analyticsPlatforms: PlatformName[] = ['x', 'bluesky', 'linkedin'];",
         );
-        expect(source).toContain('Object.keys(enabled) as PlatformName[]');
+        expect(source).toContain('disabledPlatformLabels');
+
+        expect(
+            disabledPlatformLabels({
+                x: true,
+                bluesky: false,
+                linkedin: false,
+                facebook: true,
+                instagram: true,
+                threads: true,
+            }),
+        ).toEqual(['Bluesky', 'LinkedIn']);
+        expect(
+            disabledPlatformLabels({
+                x: true,
+                bluesky: true,
+                linkedin: true,
+                facebook: true,
+                instagram: true,
+                threads: true,
+            }),
+        ).toEqual([]);
     });
 });
 

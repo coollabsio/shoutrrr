@@ -197,23 +197,25 @@ export default function PostsIndex({ posts, filters, sets, counts }: Props) {
 
                     {/* Filter dropdown */}
                     <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 gap-1.5"
-                            >
-                                <Filter className="size-3.5" />
-                                Filter
-                                {activeFilterCount > 0 && (
-                                    <Badge
-                                        variant="secondary"
-                                        className="ml-0.5 h-4 rounded-full px-1.5 text-[10px]"
-                                    >
-                                        {activeFilterCount}
-                                    </Badge>
-                                )}
-                            </Button>
+                        <DropdownMenuTrigger
+                            render={
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1.5"
+                                />
+                            }
+                        >
+                            <Filter className="size-3.5" />
+                            Filter
+                            {activeFilterCount > 0 && (
+                                <Badge
+                                    variant="secondary"
+                                    className="ml-0.5 h-4 rounded-full px-1.5 text-[10px]"
+                                >
+                                    {activeFilterCount}
+                                </Badge>
+                            )}
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
@@ -223,10 +225,10 @@ export default function PostsIndex({ posts, filters, sets, counts }: Props) {
                                 <DropdownMenuCheckboxItem
                                     key={opt.value}
                                     checked={filters.platform === opt.value}
-                                    onSelect={(e) => {
-                                        e.preventDefault();
-                                        handlePlatformToggle(opt.value);
-                                    }}
+                                    closeOnClick={false}
+                                    onCheckedChange={() =>
+                                        handlePlatformToggle(opt.value)
+                                    }
                                 >
                                     {opt.label}
                                 </DropdownMenuCheckboxItem>
@@ -259,8 +261,13 @@ export default function PostsIndex({ posts, filters, sets, counts }: Props) {
                     </DropdownMenu>
 
                     <div className="ml-auto">
-                        <Button asChild size="sm" className="h-8">
-                            <Link href={dashboard().url}>New post</Link>
+                        <Button
+                            nativeButton={false}
+                            size="sm"
+                            className="h-8"
+                            render={<Link href={dashboard().url} />}
+                        >
+                            New post
                         </Button>
                     </div>
                 </div>

@@ -224,51 +224,53 @@ export function PostRowActions({ post }: Props) {
         // oxlint-disable-next-line prefer-tag-over-role -- wrapper stops row-click bubbling only
         <div role="presentation" onClick={stopBubble} onKeyDown={stopBubble}>
             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Post actions"
-                        className="size-8 text-muted-foreground hover:text-foreground"
-                    >
-                        <MoreHorizontal className="size-4" aria-hidden />
-                    </Button>
+                <DropdownMenuTrigger
+                    render={
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Post actions"
+                            className="size-8 text-muted-foreground hover:text-foreground"
+                        />
+                    }
+                >
+                    <MoreHorizontal className="size-4" aria-hidden />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                     {caps.canEdit && (
-                        <DropdownMenuItem onSelect={handleEdit}>
+                        <DropdownMenuItem onClick={handleEdit}>
                             Edit
                         </DropdownMenuItem>
                     )}
                     {caps.canSchedule && (
-                        <DropdownMenuItem onSelect={openSchedule}>
+                        <DropdownMenuItem onClick={openSchedule}>
                             Schedule&hellip;
                         </DropdownMenuItem>
                     )}
                     {caps.canReschedule && (
-                        <DropdownMenuItem onSelect={openReschedule}>
+                        <DropdownMenuItem onClick={openReschedule}>
                             Reschedule&hellip;
                         </DropdownMenuItem>
                     )}
                     {caps.canRetry && (
-                        <DropdownMenuItem onSelect={handleRetry}>
+                        <DropdownMenuItem onClick={handleRetry}>
                             Retry failed
                         </DropdownMenuItem>
                     )}
                     {caps.canUnschedule && (
                         <DropdownMenuItem
-                            onSelect={() => void handleUnschedule()}
+                            onClick={() => void handleUnschedule()}
                         >
                             Unschedule
                         </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onSelect={() => setShareOpen(true)}>
+                    <DropdownMenuItem onClick={() => setShareOpen(true)}>
                         Share&hellip;
                     </DropdownMenuItem>
                     {caps.canDelete && (
                         <DropdownMenuItem
                             variant="destructive"
-                            onSelect={() => void handleDelete()}
+                            onClick={() => void handleDelete()}
                         >
                             Delete
                         </DropdownMenuItem>

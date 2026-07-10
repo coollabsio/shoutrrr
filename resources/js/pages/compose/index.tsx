@@ -29,15 +29,14 @@ export default function ComposePage({
             <div className="mx-auto w-full max-w-7xl px-4 pt-6 pb-16 sm:px-6">
                 <div className="sticky top-0 z-10 mb-5 flex items-center gap-2 border-b border-border bg-background/85 px-2 py-2 backdrop-blur-md">
                     <Button
-                        asChild
+                        nativeButton={false}
                         variant="ghost"
                         size="sm"
                         className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+                        render={<Link href={postsRoute().url} />}
                     >
-                        <Link href={postsRoute().url}>
-                            <ArrowLeft className="size-4" />
-                            Posts
-                        </Link>
+                        <ArrowLeft className="size-4" />
+                        Posts
                     </Button>
                     <div className="h-4 w-px bg-border" aria-hidden />
                     <div className="flex min-w-0 flex-1 items-center gap-1.5">

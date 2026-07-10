@@ -198,20 +198,22 @@ function PlatformTabRow({
             ))}
             {overflowAccounts.length > 0 && (
                 <Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-                    <PopoverTrigger asChild>
-                        <button
-                            type="button"
-                            className={cn(
-                                TAB_CLASS,
-                                'shrink-0 gap-1.5',
-                                compact && 'px-2',
-                                'data-[state=open]:bg-muted data-[state=open]:text-foreground',
-                            )}
-                            aria-label={`${overflowAccounts.length} more accounts`}
-                        >
-                            <span>+{overflowAccounts.length} more</span>
-                            <ChevronDown className="size-3 opacity-70 transition-transform duration-150 group-data-[state=open]/tab:rotate-180" />
-                        </button>
+                    <PopoverTrigger
+                        render={
+                            <button
+                                type="button"
+                                className={cn(
+                                    TAB_CLASS,
+                                    'shrink-0 gap-1.5',
+                                    compact && 'px-2',
+                                    'data-[popup-open]:bg-muted data-[popup-open]:text-foreground',
+                                )}
+                                aria-label={`${overflowAccounts.length} more accounts`}
+                            />
+                        }
+                    >
+                        <span>+{overflowAccounts.length} more</span>
+                        <ChevronDown className="size-3 opacity-70 transition-transform duration-150 group-data-[popup-open]/tab:rotate-180" />
                     </PopoverTrigger>
                     <PopoverContent
                         align="start"
@@ -335,21 +337,23 @@ function NeedsAttentionIcon({ account }: { account: Account }) {
 
     return (
         <Tooltip>
-            <TooltipTrigger asChild>
-                <span
-                    role="link"
-                    tabIndex={0}
-                    aria-label={`${account.handle} needs attention`}
-                    onClick={openAccounts}
-                    onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                            openAccounts(event);
-                        }
-                    }}
-                    className="inline-grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm text-destructive outline-hidden hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive/40"
-                >
-                    <AlertTriangle className="size-3.5" aria-hidden />
-                </span>
+            <TooltipTrigger
+                render={
+                    <span
+                        role="link"
+                        tabIndex={0}
+                        aria-label={`${account.handle} needs attention`}
+                        onClick={openAccounts}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                openAccounts(event);
+                            }
+                        }}
+                        className="inline-grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm text-destructive outline-hidden hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive/40"
+                    />
+                }
+            >
+                <AlertTriangle className="size-3.5" aria-hidden />
             </TooltipTrigger>
             <TooltipContent side="top">
                 Reconnect {account.handle} before posting.

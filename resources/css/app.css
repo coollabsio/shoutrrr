@@ -341,14 +341,7 @@
     }
 }
 
-/* Force-mounted "keep-warm" popovers (the emoji picker, marked `data-keep-warm`)
-   stay in the DOM while closed to avoid a heavy remount on reopen. Radix keeps
-   their popper wrapper positioned over the anchor with `pointer-events: auto`, so
-   while closed the invisible wrapper would sit over the composer and swallow every
-   click on the tab strip / controls beneath it. The content itself is already
-   `pointer-events-none` when closed; make the wrapper click-through too. */
-[data-radix-popper-content-wrapper]:has(
-    > [data-keep-warm][data-state='closed']
-) {
-    pointer-events: none;
-}
+/* Kept-warm popovers (the emoji picker, marked `data-keep-warm`) stay mounted
+   via Portal `keepMounted` while closed to avoid a heavy remount on reopen. The
+   Base UI Positioner that wraps them is made click-through while closed inline
+   (`data-closed:pointer-events-none`), so no global rule is needed here. */

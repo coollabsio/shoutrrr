@@ -203,15 +203,18 @@ export default function DestinationSelector({
 
     return (
         <Popover>
-            <PopoverTrigger asChild disabled={disabled}>
-                <button
-                    type="button"
-                    aria-label="Post destination"
-                    className="inline-flex h-7 max-w-[116px] items-center gap-1 rounded-md border border-transparent bg-transparent px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50 sm:max-w-[150px]"
-                >
-                    <span className="truncate">{label}</span>
-                    <ChevronDown className="size-3 shrink-0 opacity-70" />
-                </button>
+            <PopoverTrigger
+                disabled={disabled}
+                render={
+                    <button
+                        type="button"
+                        aria-label="Post destination"
+                        className="inline-flex h-7 max-w-[116px] items-center gap-1 rounded-md border border-transparent bg-transparent px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50 sm:max-w-[150px]"
+                    />
+                }
+            >
+                <span className="truncate">{label}</span>
+                <ChevronDown className="size-3 shrink-0 opacity-70" />
             </PopoverTrigger>
             <PopoverContent
                 align="end"
@@ -278,25 +281,27 @@ function NeedsAttentionLabel({ handle }: { handle?: string }) {
 
     return (
         <Tooltip>
-            <TooltipTrigger asChild>
-                <span
-                    role="link"
-                    tabIndex={0}
-                    className="ml-auto inline-grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm text-destructive outline-hidden hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive/40"
-                    aria-label={
-                        handle
-                            ? `${handle} needs attention`
-                            : 'Account needs attention'
-                    }
-                    onClick={openAccounts}
-                    onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                            openAccounts(event);
+            <TooltipTrigger
+                render={
+                    <span
+                        role="link"
+                        tabIndex={0}
+                        className="ml-auto inline-grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm text-destructive outline-hidden hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive/40"
+                        aria-label={
+                            handle
+                                ? `${handle} needs attention`
+                                : 'Account needs attention'
                         }
-                    }}
-                >
-                    <AlertTriangle className="size-3.5" aria-hidden />
-                </span>
+                        onClick={openAccounts}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                openAccounts(event);
+                            }
+                        }}
+                    />
+                }
+            >
+                <AlertTriangle className="size-3.5" aria-hidden />
             </TooltipTrigger>
             <TooltipContent side="top">
                 {handle
