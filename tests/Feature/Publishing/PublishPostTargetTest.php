@@ -185,9 +185,56 @@ test('publish fails immediately when the account already needs attention', funct
     Bus::assertNotDispatched(PublishPostTarget::class);
 });
 
-test('auth expired failure marks the target failed without retrying', function () {
+test('auth expired result refreshes credentials once and retries the connector', function () {
+    $target = publishTarget();
+    $target->account()->firstOrFail()->secret()->firstOrFail()->forceFill([
+        'refresh_token' => 'refresh-old',
+    ])->save();
+
+    config()->set('services.x.client_id', 'client-id');
+    config()->set('services.x.client_secret', 'client-secret');
+    Http::fake([
+        'https://api.twitter.com/2/oauth2/token' => Http::response([
+            'access_token' => 'fresh-token',
+            'refresh_token' => 'fresh-refresh-token',
+            'expires_in' => 7200,
+        ]),
+    ]);
+
+    $tokens = [];
+    bindConnector(function (PublishContext $context) use (&$tokens): PublishResult {
+        $tokens[] = $context->credentials['access_token'];
+
+        return count($tokens) === 1
+            ? PublishResult::failure(ErrorKind::AuthExpired, 'Unauthorized', 401)
+            : PublishResult::success(['111']);
+    });
+
+    (new PublishPostTarget($target))->handle(
+        app(PublishConnectorRegistry::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+        app(BackoffSchedule::class),
+    );
+
+    $target->refresh();
+    expect($tokens)->toBe(['tok', 'fresh-token'])
+        ->and($target->status)->toBe(PostTargetStatus::Published)
+        ->and($target->attempts)->toBe(1)
+        ->and($target->account()->firstOrFail()->status)->toBe(ConnectedAccountStatus::Active);
+
+    Http::assertSentCount(1);
+});
+
+test('auth expired after the recovery refresh marks the target failed without retrying', function () {
     Bus::fake();
     $target = publishTarget();
+    $target->account()->firstOrFail()->secret()->firstOrFail()->forceFill([
+        'refresh_token' => 'refresh-old',
+    ])->save();
+    Http::fake([
+        'https://api.twitter.com/2/oauth2/token' => Http::response([], 400),
+    ]);
     bindConnector(PublishResult::failure(ErrorKind::AuthExpired, 'Unauthorized', 401));
 
     (new PublishPostTarget($target))->handle(
@@ -200,7 +247,7 @@ test('auth expired failure marks the target failed without retrying', function (
     $target->refresh();
     expect($target->status)->toBe(PostTargetStatus::Failed)
         ->and($target->error_kind)->toBe(ErrorKind::AuthExpired)
-        ->and($target->error_message)->toBe('Unauthorized')
+        ->and($target->error_message)->toStartWith('Token refresh failed for account ')
         ->and($target->attempts)->toBe(1)
         ->and($target->next_attempt_at)->toBeNull();
     expect($target->account()->firstOrFail()->status)->toBe(ConnectedAccountStatus::NeedsAttention);
