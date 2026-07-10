@@ -69,6 +69,14 @@ class DiscordConnector
      */
     public function assertValidWebhookUrl(string $url): void
     {
+        // parse_url() silently substitutes embedded control characters (tab/CR/LF)
+        // with `_` before we ever see the path, which would otherwise let a
+        // malicious control character sneak through validation while the raw,
+        // unsanitized $url is still the one used for the outbound request.
+        if (preg_match('/[\x00-\x1f\x7f]/', $url) === 1) {
+            throw new RuntimeException('That does not look like a Discord webhook URL.');
+        }
+
         if (parse_url($url, PHP_URL_SCHEME) !== 'https') {
             throw new RuntimeException('The Discord webhook URL must use https.');
         }
@@ -81,7 +89,7 @@ class DiscordConnector
 
         $path = (string) parse_url($url, PHP_URL_PATH);
 
-        if (preg_match('#^/api(?:/v\d+)?/webhooks/\d+/[\w-]+$#', $path) !== 1) {
+        if (preg_match('#^/api(?:/v\d+)?/webhooks/\d+/[\w-]+$#D', $path) !== 1) {
             throw new RuntimeException('That does not look like a Discord webhook URL.');
         }
     }
