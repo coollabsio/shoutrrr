@@ -81,6 +81,40 @@ test('post job resolves and forwards the facebook page token to the graph api', 
     Http::assertSent(fn ($request) => str_contains($request->url(), 'access_token=page-token'));
 });
 
+test('post job resolves and forwards the discord webhook url to refetch reactions', function () {
+    // Regression: the metrics job gated credential resolution to a platform
+    // whitelist that omitted Discord, so DiscordMetricsConnector::fetchPost
+    // always received an empty credentials array and failed every run. Prove
+    // Discord now resolves its stored webhook URL end-to-end.
+    Http::fake([
+        'discord.com/api/webhooks/1/tok/messages/999' => Http::response([
+            'reactions' => [['count' => 3], ['count' => 2]],
+        ]),
+    ]);
+
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Discord,
+        'token_expires_at' => null,
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'https://discord.com/api/webhooks/1/tok',
+    ]);
+
+    $target = PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Discord,
+        'posted_at' => now(),
+        'remote_id' => '999',
+        'remote_ids' => ['999'],
+    ]);
+
+    CapturePostTargetMetrics::dispatchSync($target);
+
+    expect($target->refresh()->metrics_status)->toBe(MetricsStatus::Ok)
+        ->and($target->likes)->toBe(5);
+});
+
 test('jobs no-op when feature disabled', function () {
     config(['metrics.enabled' => false]);
     $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky]);

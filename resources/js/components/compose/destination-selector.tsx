@@ -26,6 +26,7 @@ const PLATFORM_BRAND: Record<string, { tile: string; glyph: string }> = {
     facebook: { tile: 'bg-[#1877F2]', glyph: 'text-white!' },
     instagram: { tile: 'bg-[#E4405F]', glyph: 'text-white!' },
     threads: { tile: 'bg-black', glyph: 'text-white!' },
+    discord: { tile: 'bg-[#5865F2]', glyph: 'text-white!' },
 };
 
 const PLATFORM_FALLBACK = { tile: 'bg-muted', glyph: 'text-muted-foreground' };
