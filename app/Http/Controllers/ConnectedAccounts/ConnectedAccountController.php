@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\ConnectedAccounts;
 
+use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
@@ -222,6 +223,13 @@ class ConnectedAccountController extends Controller
 
         $account->forceFill([
             'capabilities' => array_replace($account->capabilities ?? [], $capabilities),
+            // A successful authenticated X lookup proves the stored access token
+            // is usable. Recover an account that a previous refresh failure left
+            // blocked, otherwise publishing would fail before it can use that
+            // still-valid token.
+            'status' => ConnectedAccountStatus::Active->value,
+            'refresh_failed_at' => null,
+            'refresh_failure_reason' => null,
         ])->save();
 
         return back()->with(

@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Enums\WorkspaceRole;
 use App\Models\ConnectedAccount;
@@ -67,7 +68,10 @@ test('owners can refresh an X subscription tier without reconnecting', function 
     $owner->forceFill(['current_workspace_id' => $workspace->id])->save();
     $account = ConnectedAccount::factory()->create([
         'workspace_id' => $workspace->id,
+        'status' => ConnectedAccountStatus::NeedsAttention->value,
         'token_expires_at' => now()->addHour(),
+        'refresh_failed_at' => now(),
+        'refresh_failure_reason' => 'HTTP 401: invalid token',
         'capabilities' => [
             'x_premium' => false,
             'max_text_length' => 280,
@@ -98,7 +102,10 @@ test('owners can refresh an X subscription tier without reconnecting', function 
             && str_contains($message, '25000'));
 
     expect($account->fresh()->xSubscriptionTier())->toBe('premium_plus')
-        ->and($account->fresh()->maxTextLength())->toBe(25_000);
+        ->and($account->fresh()->maxTextLength())->toBe(25_000)
+        ->and($account->fresh()->status)->toBe(ConnectedAccountStatus::Active)
+        ->and($account->fresh()->refresh_failed_at)->toBeNull()
+        ->and($account->fresh()->refresh_failure_reason)->toBeNull();
 });
 
 test('a failed X tier lookup retains the existing account limit', function () {
