@@ -28,9 +28,15 @@ function account(overrides: Partial<Account>): Account {
 }
 
 describe('reconnectOAuthUrl', () => {
-    it('uses the dedicated Bluesky OAuth route for Bluesky accounts', () => {
-        expect(reconnectOAuthUrl(account({ platform: 'bluesky' }))).toBe(
-            BlueskyOAuthController.redirect.url(),
+    it('uses the dedicated Bluesky OAuth route, prefilling the handle as identifier', () => {
+        expect(
+            reconnectOAuthUrl(
+                account({ platform: 'bluesky', handle: '@me.bsky.social' }),
+            ),
+        ).toBe(
+            BlueskyOAuthController.redirect.url({
+                query: { identifier: 'me.bsky.social' },
+            }),
         );
     });
 
@@ -39,12 +45,16 @@ describe('reconnectOAuthUrl', () => {
             reconnectOAuthUrl(
                 account({
                     platform: 'bluesky',
+                    handle: '@me.bsky.social',
                     pds_url: 'https://pds.example',
                 }),
             ),
         ).toBe(
             BlueskyOAuthController.redirect.url({
-                query: { pds_url: 'https://pds.example' },
+                query: {
+                    identifier: 'me.bsky.social',
+                    pds_url: 'https://pds.example',
+                },
             }),
         );
     });
