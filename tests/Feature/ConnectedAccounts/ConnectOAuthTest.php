@@ -136,6 +136,7 @@ test('callback persists an active X account with an encrypted token', function (
         ->and($account->capabilities)->toMatchArray([
             'x_premium' => false,
             'max_text_length' => 280,
+            'max_video_duration_seconds' => 140,
             'verified_type' => 'none',
             'x_subscription_tier' => 'free',
         ])
@@ -164,7 +165,8 @@ test('callback detects the X Premium subscription tier for longer posts', functi
     expect($account->hasXPremium())->toBeTrue()
         ->and($account->xSubscriptionTier())->toBe('basic')
         ->and($account->xSubscriptionLabel())->toBe('X Premium Basic')
-        ->and($account->maxTextLength())->toBe(25_000);
+        ->and($account->maxTextLength())->toBe(25_000)
+        ->and($account->maxVideoDurationSeconds())->toBe(14_400);
 });
 
 test('callback maps a linkedin-openid user', function () {

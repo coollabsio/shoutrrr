@@ -5,6 +5,7 @@ import {
     nextDownscale,
     planVideoEncode,
     validateVideo,
+    videoLimitsForTargets,
     type VideoMeta,
 } from '@/lib/compose/video';
 import type { PlatformLimits } from '@/types/compose';
@@ -70,6 +71,30 @@ describe('validateVideo', () => {
             limits({ platform: 'bluesky', maxVideoBytes: 100_000_000 }),
         ]);
         expect(result.ok).toBe(false);
+    });
+});
+
+describe('videoLimitsForTargets', () => {
+    const platformLimits = [
+        limits({ platform: 'x', maxVideoDurationSeconds: 140 }),
+        limits({ platform: 'bluesky', maxVideoDurationSeconds: 180 }),
+    ];
+
+    it('uses the detected Premium X duration for a Premium-only target', () => {
+        expect(
+            videoLimitsForTargets(platformLimits, [
+                { platform: 'x', max_video_duration_seconds: 14_400 },
+            ]),
+        ).toMatchObject([{ platform: 'x', maxVideoDurationSeconds: 14_400 }]);
+    });
+
+    it('keeps the free X duration when a free and Premium account are selected together', () => {
+        expect(
+            videoLimitsForTargets(platformLimits, [
+                { platform: 'x', max_video_duration_seconds: 14_400 },
+                { platform: 'x', max_video_duration_seconds: 140 },
+            ]),
+        ).toMatchObject([{ platform: 'x', maxVideoDurationSeconds: 140 }]);
     });
 });
 

@@ -5,6 +5,7 @@ use App\Enums\Platform;
 test('per-platform video limits match the spec', function (): void {
     expect(Platform::X->maxVideoBytes())->toBe(536_870_912)
         ->and(Platform::X->maxVideoDurationSeconds())->toBe(140)
+        ->and(Platform::X->maxVideoDurationSeconds(true))->toBe(14_400)
         ->and(Platform::LinkedIn->maxVideoBytes())->toBe(524_288_000)
         ->and(Platform::LinkedIn->maxVideoDurationSeconds())->toBe(1800)
         ->and(Platform::Bluesky->maxVideoBytes())->toBe(100_000_000)

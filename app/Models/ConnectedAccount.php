@@ -92,6 +92,26 @@ class ConnectedAccount extends Model
         return (int) ($this->capabilities['max_text_length'] ?? $this->platform->maxLength());
     }
 
+    public function maxVideoDurationSeconds(): int
+    {
+        if ($this->platform !== Platform::X) {
+            return $this->platform->maxVideoDurationSeconds();
+        }
+
+        // Do not trust the legacy x_premium flag: only a subscription tier read
+        // from X is allowed to unlock the longer upload path.
+        if ($this->xSubscriptionTier() === null) {
+            return Platform::X->maxVideoDurationSeconds();
+        }
+
+        $value = $this->capabilities['max_video_duration_seconds'] ?? null;
+        if (is_int($value) && $value > 0) {
+            return $value;
+        }
+
+        return Platform::X->maxVideoDurationSeconds($this->hasXPremium());
+    }
+
     public function hasXPremium(): bool
     {
         return in_array($this->xSubscriptionTier(), ['basic', 'premium', 'premium_plus'], true);

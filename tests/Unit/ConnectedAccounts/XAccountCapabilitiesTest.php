@@ -13,6 +13,7 @@ test('it maps a free X account to the standard post length even with a blue badg
     ]))->toBe([
         'x_premium' => false,
         'max_text_length' => 280,
+        'max_video_duration_seconds' => 140,
         'verified_type' => 'blue',
         'x_subscription_tier' => 'free',
     ]);
@@ -25,6 +26,7 @@ test('it maps every X Premium subscription tier to the longer post length', func
     ]))->toBe([
         'x_premium' => true,
         'max_text_length' => 25_000,
+        'max_video_duration_seconds' => 14_400,
         'verified_type' => 'none',
         'x_subscription_tier' => $tier,
     ]);
@@ -52,6 +54,7 @@ test('it detects subscription type from the authenticated X user endpoint', func
     expect($capabilities)->toMatchArray([
         'x_premium' => true,
         'max_text_length' => 25_000,
+        'max_video_duration_seconds' => 14_400,
         'verified_type' => 'none',
         'x_subscription_tier' => 'premium_plus',
         'x_subscription_checked_at' => '2026-07-10T12:00:00+00:00',
@@ -70,6 +73,7 @@ test('it distinguishes an unavailable lookup from a free account', function () {
         ->and(app(XAccountCapabilities::class)->forAccessToken(''))->toBe([
             'x_premium' => false,
             'max_text_length' => 280,
+            'max_video_duration_seconds' => 140,
             'verified_type' => null,
             'x_subscription_tier' => 'free',
         ]);
@@ -86,5 +90,17 @@ test('legacy badge-only capabilities do not grant a Premium post limit', functio
 
     expect($account->xSubscriptionTier())->toBeNull()
         ->and($account->hasXPremium())->toBeFalse()
-        ->and($account->maxTextLength())->toBe(280);
+        ->and($account->maxTextLength())->toBe(280)
+        ->and($account->maxVideoDurationSeconds())->toBe(140);
+});
+
+test('a detected X Premium tier grants the longer video duration', function () {
+    $account = new ConnectedAccount;
+    $account->platform = Platform::X;
+    $account->capabilities = [
+        'x_subscription_tier' => 'premium',
+        'max_video_duration_seconds' => 14_400,
+    ];
+
+    expect($account->maxVideoDurationSeconds())->toBe(14_400);
 });

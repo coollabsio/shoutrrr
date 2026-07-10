@@ -59,6 +59,17 @@ function formatSubscriptionCheckedAt(value: string | null): string {
     );
 }
 
+function formatVideoDuration(seconds: number): string {
+    if (seconds >= 3600 && seconds % 3600 === 0) {
+        return `${seconds / 3600}h`;
+    }
+
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+
+    return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
+}
+
 function ReconnectBlueskyDialog({ account }: { account: Account }) {
     const [open, setOpen] = useState(false);
 
@@ -307,7 +318,11 @@ export function AccountCard({
                         </span>
                         <span className="block truncate text-[11.5px] text-muted-foreground">
                             {account.max_text_length.toLocaleString()}{' '}
-                            characters per post ·{' '}
+                            characters per post · video up to{' '}
+                            {formatVideoDuration(
+                                account.max_video_duration_seconds,
+                            )}{' '}
+                            ·{' '}
                             {formatSubscriptionCheckedAt(
                                 account.x_subscription_checked_at,
                             )}

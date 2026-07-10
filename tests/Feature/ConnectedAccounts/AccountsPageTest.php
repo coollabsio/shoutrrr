@@ -26,6 +26,7 @@ function viewerInWorkspace(WorkspaceRole $role): User
         'capabilities' => [
             'x_premium' => true,
             'max_text_length' => 25_000,
+            'max_video_duration_seconds' => 14_400,
             'verified_type' => 'blue',
             'x_subscription_tier' => 'premium',
             'x_subscription_checked_at' => '2026-07-10T12:00:00+00:00',
@@ -50,6 +51,7 @@ test('the accounts page lists accounts and exposes capabilities and canManage to
             ->where('accounts.0.x_subscription_label', 'X Premium')
             ->where('accounts.0.x_subscription_checked_at', '2026-07-10T12:00:00+00:00')
             ->where('accounts.0.max_text_length', 25_000)
+            ->where('accounts.0.max_video_duration_seconds', 14_400)
             ->where('accounts.0.is_default', false)
             ->missing('accounts.0.secret'),
         );
@@ -69,6 +71,7 @@ test('owners can refresh an X subscription tier without reconnecting', function 
         'capabilities' => [
             'x_premium' => false,
             'max_text_length' => 280,
+            'max_video_duration_seconds' => 140,
             'verified_type' => 'blue',
             'x_subscription_tier' => 'free',
         ],
@@ -112,6 +115,7 @@ test('a failed X tier lookup retains the existing account limit', function () {
         'capabilities' => [
             'x_premium' => true,
             'max_text_length' => 25_000,
+            'max_video_duration_seconds' => 14_400,
             'verified_type' => 'none',
             'x_subscription_tier' => 'premium',
         ],

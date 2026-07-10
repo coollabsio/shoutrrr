@@ -11,6 +11,7 @@ export type Account = {
     connected_by: string | null;
     token_expires_at: string | null;
     max_text_length: number;
+    max_video_duration_seconds: number;
     x_premium: boolean;
     x_subscription_tier: 'free' | 'basic' | 'premium' | 'premium_plus' | null;
     x_subscription_label: string | null;

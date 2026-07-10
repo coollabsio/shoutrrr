@@ -54,6 +54,8 @@ test('postReply uploads video via chunked init/append/finalize/STATUS and attach
 
     expect($result->isOk())->toBeTrue();
     expect($result->remoteReplyId)->toBe('888');
+    Http::assertSent(fn ($request): bool => $request->method() === 'GET'
+        && $request->url() === 'https://api.x.com/2/media/upload?media_id=222');
     Http::assertSent(fn ($r) => str_contains($r->url(), '/2/tweets')
         && ($r['media']['media_ids'][0] ?? null) === '222');
 });

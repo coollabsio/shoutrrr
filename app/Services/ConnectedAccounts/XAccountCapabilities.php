@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\ConnectedAccounts;
 
+use App\Enums\Platform;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Date;
@@ -20,7 +21,7 @@ class XAccountCapabilities
     public function __construct(private readonly HttpFactory $http) {}
 
     /**
-     * @return array{x_premium: bool, max_text_length: int, verified_type: string|null, x_subscription_tier: string, x_subscription_checked_at?: string}
+     * @return array{x_premium: bool, max_text_length: int, max_video_duration_seconds: int, verified_type: string|null, x_subscription_tier: string, x_subscription_checked_at?: string}
      */
     public function forAccessToken(?string $token): array
     {
@@ -32,7 +33,7 @@ class XAccountCapabilities
      * deliberately distinct from a free account so callers can retain a known
      * tier instead of downgrading an account during a transient X API failure.
      *
-     * @return array{x_premium: bool, max_text_length: int, verified_type: string|null, x_subscription_tier: string, x_subscription_checked_at: string}|null
+     * @return array{x_premium: bool, max_text_length: int, max_video_duration_seconds: int, verified_type: string|null, x_subscription_tier: string, x_subscription_checked_at: string}|null
      */
     public function tryForAccessToken(?string $token): ?array
     {
@@ -74,7 +75,7 @@ class XAccountCapabilities
 
     /**
      * @param  array<string, mixed>  $user
-     * @return array{x_premium: bool, max_text_length: int, verified_type: string|null, x_subscription_tier: string}
+     * @return array{x_premium: bool, max_text_length: int, max_video_duration_seconds: int, verified_type: string|null, x_subscription_tier: string}
      */
     public static function fromUserData(array $user): array
     {
@@ -90,6 +91,7 @@ class XAccountCapabilities
         return [
             'x_premium' => $isPremium,
             'max_text_length' => $isPremium ? self::PREMIUM_TEXT_LENGTH : self::STANDARD_TEXT_LENGTH,
+            'max_video_duration_seconds' => Platform::X->maxVideoDurationSeconds($isPremium),
             'verified_type' => $verifiedType,
             'x_subscription_tier' => $subscriptionTier,
         ];

@@ -53,6 +53,7 @@ class ConnectedAccountController extends Controller
                 'connected_by' => $account->connectedBy?->name,
                 'token_expires_at' => $account->token_expires_at?->toIso8601String(),
                 'max_text_length' => $account->maxTextLength(),
+                'max_video_duration_seconds' => $account->maxVideoDurationSeconds(),
                 'x_premium' => $account->hasXPremium(),
                 'x_subscription_tier' => $account->xSubscriptionTier(),
                 'x_subscription_label' => $account->xSubscriptionLabel(),
@@ -223,7 +224,10 @@ class ConnectedAccountController extends Controller
             'capabilities' => array_replace($account->capabilities ?? [], $capabilities),
         ])->save();
 
-        return back()->with('success', "{$account->handle} is {$account->xSubscriptionLabel()} — {$account->maxTextLength()} characters per X post.");
+        return back()->with(
+            'success',
+            "{$account->handle} is {$account->xSubscriptionLabel()} — {$account->maxTextLength()} characters per X post and up to {$account->maxVideoDurationSeconds()} seconds of video.",
+        );
     }
 
     public function destroy(Request $request, ConnectedAccount $account): RedirectResponse

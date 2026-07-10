@@ -29,6 +29,7 @@ test('shell props expose accounts, sets, and limits on every page', function () 
         ->assertInertia(fn ($page) => $page
             ->has('shell.accounts', 1)
             ->where('shell.accounts.0.status', 'needs_attention')
+            ->where('shell.accounts.0.max_video_duration_seconds', 140)
             ->has('shell.sets', 1)
             ->has('shell.limits')
         );

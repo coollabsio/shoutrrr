@@ -1,4 +1,4 @@
-import type { PlatformLimits } from '@/types/compose';
+import type { PlatformLimits, PlatformName } from '@/types/compose';
 
 export type VideoMeta = {
     sizeBytes: number;
@@ -7,6 +7,44 @@ export type VideoMeta = {
     width: number;
     height: number;
 };
+
+type VideoLimitTarget = {
+    platform: PlatformName;
+    max_video_duration_seconds?: number;
+};
+
+/**
+ * Start from each platform's shared media contract, then tighten it to the
+ * strictest selected account. This matters for X: a detected Premium account
+ * has a longer video entitlement, but selecting it alongside a free X account
+ * must still keep the upload within the free account's cap.
+ */
+export function videoLimitsForTargets(
+    limits: PlatformLimits[],
+    targets: VideoLimitTarget[],
+): PlatformLimits[] {
+    return limits.flatMap((limit) => {
+        const matchingTargets = targets.filter(
+            (target) => target.platform === limit.platform,
+        );
+        if (matchingTargets.length === 0) {
+            return [];
+        }
+
+        return [
+            {
+                ...limit,
+                maxVideoDurationSeconds: Math.min(
+                    ...matchingTargets.map(
+                        (target) =>
+                            target.max_video_duration_seconds ??
+                            limit.maxVideoDurationSeconds,
+                    ),
+                ),
+            },
+        ];
+    });
+}
 
 export function validateVideo(
     meta: VideoMeta,
@@ -174,11 +212,10 @@ export function readVideoMetadata(file: File): Promise<VideoMeta> {
                 resolve({
                     sizeBytes: file.size,
                     mime: file.type,
-                    // Floor, not round: a 140.4s clip must not be rejected against a
-                    // 140s cap. Clamp to ≥1: a valid video always has some duration,
-                    // but a sub-second trim (e.g. 0.8s) floors to 0, which fails the
-                    // confirm endpoint's `min:1` rule and 422s the upload.
-                    durationSeconds: Math.max(1, Math.floor(video.duration)),
+                    // Ceil, not floor: a 140.4s clip must not slip through a 140s
+                    // cap only to fail after it reaches X. Clamp to ≥1 so a valid
+                    // sub-second trim also satisfies the confirm endpoint's min:1.
+                    durationSeconds: Math.max(1, Math.ceil(video.duration)),
                     width: video.videoWidth,
                     height: video.videoHeight,
                 }),

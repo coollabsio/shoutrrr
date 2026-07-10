@@ -30,7 +30,7 @@ import {
     syncMentionsFromText,
 } from '@/lib/compose/mentions';
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
-import { readVideoMetadata } from '@/lib/compose/video';
+import { readVideoMetadata, videoLimitsForTargets } from '@/lib/compose/video';
 import {
     defaultSettings,
     normalizeSettings,
@@ -211,9 +211,7 @@ export default function Composer({
     const attentionAccounts = tabAccounts.filter(
         (account) => account.status === 'needs_attention',
     );
-    const selectedVideoLimits = limits.filter((l) =>
-        tabAccounts.some((a) => a.platform === l.platform),
-    );
+    const selectedVideoLimits = videoLimitsForTargets(limits, tabAccounts);
     const { flush, ensurePost } = useAutosave({
         state,
         accountIds: destinationAccountIds,

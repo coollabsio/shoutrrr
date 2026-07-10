@@ -293,7 +293,7 @@ class XEngagementConnector implements EngagementConnector
         $status = $finalize;
         for ($i = 0; $i < self::STATUS_POLL_MAX; $i++) {
             $status = $this->http->withToken($token)->acceptJson()
-                ->get(self::MEDIA_BASE, ['command' => 'STATUS', 'media_id' => $mediaId]);
+                ->get(self::MEDIA_BASE, ['media_id' => $mediaId]);
 
             $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $status);
 
