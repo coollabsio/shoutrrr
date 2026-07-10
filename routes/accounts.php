@@ -72,6 +72,9 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('accounts/{account}/default', [ConnectedAccountController::class, 'makeDefault'])
         ->name('accounts.default');
 
+    Route::patch('accounts/{account}/toggle', [ConnectedAccountController::class, 'toggle'])
+        ->name('accounts.toggle');
+
     Route::delete('accounts/{account}', [ConnectedAccountController::class, 'destroy'])
         ->name('accounts.destroy');
 });
