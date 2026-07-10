@@ -55,12 +55,13 @@ test('connect rejects non-Discord and malformed URLs before any request', functi
     'wrong path' => ['https://discord.com/api/not-webhooks/1/tok'],
     'discord.com root' => ['https://discord.com/'],
     'host suffix' => ['https://discord.com.evil.com/api/webhooks/1/tok'],
+    'embedded control char' => ["https://discord.com/api/webhooks/1/tok\x01en"],
 ]);
 
 test('assertValidWebhookUrl rejects a path with a trailing newline', function () {
     // connect() trims the URL before validating, which would strip a *pure*
-    // trailing newline before it ever reached the regex — so this has to
-    // exercise the validator directly to lock in the regex-anchoring fix.
+    // trailing newline before it ever reached the regex — so this locks in
+    // that no control character survives to the outbound request.
     expect(fn () => app(DiscordConnector::class)->assertValidWebhookUrl("https://discord.com/api/webhooks/1/tok\n"))
         ->toThrow(RuntimeException::class);
 });
