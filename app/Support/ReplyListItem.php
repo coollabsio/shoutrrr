@@ -35,6 +35,7 @@ final class ReplyListItem
             'post_excerpt' => $target?->post?->excerpt(),
             'account_handle' => $target?->account?->handle,
             'account_max_text_length' => $target?->account?->maxTextLength(),
+            'account_disabled' => (bool) $target?->account?->isDisabled(),
         ];
     }
 }

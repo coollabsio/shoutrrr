@@ -385,6 +385,12 @@ function RightPane({
                 platform={selected.platform}
                 replyingTo={atHandle(selected.author_handle)}
                 maxLength={selected.account_max_text_length ?? undefined}
+                disabled={selected.account_disabled}
+                disabledReason={
+                    selected.account_disabled
+                        ? 'This account is disabled in the workspace. Enable it in Accounts to reply.'
+                        : undefined
+                }
                 onSend={send}
             />
         </div>

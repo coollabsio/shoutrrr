@@ -108,6 +108,21 @@ test('SendReply::failed marks the row failed', function () {
     expect($ourRow->fresh()->send_status)->toBe(SendStatus::Failed);
 });
 
+test('SendReply fails the row without posting when the account is disabled', function () {
+    $this->reply->target->account->forceFill(['disabled_at' => now()])->save();
+
+    $ourRow = PostTargetReply::factory()->create([
+        'workspace_id' => $this->workspace->id, 'post_target_id' => $this->reply->post_target_id,
+        'platform' => Platform::X, 'is_ours' => true, 'send_status' => SendStatus::Sending->value,
+        'parent_remote_id' => $this->reply->remote_reply_id,
+    ]);
+
+    (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic', Platform::X))
+        ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+
+    expect($ourRow->fresh()->send_status)->toBe(SendStatus::Failed);
+});
+
 test('SendReply posts the media reply and marks it sent', function () {
     $connector = Mockery::mock(EngagementConnector::class);
     $connector->shouldReceive('postReply')->andReturn(ReplyPostResult::ok('rid', 'cid'));

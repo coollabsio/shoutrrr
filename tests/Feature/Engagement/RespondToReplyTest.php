@@ -136,6 +136,18 @@ test('replying up to account capability limit is accepted', function (): void {
         ->assertSessionHasNoErrors();
 });
 
+test('responding is blocked when the account is disabled', function (): void {
+    fakePostReply(ReplyPostResult::ok('at://mine', 'cidmine'));
+
+    $this->target->account->forceFill(['disabled_at' => now()])->save();
+
+    $this->post(route('engagement.respond', $this->reply), ['text' => 'nope'])
+        ->assertSessionHas('error');
+
+    expect($this->reply->fresh()->status)->toBe(ReplyStatus::Pending)
+        ->and(PostTargetReply::withoutGlobalScopes()->where('is_ours', true)->exists())->toBeFalse();
+});
+
 test('a failed post surfaces an error and does not mark responded', function (): void {
     fakePostReply(ReplyPostResult::failed('platform down'));
 

@@ -305,6 +305,10 @@ class EngagementController extends Controller
             return back()->with('error', 'This account is no longer connected.');
         }
 
+        if ($account->isDisabled()) {
+            return back()->with('error', 'This account is disabled in the workspace. Enable it to reply.');
+        }
+
         try {
             $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn, Platform::Facebook, Platform::Instagram, Platform::Threads], true)
                 ? $tokens->fresh($account)

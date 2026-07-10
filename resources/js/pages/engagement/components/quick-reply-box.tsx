@@ -3,6 +3,11 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { MediaView, PlatformName } from '@/types/compose';
 
@@ -17,6 +22,7 @@ type Props = {
     replyingTo?: string;
     maxLength?: number;
     disabled?: boolean;
+    disabledReason?: string;
     onSend: (text: string, mediaIds: string[]) => Promise<void>;
 };
 
@@ -26,6 +32,7 @@ export function QuickReplyBox({
     replyingTo,
     maxLength,
     disabled,
+    disabledReason,
     onSend,
 }: Props) {
     const [text, setText] = useState('');
@@ -112,26 +119,45 @@ export function QuickReplyBox({
                     {remaining}
                 </span>
 
-                <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => void send()}
-                    disabled={disabled || !canSend}
-                >
-                    {sending ? (
-                        'Sending…'
+                {(() => {
+                    const replyButton = (
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void send()}
+                            disabled={disabled || !canSend}
+                        >
+                            {sending ? (
+                                'Sending…'
+                            ) : (
+                                <>
+                                    <span>Reply</span>
+                                    <kbd
+                                        aria-hidden="true"
+                                        className="ml-0.5 hidden h-4 items-center rounded border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex"
+                                    >
+                                        {QUICK_REPLY_SEND_SHORTCUT}
+                                    </kbd>
+                                </>
+                            )}
+                        </Button>
+                    );
+
+                    // A disabled <button> swallows pointer events, so the tooltip
+                    // trigger wraps a focusable span rather than the button itself.
+                    return disabled && disabledReason ? (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span tabIndex={0}>{replyButton}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="end">
+                                {disabledReason}
+                            </TooltipContent>
+                        </Tooltip>
                     ) : (
-                        <>
-                            <span>Reply</span>
-                            <kbd
-                                aria-hidden="true"
-                                className="ml-0.5 hidden h-4 items-center rounded border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex"
-                            >
-                                {QUICK_REPLY_SEND_SHORTCUT}
-                            </kbd>
-                        </>
-                    )}
-                </Button>
+                        replyButton
+                    );
+                })()}
             </div>
 
             {rm.editor}

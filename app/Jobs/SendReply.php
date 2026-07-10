@@ -72,7 +72,7 @@ class SendReply implements ShouldQueue
 
         $account = $parent->target?->account()->withoutGlobalScopes()->first();
 
-        if ($account === null) {
+        if ($account === null || $account->isDisabled()) {
             $this->failRow($ourRow);
 
             return;

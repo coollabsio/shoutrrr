@@ -21,6 +21,7 @@ export type ReplyItem = {
     post_excerpt: string | null;
     account_handle: string | null;
     account_max_text_length: number | null;
+    account_disabled: boolean;
 };
 
 export type AccountFacet = {
