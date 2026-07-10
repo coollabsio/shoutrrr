@@ -66,15 +66,15 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
     return (
         <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2.5">
             <ToggleGroup
-                type="single"
-                value={
+                value={[
                     filters.archived
                         ? 'archived'
                         : filters.unread
                           ? 'unread'
-                          : 'all'
-                }
-                onValueChange={(v) => {
+                          : 'all',
+                ]}
+                onValueChange={(value) => {
+                    const v = value[0];
                     if (v) {
                         update({
                             unread: v === 'unread',
@@ -99,7 +99,7 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
             <Select
                 value={filters.platform || 'all'}
                 onValueChange={(v) =>
-                    update({ platform: v === 'all' ? '' : v })
+                    update({ platform: !v || v === 'all' ? '' : v })
                 }
             >
                 <SelectTrigger size="sm" className="h-8 w-auto gap-1.5 text-xs">
@@ -120,7 +120,7 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
                 <Select
                     value={filters.account || 'all'}
                     onValueChange={(v) =>
-                        update({ account: v === 'all' ? '' : v })
+                        update({ account: !v || v === 'all' ? '' : v })
                     }
                 >
                     <SelectTrigger
@@ -160,16 +160,18 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
                 </Badge>
             ) : posts.length > 0 ? (
                 <Popover open={postPickerOpen} onOpenChange={setPostPickerOpen}>
-                    <PopoverTrigger asChild>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 gap-1.5 text-xs text-muted-foreground"
-                        >
-                            <FileText className="size-3.5" />
-                            Filter by post
-                            <ChevronDown className="size-3.5 opacity-60" />
-                        </Button>
+                    <PopoverTrigger
+                        render={
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs text-muted-foreground"
+                            />
+                        }
+                    >
+                        <FileText className="size-3.5" />
+                        Filter by post
+                        <ChevronDown className="size-3.5 opacity-60" />
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-80 p-0">
                         <Command>

@@ -71,10 +71,17 @@ export default function ManageConnectedAccounts({ connections }: Props) {
                                 Disconnect
                             </Button>
                         ) : (
-                            <Button variant="outline" size="sm" asChild>
-                                <a href={redirect.url(connection.provider)}>
-                                    Connect
-                                </a>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                nativeButton={false}
+                                render={
+                                    <a
+                                        href={redirect.url(connection.provider)}
+                                    />
+                                }
+                            >
+                                Connect
                             </Button>
                         )}
                     </div>

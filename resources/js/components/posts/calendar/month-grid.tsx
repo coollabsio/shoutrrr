@@ -182,14 +182,16 @@ function DayCell({
                     ))}
                     {overflow > 0 && (
                         <Popover>
-                            <PopoverTrigger asChild>
-                                <button
-                                    type="button"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="w-full rounded-sm px-1.5 py-0.5 text-left text-[10px] font-medium tracking-wider text-muted-foreground uppercase tabular-nums transition-colors hover:bg-muted hover:text-foreground"
-                                >
-                                    +{overflow} more
-                                </button>
+                            <PopoverTrigger
+                                render={
+                                    <button
+                                        type="button"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-full rounded-sm px-1.5 py-0.5 text-left text-[10px] font-medium tracking-wider text-muted-foreground uppercase tabular-nums transition-colors hover:bg-muted hover:text-foreground"
+                                    />
+                                }
+                            >
+                                +{overflow} more
                             </PopoverTrigger>
                             <PopoverContent
                                 align="start"

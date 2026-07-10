@@ -224,15 +224,17 @@ export function PostRowActions({ post }: Props) {
         // oxlint-disable-next-line prefer-tag-over-role -- wrapper stops row-click bubbling only
         <div role="presentation" onClick={stopBubble} onKeyDown={stopBubble}>
             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Post actions"
-                        className="size-8 text-muted-foreground hover:text-foreground"
-                    >
-                        <MoreHorizontal className="size-4" aria-hidden />
-                    </Button>
+                <DropdownMenuTrigger
+                    render={
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Post actions"
+                            className="size-8 text-muted-foreground hover:text-foreground"
+                        />
+                    }
+                >
+                    <MoreHorizontal className="size-4" aria-hidden />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                     {caps.canEdit && (

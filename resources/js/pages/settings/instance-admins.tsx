@@ -136,18 +136,17 @@ export default function InstanceAdmins({ owners, users, search }: Props) {
                                                 owners.length > 1 && (
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger
-                                                            asChild
+                                                            render={
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                />
+                                                            }
                                                         >
-                                                            <Button
-                                                                size="icon"
-                                                                variant="ghost"
-                                                            >
-                                                                <MoreVertical className="size-4" />
-                                                                <span className="sr-only">
-                                                                    Owner
-                                                                    actions
-                                                                </span>
-                                                            </Button>
+                                                            <MoreVertical className="size-4" />
+                                                            <span className="sr-only">
+                                                                Owner actions
+                                                            </span>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem

@@ -43,14 +43,16 @@ export function AddTimePopover({
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <button
-                    type="button"
-                    className="inline-flex items-center justify-center gap-1 rounded-md border border-dashed border-border py-1 text-[12px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
-                >
-                    <Plus className="size-3.5" />
-                    Add time
-                </button>
+            <PopoverTrigger
+                render={
+                    <button
+                        type="button"
+                        className="inline-flex items-center justify-center gap-1 rounded-md border border-dashed border-border py-1 text-[12px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                    />
+                }
+            >
+                <Plus className="size-3.5" />
+                Add time
             </PopoverTrigger>
             <PopoverContent align="start" className="w-auto p-3">
                 <div className="flex items-center gap-1.5">

@@ -97,16 +97,18 @@ export default function MembersTable({
                                 <TableCell className="text-right">
                                     {!member.is_owner && (
                                         <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                >
-                                                    <MoreVertical className="size-4" />
-                                                    <span className="sr-only">
-                                                        Member actions
-                                                    </span>
-                                                </Button>
+                                            <DropdownMenuTrigger
+                                                render={
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                    />
+                                                }
+                                            >
+                                                <MoreVertical className="size-4" />
+                                                <span className="sr-only">
+                                                    Member actions
+                                                </span>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 {availableRoles

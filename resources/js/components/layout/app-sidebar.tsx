@@ -94,12 +94,10 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem className="flex items-center gap-1">
                         <SidebarMenuButton
-                            asChild
                             className="h-8 min-w-0 flex-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
+                            render={<Link href={composeHref} />}
                         >
-                            <Link href={composeHref}>
-                                <AppLogo />
-                            </Link>
+                            <AppLogo />
                         </SidebarMenuButton>
                         <a
                             href={githubReleaseUrl}
@@ -121,30 +119,28 @@ export function AppSidebar() {
                         <SidebarMenu>
                             <SidebarMenuItem>
                                 <SidebarMenuButton
-                                    asChild
                                     tooltip="Compose new post"
                                     isActive={isCurrentUrl(composeHref)}
                                     className={composeButtonClassName(
                                         collapsed,
                                     )}
+                                    render={<Link href={composeHref} />}
                                 >
-                                    <Link href={composeHref}>
-                                        <span className="pointer-events-none flex items-center gap-2">
-                                            <span
-                                                className={composeIconClassName()}
-                                            >
-                                                <Pencil aria-hidden="true" />
-                                            </span>
-                                            {!collapsed && (
-                                                <span>Compose post</span>
-                                            )}
+                                    <span className="pointer-events-none flex items-center gap-2">
+                                        <span
+                                            className={composeIconClassName()}
+                                        >
+                                            <Pencil aria-hidden="true" />
                                         </span>
                                         {!collapsed && (
-                                            <Kbd className="bg-primary-foreground/15 text-primary-foreground">
-                                                ⌘.
-                                            </Kbd>
+                                            <span>Compose post</span>
                                         )}
-                                    </Link>
+                                    </span>
+                                    {!collapsed && (
+                                        <Kbd className="bg-primary-foreground/15 text-primary-foreground">
+                                            ⌘.
+                                        </Kbd>
+                                    )}
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
                         </SidebarMenu>
@@ -164,38 +160,36 @@ export function AppSidebar() {
                                 .map((item) => (
                                     <SidebarMenuItem key={item.title}>
                                         <SidebarMenuButton
-                                            asChild
                                             tooltip={item.title}
                                             isActive={isCurrentUrl(item.href)}
+                                            render={<Link href={item.href} />}
                                         >
-                                            <Link href={item.href}>
-                                                <item.icon aria-hidden="true" />
-                                                <span>{item.title}</span>
-                                                {item.title === 'Engagement' &&
-                                                unreadReplies > 0 ? (
-                                                    <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
-                                                        {unreadReplies > 99
-                                                            ? '99+'
-                                                            : unreadReplies}
-                                                    </span>
-                                                ) : null}
-                                            </Link>
+                                            <item.icon aria-hidden="true" />
+                                            <span>{item.title}</span>
+                                            {item.title === 'Engagement' &&
+                                            unreadReplies > 0 ? (
+                                                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                    {unreadReplies > 99
+                                                        ? '99+'
+                                                        : unreadReplies}
+                                                </span>
+                                            ) : null}
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
                                 ))}
                             {features?.analytics && (
                                 <SidebarMenuItem>
                                     <SidebarMenuButton
-                                        asChild
                                         tooltip="Analytics"
                                         isActive={isCurrentUrl(
                                             analyticsRoute(),
                                         )}
+                                        render={
+                                            <Link href={analyticsRoute()} />
+                                        }
                                     >
-                                        <Link href={analyticsRoute()}>
-                                            <ChartColumn aria-hidden="true" />
-                                            <span>Analytics</span>
-                                        </Link>
+                                        <ChartColumn aria-hidden="true" />
+                                        <span>Analytics</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             )}
@@ -210,39 +204,35 @@ export function AppSidebar() {
                             <SidebarMenu>
                                 <SidebarMenuItem>
                                     <SidebarMenuButton
-                                        asChild
                                         tooltip={workspaceSettingsLabel}
                                         isActive={isCurrentOrParentUrl(
                                             WorkspaceSettingsController.showOverview(),
                                         )}
+                                        render={
+                                            <Link
+                                                href={WorkspaceSettingsController.showOverview()}
+                                            />
+                                        }
                                     >
-                                        <Link
-                                            href={WorkspaceSettingsController.showOverview()}
-                                        >
-                                            <Settings aria-hidden="true" />
-                                            <span>
-                                                {workspaceSettingsLabel}
-                                            </span>
-                                        </Link>
+                                        <Settings aria-hidden="true" />
+                                        <span>{workspaceSettingsLabel}</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                                 {instance.isOwner && (
                                     <SidebarMenuItem>
                                         <SidebarMenuButton
-                                            asChild
                                             tooltip={instanceSettingsLabel}
                                             isActive={isCurrentOrParentUrl(
                                                 InstanceSettingsController.edit(),
                                             )}
+                                            render={
+                                                <Link
+                                                    href={InstanceSettingsController.edit()}
+                                                />
+                                            }
                                         >
-                                            <Link
-                                                href={InstanceSettingsController.edit()}
-                                            >
-                                                <Wrench aria-hidden="true" />
-                                                <span>
-                                                    {instanceSettingsLabel}
-                                                </span>
-                                            </Link>
+                                            <Wrench aria-hidden="true" />
+                                            <span>{instanceSettingsLabel}</span>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
                                 )}

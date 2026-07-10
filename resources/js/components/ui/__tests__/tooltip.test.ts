@@ -22,7 +22,7 @@ beforeAll(() => {
 });
 
 describe('tooltip', () => {
-    it('uses a real Radix arrow filled from the tooltip background', async () => {
+    it('drives its surface and arrow from the --tooltip-bg variable', async () => {
         const container = document.createElement('div');
         document.body.append(container);
         const root = createRoot(container);
@@ -36,14 +36,9 @@ describe('tooltip', () => {
                     { open: true },
                     React.createElement(
                         TooltipTrigger,
-                        { asChild: true },
-                        React.createElement('button', null, 'Trigger'),
+                        { render: React.createElement('button', null, 'Trigger') },
                     ),
-                    React.createElement(
-                        TooltipContent,
-                        { forceMount: true },
-                        'Tooltip body',
-                    ),
+                    React.createElement(TooltipContent, null, 'Tooltip body'),
                 ),
             ),
         );
@@ -55,19 +50,23 @@ describe('tooltip', () => {
         });
 
         const tooltip = document.querySelector('[data-slot="tooltip-content"]');
-        const arrow = tooltip?.querySelector('svg');
+        // Base UI renders the arrow as a plain <div> (last child of the popup),
+        // not the old Radix <svg>. Both surface and arrow must resolve their
+        // color through --tooltip-bg so consumers can recolor the tooltip
+        // (e.g. target-status-chips overrides it to var(--popover)).
+        const arrow = tooltip?.lastElementChild;
 
         expect(
             tooltip?.classList.contains('[--tooltip-bg:var(--foreground)]'),
         ).toBe(true);
         expect(tooltip?.classList.contains('bg-(--tooltip-bg)')).toBe(true);
-        expect(tooltip?.classList.contains('rotate-45')).toBe(false);
         expect(tooltip?.classList.contains('bg-foreground')).toBe(false);
-        expect(tooltip?.classList.contains('fill-foreground')).toBe(false);
 
         expect(arrow).not.toBeNull();
+        expect(arrow?.classList.contains('bg-(--tooltip-bg)')).toBe(true);
         expect(arrow?.classList.contains('fill-(--tooltip-bg)')).toBe(true);
-        expect(arrow?.classList.contains('rotate-45')).toBe(false);
+        expect(arrow?.classList.contains('bg-foreground')).toBe(false);
+        expect(arrow?.classList.contains('fill-foreground')).toBe(false);
 
         root.unmount();
         container.remove();

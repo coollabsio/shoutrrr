@@ -36,11 +36,9 @@ export default function InviteMemberDialog({
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button>
-                    <UserPlus className="size-4" />
-                    Invite member
-                </Button>
+            <DialogTrigger render={<Button />}>
+                <UserPlus className="size-4" />
+                Invite member
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>

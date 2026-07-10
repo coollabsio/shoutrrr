@@ -147,8 +147,8 @@ export function QuickReplyBox({
                     // trigger wraps a focusable span rather than the button itself.
                     return disabled && disabledReason ? (
                         <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span tabIndex={0}>{replyButton}</span>
+                            <TooltipTrigger render={<span tabIndex={0} />}>
+                                {replyButton}
                             </TooltipTrigger>
                             <TooltipContent side="top" align="end">
                                 {disabledReason}

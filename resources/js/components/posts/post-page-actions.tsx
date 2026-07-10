@@ -151,15 +151,18 @@ export function PostPageActions({ post }: Props) {
 
             {showReplies && (
                 <Button
-                    asChild
                     size="sm"
                     variant="outline"
                     aria-label="View replies"
+                    nativeButton={false}
+                    render={
+                        <Link
+                            href={`${engagementRoute().url}?post=${post.id}`}
+                        />
+                    }
                 >
-                    <Link href={`${engagementRoute().url}?post=${post.id}`}>
-                        <MessageCircle className="size-3.5" aria-hidden />
-                        <span className="hidden sm:inline">Replies</span>
-                    </Link>
+                    <MessageCircle className="size-3.5" aria-hidden />
+                    <span className="hidden sm:inline">Replies</span>
                 </Button>
             )}
 

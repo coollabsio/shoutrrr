@@ -91,12 +91,7 @@ export function ConflictDialog({
 
     return (
         <Dialog open={open}>
-            <DialogContent
-                className="max-w-2xl"
-                showCloseButton={false}
-                onEscapeKeyDown={(e) => e.preventDefault()}
-                onPointerDownOutside={(e) => e.preventDefault()}
-            >
+            <DialogContent className="max-w-2xl" showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle className="text-[15px] font-semibold">
                         Someone else updated this post

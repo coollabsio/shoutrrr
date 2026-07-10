@@ -336,17 +336,21 @@ function RightPane({
                 </div>
                 {selected.post_id ? (
                     <Button
-                        asChild
+                        nativeButton={false}
                         variant="ghost"
                         size="sm"
                         className="gap-1 text-muted-foreground hover:text-foreground"
+                        render={
+                            <Link
+                                href={
+                                    ComposerController.show(selected.post_id)
+                                        .url
+                                }
+                            />
+                        }
                     >
-                        <Link
-                            href={ComposerController.show(selected.post_id).url}
-                        >
-                            Post
-                            <ArrowUpRight className="size-3.5" />
-                        </Link>
+                        Post
+                        <ArrowUpRight className="size-3.5" />
                     </Button>
                 ) : null}
                 <Button

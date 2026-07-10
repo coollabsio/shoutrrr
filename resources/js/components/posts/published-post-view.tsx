@@ -499,13 +499,13 @@ function PublishedBody({
 
             {publishedTargets.length > 1 && (
                 <ToggleGroup
-                    type="single"
-                    value={selectedTarget?.id ?? ''}
+                    value={selectedTarget ? [selectedTarget.id] : []}
                     size="sm"
                     variant="outline"
                     onValueChange={(value) => {
-                        if (value) {
-                            setSelectedId(value);
+                        const v = value[0];
+                        if (v) {
+                            setSelectedId(v);
                         }
                     }}
                     className="flex flex-wrap justify-start"

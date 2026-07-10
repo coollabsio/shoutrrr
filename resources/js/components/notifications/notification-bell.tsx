@@ -186,24 +186,26 @@ export function NotificationBell() {
 
     return (
         <Popover>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative size-8 text-muted-foreground"
-                    aria-label={
-                        unread > 0
-                            ? `Notifications (${unread} unread)`
-                            : 'Notifications'
-                    }
-                >
-                    <Bell className="size-4" />
-                    {unread > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-medium text-white tabular-nums">
-                            {unread > 9 ? '9+' : unread}
-                        </span>
-                    )}
-                </Button>
+            <PopoverTrigger
+                render={
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="relative size-8 text-muted-foreground"
+                        aria-label={
+                            unread > 0
+                                ? `Notifications (${unread} unread)`
+                                : 'Notifications'
+                        }
+                    />
+                }
+            >
+                <Bell className="size-4" />
+                {unread > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-medium text-white tabular-nums">
+                        {unread > 9 ? '9+' : unread}
+                    </span>
+                )}
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 gap-0 p-0">
                 <div className="flex items-center justify-between border-b border-border px-3 py-2">

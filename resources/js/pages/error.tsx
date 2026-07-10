@@ -69,11 +69,13 @@ export default function ErrorPage({ status }: Props) {
                     </p>
 
                     <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                        <Button asChild size="lg">
-                            <Link href={home().url}>
-                                <Home />
-                                Go home
-                            </Link>
+                        <Button
+                            size="lg"
+                            nativeButton={false}
+                            render={<Link href={home().url} />}
+                        >
+                            <Home />
+                            Go home
                         </Button>
                         <Button
                             type="button"

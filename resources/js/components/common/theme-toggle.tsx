@@ -21,16 +21,18 @@ export function ThemeToggle() {
 
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 text-muted-foreground"
-                    aria-label="Toggle theme"
-                >
-                    <Sun className="size-4 dark:hidden" />
-                    <Moon className="hidden size-4 dark:block" />
-                </Button>
+            <DropdownMenuTrigger
+                render={
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground"
+                        aria-label="Toggle theme"
+                    />
+                }
+            >
+                <Sun className="size-4 dark:hidden" />
+                <Moon className="hidden size-4 dark:block" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 {options.map(({ value, icon: Icon, label }) => (
