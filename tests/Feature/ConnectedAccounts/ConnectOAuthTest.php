@@ -119,8 +119,8 @@ test('callback persists an active X account with an encrypted token', function (
         'expiresIn' => 7200,
     ]);
     Http::fake([
-        'https://api.twitter.com/2/users/me*' => Http::response([
-            'data' => ['id' => 'x-99', 'verified_type' => 'none'],
+        'https://api.x.com/2/users/me*' => Http::response([
+            'data' => ['id' => 'x-99', 'subscription_type' => 'None', 'verified_type' => 'none'],
         ]),
     ]);
 
@@ -133,14 +133,16 @@ test('callback persists an active X account with an encrypted token', function (
         ->and($account->handle)->toBe('@ada')
         ->and($account->workspace_id)->toBe($workspace->id)
         ->and($account->secret->access_token)->toBe('access')
-        ->and($account->capabilities)->toBe([
+        ->and($account->capabilities)->toMatchArray([
             'x_premium' => false,
             'max_text_length' => 280,
             'verified_type' => 'none',
-        ]);
+            'x_subscription_tier' => 'free',
+        ])
+        ->and($account->capabilities['x_subscription_checked_at'])->toBeString()->not->toBe('');
 });
 
-test('callback detects X premium accounts for long tweets', function () {
+test('callback detects the X Premium subscription tier for longer posts', function () {
     config()->set('services.x.client_id', 'cid');
     config()->set('services.x.client_secret', 'secret');
     config()->set('services.x.redirect', 'https://app.test/accounts/callback/x');
@@ -151,8 +153,8 @@ test('callback detects X premium accounts for long tweets', function () {
         'token' => 'access',
     ]);
     Http::fake([
-        'https://api.twitter.com/2/users/me*' => Http::response([
-            'data' => ['id' => 'x-premium', 'verified_type' => 'blue'],
+        'https://api.x.com/2/users/me*' => Http::response([
+            'data' => ['id' => 'x-premium', 'subscription_type' => 'Basic', 'verified_type' => 'none'],
         ]),
     ]);
 
@@ -160,6 +162,8 @@ test('callback detects X premium accounts for long tweets', function () {
 
     $account = ConnectedAccount::withoutGlobalScopes()->firstWhere('remote_account_id', 'x-premium');
     expect($account->hasXPremium())->toBeTrue()
+        ->and($account->xSubscriptionTier())->toBe('basic')
+        ->and($account->xSubscriptionLabel())->toBe('X Premium Basic')
         ->and($account->maxTextLength())->toBe(25_000);
 });
 

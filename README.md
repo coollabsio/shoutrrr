@@ -39,13 +39,13 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 
 | Platform        | Connect with                   | Publishing                                          | Threads         | Analytics                            |
 | --------------- | ------------------------------ | --------------------------------------------------- | --------------- | ------------------------------------ |
-| **X** (Twitter) | OAuth 2.0                      | ✅ (≤280 chars, ≤25,000 for Premium, up to 4 media) | ✅              | likes, reposts, replies, impressions |
+| **X** (Twitter) | OAuth 2.0                      | ✅ (≤280 chars, ≤25,000 for X Premium tiers, up to 4 media) | ✅              | likes, reposts, replies, impressions |
 | **Bluesky**     | ATProto OAuth or app passwords | ✅ (≤300 graphemes, up to 4 images or 1 video)      | ✅              | likes, reposts, replies              |
 | **LinkedIn**    | OAuth 2.0 (OIDC)               | ✅ (≤3000 chars, up to 9 images or 1 video)         | — (single post) | not available for personal accounts  |
 
 ## Features
 
-- 📝 **Composer** — draft with media and alt text, see a live character count for each network/account (including X Premium limits), and automatically split long posts into threads where the platform supports it.
+- 📝 **Composer** — draft with media and alt text, see a live character count for each network/account (including detected X subscription limits), and automatically split long posts into threads where the platform supports it.
 - 🚀 **Multi-account publishing** — fan one post out to many accounts at once, with optional per-platform overrides. Each target publishes independently and retries on failure.
 - 🗓️ **Queue & calendar** — set recurring posting slots (in your workspace's timezone), drop drafts into the queue, and review everything on a month calendar. Publish instantly whenever you like.
 - 📊 **Analytics** — follower and post-count trends per account, plus per-post engagement (likes, reposts, replies, impressions) where the provider API supports it.
@@ -193,7 +193,7 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI="${APP_URL}/auth/google/callback"
 ```
 
-> **Heads up:** publishing, scheduling, engagement polling, and analytics capture rely on a running queue worker and scheduler. The provided Docker setups start both for you. Metrics and engagement are enabled by default and can be disabled with `METRICS_ENABLED=false` / `ENGAGEMENT_ENABLED=false` (see `config/metrics.php` and `config/engagement.php`).
+> **Heads up:** publishing, scheduling, engagement polling, and analytics capture rely on a running queue worker and scheduler. The provided Docker setups start both for you. Metrics and engagement are enabled by default and can be disabled with `METRICS_ENABLED=false` / `ENGAGEMENT_ENABLED=false` (see `config/metrics.php` and `config/engagement.php`). X accounts read the authenticated account's subscription type when connected or when **Refresh tier** is used in Connected Accounts; Free accounts use a 280-character limit and Basic, Premium, and Premium+ accounts use 25,000.
 
 ## Development
 

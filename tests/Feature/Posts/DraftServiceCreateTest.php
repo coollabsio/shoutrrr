@@ -82,6 +82,7 @@ test('createDraft keeps long X text together for premium accounts', function () 
             'x_premium' => true,
             'max_text_length' => 25_000,
             'verified_type' => 'blue',
+            'x_subscription_tier' => 'premium',
         ],
     ])->save();
 

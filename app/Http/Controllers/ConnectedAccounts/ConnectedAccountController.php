@@ -9,11 +9,14 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\BlueskyConnector;
+use App\Services\ConnectedAccounts\XAccountCapabilities;
+use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -23,6 +26,8 @@ class ConnectedAccountController extends Controller
     public function __construct(
         private readonly BlueskyConnector $connector,
         private readonly AccountConnectionService $connections,
+        private readonly XAccountCapabilities $xCapabilities,
+        private readonly TokenManager $tokens,
     ) {}
 
     public function index(Request $request): Response
@@ -49,6 +54,9 @@ class ConnectedAccountController extends Controller
                 'token_expires_at' => $account->token_expires_at?->toIso8601String(),
                 'max_text_length' => $account->maxTextLength(),
                 'x_premium' => $account->hasXPremium(),
+                'x_subscription_tier' => $account->xSubscriptionTier(),
+                'x_subscription_label' => $account->xSubscriptionLabel(),
+                'x_subscription_checked_at' => $account->xSubscriptionCheckedAt(),
                 'is_default' => $account->id === $defaultAccountId,
                 'disabled' => $account->isDisabled(),
                 'pds_url' => $this->customPdsUrl($account),
@@ -183,6 +191,39 @@ class ConnectedAccountController extends Controller
             : "{$account->handle} is enabled.";
 
         return redirect()->route('accounts.index')->with('success', $message);
+    }
+
+    public function refreshXAccountTier(Request $request, ConnectedAccount $account): RedirectResponse
+    {
+        $request->user()->can('update', $account) ?: abort(403);
+
+        if ($account->platform !== Platform::X) {
+            return back()->with('error', 'Only X accounts have a subscription tier.');
+        }
+
+        try {
+            $credentials = $this->tokens->fresh($account);
+            $capabilities = $this->xCapabilities->tryForAccessToken(
+                isset($credentials['access_token']) ? (string) $credentials['access_token'] : null,
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('Could not refresh X account subscription tier.', [
+                'account_id' => $account->id,
+                'exception' => $exception::class,
+            ]);
+
+            return back()->with('error', "We couldn't refresh {$account->handle}'s X account tier. Your existing limit was kept.");
+        }
+
+        if ($capabilities === null) {
+            return back()->with('error', "We couldn't refresh {$account->handle}'s X account tier. Your existing limit was kept.");
+        }
+
+        $account->forceFill([
+            'capabilities' => array_replace($account->capabilities ?? [], $capabilities),
+        ])->save();
+
+        return back()->with('success', "{$account->handle} is {$account->xSubscriptionLabel()} — {$account->maxTextLength()} characters per X post.");
     }
 
     public function destroy(Request $request, ConnectedAccount $account): RedirectResponse

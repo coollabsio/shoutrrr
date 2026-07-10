@@ -6,11 +6,12 @@ namespace App\Services\ConnectedAccounts;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Log;
 
 class XAccountCapabilities
 {
-    private const string USER_URL = 'https://api.twitter.com/2/users/me';
+    private const string USER_URL = 'https://api.x.com/2/users/me';
 
     private const int STANDARD_TEXT_LENGTH = 280;
 
@@ -19,12 +20,24 @@ class XAccountCapabilities
     public function __construct(private readonly HttpFactory $http) {}
 
     /**
-     * @return array{x_premium: bool, max_text_length: int, verified_type: string|null}
+     * @return array{x_premium: bool, max_text_length: int, verified_type: string|null, x_subscription_tier: string, x_subscription_checked_at?: string}
      */
     public function forAccessToken(?string $token): array
     {
+        return $this->tryForAccessToken($token) ?? self::fromUserData([]);
+    }
+
+    /**
+     * Read the subscription tier for the authenticated user. A failed request is
+     * deliberately distinct from a free account so callers can retain a known
+     * tier instead of downgrading an account during a transient X API failure.
+     *
+     * @return array{x_premium: bool, max_text_length: int, verified_type: string|null, x_subscription_tier: string, x_subscription_checked_at: string}|null
+     */
+    public function tryForAccessToken(?string $token): ?array
+    {
         if ($token === null || $token === '') {
-            return self::fromUserData([]);
+            return null;
         }
 
         try {
@@ -34,7 +47,7 @@ class XAccountCapabilities
                 ->timeout(5)
                 ->connectTimeout(3)
                 ->get(self::USER_URL, [
-                    'user.fields' => 'verified,verified_type',
+                    'user.fields' => 'subscription_type,verified,verified_type',
                 ]);
         } catch (ConnectionException $exception) {
             Log::warning('Could not detect X account capabilities.', [
@@ -42,7 +55,7 @@ class XAccountCapabilities
                 'message' => $exception->getMessage(),
             ]);
 
-            return self::fromUserData([]);
+            return null;
         }
 
         if ($response->failed()) {
@@ -50,25 +63,35 @@ class XAccountCapabilities
                 'status' => $response->status(),
             ]);
 
-            return self::fromUserData([]);
+            return null;
         }
 
-        return self::fromUserData((array) $response->json('data', []));
+        return [
+            ...self::fromUserData((array) $response->json('data', [])),
+            'x_subscription_checked_at' => Date::now()->toIso8601String(),
+        ];
     }
 
     /**
      * @param  array<string, mixed>  $user
-     * @return array{x_premium: bool, max_text_length: int, verified_type: string|null}
+     * @return array{x_premium: bool, max_text_length: int, verified_type: string|null, x_subscription_tier: string}
      */
     public static function fromUserData(array $user): array
     {
-        $verifiedType = isset($user['verified_type']) ? (string) $user['verified_type'] : null;
-        $isPremium = in_array($verifiedType, ['blue', 'business', 'government'], true);
+        $verifiedType = isset($user['verified_type']) ? strtolower((string) $user['verified_type']) : null;
+        $subscriptionTier = match (strtolower((string) ($user['subscription_type'] ?? ''))) {
+            'basic' => 'basic',
+            'premium' => 'premium',
+            'premiumplus', 'premium_plus' => 'premium_plus',
+            default => 'free',
+        };
+        $isPremium = $subscriptionTier !== 'free';
 
         return [
             'x_premium' => $isPremium,
             'max_text_length' => $isPremium ? self::PREMIUM_TEXT_LENGTH : self::STANDARD_TEXT_LENGTH,
             'verified_type' => $verifiedType,
+            'x_subscription_tier' => $subscriptionTier,
         ];
     }
 }

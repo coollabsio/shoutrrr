@@ -85,13 +85,57 @@ class ConnectedAccount extends Model
 
     public function maxTextLength(): int
     {
+        if ($this->platform === Platform::X && $this->xSubscriptionTier() === null) {
+            return Platform::X->maxLength();
+        }
+
         return (int) ($this->capabilities['max_text_length'] ?? $this->platform->maxLength());
     }
 
     public function hasXPremium(): bool
     {
-        return $this->platform === Platform::X
-            && (bool) ($this->capabilities['x_premium'] ?? false);
+        return in_array($this->xSubscriptionTier(), ['basic', 'premium', 'premium_plus'], true);
+    }
+
+    public function xSubscriptionTier(): ?string
+    {
+        if ($this->platform !== Platform::X) {
+            return null;
+        }
+
+        $capabilities = $this->capabilities ?? [];
+
+        if (! array_key_exists('x_subscription_tier', $capabilities)) {
+            return null;
+        }
+
+        $tier = (string) $capabilities['x_subscription_tier'];
+
+        return in_array($tier, ['basic', 'premium', 'premium_plus'], true)
+            ? $tier
+            : 'free';
+    }
+
+    public function xSubscriptionLabel(): ?string
+    {
+        return match ($this->xSubscriptionTier()) {
+            'basic' => 'X Premium Basic',
+            'premium' => 'X Premium',
+            'premium_plus' => 'X Premium+',
+            'free' => 'Free',
+            default => null,
+        };
+    }
+
+    public function xSubscriptionCheckedAt(): ?string
+    {
+        if ($this->platform !== Platform::X) {
+            return null;
+        }
+
+        $value = $this->capabilities['x_subscription_checked_at'] ?? null;
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     public function isDisabled(): bool

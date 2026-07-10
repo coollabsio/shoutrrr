@@ -7,6 +7,7 @@ use App\Models\ConnectedAccountSecret;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function viewerInWorkspace(WorkspaceRole $role): User
@@ -26,6 +27,8 @@ function viewerInWorkspace(WorkspaceRole $role): User
             'x_premium' => true,
             'max_text_length' => 25_000,
             'verified_type' => 'blue',
+            'x_subscription_tier' => 'premium',
+            'x_subscription_checked_at' => '2026-07-10T12:00:00+00:00',
         ],
     ]);
 
@@ -43,10 +46,92 @@ test('the accounts page lists accounts and exposes capabilities and canManage to
             ->has('accounts', 1)
             ->where('accounts.0.handle', '@listed')
             ->where('accounts.0.x_premium', true)
+            ->where('accounts.0.x_subscription_tier', 'premium')
+            ->where('accounts.0.x_subscription_label', 'X Premium')
+            ->where('accounts.0.x_subscription_checked_at', '2026-07-10T12:00:00+00:00')
             ->where('accounts.0.max_text_length', 25_000)
             ->where('accounts.0.is_default', false)
             ->missing('accounts.0.secret'),
         );
+});
+
+test('owners can refresh an X subscription tier without reconnecting', function () {
+    $owner = User::factory()->create(['email_verified_at' => now()]);
+    $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $owner->id,
+    ]);
+    $owner->forceFill(['current_workspace_id' => $workspace->id])->save();
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'token_expires_at' => now()->addHour(),
+        'capabilities' => [
+            'x_premium' => false,
+            'max_text_length' => 280,
+            'verified_type' => 'blue',
+            'x_subscription_tier' => 'free',
+        ],
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'stored-access-token',
+    ]);
+
+    Http::fake([
+        'https://api.x.com/2/users/me*' => Http::response([
+            'data' => [
+                'id' => $account->remote_account_id,
+                'subscription_type' => 'PremiumPlus',
+                'verified_type' => 'none',
+            ],
+        ]),
+    ]);
+
+    test()->actingAs($owner)
+        ->post(route('accounts.refresh-x-tier', $account))
+        ->assertRedirect()
+        ->assertSessionHas('success', fn (string $message): bool => str_contains($message, 'X Premium+')
+            && str_contains($message, '25000'));
+
+    expect($account->fresh()->xSubscriptionTier())->toBe('premium_plus')
+        ->and($account->fresh()->maxTextLength())->toBe(25_000);
+});
+
+test('a failed X tier lookup retains the existing account limit', function () {
+    $owner = User::factory()->create(['email_verified_at' => now()]);
+    $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $owner->id,
+    ]);
+    $owner->forceFill(['current_workspace_id' => $workspace->id])->save();
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'token_expires_at' => now()->addHour(),
+        'capabilities' => [
+            'x_premium' => true,
+            'max_text_length' => 25_000,
+            'verified_type' => 'none',
+            'x_subscription_tier' => 'premium',
+        ],
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'stored-access-token',
+    ]);
+
+    Http::fake([
+        'https://api.x.com/2/users/me*' => Http::response([], 503),
+    ]);
+
+    test()->actingAs($owner)
+        ->post(route('accounts.refresh-x-tier', $account))
+        ->assertRedirect()
+        ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'existing limit was kept'));
+
+    expect($account->fresh()->xSubscriptionTier())->toBe('premium')
+        ->and($account->fresh()->maxTextLength())->toBe(25_000);
 });
 
 test('the accounts page exposes a saved custom PDS so reconnect can replay it', function () {

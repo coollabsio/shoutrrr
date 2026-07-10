@@ -76,6 +76,10 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware('throttle:30,1')
         ->name('accounts.toggle');
 
+    Route::post('accounts/{account}/refresh-x-tier', [ConnectedAccountController::class, 'refreshXAccountTier'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.refresh-x-tier');
+
     Route::delete('accounts/{account}', [ConnectedAccountController::class, 'destroy'])
         ->name('accounts.destroy');
 });

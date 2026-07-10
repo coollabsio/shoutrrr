@@ -45,6 +45,20 @@ const PLATFORM_FALLBACK = { tile: 'bg-muted', glyph: 'text-muted-foreground' };
 export const ACCOUNT_CARD_ACTIONS_CLASS =
     'mt-1 flex flex-wrap items-center gap-2 border-t border-border pt-4';
 
+function formatSubscriptionCheckedAt(value: string | null): string {
+    if (!value) {
+        return 'Not checked yet';
+    }
+
+    return (
+        'Checked ' +
+        new Intl.DateTimeFormat(undefined, {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+        }).format(new Date(value))
+    );
+}
+
 function ReconnectBlueskyDialog({ account }: { account: Account }) {
     const [open, setOpen] = useState(false);
 
@@ -139,6 +153,7 @@ export function AccountCard({
     onReconnectOAuth,
     onDisconnect,
     onToggle,
+    onRefreshXAccountTier,
 }: {
     account: Account;
     canManage: boolean;
@@ -146,6 +161,7 @@ export function AccountCard({
     onReconnectOAuth: (account: Account) => void;
     onDisconnect: (account: Account) => void;
     onToggle: (account: Account, enabled: boolean) => void;
+    onRefreshXAccountTier: (account: Account) => void;
 }) {
     const brand = PLATFORM_BRAND[account.platform] ?? PLATFORM_FALLBACK;
     const needsAttention = account.status !== 'active';
@@ -261,14 +277,14 @@ export function AccountCard({
                         </Badge>
                     </>
                 )}
-                {account.x_premium && (
+                {account.platform === 'x' && account.x_subscription_label && (
                     <>
                         <span aria-hidden>·</span>
                         <Badge
                             variant="info"
                             className="h-4 rounded-full px-1.5 text-[10.5px]"
                         >
-                            Premium
+                            {account.x_subscription_label}
                         </Badge>
                     </>
                 )}
@@ -282,6 +298,35 @@ export function AccountCard({
                 )}
             </div>
 
+            {account.platform === 'x' && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                    <span className="min-w-0">
+                        <span className="block text-[12.5px] font-medium">
+                            {account.x_subscription_label ??
+                                'Refresh to detect X account tier'}
+                        </span>
+                        <span className="block truncate text-[11.5px] text-muted-foreground">
+                            {account.max_text_length.toLocaleString()}{' '}
+                            characters per post ·{' '}
+                            {formatSubscriptionCheckedAt(
+                                account.x_subscription_checked_at,
+                            )}
+                        </span>
+                    </span>
+                    {canManage && !frozen && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 shrink-0"
+                            onClick={() => onRefreshXAccountTier(account)}
+                        >
+                            <RefreshCw className="size-4" />
+                            Refresh tier
+                        </Button>
+                    )}
+                </div>
+            )}
             {canManage && (
                 <div className={ACCOUNT_CARD_ACTIONS_CLASS}>
                     {!frozen &&

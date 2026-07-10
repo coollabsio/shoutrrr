@@ -20,6 +20,9 @@ function account(overrides: Partial<Account>): Account {
         token_expires_at: null,
         max_text_length: 300,
         x_premium: false,
+        x_subscription_tier: null,
+        x_subscription_label: null,
+        x_subscription_checked_at: null,
         is_default: false,
         disabled: false,
         pds_url: null,
@@ -30,7 +33,9 @@ function account(overrides: Partial<Account>): Account {
 describe('reconnectOAuthUrl', () => {
     it('uses the dedicated Bluesky OAuth route for Bluesky accounts', () => {
         expect(reconnectOAuthUrl(account({ platform: 'bluesky' }))).toBe(
-            BlueskyOAuthController.redirect.url(),
+            BlueskyOAuthController.redirect.url({
+                query: { identifier: 'me.bsky.social' },
+            }),
         );
     });
 
@@ -44,7 +49,10 @@ describe('reconnectOAuthUrl', () => {
             ),
         ).toBe(
             BlueskyOAuthController.redirect.url({
-                query: { pds_url: 'https://pds.example' },
+                query: {
+                    identifier: 'me.bsky.social',
+                    pds_url: 'https://pds.example',
+                },
             }),
         );
     });
