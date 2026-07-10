@@ -6,7 +6,7 @@
 
 **An open-source, self-hostable alternative to Buffer, Typefully & Hootsuite.**
 
-Write once, publish everywhere. Schedule posts to X, Bluesky, and LinkedIn from one calendar — on your own server, with your own data.
+Write once, publish everywhere. Schedule posts to X, Bluesky, LinkedIn, Facebook, Instagram, and Threads from one calendar — on your own server, with your own data.
 
 [![License](https://img.shields.io/github/license/coollabsio/shoutrrr?style=for-the-badge&color=4c1)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/coollabsio/shoutrrr?style=for-the-badge&logo=github&color=f5c518)](https://github.com/coollabsio/shoutrrr/stargazers)
@@ -37,11 +37,14 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 
 ## Supported platforms
 
-| Platform        | Connect with                   | Publishing                                          | Threads         | Analytics                            |
-| --------------- | ------------------------------ | --------------------------------------------------- | --------------- | ------------------------------------ |
-| **X** (Twitter) | OAuth 2.0                      | ✅ (≤280 chars, ≤25,000 for Premium, up to 4 media) | ✅              | likes, reposts, replies, impressions |
-| **Bluesky**     | ATProto OAuth or app passwords | ✅ (≤300 graphemes, up to 4 images or 1 video)      | ✅              | likes, reposts, replies              |
-| **LinkedIn**    | OAuth 2.0 (OIDC)               | ✅ (≤3000 chars, up to 9 images or 1 video)         | — (single post) | not available for personal accounts  |
+| Platform         | Connect with                   | Publishing                                                | Threads         | Analytics                            |
+| ---------------- | ------------------------------ | --------------------------------------------------------- | --------------- | ------------------------------------ |
+| **X** (Twitter)  | OAuth 2.0                      | ✅ (≤280 chars, ≤25,000 for Premium, up to 4 media)       | ✅              | likes, reposts, replies, impressions |
+| **Bluesky**      | ATProto OAuth or app passwords | ✅ (≤300 graphemes, up to 4 images or 1 video)            | ✅              | likes, reposts, replies              |
+| **LinkedIn**     | OAuth 2.0 (OIDC)               | ✅ (≤3000 chars, up to 9 images or 1 video)               | — (single post) | not available for personal accounts  |
+| **Facebook** (Pages) | OAuth 2.0 (Facebook Login) | ✅ (≤63,206 chars, up to 10 images or 1 video)            | — (single post) | likes, comments, shares, impressions |
+| **Instagram**    | OAuth 2.0 (Facebook Login)     | ✅ (media required, ≤2,200 chars, up to 10 images or 1 video/Reel) | — (single post) | likes, comments, shares, views       |
+| **Threads**      | OAuth 2.0                      | ✅ (≤500 chars, up to 10 images or 1 video)               | ✅              | likes, replies, reposts, views       |
 
 ## Features
 
@@ -144,7 +147,7 @@ Set `INERTIA_SSR_ENABLED=true` for server-side rendering. To run the worker/sche
     | `APP_ENV`   | `production`                                                                 |
     | `APP_DEBUG` | `false`                                                                      |
 
-    Add your `X_*`, `LINKEDIN_*`, and optional `GOOGLE_*` credentials here too (see [Connecting your accounts](#connecting-your-accounts)).
+    Add your `X_*`, `LINKEDIN_*`, `FACEBOOK_*`, `THREADS_*`, and optional `GOOGLE_*` credentials here too (see [Connecting your accounts](#connecting-your-accounts)).
 
 5. Click **Deploy**.
 
@@ -169,7 +172,7 @@ The CSP is intentionally **not** sent in `local` (`APP_ENV=local`) because it is
 - **OAuth (recommended)** — users sign in on Bluesky and authorize Shoutrrr without handing over a password. It's zero-config: Shoutrrr publishes an [ATProto OAuth](https://atproto.com/specs/oauth) client-metadata document at `${APP_URL}/oauth/bluesky/client-metadata.json` (with keys at `${APP_URL}/oauth/bluesky/jwks.json`), and Bluesky's authorization server fetches those to identify your instance. The signing key is generated once and stored encrypted — there's nothing to add to `.env`. **The one requirement:** `APP_URL` must be a public HTTPS URL, because Bluesky has to reach those two documents over the internet. (In `local` dev, Shoutrrr falls back to a loopback client so OAuth still works on `localhost`.)
 - **App password** — users paste a Bluesky [app password](https://bsky.app/settings/app-passwords). No setup, and it works anywhere — including private or LAN deployments Bluesky can't reach for OAuth.
 
-**X** and **LinkedIn** publish through your own developer app, so you'll register one with each provider and add the credentials to `.env`. The redirect URIs must match what you register (they default to `${APP_URL}/...`):
+**X**, **LinkedIn**, and the **Meta** platforms (Facebook, Instagram, Threads) publish through your own developer app, so you'll register one with each provider and add the credentials to `.env`. The redirect URIs must match what you register (they default to `${APP_URL}/...`):
 
 ```dotenv
 # X — https://developer.x.com
@@ -181,6 +184,19 @@ X_REDIRECT_URI="${APP_URL}/accounts/callback/x"
 LINKEDIN_CLIENT_ID=
 LINKEDIN_CLIENT_SECRET=
 LINKEDIN_REDIRECT_URI="${APP_URL}/accounts/callback/linkedin"
+
+# Facebook + Instagram — one Meta app (https://developers.facebook.com).
+# Instagram accounts are discovered via their linked Facebook Pages, so both
+# platforms share these credentials. Publishing to non-test accounts requires
+# Meta App Review + Business Verification.
+FACEBOOK_CLIENT_ID=
+FACEBOOK_CLIENT_SECRET=
+FACEBOOK_REDIRECT_URI="${APP_URL}/accounts/callback/meta"
+
+# Threads — a separate Meta app (https://developers.facebook.com).
+THREADS_CLIENT_ID=
+THREADS_CLIENT_SECRET=
+THREADS_REDIRECT_URI="${APP_URL}/accounts/callback/threads"
 ```
 
 Optionally, let people sign in with a social account instead of a password:
@@ -270,7 +286,7 @@ Run the full local gate (lint, format, type-check, refactor check, Pest suite) w
 
 See all the people who have contributed in the [contributors list](https://github.com/coollabsio/shoutrrr/graphs/contributors).
 
-## Star history
+<!-- ## Star history
 
 <a href="https://www.star-history.com/?type=date&repos=coollabsio%2Fshoutrrr">
  <picture>
@@ -278,7 +294,7 @@ See all the people who have contributed in the [contributors list](https://githu
    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=coollabsio/shoutrrr&type=date&legend=top-left" />
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=coollabsio/shoutrrr&type=date&legend=top-left" />
  </picture>
-</a>
+</a> -->
 
 ## License
 
