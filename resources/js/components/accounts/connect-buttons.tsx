@@ -561,20 +561,6 @@ export function ConnectButtons({
                                 ? metaConnectLabel(capabilities)
                                 : capability.label;
 
-                        // Bluesky authenticates via a handle / app-password dialog.
-                        if (capability.supportsAppPassword) {
-                            return (
-                                <DropdownMenuItem
-                                    key={capability.platform}
-                                    className="gap-2.5"
-                                    onClick={() => setBlueskyOpen(true)}
-                                >
-                                    {platformIcon(capability.platform)}
-                                    {label}
-                                </DropdownMenuItem>
-                            );
-                        }
-
                         // Discord authenticates via a pasted webhook URL dialog.
                         if (capability.supportsWebhook) {
                             return (
@@ -582,6 +568,20 @@ export function ConnectButtons({
                                     key={capability.platform}
                                     className="gap-2.5"
                                     onClick={() => setDiscordOpen(true)}
+                                >
+                                    {platformIcon(capability.platform)}
+                                    {label}
+                                </DropdownMenuItem>
+                            );
+                        }
+
+                        // Bluesky authenticates via a handle / app-password dialog.
+                        if (capability.supportsAppPassword) {
+                            return (
+                                <DropdownMenuItem
+                                    key={capability.platform}
+                                    className="gap-2.5"
+                                    onClick={() => setBlueskyOpen(true)}
                                 >
                                     {platformIcon(capability.platform)}
                                     {label}
