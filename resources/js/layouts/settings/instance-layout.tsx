@@ -26,6 +26,11 @@ export default function InstanceSettingsLayout({
             icon: null,
         },
         {
+            title: 'Platforms',
+            href: InstanceSettingsController.platforms(),
+            icon: null,
+        },
+        {
             title: 'Usage',
             href: InstanceSettingsController.usage(),
             icon: null,

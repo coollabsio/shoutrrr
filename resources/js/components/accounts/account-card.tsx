@@ -134,11 +134,13 @@ function ReconnectBlueskyDialog({ account }: { account: Account }) {
 export function AccountCard({
     account,
     canManage,
+    frozen,
     onReconnectOAuth,
     onDisconnect,
 }: {
     account: Account;
     canManage: boolean;
+    frozen?: boolean;
     onReconnectOAuth: (account: Account) => void;
     onDisconnect: (account: Account) => void;
 }) {
@@ -192,25 +194,34 @@ export function AccountCard({
                     </div>
                 </div>
 
-                <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium">
-                    <span
-                        className={cn(
-                            'size-1.5 rounded-full',
-                            needsAttention
-                                ? 'bg-destructive'
-                                : 'bg-emerald-500',
-                        )}
-                    />
-                    <span
-                        className={
-                            needsAttention
-                                ? 'text-destructive'
-                                : 'text-muted-foreground'
-                        }
-                    >
-                        {needsAttention ? account.status_label : 'Connected'}
+                <div className="flex shrink-0 items-center gap-2">
+                    {frozen && (
+                        <Badge variant="secondary" className="shrink-0">
+                            Platform disabled
+                        </Badge>
+                    )}
+                    <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium">
+                        <span
+                            className={cn(
+                                'size-1.5 rounded-full',
+                                needsAttention
+                                    ? 'bg-destructive'
+                                    : 'bg-emerald-500',
+                            )}
+                        />
+                        <span
+                            className={
+                                needsAttention
+                                    ? 'text-destructive'
+                                    : 'text-muted-foreground'
+                            }
+                        >
+                            {needsAttention
+                                ? account.status_label
+                                : 'Connected'}
+                        </span>
                     </span>
-                </span>
+                </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11.5px] text-muted-foreground">
@@ -249,19 +260,20 @@ export function AccountCard({
 
             {canManage && (
                 <div className={ACCOUNT_CARD_ACTIONS_CLASS}>
-                    {account.auth_method === 'app_password' ? (
-                        <ReconnectBlueskyDialog account={account} />
-                    ) : (
-                        <Button
-                            variant={needsAttention ? 'default' : 'outline'}
-                            size="sm"
-                            className="h-8 shrink-0"
-                            onClick={() => onReconnectOAuth(account)}
-                        >
-                            <RefreshCw className="size-4" />
-                            Reconnect
-                        </Button>
-                    )}
+                    {!frozen &&
+                        (account.auth_method === 'app_password' ? (
+                            <ReconnectBlueskyDialog account={account} />
+                        ) : (
+                            <Button
+                                variant={needsAttention ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-8 shrink-0"
+                                onClick={() => onReconnectOAuth(account)}
+                            >
+                                <RefreshCw className="size-4" />
+                                Reconnect
+                            </Button>
+                        ))}
                     {!account.is_default && (
                         <Form
                             {...ConnectedAccountController.makeDefault.form(

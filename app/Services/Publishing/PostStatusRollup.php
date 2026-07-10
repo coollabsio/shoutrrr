@@ -16,15 +16,19 @@ class PostStatusRollup
         $statuses = $post->targets()->pluck('status')
             ->map(fn (PostTargetStatus|string $value): PostTargetStatus => $value instanceof PostTargetStatus ? $value : PostTargetStatus::from($value));
 
+        $total = $statuses->count();
         $hasInFlight = $statuses->contains(fn (PostTargetStatus $s): bool => in_array($s, [PostTargetStatus::Pending, PostTargetStatus::Publishing], true));
         $published = $statuses->filter(fn (PostTargetStatus $s): bool => $s === PostTargetStatus::Published)->count();
         $failed = $statuses->filter(fn (PostTargetStatus $s): bool => $s === PostTargetStatus::Failed)->count();
-        $total = $statuses->count();
+        $skipped = $statuses->filter(fn (PostTargetStatus $s): bool => $s === PostTargetStatus::Skipped)->count();
+
+        $allPublished = $total > 0 && $published === $total;
+        $noneReached = $total > 0 && $published === 0 && ($failed + $skipped) === $total;
 
         $status = match (true) {
             $hasInFlight => PostStatus::Publishing,
-            $published === $total && $total > 0 => PostStatus::Published,
-            $failed === $total && $total > 0 => PostStatus::Failed,
+            $allPublished => PostStatus::Published,
+            $noneReached => PostStatus::Failed,
             default => PostStatus::Partial,
         };
 

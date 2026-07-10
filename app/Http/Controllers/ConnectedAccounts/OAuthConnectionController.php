@@ -11,6 +11,7 @@ use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\ConnectedAccounts\XAccountCapabilities;
+use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -158,6 +159,7 @@ class OAuthConnectionController extends Controller
             || ! $resolved->supportsOAuth()
             || ! $resolved->isConfigured()
             || ! $resolved->isLaunched()
+            || ! app(InstanceSettings::class)->platformAvailable($resolved)
             // Facebook/Instagram always go through the dedicated
             // MetaConnectionController Page-selection flow, never this
             // generic single-step route — even once launched.

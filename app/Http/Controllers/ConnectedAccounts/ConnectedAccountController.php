@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\BlueskyConnector;
+use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -82,6 +83,11 @@ class ConnectedAccountController extends Controller
     public function reconnect(Request $request, ConnectedAccount $account): RedirectResponse
     {
         $request->user()->can('update', $account) ?: abort(403);
+
+        if (! app(InstanceSettings::class)->platformAvailable($account->platform)) {
+            return redirect()->route('accounts.index')
+                ->with('error', "{$account->platform->label()} is disabled on this instance.");
+        }
 
         // OAuth accounts reconnect by re-running the provider flow (which upserts
         // onto this row via the unique constraint); only app-password accounts

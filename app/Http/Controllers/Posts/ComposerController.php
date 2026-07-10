@@ -12,6 +12,7 @@ use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\WorkspaceMention;
+use App\Support\InstanceSettings;
 use App\Support\MetricsPresenter;
 use App\Support\PostView;
 use Illuminate\Http\Request;
@@ -24,9 +25,11 @@ class ComposerController extends Controller
     {
         $request->user()->can('viewAny', Post::class) ?: abort(403);
         $defaultAccountId = $request->user()->currentWorkspace()->value('default_connected_account_id');
+        $settings = app(InstanceSettings::class);
 
         $accounts = ConnectedAccount::query()
             ->get()
+            ->filter(fn (ConnectedAccount $account): bool => $settings->platformAvailable($account->platform))
             ->sortByDesc(fn (ConnectedAccount $account): bool => $account->id === $defaultAccountId)
             ->map(fn (ConnectedAccount $account): array => [
                 'id' => $account->id,

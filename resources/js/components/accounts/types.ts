@@ -23,4 +23,5 @@ export type Capability = {
     supportsAppPassword: boolean;
     configured: boolean;
     launched: boolean;
+    enabled: boolean;
 };

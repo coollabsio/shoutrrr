@@ -24,6 +24,7 @@ const TARGET_STATUS_META: Record<TargetStatus, TargetStatusMeta> = {
     publishing: { tone: 'active', label: 'Publishing', spinning: true },
     published: { tone: 'success', label: 'Published', spinning: false },
     failed: { tone: 'error', label: 'Failed', spinning: false },
+    skipped: { tone: 'muted', label: 'Skipped', spinning: false },
     deleting: { tone: 'active', label: 'Deleting', spinning: true },
     deleted: { tone: 'muted', label: 'Deleted', spinning: false },
 };
@@ -64,7 +65,7 @@ export function failedTargets(targets: TargetView[]): TargetView[] {
  * feedback should leave them as-is rather than flip them back to in-flight.
  */
 const OPTIMISTIC_SKIP_STATUSES: ReadonlySet<TargetStatus> =
-    new Set<TargetStatus>(['published', 'deleting', 'deleted']);
+    new Set<TargetStatus>(['published', 'skipped', 'deleting', 'deleted']);
 
 /**
  * The instant in-flight snapshot to show when the user hits Publish/Schedule,

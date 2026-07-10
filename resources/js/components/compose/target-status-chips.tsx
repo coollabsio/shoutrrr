@@ -36,7 +36,7 @@ export type ChipTarget = Pick<
 
 type Props = {
     targets: ChipTarget[];
-    /** Retry a single failed target; omit to hide the Retry control. */
+    /** Retry a single failed or skipped target; omit to hide the Retry control. */
     onRetry?: (targetId: string) => void;
     /** Target ids with an in-flight retry request (disables their Retry button). */
     retryingIds?: ReadonlySet<string>;
@@ -45,7 +45,9 @@ type Props = {
 /**
  * Live per-target publish status: a platform glyph, a tinted status label
  * (spinner while publishing, check when published, ✕ + error message when
- * failed), and an inline Retry on failed targets.
+ * failed), and an inline Retry on failed or skipped targets. Skipped targets
+ * also surface their stored reason (e.g. the platform being disabled
+ * instance-wide) so the chip isn't a bare "Skipped".
  */
 export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
     if (targets.length === 0) {
@@ -57,6 +59,7 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
             {targets.map((target) => {
                 const meta = targetStatusMeta(target.status);
                 const isFailed = target.status === 'failed';
+                const isSkipped = target.status === 'skipped';
                 const isRetrying = retryingIds?.has(target.id) ?? false;
                 const attempts = target.attempts ?? 0;
                 const errorMessage = target.error_message
@@ -107,13 +110,25 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
                             ) : null}
                             <span>{meta.label}</span>
                         </span>
-                        {isFailed && errorMessage && (
-                            <span className="min-w-0 flex-1 truncate text-destructive/90">
+                        {(isFailed || isSkipped) && errorMessage && (
+                            <span
+                                className={cn(
+                                    'min-w-0 flex-1 truncate',
+                                    isFailed
+                                        ? 'text-destructive/90'
+                                        : 'text-muted-foreground',
+                                )}
+                            >
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <button
                                             type="button"
-                                            className="inline-block max-w-full cursor-help truncate border-0 bg-transparent p-0 text-left font-[inherit] text-inherit underline decoration-destructive/40 decoration-dotted underline-offset-2"
+                                            className={cn(
+                                                'inline-block max-w-full cursor-help truncate border-0 bg-transparent p-0 text-left font-[inherit] text-inherit underline decoration-dotted underline-offset-2',
+                                                isFailed
+                                                    ? 'decoration-destructive/40'
+                                                    : 'decoration-muted-foreground/40',
+                                            )}
                                         >
                                             {errorMessage}
                                         </button>
@@ -133,7 +148,7 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
                                 </Tooltip>
                             </span>
                         )}
-                        {isFailed && onRetry && (
+                        {(isFailed || isSkipped) && onRetry && (
                             <button
                                 type="button"
                                 disabled={isRetrying}

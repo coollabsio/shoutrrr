@@ -13,6 +13,7 @@ class PublishDispatcher
 {
     private const array TERMINAL = [
         PostTargetStatus::Published,
+        PostTargetStatus::Skipped,
         PostTargetStatus::Deleting,
         PostTargetStatus::Deleted,
     ];

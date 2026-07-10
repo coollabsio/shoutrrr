@@ -31,22 +31,38 @@ class InstanceSettings
 
     public function engagementPollingEnabled(?Platform $platform = null): bool
     {
-        return $this->platformEnabled('engagement_polling_enabled', $platform);
+        return $this->platformAvailable($platform)
+            && $this->platformEnabled('engagement_polling_enabled', $platform);
     }
 
     public function postMetricsPollingEnabled(?Platform $platform = null): bool
     {
-        return $this->platformEnabled('post_metrics_polling_enabled', $platform);
+        return $this->platformAvailable($platform)
+            && $this->platformEnabled('post_metrics_polling_enabled', $platform);
     }
 
     public function accountMetricsPollingEnabled(?Platform $platform = null): bool
     {
-        return $this->platformEnabled('account_metrics_polling_enabled', $platform);
+        return $this->platformAvailable($platform)
+            && $this->platformEnabled('account_metrics_polling_enabled', $platform);
     }
 
     public function quoteTweetsEnabled(): bool
     {
         return $this->boolean('quote_tweets_enabled');
+    }
+
+    public function platformAvailable(?Platform $platform = null): bool
+    {
+        return $this->platformEnabled('platforms_enabled', $platform);
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    public function platformsEnabled(): array
+    {
+        return $this->platformEnabledValues('platforms_enabled');
     }
 
     public function registrationsAllowed(?string $invitationToken = null): bool

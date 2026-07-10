@@ -96,10 +96,12 @@ class HandleInertiaRequests extends Middleware
         // middleware ordering and prevents cross-workspace leakage.
         $workspaceId = $user->current_workspace_id;
         $defaultAccountId = $user->currentWorkspace()->value('default_connected_account_id');
+        $settings = app(InstanceSettings::class);
 
         $accounts = ConnectedAccount::query()
             ->where('workspace_id', $workspaceId)
             ->get()
+            ->filter(fn (ConnectedAccount $account): bool => $settings->platformAvailable($account->platform))
             ->sortByDesc(fn (ConnectedAccount $account): bool => $account->id === $defaultAccountId)
             ->map(fn (ConnectedAccount $account): array => [
                 'id' => $account->id,
