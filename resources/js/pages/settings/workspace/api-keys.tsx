@@ -272,7 +272,7 @@ export default function ApiKeys({ apiKeys }: Props) {
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem
                                                                 variant="destructive"
-                                                                onSelect={() =>
+                                                                onClick={() =>
                                                                     revokeKey(
                                                                         key,
                                                                     )

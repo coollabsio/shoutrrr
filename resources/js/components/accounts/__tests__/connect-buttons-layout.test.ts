@@ -26,7 +26,7 @@ function capability(overrides: Partial<Capability>): Capability {
 describe('Bluesky connect dialog layout', () => {
     it('marks the collapsible trigger icon as a visible expandable control', () => {
         expect(COLLAPSIBLE_TRIGGER_ICON_CLASS).toContain(
-            '[&[data-state=open]_svg]:rotate-180',
+            '[&[data-panel-open]_svg]:rotate-180',
         );
     });
 

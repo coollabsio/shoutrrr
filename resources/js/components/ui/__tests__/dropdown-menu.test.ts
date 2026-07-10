@@ -2,7 +2,7 @@
 
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
     DropdownMenu,
@@ -70,6 +70,42 @@ describe('dropdown-menu', () => {
         }).not.toThrow();
 
         expect(document.body.textContent).toContain('Section heading');
+
+        act(() => root.unmount());
+        container.remove();
+    });
+
+    // Radix DropdownMenu.Item fired `onSelect`; Base UI Menu.Item only supports
+    // `onClick`. Because `onSelect` is a valid native DOM prop, tsc/build cannot
+    // catch a stale `onSelect` — it silently binds the text-selection event and
+    // the action never runs. This locks in that clicking an item runs onClick.
+    it('invokes onClick when a menu item is activated', () => {
+        const onClick = vi.fn();
+        const container = document.createElement('div');
+        document.body.append(container);
+        const root = createRoot(container);
+
+        act(() => {
+            root.render(
+                createElement(
+                    DropdownMenu,
+                    { open: true },
+                    createElement(
+                        DropdownMenuContent,
+                        null,
+                        createElement(DropdownMenuItem, { onClick }, 'Run'),
+                    ),
+                ),
+            );
+        });
+
+        const item = Array.from(
+            document.querySelectorAll('[role="menuitem"]'),
+        ).find((el) => el.textContent === 'Run') as HTMLElement | undefined;
+
+        act(() => item?.click());
+
+        expect(onClick).toHaveBeenCalledTimes(1);
 
         act(() => root.unmount());
         container.remove();

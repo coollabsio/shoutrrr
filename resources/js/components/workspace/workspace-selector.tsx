@@ -52,7 +52,7 @@ export function WorkspaceSelector() {
                                 <SidebarMenuButton
                                     size="lg"
                                     disabled={loading}
-                                    className="data-[state=open]:bg-sidebar-accent"
+                                    className="data-[popup-open]:bg-sidebar-accent"
                                 />
                             }
                         >

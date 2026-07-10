@@ -225,10 +225,10 @@ export default function PostsIndex({ posts, filters, sets, counts }: Props) {
                                 <DropdownMenuCheckboxItem
                                     key={opt.value}
                                     checked={filters.platform === opt.value}
-                                    onSelect={(e) => {
-                                        e.preventDefault();
-                                        handlePlatformToggle(opt.value);
-                                    }}
+                                    closeOnClick={false}
+                                    onCheckedChange={() =>
+                                        handlePlatformToggle(opt.value)
+                                    }
                                 >
                                     {opt.label}
                                 </DropdownMenuCheckboxItem>

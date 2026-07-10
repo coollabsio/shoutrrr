@@ -1,0 +1,505 @@
+diff --git a/resources/js/components/ui/checkbox.tsx b/resources/js/components/ui/checkbox.tsx
+index 564c332..8cad2b0 100644
+--- a/resources/js/components/ui/checkbox.tsx
++++ b/resources/js/components/ui/checkbox.tsx
+@@ -1,15 +1,11 @@
+ "use client"
+ 
+-import * as React from "react"
+-import { Checkbox as CheckboxPrimitive } from "radix-ui"
++import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox"
+ 
+ import { cn } from "@/lib/utils"
+ import { CheckIcon } from "lucide-react"
+ 
+-function Checkbox({
+-  className,
+-  ...props
+-}: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
++function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
+   return (
+     <CheckboxPrimitive.Root
+       data-slot="checkbox"
+diff --git a/resources/js/components/ui/collapsible.tsx b/resources/js/components/ui/collapsible.tsx
+index 63fc8ef..4b242f7 100644
+--- a/resources/js/components/ui/collapsible.tsx
++++ b/resources/js/components/ui/collapsible.tsx
+@@ -1,30 +1,18 @@
+-import { Collapsible as CollapsiblePrimitive } from "radix-ui"
++import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible"
+ 
+-function Collapsible({
+-  ...props
+-}: React.ComponentProps<typeof CollapsiblePrimitive.Root>) {
++function Collapsible({ ...props }: CollapsiblePrimitive.Root.Props) {
+   return <CollapsiblePrimitive.Root data-slot="collapsible" {...props} />
+ }
+ 
+-function CollapsibleTrigger({
+-  ...props
+-}: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleTrigger>) {
++function CollapsibleTrigger({ ...props }: CollapsiblePrimitive.Trigger.Props) {
+   return (
+-    <CollapsiblePrimitive.CollapsibleTrigger
+-      data-slot="collapsible-trigger"
+-      {...props}
+-    />
++    <CollapsiblePrimitive.Trigger data-slot="collapsible-trigger" {...props} />
+   )
+ }
+ 
+-function CollapsibleContent({
+-  ...props
+-}: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleContent>) {
++function CollapsibleContent({ ...props }: CollapsiblePrimitive.Panel.Props) {
+   return (
+-    <CollapsiblePrimitive.CollapsibleContent
+-      data-slot="collapsible-content"
+-      {...props}
+-    />
++    <CollapsiblePrimitive.Panel data-slot="collapsible-content" {...props} />
+   )
+ }
+ 
+diff --git a/resources/js/components/ui/command.tsx b/resources/js/components/ui/command.tsx
+index f380b35..2e9041f 100644
+--- a/resources/js/components/ui/command.tsx
++++ b/resources/js/components/ui/command.tsx
+@@ -43,6 +43,7 @@ function CommandDialog({
+   description?: string
+   className?: string
+   showCloseButton?: boolean
++  children?: React.ReactNode
+ }) {
+   return (
+     <Dialog {...props}>
+diff --git a/resources/js/components/ui/separator.tsx b/resources/js/components/ui/separator.tsx
+index ca11501..4f65961 100644
+--- a/resources/js/components/ui/separator.tsx
++++ b/resources/js/components/ui/separator.tsx
+@@ -1,18 +1,15 @@
+-import * as React from "react"
+-import { Separator as SeparatorPrimitive } from "radix-ui"
++import { Separator as SeparatorPrimitive } from "@base-ui/react/separator"
+ 
+ import { cn } from "@/lib/utils"
+ 
+ function Separator({
+   className,
+   orientation = "horizontal",
+-  decorative = true,
+   ...props
+-}: React.ComponentProps<typeof SeparatorPrimitive.Root>) {
++}: SeparatorPrimitive.Props) {
+   return (
+-    <SeparatorPrimitive.Root
++    <SeparatorPrimitive
+       data-slot="separator"
+-      decorative={decorative}
+       orientation={orientation}
+       className={cn(
+         "shrink-0 bg-border data-horizontal:h-px data-horizontal:w-full data-vertical:w-px data-vertical:self-stretch",
+diff --git a/resources/js/components/ui/sheet.tsx b/resources/js/components/ui/sheet.tsx
+index b2763c6..ba55a9e 100644
+--- a/resources/js/components/ui/sheet.tsx
++++ b/resources/js/components/ui/sheet.tsx
+@@ -1,41 +1,34 @@
++"use client"
++
+ import * as React from "react"
+-import { Dialog as SheetPrimitive } from "radix-ui"
++import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
+ 
+ import { cn } from "@/lib/utils"
+ import { Button } from "@/components/ui/button"
+ import { XIcon } from "lucide-react"
+ 
+-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
++function Sheet({ ...props }: SheetPrimitive.Root.Props) {
+   return <SheetPrimitive.Root data-slot="sheet" {...props} />
+ }
+ 
+-function SheetTrigger({
+-  ...props
+-}: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
++function SheetTrigger({ ...props }: SheetPrimitive.Trigger.Props) {
+   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
+ }
+ 
+-function SheetClose({
+-  ...props
+-}: React.ComponentProps<typeof SheetPrimitive.Close>) {
++function SheetClose({ ...props }: SheetPrimitive.Close.Props) {
+   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
+ }
+ 
+-function SheetPortal({
+-  ...props
+-}: React.ComponentProps<typeof SheetPrimitive.Portal>) {
++function SheetPortal({ ...props }: SheetPrimitive.Portal.Props) {
+   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
+ }
+ 
+-function SheetOverlay({
+-  className,
+-  ...props
+-}: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
++function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
+   return (
+-    <SheetPrimitive.Overlay
++    <SheetPrimitive.Backdrop
+       data-slot="sheet-overlay"
+       className={cn(
+-        "fixed inset-0 z-50 bg-black/30 duration-100 supports-backdrop-filter:backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
++        "fixed inset-0 z-50 bg-black/30 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-sm",
+         className
+       )}
+       {...props}
+@@ -49,37 +42,40 @@ function SheetContent({
+   side = "right",
+   showCloseButton = true,
+   ...props
+-}: React.ComponentProps<typeof SheetPrimitive.Content> & {
++}: SheetPrimitive.Popup.Props & {
+   side?: "top" | "right" | "bottom" | "left"
+   showCloseButton?: boolean
+ }) {
+   return (
+     <SheetPortal>
+       <SheetOverlay />
+-      <SheetPrimitive.Content
++      <SheetPrimitive.Popup
+         data-slot="sheet-content"
+         data-side={side}
+         className={cn(
+-          "fixed z-50 flex flex-col bg-popover bg-clip-padding text-sm text-popover-foreground shadow-xl transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-[side=bottom]:data-open:slide-in-from-bottom-10 data-[side=left]:data-open:slide-in-from-left-10 data-[side=right]:data-open:slide-in-from-right-10 data-[side=top]:data-open:slide-in-from-top-10 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:data-closed:slide-out-to-bottom-10 data-[side=left]:data-closed:slide-out-to-left-10 data-[side=right]:data-closed:slide-out-to-right-10 data-[side=top]:data-closed:slide-out-to-top-10",
++          "fixed z-50 flex flex-col bg-popover bg-clip-padding text-sm text-popover-foreground shadow-xl transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
+           className
+         )}
+         {...props}
+       >
+         {children}
+         {showCloseButton && (
+-          <SheetPrimitive.Close data-slot="sheet-close" asChild>
+-            <Button
+-              variant="ghost"
+-              className="absolute top-4 right-4 bg-secondary"
+-              size="icon-sm"
+-            >
+-              <XIcon
++          <SheetPrimitive.Close
++            data-slot="sheet-close"
++            render={
++              <Button
++                variant="ghost"
++                className="absolute top-4 right-4 bg-secondary"
++                size="icon-sm"
+               />
+-              <span className="sr-only">Close</span>
+-            </Button>
++            }
++          >
++            <XIcon
++            />
++            <span className="sr-only">Close</span>
+           </SheetPrimitive.Close>
+         )}
+-      </SheetPrimitive.Content>
++      </SheetPrimitive.Popup>
+     </SheetPortal>
+   )
+ }
+@@ -104,10 +100,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
+   )
+ }
+ 
+-function SheetTitle({
+-  className,
+-  ...props
+-}: React.ComponentProps<typeof SheetPrimitive.Title>) {
++function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
+   return (
+     <SheetPrimitive.Title
+       data-slot="sheet-title"
+@@ -123,7 +116,7 @@ function SheetTitle({
+ function SheetDescription({
+   className,
+   ...props
+-}: React.ComponentProps<typeof SheetPrimitive.Description>) {
++}: SheetPrimitive.Description.Props) {
+   return (
+     <SheetPrimitive.Description
+       data-slot="sheet-description"
+diff --git a/resources/js/components/ui/sidebar.tsx b/resources/js/components/ui/sidebar.tsx
+index 5f2b02d..1a24257 100644
+--- a/resources/js/components/ui/sidebar.tsx
++++ b/resources/js/components/ui/sidebar.tsx
+@@ -1,6 +1,9 @@
++"use client"
++
+ import * as React from "react"
++import { mergeProps } from "@base-ui/react/merge-props"
++import { useRender } from "@base-ui/react/use-render"
+ import { cva, type VariantProps } from "class-variance-authority"
+-import { Slot } from "radix-ui"
+ 
+ import { useIsMobile } from "@/hooks/use-mobile"
+ import { cn } from "@/lib/utils"
+@@ -392,42 +395,50 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
+ 
+ function SidebarGroupLabel({
+   className,
+-  asChild = false,
++  render,
+   ...props
+-}: React.ComponentProps<"div"> & { asChild?: boolean }) {
+-  const Comp = asChild ? Slot.Root : "div"
+-
+-  return (
+-    <Comp
+-      data-slot="sidebar-group-label"
+-      data-sidebar="group-label"
+-      className={cn(
+-        "flex h-8 shrink-0 items-center rounded-xl px-3 text-xs font-medium text-sidebar-foreground/70 ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 focus-visible:ring-3 [&>svg]:size-4 [&>svg]:shrink-0",
+-        className
+-      )}
+-      {...props}
+-    />
+-  )
++}: useRender.ComponentProps<"div"> & React.ComponentProps<"div">) {
++  return useRender({
++    defaultTagName: "div",
++    props: mergeProps<"div">(
++      {
++        className: cn(
++          "flex h-8 shrink-0 items-center rounded-xl px-3 text-xs font-medium text-sidebar-foreground/70 ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 focus-visible:ring-3 [&>svg]:size-4 [&>svg]:shrink-0",
++          className
++        ),
++      },
++      props
++    ),
++    render,
++    state: {
++      slot: "sidebar-group-label",
++      sidebar: "group-label",
++    },
++  })
+ }
+ 
+ function SidebarGroupAction({
+   className,
+-  asChild = false,
++  render,
+   ...props
+-}: React.ComponentProps<"button"> & { asChild?: boolean }) {
+-  const Comp = asChild ? Slot.Root : "button"
+-
+-  return (
+-    <Comp
+-      data-slot="sidebar-group-action"
+-      data-sidebar="group-action"
+-      className={cn(
+-        "absolute top-3.5 right-3 flex aspect-square w-5 items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-3 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
+-        className
+-      )}
+-      {...props}
+-    />
+-  )
++}: useRender.ComponentProps<"button"> & React.ComponentProps<"button">) {
++  return useRender({
++    defaultTagName: "button",
++    props: mergeProps<"button">(
++      {
++        className: cn(
++          "absolute top-3.5 right-3 flex aspect-square w-5 items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-3 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
++          className
++        ),
++      },
++      props
++    ),
++    render,
++    state: {
++      slot: "sidebar-group-action",
++      sidebar: "group-action",
++    },
++  })
+ }
+ 
+ function SidebarGroupContent({
+@@ -489,34 +500,38 @@ const sidebarMenuButtonVariants = cva(
+ )
+ 
+ function SidebarMenuButton({
+-  asChild = false,
++  render,
+   isActive = false,
+   variant = "default",
+   size = "default",
+   tooltip,
+   className,
+   ...props
+-}: React.ComponentProps<"button"> & {
+-  asChild?: boolean
+-  isActive?: boolean
+-  tooltip?: string | React.ComponentProps<typeof TooltipContent>
+-} & VariantProps<typeof sidebarMenuButtonVariants>) {
+-  const Comp = asChild ? Slot.Root : "button"
++}: useRender.ComponentProps<"button"> &
++  React.ComponentProps<"button"> & {
++    isActive?: boolean
++    tooltip?: string | React.ComponentProps<typeof TooltipContent>
++  } & VariantProps<typeof sidebarMenuButtonVariants>) {
+   const { isMobile, state } = useSidebar()
+-
+-  const button = (
+-    <Comp
+-      data-slot="sidebar-menu-button"
+-      data-sidebar="menu-button"
+-      data-size={size}
+-      data-active={isActive}
+-      className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+-      {...props}
+-    />
+-  )
++  const comp = useRender({
++    defaultTagName: "button",
++    props: mergeProps<"button">(
++      {
++        className: cn(sidebarMenuButtonVariants({ variant, size }), className),
++      },
++      props
++    ),
++    render: !tooltip ? render : <TooltipTrigger render={render} />,
++    state: {
++      slot: "sidebar-menu-button",
++      sidebar: "menu-button",
++      size,
++      active: isActive,
++    },
++  })
+ 
+   if (!tooltip) {
+-    return button
++    return comp
+   }
+ 
+   if (typeof tooltip === "string") {
+@@ -527,7 +542,7 @@ function SidebarMenuButton({
+ 
+   return (
+     <Tooltip>
+-      <TooltipTrigger asChild>{button}</TooltipTrigger>
++      {comp}
+       <TooltipContent
+         side="right"
+         align="center"
+@@ -540,28 +555,32 @@ function SidebarMenuButton({
+ 
+ function SidebarMenuAction({
+   className,
+-  asChild = false,
++  render,
+   showOnHover = false,
+   ...props
+-}: React.ComponentProps<"button"> & {
+-  asChild?: boolean
+-  showOnHover?: boolean
+-}) {
+-  const Comp = asChild ? Slot.Root : "button"
+-
+-  return (
+-    <Comp
+-      data-slot="sidebar-menu-action"
+-      data-sidebar="menu-action"
+-      className={cn(
+-        "absolute top-1.5 right-1 flex aspect-square w-5 items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[size=default]/menu-button:top-1.5 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-3 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
+-        showOnHover &&
+-          "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 peer-data-active/menu-button:text-sidebar-accent-foreground aria-expanded:opacity-100 md:opacity-0",
+-        className
+-      )}
+-      {...props}
+-    />
+-  )
++}: useRender.ComponentProps<"button"> &
++  React.ComponentProps<"button"> & {
++    showOnHover?: boolean
++  }) {
++  return useRender({
++    defaultTagName: "button",
++    props: mergeProps<"button">(
++      {
++        className: cn(
++          "absolute top-1.5 right-1 flex aspect-square w-5 items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[size=default]/menu-button:top-1.5 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-3 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
++          showOnHover &&
++            "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 peer-data-active/menu-button:text-sidebar-accent-foreground aria-expanded:opacity-100 md:opacity-0",
++          className
++        ),
++      },
++      props
++    ),
++    render,
++    state: {
++      slot: "sidebar-menu-action",
++      sidebar: "menu-action",
++    },
++  })
+ }
+ 
+ function SidebarMenuBadge({
+@@ -648,31 +667,35 @@ function SidebarMenuSubItem({
+ }
+ 
+ function SidebarMenuSubButton({
+-  asChild = false,
++  render,
+   size = "md",
+   isActive = false,
+   className,
+   ...props
+-}: React.ComponentProps<"a"> & {
+-  asChild?: boolean
+-  size?: "sm" | "md"
+-  isActive?: boolean
+-}) {
+-  const Comp = asChild ? Slot.Root : "a"
+-
+-  return (
+-    <Comp
+-      data-slot="sidebar-menu-sub-button"
+-      data-sidebar="menu-sub-button"
+-      data-size={size}
+-      data-active={isActive}
+-      className={cn(
+-        "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-xl px-3 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-3 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-sm data-[size=sm]:text-xs data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground",
+-        className
+-      )}
+-      {...props}
+-    />
+-  )
++}: useRender.ComponentProps<"a"> &
++  React.ComponentProps<"a"> & {
++    size?: "sm" | "md"
++    isActive?: boolean
++  }) {
++  return useRender({
++    defaultTagName: "a",
++    props: mergeProps<"a">(
++      {
++        className: cn(
++          "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-xl px-3 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-3 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-sm data-[size=sm]:text-xs data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground",
++          className
++        ),
++      },
++      props
++    ),
++    render,
++    state: {
++      slot: "sidebar-menu-sub-button",
++      sidebar: "menu-sub-button",
++      size,
++      active: isActive,
++    },
++  })
+ }
+ 
+ export {

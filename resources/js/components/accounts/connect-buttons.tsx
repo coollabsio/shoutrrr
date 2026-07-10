@@ -43,7 +43,7 @@ import type { PlatformName } from '@/types/compose';
 import type { Capability } from './types';
 
 export const COLLAPSIBLE_TRIGGER_ICON_CLASS =
-    '[&[data-state=open]_svg]:rotate-180';
+    '[&[data-panel-open]_svg]:rotate-180';
 
 const SUPPORTED_PLATFORM_ICONS = [
     'x',
@@ -473,7 +473,7 @@ export function ConnectButtons({
             <DropdownMenu>
                 <DropdownMenuTrigger
                     render={
-                        <Button className="w-full justify-center sm:w-auto [&[data-state=open]>svg:last-of-type]:rotate-180" />
+                        <Button className="w-full justify-center sm:w-auto [&[data-popup-open]>svg:last-of-type]:rotate-180" />
                     }
                 >
                     <Plus className="size-4" />
@@ -504,10 +504,7 @@ export function ConnectButtons({
                                 <DropdownMenuItem
                                     key={capability.platform}
                                     className="gap-2.5"
-                                    onSelect={(e) => {
-                                        e.preventDefault();
-                                        setBlueskyOpen(true);
-                                    }}
+                                    onClick={() => setBlueskyOpen(true)}
                                 >
                                     {platformIcon(capability.platform)}
                                     {label}

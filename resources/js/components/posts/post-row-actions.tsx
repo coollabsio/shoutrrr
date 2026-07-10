@@ -238,39 +238,39 @@ export function PostRowActions({ post }: Props) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                     {caps.canEdit && (
-                        <DropdownMenuItem onSelect={handleEdit}>
+                        <DropdownMenuItem onClick={handleEdit}>
                             Edit
                         </DropdownMenuItem>
                     )}
                     {caps.canSchedule && (
-                        <DropdownMenuItem onSelect={openSchedule}>
+                        <DropdownMenuItem onClick={openSchedule}>
                             Schedule&hellip;
                         </DropdownMenuItem>
                     )}
                     {caps.canReschedule && (
-                        <DropdownMenuItem onSelect={openReschedule}>
+                        <DropdownMenuItem onClick={openReschedule}>
                             Reschedule&hellip;
                         </DropdownMenuItem>
                     )}
                     {caps.canRetry && (
-                        <DropdownMenuItem onSelect={handleRetry}>
+                        <DropdownMenuItem onClick={handleRetry}>
                             Retry failed
                         </DropdownMenuItem>
                     )}
                     {caps.canUnschedule && (
                         <DropdownMenuItem
-                            onSelect={() => void handleUnschedule()}
+                            onClick={() => void handleUnschedule()}
                         >
                             Unschedule
                         </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onSelect={() => setShareOpen(true)}>
+                    <DropdownMenuItem onClick={() => setShareOpen(true)}>
                         Share&hellip;
                     </DropdownMenuItem>
                     {caps.canDelete && (
                         <DropdownMenuItem
                             variant="destructive"
-                            onSelect={() => void handleDelete()}
+                            onClick={() => void handleDelete()}
                         >
                             Delete
                         </DropdownMenuItem>

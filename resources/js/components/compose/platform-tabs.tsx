@@ -206,14 +206,14 @@ function PlatformTabRow({
                                     TAB_CLASS,
                                     'shrink-0 gap-1.5',
                                     compact && 'px-2',
-                                    'data-[state=open]:bg-muted data-[state=open]:text-foreground',
+                                    'data-[popup-open]:bg-muted data-[popup-open]:text-foreground',
                                 )}
                                 aria-label={`${overflowAccounts.length} more accounts`}
                             />
                         }
                     >
                         <span>+{overflowAccounts.length} more</span>
-                        <ChevronDown className="size-3 opacity-70 transition-transform duration-150 group-data-[state=open]/tab:rotate-180" />
+                        <ChevronDown className="size-3 opacity-70 transition-transform duration-150 group-data-[popup-open]/tab:rotate-180" />
                     </PopoverTrigger>
                     <PopoverContent
                         align="start"
