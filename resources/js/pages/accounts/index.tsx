@@ -75,6 +75,30 @@ export default function ConnectedAccounts({
         window.location.href = reconnectOAuthUrl(account);
     };
 
+    const toggleEnabled = (account: Account, enabled: boolean) => {
+        router.patch(
+            ConnectedAccountController.toggle.url(account.id),
+            {},
+            {
+                preserveScroll: true,
+                optimistic: (props) => ({
+                    accounts: (props as { accounts?: Account[] }).accounts?.map(
+                        (a) =>
+                            a.id === account.id
+                                ? {
+                                      ...a,
+                                      disabled: !enabled,
+                                      is_default: enabled
+                                          ? a.is_default
+                                          : false,
+                                  }
+                                : a,
+                    ),
+                }),
+            },
+        );
+    };
+
     const { flash } = usePage().props;
     const [dismissedError, setDismissedError] = useState<string | null>(null);
     // Connect/reconnect failures for every platform flash an `error`; surface it
@@ -167,6 +191,7 @@ export default function ConnectedAccounts({
                                 frozen={disabledPlatforms.has(account.platform)}
                                 onReconnectOAuth={reconnectOAuth}
                                 onDisconnect={disconnect}
+                                onToggle={toggleEnabled}
                             />
                         ))}
                     </div>
