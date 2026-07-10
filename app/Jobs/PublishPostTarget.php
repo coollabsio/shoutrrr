@@ -71,8 +71,10 @@ class PublishPostTarget implements ShouldQueue
         PostStatusRollup $rollup,
         BackoffSchedule $backoff,
         ?WorkspaceSubscriptionGate $subscriptions = null,
+        ?InstanceSettings $settings = null,
     ): void {
         $subscriptions ??= app(WorkspaceSubscriptionGate::class);
+        $settings ??= app(InstanceSettings::class);
         $target = $this->target->fresh() ?? $this->target;
         $this->target = $target;
 
@@ -82,7 +84,7 @@ class PublishPostTarget implements ShouldQueue
             return;
         }
 
-        if (! app(InstanceSettings::class)->platformAvailable($target->platform)) {
+        if (! $settings->platformAvailable($target->platform)) {
             $target->forceFill([
                 'status' => PostTargetStatus::Skipped->value,
                 'error_kind' => null,

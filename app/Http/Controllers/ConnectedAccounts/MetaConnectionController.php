@@ -231,7 +231,7 @@ class MetaConnectionController extends Controller
     {
         $scopes = [];
 
-        foreach (Platform::launchedMetaGraphPlatforms() as $platform) {
+        foreach (Platform::availableMetaGraphPlatforms() as $platform) {
             array_push($scopes, ...$platform->scopes());
         }
 

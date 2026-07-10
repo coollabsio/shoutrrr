@@ -91,7 +91,7 @@ class PostActionsController extends Controller
             abort(404, 'No such target on that post.');
         }
 
-        if (! in_array($postTarget->status, [PostTargetStatus::Failed, PostTargetStatus::Skipped], true)) {
+        if (! $postTarget->status->isRetryable()) {
             abort(422, 'Only failed or skipped targets can be retried.');
         }
 

@@ -20,7 +20,7 @@ class PostTargetRetryController extends Controller
     public function store(Request $request, Post $post, PostTarget $target): JsonResponse|RedirectResponse
     {
         abort_unless($request->user()->can('update', $post), 403);
-        abort_unless(in_array($target->status, [PostTargetStatus::Failed, PostTargetStatus::Skipped], true), 409);
+        abort_unless($target->status->isRetryable(), 409);
 
         $target->forceFill([
             'status' => PostTargetStatus::Pending->value,

@@ -47,7 +47,7 @@ class RetryPostTargetTool extends WorkspaceTool
             return Response::error('No such target on that post.');
         }
 
-        if (! in_array($target->status, [PostTargetStatus::Failed, PostTargetStatus::Skipped], true)) {
+        if (! $target->status->isRetryable()) {
             return Response::error('Only failed or skipped targets can be retried.');
         }
 
