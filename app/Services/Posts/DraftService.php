@@ -15,6 +15,7 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Support\InstanceSettings;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 
@@ -81,12 +82,11 @@ class DraftService
 
         $frozen = $this->frozenPlatformValues();
 
-        $ids = $frozen === []
-            ? $ids
-            : ConnectedAccount::withoutGlobalScopes()
-                ->whereKey($ids->all())
-                ->whereNotIn('platform', $frozen)
-                ->pluck('id');
+        $ids = ConnectedAccount::withoutGlobalScopes()
+            ->whereKey($ids->all())
+            ->enabled()
+            ->when($frozen !== [], fn (Builder $query): Builder => $query->whereNotIn('platform', $frozen))
+            ->pluck('id');
 
         return $this->defaultFirst($workspaceId, $ids->map(static fn (mixed $id): string => (string) $id)->all());
     }

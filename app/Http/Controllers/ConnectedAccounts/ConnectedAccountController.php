@@ -12,6 +12,8 @@ use App\Services\ConnectedAccounts\BlueskyConnector;
 use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -48,6 +50,7 @@ class ConnectedAccountController extends Controller
                 'max_text_length' => $account->maxTextLength(),
                 'x_premium' => $account->hasXPremium(),
                 'is_default' => $account->id === $defaultAccountId,
+                'disabled' => $account->isDisabled(),
                 'pds_url' => $this->customPdsUrl($account),
             ])
             ->values()
@@ -154,6 +157,32 @@ class ConnectedAccountController extends Controller
         ])->save();
 
         return redirect()->route('accounts.index')->with('success', "{$account->handle} is now the default account.");
+    }
+
+    public function toggle(Request $request, ConnectedAccount $account): RedirectResponse
+    {
+        $request->user()->can('update', $account) ?: abort(403);
+
+        DB::transaction(function () use ($request, $account): void {
+            $disabling = ! $account->isDisabled();
+
+            $account->forceFill([
+                'disabled_at' => $disabling ? Date::now() : null,
+            ])->save();
+
+            if ($disabling) {
+                $workspace = $request->user()->currentWorkspace()->first();
+                if ($workspace?->default_connected_account_id === $account->id) {
+                    $workspace->forceFill(['default_connected_account_id' => null])->save();
+                }
+            }
+        });
+
+        $message = $account->isDisabled()
+            ? "{$account->handle} is disabled."
+            : "{$account->handle} is enabled.";
+
+        return redirect()->route('accounts.index')->with('success', $message);
     }
 
     public function destroy(Request $request, ConnectedAccount $account): RedirectResponse

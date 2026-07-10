@@ -75,6 +75,30 @@ export default function ConnectedAccounts({
         window.location.href = reconnectOAuthUrl(account);
     };
 
+    const toggleEnabled = (account: Account, enabled: boolean) => {
+        router.patch(
+            ConnectedAccountController.toggle.url(account.id),
+            {},
+            {
+                preserveScroll: true,
+                optimistic: (props) => ({
+                    accounts: (props as { accounts?: Account[] }).accounts?.map(
+                        (a) =>
+                            a.id === account.id
+                                ? {
+                                      ...a,
+                                      disabled: !enabled,
+                                      is_default: enabled
+                                          ? a.is_default
+                                          : false,
+                                  }
+                                : a,
+                    ),
+                }),
+            },
+        );
+    };
+
     const { flash } = usePage().props;
     const [dismissedError, setDismissedError] = useState<string | null>(null);
     // Connect/reconnect failures for every platform flash an `error`; surface it
@@ -82,8 +106,15 @@ export default function ConnectedAccounts({
     const connectError =
         flash?.error && flash.error !== dismissedError ? flash.error : null;
 
-    const connectedCount = accounts.filter((a) => a.status === 'active').length;
-    const attentionCount = accounts.length - connectedCount;
+    // A disabled account is neither "connected" nor "needs attention" — it's a
+    // third, dormant bucket, so each account lands in exactly one count.
+    const connectedCount = accounts.filter(
+        (a) => a.status === 'active' && !a.disabled,
+    ).length;
+    const attentionCount = accounts.filter(
+        (a) => a.status !== 'active' && !a.disabled,
+    ).length;
+    const disabledCount = accounts.filter((a) => a.disabled).length;
 
     return (
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-6 pb-16 sm:px-6">
@@ -156,6 +187,17 @@ export default function ConnectedAccounts({
                                 </span>
                             </span>
                         )}
+                        {disabledCount > 0 && (
+                            <span className="flex items-center gap-1.5">
+                                <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+                                <span className="font-medium tabular-nums">
+                                    {disabledCount}
+                                </span>
+                                <span className="text-muted-foreground">
+                                    disabled
+                                </span>
+                            </span>
+                        )}
                     </div>
 
                     <div className={ACCOUNT_GRID_CLASS}>
@@ -167,6 +209,7 @@ export default function ConnectedAccounts({
                                 frozen={disabledPlatforms.has(account.platform)}
                                 onReconnectOAuth={reconnectOAuth}
                                 onDisconnect={disconnect}
+                                onToggle={toggleEnabled}
                             />
                         ))}
                     </div>

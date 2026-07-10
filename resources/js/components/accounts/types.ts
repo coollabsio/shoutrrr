@@ -13,6 +13,7 @@ export type Account = {
     max_text_length: number;
     x_premium: boolean;
     is_default: boolean;
+    disabled: boolean;
     pds_url: string | null;
 };
 

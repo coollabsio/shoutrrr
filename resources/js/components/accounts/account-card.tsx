@@ -24,6 +24,7 @@ import {
     InputGroupInput,
 } from '@/components/ui/input-group';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import type { PlatformName } from '@/types/compose';
 
@@ -137,15 +138,18 @@ export function AccountCard({
     frozen,
     onReconnectOAuth,
     onDisconnect,
+    onToggle,
 }: {
     account: Account;
     canManage: boolean;
     frozen?: boolean;
     onReconnectOAuth: (account: Account) => void;
     onDisconnect: (account: Account) => void;
+    onToggle: (account: Account, enabled: boolean) => void;
 }) {
     const brand = PLATFORM_BRAND[account.platform] ?? PLATFORM_FALLBACK;
     const needsAttention = account.status !== 'active';
+    const disabled = account.disabled;
     const name = account.display_name ?? account.handle;
 
     return (
@@ -153,6 +157,7 @@ export function AccountCard({
             className={cn(
                 'flex flex-col gap-4 rounded-xl border bg-card p-5 transition-colors',
                 needsAttention ? 'border-destructive/40' : 'border-border',
+                disabled && 'opacity-60',
             )}
         >
             <div className="flex items-start justify-between gap-2">
@@ -200,6 +205,11 @@ export function AccountCard({
                             Platform disabled
                         </Badge>
                     )}
+                    {disabled && !frozen && (
+                        <Badge variant="secondary" className="shrink-0">
+                            Disabled
+                        </Badge>
+                    )}
                     <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium">
                         <span
                             className={cn(
@@ -221,6 +231,20 @@ export function AccountCard({
                                 : 'Connected'}
                         </span>
                     </span>
+                    {canManage && (
+                        <Switch
+                            checked={!disabled}
+                            onCheckedChange={(checked) =>
+                                onToggle(account, checked)
+                            }
+                            aria-label={
+                                disabled
+                                    ? `Enable ${account.handle}`
+                                    : `Disable ${account.handle}`
+                            }
+                            className="ml-1"
+                        />
+                    )}
                 </div>
             </div>
 

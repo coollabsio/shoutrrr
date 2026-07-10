@@ -21,6 +21,7 @@ function account(overrides: Partial<Account>): Account {
         max_text_length: 300,
         x_premium: false,
         is_default: false,
+        disabled: false,
         pds_url: null,
         ...overrides,
     };
