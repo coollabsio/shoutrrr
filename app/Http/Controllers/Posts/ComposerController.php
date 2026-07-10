@@ -28,6 +28,7 @@ class ComposerController extends Controller
         $settings = app(InstanceSettings::class);
 
         $accounts = ConnectedAccount::query()
+            ->enabled()
             ->get()
             ->filter(fn (ConnectedAccount $account): bool => $settings->platformAvailable($account->platform))
             ->sortByDesc(fn (ConnectedAccount $account): bool => $account->id === $defaultAccountId)

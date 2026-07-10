@@ -100,6 +100,7 @@ class HandleInertiaRequests extends Middleware
 
         $accounts = ConnectedAccount::query()
             ->where('workspace_id', $workspaceId)
+            ->enabled()
             ->get()
             ->filter(fn (ConnectedAccount $account): bool => $settings->platformAvailable($account->platform))
             ->sortByDesc(fn (ConnectedAccount $account): bool => $account->id === $defaultAccountId)
