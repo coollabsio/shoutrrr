@@ -98,7 +98,7 @@ docker run -d \
 
 Shoutrrr runs its startup tasks automatically, including database migrations. Open `http://localhost:8080`, register the first account, and you're in. The image defaults to production mode, SQLite, database-backed cache/queue/session storage, one in-container queue worker, one scheduler, and SSR disabled.
 
-The image accepts videos up to Shoutrrr's 512 MiB application ceiling by default. If you place it behind a reverse proxy, set that proxy's request-body limit to at least 512 MiB too. Self-hosters can override `PHP_POST_MAX_SIZE`, `PHP_UPLOAD_MAX_FILE_SIZE`, and `PHP_MEMORY_LIMIT` in their environment; the local-disk upload path needs enough memory to receive the video before it is stored.
+The image accepts videos up to Shoutrrr's 1 GiB application ceiling by default. If you place it behind a reverse proxy, set that proxy's request-body limit to at least 1.1 GiB too. Self-hosters can override `PHP_POST_MAX_SIZE`, `PHP_UPLOAD_MAX_FILE_SIZE`, and `PHP_MEMORY_LIMIT` in their environment; the local-disk upload path needs enough memory to receive the video before it is stored.
 
 For a real public deployment, set `APP_URL` to your HTTPS domain and set `SESSION_SECURE_COOKIE=true`. To test a specific release candidate, replace `latest` with a version tag such as `1.0.0-rc.2` in the commands above.
 

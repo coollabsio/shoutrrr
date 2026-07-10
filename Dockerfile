@@ -152,12 +152,12 @@ ARG PHP_OPCACHE_ENABLE=1
 # The local-disk video-upload path uses a signed raw PUT through Laravel.
 # Laravel validates CONTENT_LENGTH against post_max_size for that request too,
 # so the base image's 100M default would reject supported platform videos
-# before they reach storage. Keep this aligned with the 512 MiB app ceiling.
-ARG PHP_POST_MAX_SIZE=512M
-ARG PHP_UPLOAD_MAX_FILE_SIZE=512M
+# before they reach storage. Keep this above the 1 GiB platform ceiling.
+ARG PHP_POST_MAX_SIZE=1100M
+ARG PHP_UPLOAD_MAX_FILE_SIZE=1100M
 # Local temporary uploads are read by Laravel before being written to storage;
 # leave headroom above the largest accepted video for the app and request body.
-ARG PHP_MEMORY_LIMIT=768M
+ARG PHP_MEMORY_LIMIT=1280M
 ARG SSL_MODE=off
 # Number of queue worker processes supervisord runs (numprocs in laravel.conf).
 # Must be a non-empty integer or supervisord fails to start.
