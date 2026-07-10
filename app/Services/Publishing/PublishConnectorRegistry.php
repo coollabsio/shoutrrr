@@ -12,6 +12,7 @@ use App\Services\Publishing\Connectors\LinkedInConnector;
 use App\Services\Publishing\Connectors\ThreadsConnector;
 use App\Services\Publishing\Connectors\XConnector;
 use App\Services\Publishing\Contracts\PublishConnector;
+use RuntimeException;
 
 class PublishConnectorRegistry
 {
@@ -24,6 +25,7 @@ class PublishConnectorRegistry
             Platform::Facebook => app(FacebookConnector::class),
             Platform::Instagram => app(InstagramConnector::class),
             Platform::Threads => app(ThreadsConnector::class),
+            Platform::Discord => throw new RuntimeException('Discord has no publish connector yet.'),
         };
     }
 }

@@ -37,6 +37,6 @@ test('measure counts plain ascii uniformly across platforms', function () {
 test('the limits array exposes one descriptor per platform for the frontend', function () {
     $limits = Platform::allLimits();
 
-    expect($limits)->toHaveCount(6)
+    expect($limits)->toHaveCount(7)
         ->and($limits[0])->toHaveKeys(['platform', 'maxLength', 'maxBytes', 'maxMedia', 'maxMediaBytes', 'allowedMime', 'threadMax']);
 });

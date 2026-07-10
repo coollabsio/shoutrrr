@@ -14,6 +14,7 @@ enum Platform: string
     case Facebook = 'facebook';
     case Instagram = 'instagram';
     case Threads = 'threads';
+    case Discord = 'discord';
 
     public function label(): string
     {
@@ -24,6 +25,7 @@ enum Platform: string
             self::Facebook => 'Facebook',
             self::Instagram => 'Instagram',
             self::Threads => 'Threads',
+            self::Discord => 'Discord',
         };
     }
 
@@ -35,6 +37,7 @@ enum Platform: string
             self::Bluesky => null,
             self::Facebook, self::Instagram => 'facebook',
             self::Threads => 'threads',
+            self::Discord => null,
         };
     }
 
@@ -55,6 +58,7 @@ enum Platform: string
             self::Facebook => ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_read_user_content', 'pages_manage_engagement', 'read_insights', 'business_management'],
             self::Instagram => ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'pages_show_list', 'business_management'],
             self::Threads => ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights'],
+            self::Discord => [],
         };
     }
 
@@ -66,6 +70,7 @@ enum Platform: string
             self::Bluesky => null,
             self::Facebook, self::Instagram => 'services.facebook',
             self::Threads => 'services.threads',
+            self::Discord => null,
         };
     }
 
@@ -79,9 +84,25 @@ enum Platform: string
         return $this === self::Bluesky;
     }
 
+    public function supportsWebhook(): bool
+    {
+        return $this === self::Discord;
+    }
+
+    /**
+     * Whether this platform can read replies/mentions for the engagement inbox.
+     * Discord webhooks are write-only — they can't receive replies — so Discord
+     * has no engagement connector and must never be scheduled for reply fetching
+     * (see the gate in InstanceSettings::engagementPollingEnabled, Task 6).
+     */
+    public function supportsEngagement(): bool
+    {
+        return $this !== self::Discord;
+    }
+
     public function isConfigured(): bool
     {
-        if ($this->supportsAppPassword()) {
+        if ($this->supportsAppPassword() || $this->supportsWebhook()) {
             return true;
         }
 
@@ -155,7 +176,7 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, configured: bool, launched: bool, enabled: bool}>
+     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, supportsWebhook: bool, configured: bool, launched: bool, enabled: bool}>
      */
     public static function capabilities(): array
     {
@@ -166,6 +187,7 @@ enum Platform: string
             'label' => $platform->label(),
             'supportsOAuth' => $platform->supportsOAuth(),
             'supportsAppPassword' => $platform->supportsAppPassword(),
+            'supportsWebhook' => $platform->supportsWebhook(),
             'configured' => $platform->isConfigured(),
             'launched' => $platform->isLaunched(),
             'enabled' => $enabled[$platform->value] ?? true,
@@ -186,6 +208,7 @@ enum Platform: string
             self::Facebook => 63_206,
             self::Instagram => 2_200,
             self::Threads => 500,
+            self::Discord => 2000,
         };
     }
 
@@ -217,6 +240,7 @@ enum Platform: string
             self::X, self::Bluesky => 4,
             self::LinkedIn => 9,
             self::Facebook, self::Instagram, self::Threads => 10,
+            self::Discord => 10,
         };
     }
 
@@ -228,6 +252,7 @@ enum Platform: string
             self::LinkedIn => 8_388_608,
             self::Facebook => 4_194_304,
             self::Instagram, self::Threads => 8_388_608,
+            self::Discord => 8_388_608,
         };
     }
 
@@ -242,6 +267,7 @@ enum Platform: string
             self::Facebook => ['image/jpeg', 'image/png', 'image/gif'],
             self::Instagram => ['image/jpeg'],
             self::Threads => ['image/jpeg', 'image/png'],
+            self::Discord => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
         };
     }
 
@@ -256,6 +282,7 @@ enum Platform: string
             self::LinkedIn => ['width' => 7680, 'height' => 4320],
             self::Facebook => ['width' => 8192, 'height' => 8192],
             self::Instagram, self::Threads => ['width' => 1440, 'height' => 1800],
+            self::Discord => ['width' => 8192, 'height' => 8192],
         };
     }
 
@@ -275,6 +302,7 @@ enum Platform: string
             self::LinkedIn => 524_288_000, // 500 MB (organic feed)
             self::Bluesky => 100_000_000,
             self::Facebook, self::Instagram, self::Threads => 1_073_741_824,
+            self::Discord => 8_388_608,
         };
     }
 
@@ -287,6 +315,7 @@ enum Platform: string
             self::Facebook => 1200,
             self::Instagram => 900,
             self::Threads => 300,
+            self::Discord => 600,
         };
     }
 
@@ -307,8 +336,7 @@ enum Platform: string
             // UTF-16 code units: 2 bytes each in UTF-16LE.
             self::X => intdiv(strlen((string) mb_convert_encoding($text, 'UTF-16LE', 'UTF-8')), 2),
             self::Bluesky => grapheme_strlen($text) ?: 0,
-            self::LinkedIn => mb_strlen($text),
-            self::Facebook, self::Instagram, self::Threads => mb_strlen($text),
+            self::LinkedIn, self::Facebook, self::Instagram, self::Threads, self::Discord => mb_strlen($text),
         };
     }
 

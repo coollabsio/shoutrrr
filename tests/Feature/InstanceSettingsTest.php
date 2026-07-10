@@ -415,6 +415,7 @@ test('instance owner can update polling settings', function () {
                 'facebook' => true,
                 'instagram' => true,
                 'threads' => true,
+                'discord' => true,
             ],
             'x' => 720,
             'bluesky' => 30,
@@ -422,6 +423,7 @@ test('instance owner can update polling settings', function () {
             'facebook' => 15,
             'instagram' => 15,
             'threads' => 15,
+            'discord' => 15,
         ],
         'post_metrics' => [
             'enabled' => [
@@ -431,6 +433,7 @@ test('instance owner can update polling settings', function () {
                 'facebook' => true,
                 'instagram' => true,
                 'threads' => true,
+                'discord' => true,
             ],
             'x' => 1440,
             'bluesky' => 45,
@@ -438,6 +441,7 @@ test('instance owner can update polling settings', function () {
             'facebook' => 15,
             'instagram' => 15,
             'threads' => 15,
+            'discord' => 15,
         ],
         'account_metrics' => [
             'enabled' => [
@@ -447,6 +451,7 @@ test('instance owner can update polling settings', function () {
                 'facebook' => true,
                 'instagram' => true,
                 'threads' => true,
+                'discord' => true,
             ],
             'x' => 1440,
             'bluesky' => 240,
@@ -454,6 +459,7 @@ test('instance owner can update polling settings', function () {
             'facebook' => 15,
             'instagram' => 15,
             'threads' => 15,
+            'discord' => 15,
         ],
     ]);
 });

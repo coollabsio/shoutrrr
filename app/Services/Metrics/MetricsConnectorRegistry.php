@@ -12,6 +12,7 @@ use App\Services\Metrics\Connectors\LinkedInMetricsConnector;
 use App\Services\Metrics\Connectors\ThreadsMetricsConnector;
 use App\Services\Metrics\Connectors\XMetricsConnector;
 use App\Services\Metrics\Contracts\MetricsConnector;
+use RuntimeException;
 
 class MetricsConnectorRegistry
 {
@@ -24,6 +25,7 @@ class MetricsConnectorRegistry
             Platform::Facebook => app(FacebookMetricsConnector::class),
             Platform::Instagram => app(InstagramMetricsConnector::class),
             Platform::Threads => app(ThreadsMetricsConnector::class),
+            Platform::Discord => throw new RuntimeException('Discord has no metrics connector yet.'),
         };
     }
 }

@@ -16,6 +16,7 @@ it('defaults every platform to available', function () {
         'facebook' => true,
         'instagram' => true,
         'threads' => true,
+        'discord' => true,
     ]);
 });
 
@@ -45,7 +46,7 @@ it('lets an owner view the platforms page', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('settings/instance-platforms')
-            ->has('platforms', 6));
+            ->has('platforms', 7));
 });
 
 it('forbids a non-owner from the platforms page', function () {
@@ -68,6 +69,7 @@ it('persists platform toggles for an owner', function () {
                 'facebook' => true,
                 'instagram' => true,
                 'threads' => true,
+                'discord' => true,
             ],
         ])
         ->assertRedirect();

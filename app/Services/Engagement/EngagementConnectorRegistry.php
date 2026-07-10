@@ -12,6 +12,7 @@ use App\Services\Engagement\Connectors\LinkedInEngagementConnector;
 use App\Services\Engagement\Connectors\ThreadsEngagementConnector;
 use App\Services\Engagement\Connectors\XEngagementConnector;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use RuntimeException;
 
 class EngagementConnectorRegistry
 {
@@ -24,6 +25,7 @@ class EngagementConnectorRegistry
             Platform::Facebook => app(FacebookEngagementConnector::class),
             Platform::Instagram => app(InstagramEngagementConnector::class),
             Platform::Threads => app(ThreadsEngagementConnector::class),
+            Platform::Discord => throw new RuntimeException('Discord does not support engagement (webhooks are write-only).'),
         };
     }
 }
