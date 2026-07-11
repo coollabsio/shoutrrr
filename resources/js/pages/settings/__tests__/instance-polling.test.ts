@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -100,5 +103,23 @@ describe('instance polling settings', () => {
                 },
             },
         });
+    });
+});
+
+describe('instance polling section rendering', () => {
+    it('renders each section from the backend sections prop, not a hardcoded list', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/pages/settings/instance-polling.tsx',
+            ),
+            'utf8',
+        );
+
+        // No module-level hardcoded platform list.
+        expect(source).not.toMatch(/const platforms(\s*):?[^=]*=\s*\[/);
+        // PollingCard is driven by a per-section platforms prop sourced from `sections`.
+        expect(source).toContain('platforms={sections.');
+        expect(source).toContain('sections.engagement');
     });
 });
