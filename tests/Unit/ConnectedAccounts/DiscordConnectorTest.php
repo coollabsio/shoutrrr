@@ -2,6 +2,7 @@
 
 use App\Enums\Platform;
 use App\Services\ConnectedAccounts\DiscordConnector;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 const VALID_WEBHOOK = 'https://discord.com/api/webhooks/123456789/abc-DEF_token';
@@ -40,6 +41,16 @@ test('connect throws when Discord rejects the webhook', function () {
 
     app(DiscordConnector::class)->connect(VALID_WEBHOOK);
 })->throws(RuntimeException::class);
+
+test('connect converts a network failure into a friendly RuntimeException', function () {
+    // A ConnectionException (DNS/timeout) is not a RuntimeException, so without
+    // the catch it would bubble past the controller as a 500. Confirm connect()
+    // translates it into the RuntimeException the controller flashes as an error.
+    Http::fake(fn () => throw new ConnectionException('cURL error 28: timed out'));
+
+    expect(fn () => app(DiscordConnector::class)->connect(VALID_WEBHOOK))
+        ->toThrow(RuntimeException::class, 'Could not reach Discord. Please try again.');
+});
 
 test('connect rejects non-Discord and malformed URLs before any request', function (string $url) {
     Http::fake();

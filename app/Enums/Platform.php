@@ -300,7 +300,7 @@ enum Platform: string
             self::LinkedIn => 8_388_608,
             self::Facebook => 4_194_304,
             self::Instagram, self::Threads => 8_388_608,
-            self::Discord => 8_388_608,
+            self::Discord => 10_485_760, // 10 MiB (Discord's default webhook attachment cap)
         };
     }
 
@@ -350,7 +350,7 @@ enum Platform: string
             self::LinkedIn => 524_288_000, // 500 MB (organic feed)
             self::Bluesky => 100_000_000,
             self::Facebook, self::Instagram, self::Threads => 1_073_741_824,
-            self::Discord => 8_388_608,
+            self::Discord => 10_485_760, // 10 MiB (Discord's default webhook attachment cap)
         };
     }
 

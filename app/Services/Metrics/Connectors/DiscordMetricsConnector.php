@@ -42,7 +42,11 @@ class DiscordMetricsConnector implements MetricsConnector
 
         foreach ($ids as $id) {
             try {
-                $response = $this->http->acceptJson()->get($webhookUrl.'/messages/'.$id);
+                $response = $this->http
+                    ->timeout(10)
+                    ->connectTimeout(5)
+                    ->acceptJson()
+                    ->get($webhookUrl.'/messages/'.$id);
             } catch (ConnectionException $e) {
                 return PostMetricsResult::failed($e->getMessage());
             }

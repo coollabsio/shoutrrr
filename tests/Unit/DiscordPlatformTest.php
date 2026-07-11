@@ -28,7 +28,7 @@ test('discord is the only platform without engagement support', function () {
 test('discord limits match the spec', function () {
     expect(Platform::Discord->maxLength())->toBe(2000)
         ->and(Platform::Discord->maxMedia())->toBe(10)
-        ->and(Platform::Discord->maxMediaBytes())->toBe(8_388_608)
+        ->and(Platform::Discord->maxMediaBytes())->toBe(10_485_760)
         ->and(Platform::Discord->threadMax())->toBeNull()
         ->and(Platform::Discord->measure('héllo'))->toBe(5);
 });

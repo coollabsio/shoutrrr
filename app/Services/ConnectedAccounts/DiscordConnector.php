@@ -6,6 +6,7 @@ namespace App\Services\ConnectedAccounts;
 
 use App\Dto\ConnectedAccount\ConnectedAccountData;
 use App\Enums\Platform;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use RuntimeException;
 
@@ -21,11 +22,15 @@ class DiscordConnector
         $webhookUrl = trim($webhookUrl);
         $this->assertValidWebhookUrl($webhookUrl);
 
-        $response = $this->http
-            ->timeout(10)
-            ->connectTimeout(5)
-            ->acceptJson()
-            ->get($webhookUrl);
+        try {
+            $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
+                ->acceptJson()
+                ->get($webhookUrl);
+        } catch (ConnectionException) {
+            throw new RuntimeException('Could not reach Discord. Please try again.');
+        }
 
         if ($response->failed()) {
             throw new RuntimeException('Discord rejected that webhook URL. Check that it is correct and still exists.');
