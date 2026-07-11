@@ -24,6 +24,7 @@ const PLATFORM_LABELS: Record<PlatformName, string> = {
     facebook: 'Facebook',
     instagram: 'Instagram',
     threads: 'Threads',
+    discord: 'Discord',
 };
 
 const PLATFORM_GLYPH_CLASS: Record<PlatformName, string> = {
@@ -33,6 +34,7 @@ const PLATFORM_GLYPH_CLASS: Record<PlatformName, string> = {
     facebook: 'text-[#1877F2]',
     instagram: 'text-[#E4405F]',
     threads: 'text-foreground',
+    discord: 'text-[#5865F2]',
 };
 
 function initials(name: string): string {

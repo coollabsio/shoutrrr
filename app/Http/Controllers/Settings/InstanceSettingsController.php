@@ -99,6 +99,16 @@ class InstanceSettingsController extends Controller
 
         return Inertia::render('settings/instance-polling', [
             'settings' => $settings->polling(),
+            'sections' => collect(['engagement', 'post_metrics', 'account_metrics'])
+                ->mapWithKeys(fn (string $section): array => [
+                    $section => array_map(
+                        fn (Platform $platform): array => [
+                            'platform' => $platform->value,
+                            'label' => $platform->label(),
+                        ],
+                        Platform::pollingSectionPlatforms($section),
+                    ),
+                ])->all(),
         ]);
     }
 

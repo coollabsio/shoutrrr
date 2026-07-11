@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import BlueskyConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyConnectionController';
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
+import DiscordConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/DiscordConnectionController';
 import MetaConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/MetaConnectionController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import InputError from '@/components/common/input-error';
@@ -52,6 +53,7 @@ const SUPPORTED_PLATFORM_ICONS = [
     'facebook',
     'instagram',
     'threads',
+    'discord',
 ];
 
 export function isSupportedPlatformIcon(
@@ -427,6 +429,66 @@ function BlueskyConnectDialog({
     );
 }
 
+function DiscordConnectDialog({
+    open,
+    onOpenChange,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Connect a Discord channel</DialogTitle>
+                    <DialogDescription>
+                        In Discord: Channel Settings → Integrations → Webhooks →
+                        New Webhook → Copy Webhook URL, then paste it here.
+                    </DialogDescription>
+                </DialogHeader>
+                <Form
+                    {...DiscordConnectionController.store.form()}
+                    options={{ preserveScroll: true }}
+                    resetOnSuccess
+                    onSuccess={() => onOpenChange(false)}
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <div className="grid gap-2 py-2">
+                                <Label htmlFor="webhook_url">Webhook URL</Label>
+                                <Input
+                                    id="webhook_url"
+                                    name="webhook_url"
+                                    type="url"
+                                    placeholder="https://discord.com/api/webhooks/..."
+                                    autoComplete="off"
+                                    aria-invalid={
+                                        errors.webhook_url ? true : undefined
+                                    }
+                                    required
+                                />
+                                <InputError message={errors.webhook_url} />
+                            </div>
+                            <DialogFooter className="pt-4">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => onOpenChange(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={processing}>
+                                    {processing ? 'Connecting...' : 'Connect'}
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 /**
  * Facebook and Instagram share a single Facebook Login flow
  * (`MetaConnectionController`), so they get one combined entry point instead
@@ -464,6 +526,7 @@ export function ConnectButtons({
     capabilities: Capability[];
 }) {
     const [blueskyOpen, setBlueskyOpen] = useState(false);
+    const [discordOpen, setDiscordOpen] = useState(false);
 
     // Instagram connects through the Facebook (Meta) entry, so it isn't its own row.
     const platforms = capabilities.filter((c) => c.platform !== 'instagram');
@@ -497,6 +560,20 @@ export function ConnectButtons({
                             capability.platform === 'facebook'
                                 ? metaConnectLabel(capabilities)
                                 : capability.label;
+
+                        // Discord authenticates via a pasted webhook URL dialog.
+                        if (capability.supportsWebhook) {
+                            return (
+                                <DropdownMenuItem
+                                    key={capability.platform}
+                                    className="gap-2.5"
+                                    onClick={() => setDiscordOpen(true)}
+                                >
+                                    {platformIcon(capability.platform)}
+                                    {label}
+                                </DropdownMenuItem>
+                            );
+                        }
 
                         // Bluesky authenticates via a handle / app-password dialog.
                         if (capability.supportsAppPassword) {
@@ -546,6 +623,10 @@ export function ConnectButtons({
             <BlueskyConnectDialog
                 open={blueskyOpen}
                 onOpenChange={setBlueskyOpen}
+            />
+            <DiscordConnectDialog
+                open={discordOpen}
+                onOpenChange={setDiscordOpen}
             />
         </>
     );

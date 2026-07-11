@@ -44,6 +44,7 @@ const PLATFORM_ACCENT: Record<PlatformName, string> = {
     facebook: 'text-[#1877F2]',
     instagram: 'text-[#E4405F]',
     threads: 'text-foreground',
+    discord: 'text-[#5865F2]',
 };
 
 const METRIC_ICON: Record<EngagementKey, typeof Heart> = {

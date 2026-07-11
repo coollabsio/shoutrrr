@@ -35,6 +35,7 @@ describe('analytics disabled metric notices', () => {
                 facebook: true,
                 instagram: true,
                 threads: true,
+                discord: true,
             }),
         ).toEqual(['Bluesky', 'LinkedIn']);
         expect(
@@ -45,6 +46,7 @@ describe('analytics disabled metric notices', () => {
                 facebook: true,
                 instagram: true,
                 threads: true,
+                discord: true,
             }),
         ).toEqual([]);
     });

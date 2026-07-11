@@ -56,6 +56,9 @@ const LAYOUT: Record<PlatformName, Slot[]> = {
         { key: 'comments', label: 'replies' },
         { key: 'reposts', label: 'reposts' },
     ],
+    // Discord webhooks only carry a summed message-reaction count; there's no
+    // comment/repost data to show alongside it.
+    discord: [{ key: 'likes', label: 'reactions' }],
 };
 
 /**

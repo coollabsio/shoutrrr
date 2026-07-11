@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Settings;
 
+use App\Enums\Platform;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -20,80 +21,75 @@ class UpdateInstancePollingSettingsRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
-     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
-        return [
-            'engagement' => ['required', 'array'],
-            'engagement.enabled' => ['required', 'array'],
-            'engagement.enabled.x' => ['required', 'boolean'],
-            'engagement.enabled.bluesky' => ['required', 'boolean'],
-            'engagement.enabled.linkedin' => ['required', 'boolean'],
-            'engagement.x' => ['required', 'integer', 'min:5', 'max:10080'],
-            'engagement.bluesky' => ['required', 'integer', 'min:5', 'max:10080'],
-            'engagement.linkedin' => ['required', 'integer', 'min:5', 'max:10080'],
-            'post_metrics' => ['required', 'array'],
-            'post_metrics.enabled' => ['required', 'array'],
-            'post_metrics.enabled.x' => ['required', 'boolean'],
-            'post_metrics.enabled.bluesky' => ['required', 'boolean'],
-            'post_metrics.enabled.linkedin' => ['required', 'boolean'],
-            'post_metrics.x' => ['required', 'integer', 'min:5', 'max:10080'],
-            'post_metrics.bluesky' => ['required', 'integer', 'min:5', 'max:10080'],
-            'post_metrics.linkedin' => ['required', 'integer', 'min:5', 'max:10080'],
-            'account_metrics' => ['required', 'array'],
-            'account_metrics.enabled' => ['required', 'array'],
-            'account_metrics.enabled.x' => ['required', 'boolean'],
-            'account_metrics.enabled.bluesky' => ['required', 'boolean'],
-            'account_metrics.enabled.linkedin' => ['required', 'boolean'],
-            'account_metrics.x' => ['required', 'integer', 'min:5', 'max:10080'],
-            'account_metrics.bluesky' => ['required', 'integer', 'min:5', 'max:10080'],
-            'account_metrics.linkedin' => ['required', 'integer', 'min:5', 'max:10080'],
-        ];
+        $rules = [];
+
+        foreach (['engagement', 'post_metrics', 'account_metrics'] as $section) {
+            $rules[$section] = ['required', 'array'];
+            $rules["{$section}.enabled"] = ['required', 'array'];
+
+            foreach (Platform::pollingSectionPlatforms($section) as $platform) {
+                $rules["{$section}.enabled.{$platform->value}"] = ['required', 'boolean'];
+                $rules["{$section}.{$platform->value}"] = ['required', 'integer', 'min:5', 'max:10080'];
+            }
+        }
+
+        return $rules;
     }
 
     /**
      * @return array{
-     *     engagement_polling_enabled: array{x: bool, bluesky: bool, linkedin: bool},
-     *     post_metrics_polling_enabled: array{x: bool, bluesky: bool, linkedin: bool},
-     *     account_metrics_polling_enabled: array{x: bool, bluesky: bool, linkedin: bool},
-     *     engagement_poll_interval_minutes: array{x: int, bluesky: int, linkedin: int},
-     *     post_metrics_poll_interval_minutes: array{x: int, bluesky: int, linkedin: int},
-     *     account_metrics_poll_interval_minutes: array{x: int, bluesky: int, linkedin: int}
+     *     engagement_polling_enabled: array<string, bool>,
+     *     post_metrics_polling_enabled: array<string, bool>,
+     *     account_metrics_polling_enabled: array<string, bool>,
+     *     engagement_poll_interval_minutes: array<string, int>,
+     *     post_metrics_poll_interval_minutes: array<string, int>,
+     *     account_metrics_poll_interval_minutes: array<string, int>,
      * }
      */
     public function instancePollingSettings(): array
     {
-        /** @var array{
-         *     engagement: array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int},
-         *     post_metrics: array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int},
-         *     account_metrics: array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int}
-         * } $settings
-         */
-        $settings = $this->validated();
+        /** @var array{engagement: array<string, mixed>, post_metrics: array<string, mixed>, account_metrics: array<string, mixed>} $validated */
+        $validated = $this->validated();
 
         return [
-            'engagement_polling_enabled' => $settings['engagement']['enabled'],
-            'post_metrics_polling_enabled' => $settings['post_metrics']['enabled'],
-            'account_metrics_polling_enabled' => $settings['account_metrics']['enabled'],
-            'engagement_poll_interval_minutes' => $this->minutes($settings['engagement']),
-            'post_metrics_poll_interval_minutes' => $this->minutes($settings['post_metrics']),
-            'account_metrics_poll_interval_minutes' => $this->minutes($settings['account_metrics']),
+            'engagement_polling_enabled' => $this->enabledMap($validated['engagement']),
+            'post_metrics_polling_enabled' => $this->enabledMap($validated['post_metrics']),
+            'account_metrics_polling_enabled' => $this->enabledMap($validated['account_metrics']),
+            'engagement_poll_interval_minutes' => $this->minutes($validated['engagement']),
+            'post_metrics_poll_interval_minutes' => $this->minutes($validated['post_metrics']),
+            'account_metrics_poll_interval_minutes' => $this->minutes($validated['account_metrics']),
         ];
     }
 
     /**
-     * @param  array{enabled: array{x: bool, bluesky: bool, linkedin: bool}, x: int, bluesky: int, linkedin: int}  $settings
-     * @return array{x: int, bluesky: int, linkedin: int}
+     * @param  array<string, mixed>  $section
+     * @return array<string, bool>
      */
-    private function minutes(array $settings): array
+    private function enabledMap(array $section): array
     {
-        return [
-            'x' => $settings['x'],
-            'bluesky' => $settings['bluesky'],
-            'linkedin' => $settings['linkedin'],
-        ];
+        /** @var array<string, mixed> $enabled */
+        $enabled = $section['enabled'] ?? [];
+
+        return array_map(static fn (mixed $value): bool => (bool) $value, $enabled);
+    }
+
+    /**
+     * Every remaining key after removing `enabled` is a per-platform interval.
+     * This relies on Laravel's `excludeUnvalidatedArrayKeys` default (on here):
+     * `validated()` strips any key without a rule, so only ruled platform
+     * intervals survive — no unvalidated/injected key can leak into storage.
+     *
+     * @param  array<string, mixed>  $section
+     * @return array<string, int>
+     */
+    private function minutes(array $section): array
+    {
+        unset($section['enabled']);
+
+        return array_map(static fn (mixed $value): int => (int) $value, $section);
     }
 }

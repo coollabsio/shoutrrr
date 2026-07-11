@@ -1,0 +1,89 @@
+<?php
+
+use App\Enums\Platform;
+use App\Services\ConnectedAccounts\DiscordConnector;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
+
+const VALID_WEBHOOK = 'https://discord.com/api/webhooks/123456789/abc-DEF_token';
+
+test('connect maps the webhook GET into ConnectedAccountData', function () {
+    Http::fake([VALID_WEBHOOK => Http::response([
+        'id' => '123456789',
+        'name' => 'Announcements',
+        'avatar' => 'abcdef0123456789',
+        'channel_id' => '555',
+        'guild_id' => '777',
+    ])]);
+
+    $data = app(DiscordConnector::class)->connect(VALID_WEBHOOK);
+
+    expect($data->platform)->toBe(Platform::Discord)
+        ->and($data->remoteAccountId)->toBe('123456789')
+        ->and($data->handle)->toBe('Announcements')
+        ->and($data->displayName)->toBe('Announcements')
+        ->and($data->authMethod)->toBe('webhook')
+        ->and($data->accessToken)->toBe(VALID_WEBHOOK)
+        ->and($data->avatarUrl)->toBe('https://cdn.discordapp.com/avatars/123456789/abcdef0123456789.png')
+        ->and($data->session)->toMatchArray(['channel_id' => '555', 'guild_id' => '777']);
+});
+
+test('connect leaves avatar null when the webhook has none', function () {
+    Http::fake([VALID_WEBHOOK => Http::response([
+        'id' => '123456789', 'name' => 'Bot', 'avatar' => null,
+    ])]);
+
+    expect(app(DiscordConnector::class)->connect(VALID_WEBHOOK)->avatarUrl)->toBeNull();
+});
+
+test('connect throws when Discord rejects the webhook', function () {
+    Http::fake([VALID_WEBHOOK => Http::response([], 404)]);
+
+    app(DiscordConnector::class)->connect(VALID_WEBHOOK);
+})->throws(RuntimeException::class);
+
+test('connect converts a network failure into a friendly RuntimeException', function () {
+    // A ConnectionException (DNS/timeout) is not a RuntimeException, so without
+    // the catch it would bubble past the controller as a 500. Confirm connect()
+    // translates it into the RuntimeException the controller flashes as an error.
+    Http::fake(fn () => throw new ConnectionException('cURL error 28: timed out'));
+
+    expect(fn () => app(DiscordConnector::class)->connect(VALID_WEBHOOK))
+        ->toThrow(RuntimeException::class, 'Could not reach Discord. Please try again.');
+});
+
+test('connect rejects non-Discord and malformed URLs before any request', function (string $url) {
+    Http::fake();
+
+    expect(fn () => app(DiscordConnector::class)->connect($url))
+        ->toThrow(RuntimeException::class);
+
+    Http::assertNothingSent();
+})->with([
+    'http scheme' => ['http://discord.com/api/webhooks/1/tok'],
+    'foreign host' => ['https://evil.com/api/webhooks/1/tok'],
+    'ssrf localhost' => ['https://127.0.0.1/api/webhooks/1/tok'],
+    'wrong path' => ['https://discord.com/api/not-webhooks/1/tok'],
+    'discord.com root' => ['https://discord.com/'],
+    'host suffix' => ['https://discord.com.evil.com/api/webhooks/1/tok'],
+    'embedded control char' => ["https://discord.com/api/webhooks/1/tok\x01en"],
+]);
+
+test('assertValidWebhookUrl rejects a path with a trailing newline', function () {
+    // connect() trims the URL before validating, which would strip a *pure*
+    // trailing newline before it ever reached the regex — so this locks in
+    // that no control character survives to the outbound request.
+    expect(fn () => app(DiscordConnector::class)->assertValidWebhookUrl("https://discord.com/api/webhooks/1/tok\n"))
+        ->toThrow(RuntimeException::class);
+});
+
+test('connect accepts the versioned api path and ptb/canary hosts', function (string $url) {
+    Http::fake([$url => Http::response(['id' => '1', 'name' => 'n'])]);
+
+    expect(app(DiscordConnector::class)->connect($url)->remoteAccountId)->toBe('1');
+})->with([
+    'versioned' => ['https://discord.com/api/v10/webhooks/1/tok'],
+    'ptb' => ['https://ptb.discord.com/api/webhooks/1/tok'],
+    'canary' => ['https://canary.discord.com/api/webhooks/1/tok'],
+    'discordapp.com' => ['https://discordapp.com/api/webhooks/1/tok'],
+]);

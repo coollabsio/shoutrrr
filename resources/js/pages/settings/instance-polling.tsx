@@ -26,18 +26,12 @@ export type PollingSettings = {
     account_metrics: PollingGroup;
 };
 
+type SectionPlatform = { platform: PlatformName; label: string };
+
 type Props = {
     settings: PollingSettings;
+    sections: Record<keyof PollingSettings, SectionPlatform[]>;
 };
-
-const platforms: { key: PlatformName; label: string }[] = [
-    { key: 'x', label: 'X' },
-    { key: 'bluesky', label: 'Bluesky' },
-    { key: 'linkedin', label: 'LinkedIn' },
-    { key: 'facebook', label: 'Facebook' },
-    { key: 'instagram', label: 'Instagram' },
-    { key: 'threads', label: 'Threads' },
-];
 
 export function pollingWithMinutes(
     settings: PollingSettings,
@@ -72,7 +66,7 @@ export function pollingWithPlatformEnabled(
     };
 }
 
-export default function InstancePolling({ settings }: Props) {
+export default function InstancePolling({ settings, sections }: Props) {
     const { data, setData, put, processing, errors } =
         useForm<PollingSettings>(settings);
 
@@ -127,6 +121,7 @@ export default function InstancePolling({ settings }: Props) {
                         title="Engagement"
                         description="How often to check published posts for new replies."
                         group="engagement"
+                        platforms={sections.engagement}
                         values={data.engagement}
                         errors={errors}
                         onChange={setMinutes}
@@ -137,6 +132,7 @@ export default function InstancePolling({ settings }: Props) {
                         title="Post metrics"
                         description="How often to refresh likes, replies, reposts, and impressions for published posts."
                         group="post_metrics"
+                        platforms={sections.post_metrics}
                         values={data.post_metrics}
                         errors={errors}
                         onChange={setMinutes}
@@ -147,6 +143,7 @@ export default function InstancePolling({ settings }: Props) {
                         title="Account metrics"
                         description="How often to snapshot follower, following, and post counts for connected accounts."
                         group="account_metrics"
+                        platforms={sections.account_metrics}
                         values={data.account_metrics}
                         errors={errors}
                         onChange={setMinutes}
@@ -166,6 +163,7 @@ function PollingCard({
     title,
     description,
     group,
+    platforms,
     values,
     errors,
     onChange,
@@ -174,6 +172,7 @@ function PollingCard({
     title: string;
     description: string;
     group: keyof PollingSettings;
+    platforms: SectionPlatform[];
     values: PollingGroup;
     errors: Partial<Record<string, string>>;
     onChange: (
@@ -188,7 +187,7 @@ function PollingCard({
     ) => void;
 }) {
     const hasDisabledPlatform = platforms.some(
-        (platform) => !values.enabled[platform.key],
+        (p) => !values.enabled[p.platform],
     );
 
     return (
@@ -207,32 +206,32 @@ function PollingCard({
                 </div>
             </CardHeader>
             <CardContent className="space-y-4">
-                {platforms.map((platform) => {
-                    const errorKey = `${group}.${platform.key}`;
-                    const isEnabled = values.enabled[platform.key];
+                {platforms.map((p) => {
+                    const errorKey = `${group}.${p.platform}`;
+                    const isEnabled = values.enabled[p.platform];
 
                     return (
                         <div
-                            key={platform.key}
+                            key={p.platform}
                             className="grid gap-2 sm:grid-cols-[1fr_9rem] sm:items-start"
                         >
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                     <Checkbox
-                                        id={`${group}-${platform.key}-enabled`}
+                                        id={`${group}-${p.platform}-enabled`}
                                         checked={isEnabled}
                                         onCheckedChange={(checked) =>
                                             onEnabledChange(
                                                 group,
-                                                platform.key,
+                                                p.platform,
                                                 checked === true,
                                             )
                                         }
                                     />
                                     <Label
-                                        htmlFor={`${group}-${platform.key}-enabled`}
+                                        htmlFor={`${group}-${p.platform}-enabled`}
                                     >
-                                        {platform.label}
+                                        {p.label}
                                     </Label>
                                     {!isEnabled && (
                                         <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
@@ -243,22 +242,22 @@ function PollingCard({
                                 <p className="text-sm text-muted-foreground">
                                     {isEnabled
                                         ? 'Interval in minutes.'
-                                        : `Polling for ${platform.label} is paused.`}
+                                        : `Polling for ${p.label} is paused.`}
                                 </p>
                             </div>
                             <div>
                                 <Input
-                                    id={`${group}-${platform.key}`}
+                                    id={`${group}-${p.platform}`}
                                     type="number"
                                     min={5}
                                     max={10080}
                                     step={5}
-                                    value={values[platform.key]}
+                                    value={values[p.platform]}
                                     disabled={!isEnabled}
                                     onChange={(event) =>
                                         onChange(
                                             group,
-                                            platform.key,
+                                            p.platform,
                                             event.target.value,
                                         )
                                     }
