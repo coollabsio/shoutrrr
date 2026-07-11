@@ -9,7 +9,9 @@ import type { PlatformName } from '@/types/compose';
  * Behaviour confirmed 2026: X collapses runs of line breaks down to a single
  * blank line; LinkedIn's feed keeps at most one blank line between paragraphs;
  * Bluesky stores and renders standard newlines untouched. Facebook, Instagram,
- * Threads, and Discord use the same single-blank-line default as X/LinkedIn.
+ * and Threads use the same single-blank-line default as X/LinkedIn. Discord
+ * renders consecutive newlines verbatim (like Bluesky), and the webhook
+ * connector publishes the raw content, so the preview must preserve them too.
  * Tune a value here if a platform changes how it collapses spacing.
  */
 const MAX_CONSECUTIVE_NEWLINES: Record<PlatformName, number> = {
@@ -19,7 +21,7 @@ const MAX_CONSECUTIVE_NEWLINES: Record<PlatformName, number> = {
     facebook: 2,
     instagram: 2,
     threads: 2,
-    discord: 2,
+    discord: Number.POSITIVE_INFINITY,
 };
 
 /**

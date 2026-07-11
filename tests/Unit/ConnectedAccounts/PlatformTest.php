@@ -61,7 +61,7 @@ test('capabilities array exposes one entry per platform for the frontend', funct
     $caps = Platform::capabilities();
 
     expect($caps)->toHaveCount(7)
-        ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'configured', 'launched']);
+        ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'supportsWebhook', 'configured', 'launched', 'enabled']);
 });
 
 test('every platform is launched', function () {

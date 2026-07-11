@@ -169,8 +169,8 @@ enum Platform: string
      * connecting must stay disabled even when credentials are configured. Flip a
      * platform to `true` when its publish/engagement/metrics connectors land.
      *
-     * All six platforms (X, Bluesky, LinkedIn, Facebook, Instagram, Threads)
-     * are launched as of Threads shipping in Phase 4.
+     * All seven platforms (X, Bluesky, LinkedIn, Facebook, Instagram, Threads,
+     * Discord) are launched.
      */
     public function isLaunched(): bool
     {
