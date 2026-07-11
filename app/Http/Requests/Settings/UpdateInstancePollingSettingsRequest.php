@@ -78,6 +78,11 @@ class UpdateInstancePollingSettingsRequest extends FormRequest
     }
 
     /**
+     * Every remaining key after removing `enabled` is a per-platform interval.
+     * This relies on Laravel's `excludeUnvalidatedArrayKeys` default (on here):
+     * `validated()` strips any key without a rule, so only ruled platform
+     * intervals survive — no unvalidated/injected key can leak into storage.
+     *
      * @param  array<string, mixed>  $section
      * @return array<string, int>
      */
