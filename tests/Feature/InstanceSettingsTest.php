@@ -373,95 +373,32 @@ test('instance owner can update polling settings', function () {
     $this->actingAs($owner)
         ->put(route('instance-settings.polling.update'), [
             'engagement' => [
-                'enabled' => [
-                    'x' => false,
-                    'bluesky' => true,
-                    'linkedin' => true,
-                ],
-                'x' => 720,
-                'bluesky' => 30,
-                'linkedin' => 120,
+                'enabled' => ['x' => false, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 720, 'bluesky' => 30, 'linkedin' => 120, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
             'post_metrics' => [
-                'enabled' => [
-                    'x' => false,
-                    'bluesky' => true,
-                    'linkedin' => true,
-                ],
-                'x' => 1440,
-                'bluesky' => 45,
-                'linkedin' => 180,
+                'enabled' => ['x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
+                'x' => 1440, 'bluesky' => 45, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 90,
             ],
             'account_metrics' => [
-                'enabled' => [
-                    'x' => false,
-                    'bluesky' => true,
-                    'linkedin' => true,
-                ],
-                'x' => 1440,
-                'bluesky' => 240,
-                'linkedin' => 480,
+                'enabled' => ['x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 1440, 'bluesky' => 240, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
         ])
         ->assertRedirect();
 
-    // Platforms not included in the update keep their defaults (enabled, 15 min).
-    expect(app(InstanceSettings::class)->polling())->toMatchArray([
-        'engagement' => [
-            'enabled' => [
-                'x' => false,
-                'bluesky' => true,
-                'linkedin' => true,
-                'facebook' => true,
-                'instagram' => true,
-                'threads' => true,
-                'discord' => true,
-            ],
-            'x' => 720,
-            'bluesky' => 30,
-            'linkedin' => 120,
-            'facebook' => 15,
-            'instagram' => 15,
-            'threads' => 15,
-            'discord' => 15,
-        ],
-        'post_metrics' => [
-            'enabled' => [
-                'x' => false,
-                'bluesky' => true,
-                'linkedin' => true,
-                'facebook' => true,
-                'instagram' => true,
-                'threads' => true,
-                'discord' => true,
-            ],
-            'x' => 1440,
-            'bluesky' => 45,
-            'linkedin' => 180,
-            'facebook' => 15,
-            'instagram' => 15,
-            'threads' => 15,
-            'discord' => 15,
-        ],
-        'account_metrics' => [
-            'enabled' => [
-                'x' => false,
-                'bluesky' => true,
-                'linkedin' => true,
-                'facebook' => true,
-                'instagram' => true,
-                'threads' => true,
-                'discord' => true,
-            ],
-            'x' => 1440,
-            'bluesky' => 240,
-            'linkedin' => 480,
-            'facebook' => 15,
-            'instagram' => 15,
-            'threads' => 15,
-            'discord' => 15,
-        ],
-    ]);
+    $polling = app(InstanceSettings::class)->polling();
+
+    // Sent values persist; Discord post-metrics is configurable (reactions).
+    expect($polling['post_metrics']['enabled']['discord'])->toBeTrue()
+        ->and($polling['post_metrics']['discord'])->toBe(90)
+        ->and($polling['engagement']['facebook'])->toBe(15)
+        ->and($polling['account_metrics']['enabled']['x'])->toBeFalse();
+
+    // LinkedIn is not a configurable metrics platform, so it keeps its read default
+    // (enabled + per-platform fallback) even though we never sent it.
+    expect($polling['post_metrics']['enabled']['linkedin'])->toBeTrue()
+        ->and($polling['account_metrics']['enabled']['linkedin'])->toBeTrue();
 });
 
 test('regular users cannot view polling settings', function () {
