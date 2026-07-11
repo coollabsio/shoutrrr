@@ -100,6 +100,54 @@ enum Platform: string
         return $this !== self::Discord;
     }
 
+    /**
+     * Whether this platform's metrics connector returns real post-level metrics.
+     * LinkedIn's post-metrics connector returns `unsupported`, so it has no
+     * post-metrics polling to configure.
+     */
+    public function supportsPostMetrics(): bool
+    {
+        return $this !== self::LinkedIn;
+    }
+
+    /**
+     * Whether this platform's metrics connector returns real account-level
+     * metrics. LinkedIn and Discord return `unsupported` (LinkedIn has no
+     * account-metrics API here; a Discord webhook cannot read server stats).
+     */
+    public function supportsAccountMetrics(): bool
+    {
+        return $this !== self::LinkedIn && $this !== self::Discord;
+    }
+
+    /**
+     * Whether this platform participates in the given polling settings section.
+     */
+    public function supportsPollingSection(string $section): bool
+    {
+        return match ($section) {
+            'engagement' => $this->supportsEngagement(),
+            'post_metrics' => $this->supportsPostMetrics(),
+            'account_metrics' => $this->supportsAccountMetrics(),
+            default => false,
+        };
+    }
+
+    /**
+     * Launched platforms whose connectors back the given polling section, in
+     * enum declaration order. Single source of truth for the polling settings
+     * controller and its update request.
+     *
+     * @return list<self>
+     */
+    public static function pollingSectionPlatforms(string $section): array
+    {
+        return array_values(array_filter(
+            self::cases(),
+            fn (self $platform): bool => $platform->isLaunched() && $platform->supportsPollingSection($section),
+        ));
+    }
+
     public function isConfigured(): bool
     {
         if ($this->supportsAppPassword() || $this->supportsWebhook()) {
