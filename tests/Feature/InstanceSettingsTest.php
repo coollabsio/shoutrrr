@@ -389,11 +389,25 @@ test('instance owner can update polling settings', function () {
 
     $polling = app(InstanceSettings::class)->polling();
 
-    // Sent values persist; Discord post-metrics is configurable (reactions).
-    expect($polling['post_metrics']['enabled']['discord'])->toBeTrue()
-        ->and($polling['post_metrics']['discord'])->toBe(90)
-        ->and($polling['engagement']['facebook'])->toBe(15)
-        ->and($polling['account_metrics']['enabled']['x'])->toBeFalse();
+    // Every sent platform's enabled flag and interval persisted correctly, section by section.
+    expect($polling['engagement']['enabled'])->toMatchArray([
+        'x' => false, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true,
+    ])
+        ->and($polling['engagement'])->toMatchArray([
+            'x' => 720, 'bluesky' => 30, 'linkedin' => 120, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+        ])
+        ->and($polling['post_metrics']['enabled'])->toMatchArray([
+            'x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true,
+        ])
+        ->and($polling['post_metrics'])->toMatchArray([
+            'x' => 1440, 'bluesky' => 45, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 90,
+        ])
+        ->and($polling['account_metrics']['enabled'])->toMatchArray([
+            'x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true,
+        ])
+        ->and($polling['account_metrics'])->toMatchArray([
+            'x' => 1440, 'bluesky' => 240, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+        ]);
 
     // LinkedIn is not a configurable metrics platform, so it keeps its read default
     // (enabled + per-platform fallback) even though we never sent it.
