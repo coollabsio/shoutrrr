@@ -6,7 +6,7 @@
 
 **An open-source, self-hostable alternative to Buffer, Typefully & Hootsuite.**
 
-Write once, publish everywhere. Schedule posts to X, Bluesky, LinkedIn, Facebook, Instagram, and Threads from one calendar — on your own server, with your own data.
+Write once, publish everywhere. Schedule posts to X, Bluesky, LinkedIn, Facebook, Instagram, Threads, and Discord from one calendar — on your own server, with your own data.
 
 [![License](https://img.shields.io/github/license/coollabsio/shoutrrr?style=for-the-badge&color=4c1)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/coollabsio/shoutrrr?style=for-the-badge&logo=github&color=f5c518)](https://github.com/coollabsio/shoutrrr/stargazers)
@@ -45,6 +45,7 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 | **Facebook** (Pages) | OAuth 2.0 (Facebook Login) | ✅ (≤63,206 chars, up to 10 images or 1 video)            | — (single post) | likes, comments, shares, impressions |
 | **Instagram**    | OAuth 2.0 (Facebook Login)     | ✅ (media required, ≤2,200 chars, up to 10 images or 1 video/Reel) | — (single post) | likes, comments, shares, views       |
 | **Threads**      | OAuth 2.0                      | ✅ (≤500 chars, up to 10 images or 1 video)               | ✅              | likes, replies, reposts, views       |
+| **Discord**      | Channel webhook URL            | ✅ (≤2000 chars, up to 10 files ≤10 MiB)                  | ✅              | reactions                            |
 
 ## Features
 
