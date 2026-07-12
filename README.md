@@ -246,6 +246,17 @@ MAIL_FROM_NAME="${APP_NAME}"
 
 A post is composed once, then split into one **target** per connected account. The scheduler dispatches due posts every minute; a queued `PublishPostTarget` job then publishes each target independently, with retries, idempotency, and a per-attempt audit trail. Scheduled jobs refresh OAuth tokens before they expire, fetch replies, and check for due metrics captures every 15 minutes. Metrics refresh cadence is controlled in `config/metrics.php`.
 
+### API & MCP tokens
+
+The REST API and MCP integration authenticate with bearer tokens minted by [Laravel Passport](https://laravel.com/docs/passport), which signs and verifies every token with an RSA keypair. **You don't need to provision these keys** — the first time a workspace issues an API key, Shoutrrr generates the pair automatically (`ApiKeyManager::ensureEncryptionKeysExist()` runs `passport:keys`) and stores it in `storage/oauth-private.key` / `oauth-public.key`. The bundled Docker setups persist `storage` on a named volume, so the keys survive redeploys.
+
+If you'd rather provision them explicitly — for example to share one keypair across multiple app instances behind a load balancer — do either of the following before issuing keys:
+
+- Run `php artisan passport:keys` once and keep `storage` persistent, **or**
+- Set the `PASSPORT_PRIVATE_KEY` and `PASSPORT_PUBLIC_KEY` env vars to the key contents (the auto-generation step is skipped when both are present).
+
+To turn auto-generation off entirely, set `PASSPORT_AUTO_GENERATE_KEYS=false`. Issuing an API key without keys present then fails loudly instead of writing new ones — useful when the keypair is managed externally and Shoutrrr must never mint its own.
+
 ### Tooling
 
 | Concern             | Tool                                                       | Command                                         |

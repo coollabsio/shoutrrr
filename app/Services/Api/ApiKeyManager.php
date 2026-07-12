@@ -8,6 +8,7 @@ use App\Models\ApiKey;
 use App\Models\User;
 use App\Models\Workspace;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 use Laravel\Passport\Client;
@@ -33,6 +34,7 @@ class ApiKeyManager
 
         $scopes = $scope === 'write' ? ['read', 'write'] : ['read'];
 
+        $this->ensureEncryptionKeysExist();
         $this->ensurePersonalAccessClientExists();
 
         // The JWT `exp` claim is baked in at mint time from this global, so it
@@ -64,6 +66,41 @@ class ApiKeyManager
         $apiKey->forceFill(['revoked_at' => now()])->save();
 
         Token::find($apiKey->access_token_id)?->revoke();
+    }
+
+    /**
+     * Passport signs and verifies every token with an RSA keypair. By default
+     * those keys live in storage (oauth-private.key / oauth-public.key) and are
+     * gitignored, so a fresh deployment has none until `passport:keys` is run.
+     * Rather than make that a mandatory bootstrap step, we generate the pair
+     * lazily the first time a key is issued — the same self-provisioning
+     * approach as the personal access client below. Skipped when the keys are
+     * supplied out of band via env (PASSPORT_PRIVATE_KEY / PASSPORT_PUBLIC_KEY).
+     * Idempotent, and lock-guarded so concurrent first-time issues don't race.
+     * Disable via PASSPORT_AUTO_GENERATE_KEYS=false to require the keys be
+     * provisioned out of band; issuing then fails loudly if none are present.
+     */
+    private function ensureEncryptionKeysExist(): void
+    {
+        if (config('passport.private_key') && config('passport.public_key')) {
+            return;
+        }
+
+        if (file_exists(Passport::keyPath('oauth-private.key'))) {
+            return;
+        }
+
+        if (! config('passport.auto_generate_keys')) {
+            return;
+        }
+
+        Cache::lock('shoutrrr:generate-passport-keys', 10)->block(5, function (): void {
+            if (file_exists(Passport::keyPath('oauth-private.key'))) {
+                return;
+            }
+
+            Artisan::call('passport:keys', ['--no-interaction' => true]);
+        });
     }
 
     /**
