@@ -59,6 +59,7 @@
         "composer install",
         "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
         "@php -r \"preg_match('/^APP_KEY=.+/m', file_get_contents('.env')) || passthru('php artisan key:generate --no-interaction');\"",
+        "@php -r \"file_exists('storage/oauth-private.key') || passthru('php artisan passport:keys --no-interaction');\"",
         "@php artisan storage:link --force",
         "bun install",
         "bun run build"
