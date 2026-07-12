@@ -15,6 +15,7 @@ use Laravel\Passport\Client;
 use Laravel\Passport\ClientRepository;
 use Laravel\Passport\Passport;
 use Laravel\Passport\Token;
+use RuntimeException;
 
 class ApiKeyManager
 {
@@ -86,16 +87,20 @@ class ApiKeyManager
             return;
         }
 
-        if (file_exists(Passport::keyPath('oauth-private.key'))) {
+        if (file_exists(Passport::keyPath('oauth-private.key')) && file_exists(Passport::keyPath('oauth-public.key'))) {
             return;
         }
 
         if (! config('passport.auto_generate_keys')) {
-            return;
+            throw new RuntimeException(
+                'Passport encryption keys are missing and PASSPORT_AUTO_GENERATE_KEYS is disabled. '
+                .'Run `php artisan passport:keys`, set PASSPORT_PRIVATE_KEY/PASSPORT_PUBLIC_KEY, '
+                .'or set PASSPORT_AUTO_GENERATE_KEYS=true.'
+            );
         }
 
         Cache::lock('shoutrrr:generate-passport-keys', 10)->block(5, function (): void {
-            if (file_exists(Passport::keyPath('oauth-private.key'))) {
+            if (file_exists(Passport::keyPath('oauth-private.key')) && file_exists(Passport::keyPath('oauth-public.key'))) {
                 return;
             }
 
