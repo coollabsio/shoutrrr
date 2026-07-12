@@ -24,9 +24,9 @@ it('sums quota for the current period, filtered by platform + operation', functi
 it('returns zero / full remaining for an unknown workspace', function () {
     $meter = app(UsageMeter::class);
 
-    expect($meter->currentPeriodQuota('missing-id'))->toBe(0)
-        ->and($meter->currentPeriodCostMicrousd('missing-id'))->toBe(0)
-        ->and($meter->remaining('missing-id', 5))->toBe(5);
+    expect($meter->currentPeriodQuota('00000000-0000-0000-0000-000000000000'))->toBe(0)
+        ->and($meter->currentPeriodCostMicrousd('00000000-0000-0000-0000-000000000000'))->toBe(0)
+        ->and($meter->remaining('00000000-0000-0000-0000-000000000000', 5))->toBe(5);
 });
 
 it('ignores the platform filter and sums across platforms when platform is null', function () {

@@ -21,6 +21,17 @@ test('filters posts by status', function () {
     expect($response->json('data'))->toHaveCount(1);
 });
 
+test('filters posts by q as a case-insensitive substring match', function () {
+    [$user, $workspace, $token] = issuedKey();
+    $match = Post::factory()->for($workspace)->create(['author_id' => $user->id, 'base_text' => 'Launch announcement']);
+    Post::factory()->for($workspace)->create(['author_id' => $user->id, 'base_text' => 'weekly recap']);
+
+    $response = $this->withToken($token)->getJson('/api/v1/posts?q=LAUNCH')->assertOk();
+
+    expect($response->json('data'))->toHaveCount(1)
+        ->and($response->json('data.0.id'))->toBe($match->id);
+});
+
 test('shows one post', function () {
     [$user, $workspace, $token] = issuedKey();
     $post = Post::factory()->for($workspace)->create(['author_id' => $user->id]);

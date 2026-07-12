@@ -37,7 +37,7 @@ class PostsController extends Controller
         $paginator = Post::query()
             ->with(['author:id,name', 'targets'])
             ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->when($validated['q'] ?? null, fn ($query, $q) => $query->where('base_text', 'like', "%{$q}%"))
+            ->when($validated['q'] ?? null, fn ($query, $q) => $query->whereLike('base_text', "%{$q}%"))
             ->orderBy('id', 'desc')
             ->cursorPaginate($validated['per_page'] ?? 25)
             ->through(fn (Post $post): array => PostListItem::make($post));

@@ -62,7 +62,7 @@ class InstanceSettingsController extends Controller
             : User::query()
                 ->select(['id', 'name', 'email'])
                 ->whereNull('instance_role')
-                ->where('email', 'like', "%{$search}%")
+                ->whereLike('email', "%{$search}%")
                 ->orderBy('email')
                 ->limit(10)
                 ->get()

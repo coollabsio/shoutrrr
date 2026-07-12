@@ -23,6 +23,6 @@ test('permission helpers resolve from membership role', function () {
 test('helpers are false without membership', function () {
     $user = User::factory()->create();
 
-    $this->assertFalse($user->hasAllPermissions(['workspace.read'], 'missing-id'));
+    $this->assertFalse($user->hasAllPermissions(['workspace.read'], '00000000-0000-0000-0000-000000000000'));
     $this->assertFalse($user->isMemberOfWorkspace(null));
 });

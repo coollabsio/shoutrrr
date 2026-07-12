@@ -277,7 +277,7 @@ test('the inbox keeps separate conversations for different authors on the same p
 });
 
 test('replies from another workspace are not visible', function (): void {
-    PostTargetReply::factory()->create(['workspace_id' => 'other-workspace', 'text' => 'foreign']);
+    PostTargetReply::factory()->create(['workspace_id' => '11111111-1111-1111-1111-111111111111', 'text' => 'foreign']);
 
     $this->actingAs($this->user)
         ->get(route('engagement.index', ['unread' => 1]))
