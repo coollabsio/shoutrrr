@@ -367,6 +367,12 @@ export function useMediaUploads({
                 }
             }
 
+            // Bail before touching the draft if the user cancelled during the
+            // compress re-read, so a cancel doesn't create a post it abandoned.
+            if (signal.aborted) {
+                return;
+            }
+
             const id = await onEnsurePost();
             if (!id) {
                 return failUpload(tempId);
