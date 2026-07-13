@@ -47,6 +47,11 @@ type MediaUploads = {
     /** Validate + upload each file, enforcing the one-video / no-mixing rule. */
     handleFiles: (files: FileList | File[]) => Promise<void>;
     dismissPending: (tempId: string) => void;
+    /**
+     * Abort an in-flight video upload — cancels the in-browser conversion,
+     * compression, or storage PUT, whichever is running, and removes the chip.
+     */
+    cancelPending: (tempId: string) => void;
 };
 
 /**
@@ -87,6 +92,9 @@ export function useMediaUploads({
     const tempSeq = useRef(0);
     // Every object URL we mint, so they can be revoked and not leak.
     const urls = useRef<Set<string>>(new Set());
+    // AbortController per in-flight video upload, keyed by its chip's tempId, so
+    // the cancel button can stop conversion/compression/PUT mid-flight.
+    const aborters = useRef<Map<string, AbortController>>(new Map());
 
     useEffect(
         () => () => {
@@ -94,6 +102,12 @@ export function useMediaUploads({
                 URL.revokeObjectURL(url);
             }
             urls.current.clear();
+            // Unmounting mid-upload: stop any in-flight work rather than let it
+            // run to completion against a gone component.
+            for (const controller of aborters.current.values()) {
+                controller.abort();
+            }
+            aborters.current.clear();
         },
         [],
     );
@@ -174,6 +188,15 @@ export function useMediaUploads({
         });
     }
 
+    function cancelPending(tempId: string): void {
+        // Abort the in-flight work (conversion/compression/PUT) so it stops
+        // burning CPU and can't add media after the user bailed, then drop the
+        // chip. `uploadVideo` sees the aborted signal and returns silently.
+        aborters.current.get(tempId)?.abort();
+        aborters.current.delete(tempId);
+        dismissPending(tempId);
+    }
+
     // --- Upload flows -------------------------------------------------------
 
     async function uploadImage(file: File): Promise<void> {
@@ -204,144 +227,199 @@ export function useMediaUploads({
     }
 
     async function uploadVideo(file: File): Promise<void> {
-        // Non-MP4 input is converted to a platform-ready MP4 in the browser
-        // first — the server only ever stores MP4. MP4 files skip this entirely
-        // and keep the existing fast path untouched.
-        let source = file;
-        if (file.type !== 'video/mp4') {
-            const { tempId } = beginUpload(file, 'video', 'processing');
-            try {
-                const { convertToMp4 } =
-                    await import('@/lib/video-editor/convert');
-                source = await convertToMp4(file, videoLimits, (fraction) =>
-                    setProgress(tempId, Math.round(fraction * 100)),
-                );
-            } catch (error) {
-                const reason =
-                    error instanceof VideoConvertError
-                        ? error.reason
-                        : 'encode-unsupported';
-                toast.error(convertErrorMessage(reason, videoLimits));
+        // One controller for the whole operation; the cancel button aborts it to
+        // stop conversion, compression, or the PUT — whichever is running.
+        const controller = new AbortController();
+        const { signal } = controller;
+        // The chip the controller is currently registered under (conversion and
+        // upload use separate chips). The finally clears whichever is active so
+        // the registry never leaks a controller.
+        let activeTempId: string | null = null;
+        const register = (tempId: string): void => {
+            activeTempId = tempId;
+            aborters.current.set(tempId, controller);
+        };
+
+        try {
+            // Non-MP4 input is converted to a platform-ready MP4 in the browser
+            // first — the server only ever stores MP4. MP4 files skip this
+            // entirely and keep the existing fast path untouched.
+            let source = file;
+            if (file.type !== 'video/mp4') {
+                const { tempId } = beginUpload(file, 'video', 'processing');
+                register(tempId);
+                try {
+                    const { convertToMp4 } =
+                        await import('@/lib/video-editor/convert');
+                    source = await convertToMp4(
+                        file,
+                        videoLimits,
+                        (fraction) =>
+                            setProgress(tempId, Math.round(fraction * 100)),
+                        signal,
+                    );
+                } catch (error) {
+                    // The user cancelled: the chip is already gone, stay silent.
+                    if (signal.aborted) {
+                        return;
+                    }
+                    const reason =
+                        error instanceof VideoConvertError
+                            ? error.reason
+                            : 'encode-unsupported';
+                    toast.error(convertErrorMessage(reason, videoLimits));
+                    dismissPending(tempId);
+
+                    return;
+                }
                 dismissPending(tempId);
+                aborters.current.delete(tempId);
+                activeTempId = null;
+            }
+
+            let meta: VideoMeta;
+            try {
+                meta = await readVideoMetadata(source);
+            } catch {
+                toast.error('Could not read that video.');
 
                 return;
             }
-            dismissPending(tempId);
-        }
-
-        let meta: VideoMeta;
-        try {
-            meta = await readVideoMetadata(source);
-        } catch {
-            toast.error('Could not read that video.');
-
-            return;
-        }
-
-        // Re-encoding can only shrink an over-cap clip's bytes — it can't fix a
-        // wrong codec or a too-long runtime. So we compress only when an
-        // oversized file is otherwise valid, detected by re-running the gate as
-        // if the file already fit (sizeBytes 0). Anything else gets the cheap
-        // up-front rejection, so a doomed file never flashes a ghost chip.
-        const maxBytes = minVideoBytes(videoLimits);
-        const verdict = validateVideo(meta, videoLimits);
-        const willCompress =
-            !verdict.ok &&
-            Number.isFinite(maxBytes) &&
-            source.size > maxBytes &&
-            validateVideo({ ...meta, sizeBytes: 0 }, videoLimits).ok;
-
-        if (!verdict.ok && !willCompress) {
-            toast.error(verdict.reason);
-
-            return;
-        }
-
-        const { tempId, previewUrl } = beginUpload(
-            source,
-            'video',
-            willCompress ? 'processing' : 'uploading',
-        );
-
-        let finalFile = source;
-        if (willCompress) {
-            let compressed: Blob | null = null;
-            try {
-                const { compressVideoToFit } =
-                    await import('@/lib/video-editor/compress');
-                compressed = await compressVideoToFit(
-                    source,
-                    maxBytes,
-                    (fraction) =>
-                        setProgress(tempId, Math.round(fraction * 100)),
-                );
-            } catch {
-                // Encode threw outright; fall through to the gate, which rejects
-                // the still-over-cap original.
+            if (signal.aborted) {
+                return;
             }
 
-            if (compressed) {
-                finalFile = new File([compressed], source.name, {
-                    type: 'video/mp4',
-                });
+            // Re-encoding can only shrink an over-cap clip's bytes — it can't fix
+            // a wrong codec or a too-long runtime. So we compress only when an
+            // oversized file is otherwise valid, detected by re-running the gate
+            // as if the file already fit (sizeBytes 0). Anything else gets the
+            // cheap up-front rejection, so a doomed file never flashes a ghost
+            // chip.
+            const maxBytes = minVideoBytes(videoLimits);
+            const verdict = validateVideo(meta, videoLimits);
+            const willCompress =
+                !verdict.ok &&
+                Number.isFinite(maxBytes) &&
+                source.size > maxBytes &&
+                validateVideo({ ...meta, sizeBytes: 0 }, videoLimits).ok;
+
+            if (!verdict.ok && !willCompress) {
+                toast.error(verdict.reason);
+
+                return;
+            }
+
+            const { tempId, previewUrl } = beginUpload(
+                source,
+                'video',
+                willCompress ? 'processing' : 'uploading',
+            );
+            register(tempId);
+
+            let finalFile = source;
+            if (willCompress) {
+                let compressed: Blob | null = null;
                 try {
-                    // Downscaling changes width/height/size — re-read so the
-                    // final gate and confirm payload reflect the real output.
-                    meta = await readVideoMetadata(finalFile);
+                    const { compressVideoToFit } =
+                        await import('@/lib/video-editor/compress');
+                    compressed = await compressVideoToFit(
+                        source,
+                        maxBytes,
+                        (fraction) =>
+                            setProgress(tempId, Math.round(fraction * 100)),
+                        undefined,
+                        signal,
+                    );
                 } catch {
-                    // compressVideoToFit already guarantees the blob fits; if the
-                    // re-read fails, trust that size over the stale original
-                    // rather than dropping an otherwise-valid upload.
-                    meta = { ...meta, sizeBytes: finalFile.size };
+                    // Encode threw or was cancelled; the abort check below bails,
+                    // otherwise fall through to the gate which rejects the
+                    // still-over-cap original.
+                }
+                if (signal.aborted) {
+                    return;
+                }
+
+                if (compressed) {
+                    finalFile = new File([compressed], source.name, {
+                        type: 'video/mp4',
+                    });
+                    try {
+                        // Downscaling changes width/height/size — re-read so the
+                        // final gate and confirm payload reflect the real output.
+                        meta = await readVideoMetadata(finalFile);
+                    } catch {
+                        // compressVideoToFit already guarantees the blob fits; if
+                        // the re-read fails, trust that size over the stale
+                        // original rather than dropping an otherwise-valid upload.
+                        meta = { ...meta, sizeBytes: finalFile.size };
+                    }
+                }
+
+                setStatus(tempId, 'uploading');
+                setProgress(tempId, 0);
+
+                const finalVerdict = validateVideo(meta, videoLimits);
+                if (!finalVerdict.ok) {
+                    toast.error(finalVerdict.reason);
+                    dismissPending(tempId);
+
+                    return;
                 }
             }
 
-            setStatus(tempId, 'uploading');
-            setProgress(tempId, 0);
-
-            const finalVerdict = validateVideo(meta, videoLimits);
-            if (!finalVerdict.ok) {
-                toast.error(finalVerdict.reason);
-                dismissPending(tempId);
-
+            const id = await onEnsurePost();
+            if (!id) {
+                return failUpload(tempId);
+            }
+            if (signal.aborted) {
                 return;
             }
-        }
 
-        const id = await onEnsurePost();
-        if (!id) {
-            return failUpload(tempId);
-        }
+            try {
+                // 1. Sign (CSRF handled by useHttp) → 2. PUT direct to storage → 3. confirm.
+                signHttp.setData({ content_type: 'video/mp4' });
+                const signed = await signHttp.post(ep.videoSign(id), {
+                    onNetworkError: () => undefined,
+                });
+                if (signal.aborted) {
+                    return;
+                }
 
-        try {
-            // 1. Sign (CSRF handled by useHttp) → 2. PUT direct to storage → 3. confirm.
-            signHttp.setData({ content_type: 'video/mp4' });
-            const signed = await signHttp.post(ep.videoSign(id), {
-                onNetworkError: () => undefined,
-            });
+                await putWithProgress(
+                    signed.url,
+                    signed.headers,
+                    finalFile,
+                    (pct) => setProgress(tempId, pct),
+                    signal,
+                );
 
-            await putWithProgress(
-                signed.url,
-                signed.headers,
-                finalFile,
-                (pct) => setProgress(tempId, pct),
-            );
+                confirmHttp.setData({
+                    key: signed.key,
+                    duration_seconds: meta.durationSeconds,
+                    width: meta.width,
+                    height: meta.height,
+                    alt_text: null,
+                });
+                const { media: result } = await confirmHttp.post(
+                    ep.videoStore(id),
+                    { onNetworkError: () => undefined },
+                );
+                if (signal.aborted) {
+                    return;
+                }
 
-            confirmHttp.setData({
-                key: signed.key,
-                duration_seconds: meta.durationSeconds,
-                width: meta.width,
-                height: meta.height,
-                alt_text: null,
-            });
-            const { media: result } = await confirmHttp.post(
-                ep.videoStore(id),
-                { onNetworkError: () => undefined },
-            );
-
-            finishUpload(tempId, result, previewUrl);
-        } catch {
-            failUpload(tempId);
+                finishUpload(tempId, result, previewUrl);
+            } catch {
+                // A cancel aborts the PUT/confirm; the chip is already gone.
+                if (signal.aborted) {
+                    return;
+                }
+                failUpload(tempId);
+            }
+        } finally {
+            if (activeTempId) {
+                aborters.current.delete(activeTempId);
+            }
         }
     }
 
@@ -378,5 +456,5 @@ export function useMediaUploads({
         }
     }
 
-    return { pending, isUploading, handleFiles, dismissPending };
+    return { pending, isUploading, handleFiles, dismissPending, cancelPending };
 }

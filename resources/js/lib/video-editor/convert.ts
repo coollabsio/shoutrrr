@@ -29,8 +29,9 @@ export async function convertToMp4(
     file: File,
     videoLimits: PlatformLimits[],
     onProgress: (fraction: number) => void,
+    signal?: AbortSignal,
 ): Promise<File> {
-    const probe = await probeVideo(file);
+    const probe = await probeVideo(file, signal);
     const plan = planConversion(probe, videoLimits);
 
     if (plan.action === 'reject') {
@@ -43,11 +44,14 @@ export async function convertToMp4(
         // decode. The probe confirmed a decodable track, so re-encoding is worth
         // a try even when the cheap container-copy path errors.
         try {
-            const remuxed = await remuxToMp4(file, onProgress);
+            const remuxed = await remuxToMp4(file, onProgress, signal);
             if (remuxed) {
                 return toMp4File(remuxed, file.name);
             }
         } catch {
+            if (signal?.aborted) {
+                throw new DOMException('Aborted', 'AbortError');
+            }
             // fall through to re-encode
         }
     }
@@ -65,6 +69,7 @@ export async function convertToMp4(
             width: probe.width,
             height: probe.height,
         },
+        signal,
     );
     if (!encoded) {
         throw new VideoConvertError('encode-unsupported');
@@ -74,12 +79,22 @@ export async function convertToMp4(
 }
 
 /** Read codec/duration/decodability with mediabunny (no `<video>` element, so
- * it works for containers the browser can't natively play, e.g. `.mkv`). */
-async function probeVideo(file: File): Promise<VideoProbe> {
+ * it works for containers the browser can't natively play, e.g. `.mkv`).
+ * Aborting disposes the input, which cancels any in-flight header reads. */
+async function probeVideo(
+    file: File,
+    signal?: AbortSignal,
+): Promise<VideoProbe> {
     const input = new Input({
         formats: ALL_FORMATS,
         source: new BlobSource(file),
     });
+    const onAbort = (): void => {
+        if (!input.disposed) {
+            input.dispose();
+        }
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
     try {
         const videoTrack = await input.getPrimaryVideoTrack();
         if (!videoTrack) {
@@ -125,15 +140,20 @@ async function probeVideo(file: File): Promise<VideoProbe> {
             sizeBytes: file.size,
         };
     } finally {
-        input.dispose();
+        signal?.removeEventListener('abort', onAbort);
+        if (!input.disposed) {
+            input.dispose();
+        }
     }
 }
 
 /** Repackage `file` into an MP4 container, copying MP4-compatible tracks without
- * re-encoding. Returns `null` when mediabunny reports the conversion invalid. */
+ * re-encoding. Returns `null` when mediabunny reports the conversion invalid.
+ * Aborting cancels the conversion, which makes `execute()` throw. */
 async function remuxToMp4(
     file: File,
     onProgress: (fraction: number) => void,
+    signal?: AbortSignal,
 ): Promise<Blob | null> {
     const input = new Input({
         formats: ALL_FORMATS,
@@ -151,7 +171,13 @@ async function remuxToMp4(
             return null;
         }
         conversion.onProgress = (progress) => onProgress(progress);
-        await conversion.execute();
+        const onAbort = (): void => void conversion.cancel();
+        signal?.addEventListener('abort', onAbort, { once: true });
+        try {
+            await conversion.execute();
+        } finally {
+            signal?.removeEventListener('abort', onAbort);
+        }
 
         const buffer = output.target.buffer;
         return buffer === null

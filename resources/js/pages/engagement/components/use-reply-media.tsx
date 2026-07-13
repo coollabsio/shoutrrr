@@ -107,7 +107,7 @@ export function useReplyMedia({
 
     // --- useMediaUploads ---------------------------------------------------
 
-    const { pending, isUploading, handleFiles, dismissPending } =
+    const { pending, isUploading, handleFiles, dismissPending, cancelPending } =
         useMediaUploads({
             media,
             videoLimits,
@@ -344,6 +344,7 @@ export function useReplyMedia({
             }
             onRemove={(id) => onChange(media.filter((m) => m.id !== id))}
             onDismissPending={dismissPending}
+            onCancelPending={cancelPending}
             onImageClick={openEditor}
         />
     ) : null;
