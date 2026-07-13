@@ -12,6 +12,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Routing\Middleware\ValidateSignature;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configureErrorPages();
         $this->configureTrustedProxies();
+        $this->configureSignedUrls();
         $this->guardAgainstMisconfiguredStripe();
         Cashier::useCustomerModel(Workspace::class);
 
@@ -116,6 +118,23 @@ class AppServiceProvider extends ServiceProvider
             }
         );
 
+    }
+
+    /**
+     * Email service providers rewrite delivered links and append click-tracking
+     * query parameters (utm_*, bento_uuid, …). Laravel signs the whole query
+     * string, so those appended params would 403 the email-verification link.
+     * Excluding them from signature validation keeps the id/hash path segments
+     * and `expires` timestamp signed while ignoring the harmless tracking noise.
+     */
+    protected function configureSignedUrls(): void
+    {
+        /** @var array<int, string> $ignored */
+        $ignored = config('auth.email_verification.ignored_signature_parameters', []);
+
+        if ($ignored !== []) {
+            ValidateSignature::except($ignored);
+        }
     }
 
     /**

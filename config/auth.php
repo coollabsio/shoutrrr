@@ -22,6 +22,22 @@ return [
 
     'email_verification' => [
         'enabled' => ! in_array(env('MAIL_MAILER', 'log'), ['array', 'log'], true),
+
+        /*
+        | Email service providers (Bento, Mailchimp, etc.) append click-tracking
+        | query parameters to the links they deliver. Laravel's signed-URL check
+        | hashes every query parameter, so those appended params would otherwise
+        | invalidate the signature and 403 the verification link. These names are
+        | excluded from signature validation — they never change what the link
+        | does (the id/hash are path segments and `expires` stays signed).
+        */
+        'ignored_signature_parameters' => array_values(array_filter(array_map(
+            trim(...),
+            explode(',', (string) env(
+                'SIGNED_URL_IGNORED_PARAMETERS',
+                'utm_source,utm_medium,utm_campaign,utm_term,utm_content,bento_uuid',
+            )),
+        ))),
     ],
 
     /*
