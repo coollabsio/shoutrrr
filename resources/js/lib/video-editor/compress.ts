@@ -14,6 +14,7 @@ import {
     nextDownscale,
     planVideoEncode,
     readVideoMetadata,
+    type VideoMeta,
     VIDEO_MIN_BITRATE,
 } from '@/lib/compose/video';
 
@@ -46,12 +47,19 @@ export async function compressVideoToFit(
     source: Blob,
     maxBytes: number,
     onProgress: (fraction: number) => void,
+    knownMeta?: VideoMeta,
 ): Promise<Blob | null> {
-    const probe =
-        source instanceof File
-            ? source
-            : new File([source], 'video.mp4', { type: 'video/mp4' });
-    const meta = await readVideoMetadata(probe);
+    // A caller that already probed the source (the format-conversion path reads
+    // metadata via mediabunny) passes it in: the `<video>`-based
+    // `readVideoMetadata` can't open containers the browser won't natively play
+    // (.mkv/.avi), so the transcode path must not depend on it.
+    const meta =
+        knownMeta ??
+        (await readVideoMetadata(
+            source instanceof File
+                ? source
+                : new File([source], 'video.mp4', { type: 'video/mp4' }),
+        ));
     const plan = planVideoEncode(meta, maxBytes);
 
     let { width, height, videoBitrate } = plan;

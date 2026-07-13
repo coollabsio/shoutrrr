@@ -38,6 +38,8 @@ function probe(overrides: Partial<VideoProbe> = {}): VideoProbe {
         videoCodec: 'avc',
         audioCodec: 'aac',
         durationSeconds: 30,
+        width: 1920,
+        height: 1080,
         sizeBytes: 10_000_000,
         ...overrides,
     };

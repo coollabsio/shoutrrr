@@ -27,6 +27,8 @@ export type VideoProbe = {
     videoCodec: string | null;
     audioCodec: string | null;
     durationSeconds: number;
+    width: number;
+    height: number;
     sizeBytes: number;
 };
 

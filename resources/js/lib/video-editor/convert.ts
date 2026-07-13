@@ -38,7 +38,7 @@ export async function convertToMp4(
     }
 
     if (plan.action === 'remux') {
-        const remuxed = await remuxToMp4(file);
+        const remuxed = await remuxToMp4(file, onProgress);
         if (remuxed) {
             return toMp4File(remuxed, file.name);
         }
@@ -46,10 +46,19 @@ export async function convertToMp4(
         // than failing a file we already know we can decode.
     }
 
+    // Feed the mediabunny-probed metadata to the encoder so it never falls back
+    // to the `<video>`-based reader, which can't open .mkv/.avi containers.
     const encoded = await compressVideoToFit(
         file,
         minVideoBytes(videoLimits),
         onProgress,
+        {
+            sizeBytes: probe.sizeBytes,
+            mime: file.type || 'video/mp4',
+            durationSeconds: probe.durationSeconds,
+            width: probe.width,
+            height: probe.height,
+        },
     );
     if (!encoded) {
         throw new VideoConvertError('encode-unsupported');
@@ -74,17 +83,27 @@ async function probeVideo(file: File): Promise<VideoProbe> {
                 videoCodec: null,
                 audioCodec: null,
                 durationSeconds: 0,
+                width: 0,
+                height: 0,
                 sizeBytes: file.size,
             };
         }
 
-        const [canDecodeVideo, videoCodec, audioTrack, duration] =
-            await Promise.all([
-                videoTrack.canDecode(),
-                videoTrack.getCodec(),
-                input.getPrimaryAudioTrack(),
-                input.computeDuration(),
-            ]);
+        const [
+            canDecodeVideo,
+            videoCodec,
+            width,
+            height,
+            audioTrack,
+            duration,
+        ] = await Promise.all([
+            videoTrack.canDecode(),
+            videoTrack.getCodec(),
+            videoTrack.getDisplayWidth(),
+            videoTrack.getDisplayHeight(),
+            input.getPrimaryAudioTrack(),
+            input.computeDuration(),
+        ]);
         const audioCodec = audioTrack ? await audioTrack.getCodec() : null;
 
         return {
@@ -95,6 +114,8 @@ async function probeVideo(file: File): Promise<VideoProbe> {
             // Floor + clamp to ≥1 to match readVideoMetadata's duration contract
             // (the confirm endpoint rejects a 0-second duration).
             durationSeconds: Math.max(1, Math.floor(duration)),
+            width,
+            height,
             sizeBytes: file.size,
         };
     } finally {
@@ -104,7 +125,10 @@ async function probeVideo(file: File): Promise<VideoProbe> {
 
 /** Repackage `file` into an MP4 container, copying MP4-compatible tracks without
  * re-encoding. Returns `null` when mediabunny reports the conversion invalid. */
-async function remuxToMp4(file: File): Promise<Blob | null> {
+async function remuxToMp4(
+    file: File,
+    onProgress: (fraction: number) => void,
+): Promise<Blob | null> {
     const input = new Input({
         formats: ALL_FORMATS,
         source: new BlobSource(file),
@@ -120,6 +144,7 @@ async function remuxToMp4(file: File): Promise<Blob | null> {
         if (!conversion.isValid) {
             return null;
         }
+        conversion.onProgress = (progress) => onProgress(progress);
         await conversion.execute();
 
         const buffer = output.target.buffer;
