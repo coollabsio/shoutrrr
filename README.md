@@ -298,15 +298,9 @@ Run the full local gate (lint, format, type-check, refactor check, Pest suite) w
 
 See all the people who have contributed in the [contributors list](https://github.com/coollabsio/shoutrrr/graphs/contributors).
 
-<!-- ## Star history
+## Star history
 
-<a href="https://www.star-history.com/?type=date&repos=coollabsio%2Fshoutrrr">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=coollabsio/shoutrrr&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=coollabsio/shoutrrr&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=coollabsio/shoutrrr&type=date&legend=top-left" />
- </picture>
-</a> -->
+[![RepoStars](https://repostars.dev/api/embed?repo=coollabsio%2Fshoutrrr&theme=noir)](https://repostars.dev/?repos=coollabsio%2Fshoutrrr&theme=noir)
 
 ## License
 
