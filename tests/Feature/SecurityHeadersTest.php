@@ -28,6 +28,24 @@ test('responses carry a nonce-based content security policy', function () {
         ->and($csp)->toContain("'strict-dynamic'");
 });
 
+test('cloud billing permits form redirects to stripe', function () {
+    config(['subscriptions.enabled' => true]);
+
+    $csp = $this->get('/login')->headers->get('Content-Security-Policy');
+
+    expect($csp)->toContain("form-action 'self' https://checkout.stripe.com https://billing.stripe.com");
+});
+
+test('self hosted deployments keep form submissions restricted to themselves', function () {
+    config(['subscriptions.enabled' => false]);
+
+    $csp = $this->get('/login')->headers->get('Content-Security-Policy');
+
+    expect($csp)->toContain("form-action 'self';")
+        ->and($csp)->not->toContain('checkout.stripe.com')
+        ->and($csp)->not->toContain('billing.stripe.com');
+});
+
 test('a local/public-disk deployment keeps connect-src and media-src tight', function () {
     config(['filesystems.default' => 'public']);
 

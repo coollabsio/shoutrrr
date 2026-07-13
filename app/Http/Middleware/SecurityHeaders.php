@@ -72,6 +72,9 @@ class SecurityHeaders
         $storage = $this->storageOrigins();
         $connect = trim("'self' blob: ".implode(' ', array_merge($storage, $this->sentryOrigins())));
         $media = trim("'self' blob: ".implode(' ', $storage));
+        $form = (bool) config('subscriptions.enabled')
+            ? "'self' https://checkout.stripe.com https://billing.stripe.com"
+            : "'self'";
 
         $directives = [
             "default-src 'self'",
@@ -90,7 +93,7 @@ class SecurityHeaders
             "connect-src {$connect}",
             "frame-ancestors 'none'",
             "base-uri 'self'",
-            "form-action 'self'",
+            "form-action {$form}",
             "object-src 'none'",
         ];
 
