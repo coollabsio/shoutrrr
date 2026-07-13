@@ -981,6 +981,7 @@ export default function Composer({
                         pending={mediaUploads.pending}
                         handleFiles={handleAddedFiles}
                         dismissPending={mediaUploads.dismissPending}
+                        cancelPending={mediaUploads.cancelPending}
                         onImageClick={openImage}
                         onVideoClick={openVideo}
                     />

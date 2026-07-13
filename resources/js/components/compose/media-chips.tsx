@@ -62,6 +62,8 @@ type Props = {
     onReorder: (ids: string[]) => void;
     onRemove: (mediaId: string) => void;
     onDismissPending: (tempId: string) => void;
+    /** Abort an in-flight video conversion/upload and drop its chip. */
+    onCancelPending: (tempId: string) => void;
     /** Read-only post: show the images, no add/remove/reorder/exclude affordances. */
     readOnly?: boolean;
     /** Click an image to (re)open it in the editor. */
@@ -114,6 +116,7 @@ export function MediaChips({
     onReorder,
     onRemove,
     onDismissPending,
+    onCancelPending,
     readOnly = false,
     onImageClick,
     onVideoClick,
@@ -313,7 +316,7 @@ export function MediaChips({
                                     className="group/chip relative"
                                     aria-label={
                                         p.status === 'processing'
-                                            ? 'Compressing media'
+                                            ? 'Processing video'
                                             : p.status === 'uploading'
                                               ? 'Uploading media'
                                               : 'Failed upload'
@@ -378,10 +381,24 @@ export function MediaChips({
                                     />
                                 </CornerButton>
                             )}
+                            {/* In-flight videos can be aborted mid-conversion or
+                                mid-upload — a stuck or slow encode isn't a
+                                dead-end. Reuses the same corner ✕ as Remove. */}
+                            {inFlight && p.kind === 'video' && (
+                                <CornerButton
+                                    label="Cancel"
+                                    onClick={() => onCancelPending(p.tempId)}
+                                >
+                                    <X
+                                        className="size-2.5 text-black"
+                                        aria-hidden="true"
+                                    />
+                                </CornerButton>
+                            )}
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[11px]">
                             {p.status === 'processing'
-                                ? 'Compressing…'
+                                ? 'Processing…'
                                 : p.status === 'uploading'
                                   ? 'Uploading…'
                                   : 'Upload failed — dismiss and retry'}

@@ -32,6 +32,8 @@ type Props = {
     handleFiles: (files: FileList) => Promise<void>;
     /** Drop a failed/pending upload chip. */
     dismissPending: (tempId: string) => void;
+    /** Abort an in-flight video conversion/upload chip. */
+    cancelPending: (tempId: string) => void;
     /** Click an attached image to (re)open it in the editor. */
     onImageClick?: (mediaId: string) => void;
     /** Click a video chip's Edit button to open the video editor. */
@@ -60,6 +62,7 @@ export function ComposerToolbar({
     pending,
     handleFiles,
     dismissPending,
+    cancelPending,
     onImageClick,
     onVideoClick,
     onInsertEmoji,
@@ -139,6 +142,7 @@ export function ComposerToolbar({
                 onReorder={onReorder}
                 onRemove={onRemove}
                 onDismissPending={dismissPending}
+                onCancelPending={cancelPending}
                 readOnly={readOnly}
                 onImageClick={onImageClick}
                 onVideoClick={onVideoClick}
