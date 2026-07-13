@@ -12,6 +12,10 @@ import {
     validateVideo,
     type VideoMeta,
 } from '@/lib/compose/video';
+import {
+    convertErrorMessage,
+    VideoConvertError,
+} from '@/lib/video-editor/convert-plan';
 import type { MediaView, PendingUpload, PlatformLimits } from '@/types/compose';
 
 type Options = {
@@ -200,9 +204,34 @@ export function useMediaUploads({
     }
 
     async function uploadVideo(file: File): Promise<void> {
+        // Non-MP4 input is converted to a platform-ready MP4 in the browser
+        // first — the server only ever stores MP4. MP4 files skip this entirely
+        // and keep the existing fast path untouched.
+        let source = file;
+        if (file.type !== 'video/mp4') {
+            const { tempId } = beginUpload(file, 'video', 'processing');
+            try {
+                const { convertToMp4 } =
+                    await import('@/lib/video-editor/convert');
+                source = await convertToMp4(file, videoLimits, (fraction) =>
+                    setProgress(tempId, Math.round(fraction * 100)),
+                );
+            } catch (error) {
+                const reason =
+                    error instanceof VideoConvertError
+                        ? error.reason
+                        : 'encode-unsupported';
+                toast.error(convertErrorMessage(reason, videoLimits));
+                dismissPending(tempId);
+
+                return;
+            }
+            dismissPending(tempId);
+        }
+
         let meta: VideoMeta;
         try {
-            meta = await readVideoMetadata(file);
+            meta = await readVideoMetadata(source);
         } catch {
             toast.error('Could not read that video.');
 
@@ -219,7 +248,7 @@ export function useMediaUploads({
         const willCompress =
             !verdict.ok &&
             Number.isFinite(maxBytes) &&
-            file.size > maxBytes &&
+            source.size > maxBytes &&
             validateVideo({ ...meta, sizeBytes: 0 }, videoLimits).ok;
 
         if (!verdict.ok && !willCompress) {
@@ -229,19 +258,19 @@ export function useMediaUploads({
         }
 
         const { tempId, previewUrl } = beginUpload(
-            file,
+            source,
             'video',
             willCompress ? 'processing' : 'uploading',
         );
 
-        let finalFile = file;
+        let finalFile = source;
         if (willCompress) {
             let compressed: Blob | null = null;
             try {
                 const { compressVideoToFit } =
                     await import('@/lib/video-editor/compress');
                 compressed = await compressVideoToFit(
-                    file,
+                    source,
                     maxBytes,
                     (fraction) =>
                         setProgress(tempId, Math.round(fraction * 100)),
@@ -252,7 +281,7 @@ export function useMediaUploads({
             }
 
             if (compressed) {
-                finalFile = new File([compressed], file.name, {
+                finalFile = new File([compressed], source.name, {
                     type: 'video/mp4',
                 });
                 try {
