@@ -38,12 +38,18 @@ export async function convertToMp4(
     }
 
     if (plan.action === 'remux') {
-        const remuxed = await remuxToMp4(file, onProgress);
-        if (remuxed) {
-            return toMp4File(remuxed, file.name);
+        // A remux that reports invalid — or throws outright — falls through to a
+        // full re-encode rather than failing a file we already know we can
+        // decode. The probe confirmed a decodable track, so re-encoding is worth
+        // a try even when the cheap container-copy path errors.
+        try {
+            const remuxed = await remuxToMp4(file, onProgress);
+            if (remuxed) {
+                return toMp4File(remuxed, file.name);
+            }
+        } catch {
+            // fall through to re-encode
         }
-        // A remux that reports invalid falls through to a full re-encode rather
-        // than failing a file we already know we can decode.
     }
 
     // Feed the mediabunny-probed metadata to the encoder so it never falls back
