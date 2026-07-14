@@ -1,13 +1,11 @@
 import { Link, usePage } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
 
-import BillingController from '@/actions/App/Http/Controllers/BillingController';
-import ApiKeysController from '@/actions/App/Http/Controllers/Settings/ApiKeysController';
-import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import Heading from '@/components/common/heading';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/hooks/use-current-url';
+import { workspaceSettingsNavItems } from '@/lib/navigation/workspace-settings-nav';
 import { cn, toUrl } from '@/lib/utils';
 import type { NavItem } from '@/types';
 
@@ -17,43 +15,11 @@ export default function WorkspaceSettingsLayout({
     const { isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
     const { features, workspaces } = usePage().props;
     const workspacePermissions = workspaces.current?.permissions ?? [];
-    const canManageWorkspaceSettings = workspacePermissions.includes(
-        'workspace.settings.manage',
-    );
-    const canManageBilling = workspacePermissions.includes(
-        'workspace.billing.manage',
-    );
 
-    const sidebarNavItems: NavItem[] = [
-        {
-            title: 'Overview',
-            href: WorkspaceSettingsController.showOverview(),
-            icon: null,
-        },
-        {
-            title: 'Members',
-            href: WorkspaceSettingsController.showMembers(),
-            icon: null,
-        },
-        ...(canManageWorkspaceSettings
-            ? [
-                  {
-                      title: 'API keys',
-                      href: ApiKeysController.index(),
-                      icon: null,
-                  },
-              ]
-            : []),
-        ...(features?.billing && canManageBilling
-            ? [
-                  {
-                      title: 'Subscription',
-                      href: BillingController.index(),
-                      icon: null,
-                  },
-              ]
-            : []),
-    ];
+    const sidebarNavItems: NavItem[] = workspaceSettingsNavItems({
+        permissions: workspacePermissions,
+        billingEnabled: !!features?.billing,
+    }).map((item) => ({ title: item.title, href: item.href, icon: null }));
 
     return (
         <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-16 sm:px-6">

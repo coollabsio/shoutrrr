@@ -2,12 +2,15 @@ import { Link, router, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     ChartColumn,
+    CreditCard,
     Inbox,
+    KeyRound,
     ListChecks,
     MessageCircle,
     Pencil,
     Settings,
     Share2,
+    Users,
     Wrench,
     type LucideIcon,
 } from 'lucide-react';
@@ -15,7 +18,6 @@ import { useEffect } from 'react';
 
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import InstanceSettingsController from '@/actions/App/Http/Controllers/Settings/InstanceSettingsController';
-import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import AppLogo from '@/components/layout/app-logo';
 import { NavUser } from '@/components/layout/nav-user';
 import { SidebarFooterCard } from '@/components/layout/sidebar-footer-card';
@@ -39,6 +41,10 @@ import {
     composeButtonClassName,
     composeIconClassName,
 } from '@/lib/navigation/compose-nav';
+import {
+    workspaceSettingsNavItems,
+    type WorkspaceSettingsNavKey,
+} from '@/lib/navigation/workspace-settings-nav';
 import { appVersion, githubReleaseUrl } from '@/lib/version';
 import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
@@ -67,6 +73,13 @@ const postsNavItems: NavItem[] = [
     { title: 'Accounts', href: accountsRoute(), icon: Share2 },
     { title: 'Engagement', href: engagementRoute(), icon: MessageCircle },
 ];
+
+const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, LucideIcon> = {
+    overview: Settings,
+    members: Users,
+    apiKeys: KeyRound,
+    subscription: CreditCard,
+};
 
 export function AppSidebar() {
     const { workspaces, features, instance, shell, updateAvailable } =
@@ -216,22 +229,33 @@ export function AppSidebar() {
                         <SidebarGroupLabel>Workspace</SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton
-                                        tooltip={workspaceSettingsLabel}
-                                        isActive={isCurrentOrParentUrl(
-                                            WorkspaceSettingsController.showOverview(),
-                                        )}
-                                        render={
-                                            <Link
-                                                href={WorkspaceSettingsController.showOverview()}
-                                            />
-                                        }
-                                    >
-                                        <Settings aria-hidden="true" />
-                                        <span>{workspaceSettingsLabel}</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
+                                {workspaceSettingsNavItems({
+                                    permissions:
+                                        workspaces.current?.permissions ?? [],
+                                    billingEnabled: !!features?.billing,
+                                }).map((item) => {
+                                    const Icon =
+                                        workspaceSettingsIcons[item.key];
+                                    const active =
+                                        item.key === 'overview'
+                                            ? isCurrentUrl(item.href)
+                                            : isCurrentOrParentUrl(item.href);
+
+                                    return (
+                                        <SidebarMenuItem key={item.key}>
+                                            <SidebarMenuButton
+                                                tooltip={item.title}
+                                                isActive={active}
+                                                render={
+                                                    <Link href={item.href} />
+                                                }
+                                            >
+                                                <Icon aria-hidden="true" />
+                                                <span>{item.title}</span>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    );
+                                })}
                                 {instance.isOwner && (
                                     <SidebarMenuItem>
                                         <SidebarMenuButton

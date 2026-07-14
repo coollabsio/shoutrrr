@@ -103,3 +103,18 @@ describe('sidebar footer card + update dot', () => {
         expect(source).toContain('bg-red-500');
     });
 });
+
+describe('hoisted workspace settings nav', () => {
+    const source = readFileSync(
+        resolve(
+            process.cwd(),
+            'resources/js/components/layout/app-sidebar.tsx',
+        ),
+        'utf8',
+    );
+
+    it('renders workspace settings items from the shared builder', () => {
+        expect(source).toContain('workspaceSettingsNavItems(');
+        expect(source).toContain('workspaceSettingsIcons[item.key]');
+    });
+});
