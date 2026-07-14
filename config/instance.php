@@ -5,6 +5,11 @@ declare(strict_types=1);
 return [
     'self_hosted' => env('SELF_HOSTED', false),
 
+    'community' => [
+        'repo' => env('SHOUTRRR_GITHUB_REPO', 'coollabsio/shoutrrr'),
+        'sponsor_url' => env('SHOUTRRR_SPONSOR_URL', 'https://github.com/sponsors/coollabsio'),
+    ],
+
     'defaults' => [
         'registrations_enabled' => env('INSTANCE_REGISTRATIONS_ENABLED', false),
         'workspace_creation_enabled' => env(

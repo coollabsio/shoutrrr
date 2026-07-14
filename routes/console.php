@@ -7,6 +7,7 @@ use App\Console\Commands\PruneAbandonedUploads;
 use App\Console\Commands\PruneMcpBindings;
 use App\Console\Commands\PruneUsageEvents;
 use App\Console\Commands\ReconcileUsageCounters;
+use App\Console\Commands\RefreshCommunityStats;
 use App\Console\Commands\RefreshExpiringTokens;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -31,3 +32,7 @@ if (config('engagement.enabled')) {
 
 Schedule::command(ReconcileUsageCounters::class)->dailyAt('02:10')->withoutOverlapping();
 Schedule::command(PruneUsageEvents::class)->dailyAt('02:20');
+
+if (! config('subscriptions.enabled')) {
+    Schedule::command(RefreshCommunityStats::class)->daily()->withoutOverlapping();
+}
