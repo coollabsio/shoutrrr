@@ -4,6 +4,7 @@ use App\Enums\WorkspaceRole;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Support\AppVersion;
 use App\Support\CommunityStats;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
@@ -67,5 +68,42 @@ test('self-hosted shares a community prop and the update flag, no billing prop',
         ->where('community.sponsorUrl', 'https://github.com/sponsors/coollabsio')
         ->where('community.stars', 4210)
         ->where('updateAvailable', true)
+    );
+});
+
+test('self-hosted names the available version and links to its release', function () {
+    config(['subscriptions.enabled' => false]);
+    config(['instance.community.repo' => 'coollabsio/shoutrrr']);
+    Cache::put(CommunityStats::LatestVersionCacheKey, 'v99.0.0');
+    actingOwnerInWorkspace();
+
+    $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
+        ->where('updateAvailable', true)
+        ->where('latestVersion', 'v99.0.0')
+        ->where('latestReleaseUrl', 'https://github.com/coollabsio/shoutrrr/releases/tag/v99.0.0')
+    );
+});
+
+test('self-hosted up-to-date exposes no available version', function () {
+    config(['subscriptions.enabled' => false]);
+    Cache::put(CommunityStats::LatestVersionCacheKey, AppVersion::current());
+    actingOwnerInWorkspace();
+
+    $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
+        ->where('updateAvailable', false)
+        ->where('latestVersion', null)
+        ->where('latestReleaseUrl', null)
+    );
+});
+
+test('cloud never exposes an available version', function () {
+    config(['subscriptions.enabled' => true]);
+    Cache::put(CommunityStats::LatestVersionCacheKey, 'v99.0.0');
+    actingOwnerInWorkspace();
+
+    $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
+        ->where('updateAvailable', false)
+        ->where('latestVersion', null)
+        ->where('latestReleaseUrl', null)
     );
 });

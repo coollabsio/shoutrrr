@@ -104,6 +104,26 @@ describe('sidebar footer card + update dot', () => {
     });
 });
 
+describe('version badge update tooltip', () => {
+    const source = readFileSync(
+        resolve(
+            process.cwd(),
+            'resources/js/components/layout/app-sidebar.tsx',
+        ),
+        'utf8',
+    );
+
+    it('links the badge to the new release when an update is available', () => {
+        expect(source).toContain('latestReleaseUrl');
+    });
+
+    it('names the available version in a tooltip', () => {
+        expect(source).toContain('TooltipContent');
+        expect(source).toContain('Update available');
+        expect(source).toContain('latestVersion');
+    });
+});
+
 describe('hoisted workspace settings nav', () => {
     const source = readFileSync(
         resolve(

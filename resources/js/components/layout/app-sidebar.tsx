@@ -35,6 +35,11 @@ import {
     SidebarMenuItem,
     useSidebar,
 } from '@/components/ui/sidebar';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { WorkspaceSelector } from '@/components/workspace/workspace-selector';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import {
@@ -62,6 +67,9 @@ type NavItem = {
 export const workspaceSettingsLabel = 'Workspace settings';
 export const instanceSettingsLabel = 'Instance settings';
 
+const versionBadgeClassName =
+    'rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none font-medium text-sidebar-foreground/60 transition-colors hover:border-sidebar-accent-foreground/30 hover:text-sidebar-foreground';
+
 const postsNavItems: NavItem[] = [
     { title: 'Posts', href: postsRoute(), icon: Inbox },
     { title: 'Calendar', href: calendarRoute(), icon: CalendarDays },
@@ -82,8 +90,15 @@ const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, LucideIcon> = {
 };
 
 export function AppSidebar() {
-    const { workspaces, features, instance, shell, updateAvailable } =
-        usePage().props;
+    const {
+        workspaces,
+        features,
+        instance,
+        shell,
+        updateAvailable,
+        latestVersion,
+        latestReleaseUrl,
+    } = usePage().props;
     const unreadReplies = shell?.unreadReplies ?? 0;
     const { isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
     const { state, setOpenMobile } = useSidebar();
@@ -115,19 +130,38 @@ export function AppSidebar() {
                             <AppLogo />
                         </SidebarMenuButton>
                         <span className="relative flex group-data-[collapsible=icon]:hidden">
-                            <a
-                                href={githubReleaseUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none font-medium text-sidebar-foreground/60 transition-colors hover:border-sidebar-accent-foreground/30 hover:text-sidebar-foreground"
-                                aria-label={
-                                    updateAvailable
-                                        ? `Shoutrrr ${appVersion} — a newer release is available on GitHub`
-                                        : `View Shoutrrr ${appVersion} release notes on GitHub`
-                                }
-                            >
-                                {appVersion}
-                            </a>
+                            {(() => {
+                                const badge = (
+                                    <a
+                                        href={
+                                            updateAvailable && latestReleaseUrl
+                                                ? latestReleaseUrl
+                                                : githubReleaseUrl
+                                        }
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={versionBadgeClassName}
+                                        aria-label={
+                                            updateAvailable
+                                                ? `Shoutrrr ${appVersion} — update ${latestVersion ?? ''} available on GitHub`
+                                                : `View Shoutrrr ${appVersion} release notes on GitHub`
+                                        }
+                                    >
+                                        {appVersion}
+                                    </a>
+                                );
+
+                                return updateAvailable ? (
+                                    <Tooltip>
+                                        <TooltipTrigger render={badge} />
+                                        <TooltipContent>
+                                            Update available: {latestVersion}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                ) : (
+                                    badge
+                                );
+                            })()}
                             {updateAvailable && (
                                 <span
                                     className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-sidebar"

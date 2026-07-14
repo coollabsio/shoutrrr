@@ -78,7 +78,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'billing' => $this->billingData($request->user()),
             'community' => $this->communityData(),
-            'updateAvailable' => ! config('subscriptions.enabled') && CommunityStats::updateAvailable(),
+            ...$this->updateData(),
         ];
     }
 
@@ -233,6 +233,25 @@ class HandleInertiaRequests extends Middleware
             'repoUrl' => "https://github.com/{$repo}",
             'sponsorUrl' => (string) config('instance.community.sponsor_url'),
             'stars' => CommunityStats::stars(),
+        ];
+    }
+
+    /**
+     * @return array{updateAvailable: bool, latestVersion: ?string, latestReleaseUrl: ?string}
+     */
+    private function updateData(): array
+    {
+        if (config('subscriptions.enabled') || ! CommunityStats::updateAvailable()) {
+            return ['updateAvailable' => false, 'latestVersion' => null, 'latestReleaseUrl' => null];
+        }
+
+        $latest = CommunityStats::latestVersion();
+        $repo = (string) config('instance.community.repo');
+
+        return [
+            'updateAvailable' => true,
+            'latestVersion' => $latest,
+            'latestReleaseUrl' => "https://github.com/{$repo}/releases/tag/{$latest}",
         ];
     }
 

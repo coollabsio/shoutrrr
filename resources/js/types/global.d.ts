@@ -42,6 +42,8 @@ declare module '@inertiajs/core' {
                 stars: number | null;
             } | null;
             updateAvailable?: boolean;
+            latestVersion?: string | null;
+            latestReleaseUrl?: string | null;
             [key: string]: unknown;
         };
     }
