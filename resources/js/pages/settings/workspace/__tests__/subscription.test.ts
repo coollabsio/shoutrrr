@@ -20,10 +20,10 @@ describe('subscription checkout forms', () => {
             resolve(process.cwd(), 'resources/js/app.tsx'),
             'utf8',
         );
-        const workspaceLayout = readFileSync(
+        const workspaceSettingsNav = readFileSync(
             resolve(
                 process.cwd(),
-                'resources/js/layouts/settings/workspace-layout.tsx',
+                'resources/js/lib/navigation/workspace-settings-nav.ts',
             ),
             'utf8',
         );
@@ -33,8 +33,8 @@ describe('subscription checkout forms', () => {
         );
 
         expect(app).toContain("name.startsWith('settings/workspace')");
-        expect(workspaceLayout).toContain("title: 'Subscription'");
-        expect(workspaceLayout).toContain('BillingController.index()');
+        expect(workspaceSettingsNav).toContain("title: 'Subscription'");
+        expect(workspaceSettingsNav).toContain('BillingController.index()');
         expect(accountSettingsLayout).not.toContain("title: 'Subscription'");
     });
 
