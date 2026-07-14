@@ -65,7 +65,7 @@ class BillingController extends Controller
         $hadStripeCustomer = $workspace->hasStripeId();
         $customerOptions = [
             'email' => $user->email,
-            'name' => $workspace->name,
+            'name' => $user->name,
         ];
 
         try {
@@ -87,6 +87,8 @@ class BillingController extends Controller
 
             return $workspace
                 ->newSubscription('default', $priceId)
+                ->allowPromotionCodes()
+                ->collectTaxIds()
                 ->checkout([
                     'success_url' => route('billing.index').'?billing=success',
                     'cancel_url' => route('billing.index').'?billing=cancelled',

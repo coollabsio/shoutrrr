@@ -56,6 +56,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureSignedUrls();
         $this->guardAgainstMisconfiguredStripe();
         Cashier::useCustomerModel(Workspace::class);
+        Cashier::calculateTaxes();
 
         // Threads has no first-party Socialite driver (separate OAuth surface
         // from the rest of Meta — authorizes at threads.net, token/API at

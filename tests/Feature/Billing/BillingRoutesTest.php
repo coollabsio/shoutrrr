@@ -10,6 +10,7 @@ use App\Models\WorkspaceMembership;
 use App\Support\UsageOperation;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Route;
+use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Subscription;
 use Symfony\Component\Process\Process;
 
@@ -39,6 +40,18 @@ test('billing routes exist but are inactive on self hosted instances', function 
 
 test('billing page is routed through workspace settings', function () {
     expect(route('billing.index', absolute: false))->toBe('/settings/workspace/subscription');
+});
+
+test('checkout enables promotion codes and tax ID collection', function () {
+    $controller = file_get_contents(app_path('Http/Controllers/BillingController.php'));
+
+    expect($controller)
+        ->toContain('->allowPromotionCodes()')
+        ->toContain('->collectTaxIds()');
+});
+
+test('billing enables automatic Stripe tax calculation', function () {
+    expect(Cashier::$calculatesTaxes)->toBeTrue();
 });
 
 test('billing defaults to disabled when self hosted is unset', function () {
