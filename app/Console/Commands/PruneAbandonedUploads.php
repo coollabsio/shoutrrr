@@ -22,11 +22,25 @@ class PruneAbandonedUploads extends Command
         $cutoff = Carbon::now()->subHours(6)->getTimestamp();
         $deleted = 0;
 
-        foreach ($disk->allFiles('tmp/media') as $file) {
-            if ($disk->lastModified($file) < $cutoff) {
-                $disk->delete($file);
-                $deleted++;
+        // allFiles()/listContents() does not honor the disk's `throw => false`
+        // flag, so a transient S3 listing error (throttling, timeout, creds)
+        // throws here and would fail the whole scheduled run. Keep it best-effort:
+        // log and fall through to the DB-orphan prune, which retries next hour.
+        try {
+            foreach ($disk->allFiles('tmp/media') as $file) {
+                // lastModified() DOES honor `throw => false` and returns false
+                // (coerced to 0) on a per-object error; require a positive
+                // timestamp so we never treat an unreadable mtime as "ancient"
+                // and delete a file we could not actually inspect.
+                $lastModified = $disk->lastModified($file);
+
+                if ($lastModified > 0 && $lastModified < $cutoff) {
+                    $disk->delete($file);
+                    $deleted++;
+                }
             }
+        } catch (\Throwable $e) {
+            Log::warning('Skipping tmp/media prune after a storage error: '.$e->getMessage());
         }
 
         if ($deleted > 0) {
