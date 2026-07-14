@@ -13,7 +13,7 @@ class RefreshCommunityStats extends Command
 {
     protected $signature = 'community:refresh-stats';
 
-    protected $description = 'Fetch the GitHub star count and latest release tag for the sidebar community card.';
+    protected $description = 'Fetch the GitHub star count and newest release tags (stable + overall) for the sidebar community card.';
 
     public function handle(GithubStatsFetcher $fetcher): int
     {
@@ -29,8 +29,12 @@ class RefreshCommunityStats extends Command
             Cache::put(CommunityStats::StarsCacheKey, $stats['stars'], now()->addDays(7));
         }
 
-        if ($stats['latest_version'] !== null) {
-            Cache::put(CommunityStats::LatestVersionCacheKey, $stats['latest_version'], now()->addDays(7));
+        if ($stats['latest_stable'] !== null) {
+            Cache::put(CommunityStats::LatestStableCacheKey, $stats['latest_stable'], now()->addDays(7));
+        }
+
+        if ($stats['latest_overall'] !== null) {
+            Cache::put(CommunityStats::LatestOverallCacheKey, $stats['latest_overall'], now()->addDays(7));
         }
 
         $this->info('Community stats refreshed.');

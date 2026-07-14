@@ -26,4 +26,11 @@ class AppVersion
 
         return version_compare($current, $latest, '<');
     }
+
+    public static function isPrerelease(?string $version = null): bool
+    {
+        $version = ltrim($version ?? self::current(), 'v');
+
+        return str_contains($version, '-');
+    }
 }

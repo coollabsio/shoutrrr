@@ -15,3 +15,12 @@ test('isOutdated compares the running version against the latest tag', function 
     expect(AppVersion::isOutdated(null))->toBeFalse();
     expect(AppVersion::isOutdated(''))->toBeFalse();
 });
+
+test('isPrerelease detects prerelease suffixes and defaults to the running version', function () {
+    expect(AppVersion::isPrerelease('v1.3.0-rc.5'))->toBeTrue();
+    expect(AppVersion::isPrerelease('1.4.0-beta.1'))->toBeTrue();
+    expect(AppVersion::isPrerelease('v1.3.0'))->toBeFalse();
+    expect(AppVersion::isPrerelease('1.2.3'))->toBeFalse();
+    // Defaults to the running version, which is a prerelease (v1.3.0-rc.5).
+    expect(AppVersion::isPrerelease())->toBeTrue();
+});

@@ -10,15 +10,17 @@ use Throwable;
 class GithubStatsFetcher
 {
     /**
-     * @return array{stars: ?int, latest_version: ?string}
+     * @return array{stars: ?int, latest_stable: ?string, latest_overall: ?string}
      */
     public function fetch(): array
     {
         $repo = (string) config('instance.community.repo');
+        $releases = $this->releases($repo);
 
         return [
             'stars' => $this->stars($repo),
-            'latest_version' => $this->latestVersion($repo),
+            'latest_stable' => $releases['stable'],
+            'latest_overall' => $releases['overall'],
         ];
     }
 
@@ -41,22 +43,71 @@ class GithubStatsFetcher
         }
     }
 
-    private function latestVersion(string $repo): ?string
+    /**
+     * Newest non-draft release tag among stable-only and among all channels.
+     *
+     * @return array{stable: ?string, overall: ?string}
+     */
+    private function releases(string $repo): array
     {
         try {
             $response = Http::timeout(10)
                 ->withHeaders(['Accept' => 'application/vnd.github+json'])
-                ->get("https://api.github.com/repos/{$repo}/releases/latest");
+                ->get("https://api.github.com/repos/{$repo}/releases", ['per_page' => 100]);
 
             if (! $response->successful()) {
-                return null;
+                return ['stable' => null, 'overall' => null];
             }
 
-            $tag = $response->json('tag_name');
+            $releases = $response->json();
 
-            return is_string($tag) && $tag !== '' ? $tag : null;
+            if (! is_array($releases)) {
+                return ['stable' => null, 'overall' => null];
+            }
+
+            $all = [];
+            $stable = [];
+
+            foreach ($releases as $release) {
+                if (! is_array($release) || ($release['draft'] ?? false) === true) {
+                    continue;
+                }
+
+                $tag = $release['tag_name'] ?? null;
+
+                if (! is_string($tag) || $tag === '') {
+                    continue;
+                }
+
+                $all[] = $tag;
+
+                if (($release['prerelease'] ?? false) !== true) {
+                    $stable[] = $tag;
+                }
+            }
+
+            return [
+                'stable' => $this->maxTag($stable),
+                'overall' => $this->maxTag($all),
+            ];
         } catch (Throwable) {
-            return null;
+            return ['stable' => null, 'overall' => null];
         }
+    }
+
+    /**
+     * @param  array<int, string>  $tags
+     */
+    private function maxTag(array $tags): ?string
+    {
+        $max = null;
+
+        foreach ($tags as $tag) {
+            if ($max === null || version_compare(ltrim($tag, 'v'), ltrim($max, 'v'), '>')) {
+                $max = $tag;
+            }
+        }
+
+        return $max;
     }
 }

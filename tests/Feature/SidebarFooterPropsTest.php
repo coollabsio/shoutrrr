@@ -59,7 +59,7 @@ test('self-hosted shares a community prop and the update flag, no billing prop',
     config(['instance.community.repo' => 'coollabsio/shoutrrr']);
     config(['instance.community.sponsor_url' => 'https://github.com/sponsors/coollabsio']);
     Cache::put(CommunityStats::StarsCacheKey, 4210);
-    Cache::put(CommunityStats::LatestVersionCacheKey, 'v99.0.0');
+    Cache::put(CommunityStats::LatestOverallCacheKey, 'v99.0.0');
     actingOwnerInWorkspace();
 
     $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
@@ -74,7 +74,7 @@ test('self-hosted shares a community prop and the update flag, no billing prop',
 test('self-hosted names the available version and links to its release', function () {
     config(['subscriptions.enabled' => false]);
     config(['instance.community.repo' => 'coollabsio/shoutrrr']);
-    Cache::put(CommunityStats::LatestVersionCacheKey, 'v99.0.0');
+    Cache::put(CommunityStats::LatestOverallCacheKey, 'v99.0.0');
     actingOwnerInWorkspace();
 
     $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
@@ -86,7 +86,7 @@ test('self-hosted names the available version and links to its release', functio
 
 test('self-hosted up-to-date exposes no available version', function () {
     config(['subscriptions.enabled' => false]);
-    Cache::put(CommunityStats::LatestVersionCacheKey, AppVersion::current());
+    Cache::put(CommunityStats::LatestOverallCacheKey, AppVersion::current());
     actingOwnerInWorkspace();
 
     $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
@@ -98,7 +98,7 @@ test('self-hosted up-to-date exposes no available version', function () {
 
 test('cloud never exposes an available version', function () {
     config(['subscriptions.enabled' => true]);
-    Cache::put(CommunityStats::LatestVersionCacheKey, 'v99.0.0');
+    Cache::put(CommunityStats::LatestOverallCacheKey, 'v99.0.0');
     actingOwnerInWorkspace();
 
     $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
