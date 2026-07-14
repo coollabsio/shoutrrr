@@ -6,9 +6,11 @@ namespace App\Support;
 
 class AppVersion
 {
+    private static ?string $current = null;
+
     public static function current(): string
     {
-        return trim((string) @file_get_contents(base_path('VERSION')));
+        return self::$current ??= trim((string) @file_get_contents(base_path('VERSION')));
     }
 
     public static function isOutdated(?string $latest): bool

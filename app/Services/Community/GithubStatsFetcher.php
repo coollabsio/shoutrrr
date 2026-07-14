@@ -51,6 +51,7 @@ class GithubStatsFetcher
     private function releases(string $repo): array
     {
         try {
+            // Newest 100 releases by creation date; ample for any realistic release cadence.
             $response = Http::timeout(10)
                 ->withHeaders(['Accept' => 'application/vnd.github+json'])
                 ->get("https://api.github.com/repos/{$repo}/releases", ['per_page' => 100]);
