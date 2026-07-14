@@ -10,6 +10,7 @@ use App\Models\ConnectedAccount;
 use App\Models\PostTargetReply;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
+use App\Support\CommunityStats;
 use App\Support\InstanceSettings;
 use App\Support\Notifications\NotificationPresenter;
 use Illuminate\Http\Request;
@@ -75,6 +76,9 @@ class HandleInertiaRequests extends Middleware
             'instance' => [
                 'isOwner' => $request->user()?->isInstanceOwner() ?? false,
             ],
+            'billing' => $this->billingData($request->user()),
+            'community' => $this->communityData(),
+            'updateAvailable' => ! config('subscriptions.enabled') && CommunityStats::updateAvailable(),
         ];
     }
 
@@ -187,6 +191,48 @@ class HandleInertiaRequests extends Middleware
             'all' => $all,
             'current' => $current,
             'canCreateWorkspaces' => $canCreate,
+        ];
+    }
+
+    /**
+     * @return array{subscribed: bool, manageUrl: string}|null
+     */
+    private function billingData(?User $user): ?array
+    {
+        if (! config('subscriptions.enabled') || ! $user || ! $user->current_workspace_id) {
+            return null;
+        }
+
+        $membership = $user->workspaceMemberships()
+            ->with('workspace')
+            ->where('workspace_id', $user->current_workspace_id)
+            ->first();
+
+        if (! $membership || ! in_array('workspace.billing.manage', $membership->permissions, true)) {
+            return null;
+        }
+
+        return [
+            'subscribed' => $membership->workspace->subscribed('default'),
+            'manageUrl' => route('billing.index'),
+        ];
+    }
+
+    /**
+     * @return array{repoUrl: string, sponsorUrl: string, stars: ?int}|null
+     */
+    private function communityData(): ?array
+    {
+        if (config('subscriptions.enabled')) {
+            return null;
+        }
+
+        $repo = (string) config('instance.community.repo');
+
+        return [
+            'repoUrl' => "https://github.com/{$repo}",
+            'sponsorUrl' => (string) config('instance.community.sponsor_url'),
+            'stars' => CommunityStats::stars(),
         ];
     }
 
