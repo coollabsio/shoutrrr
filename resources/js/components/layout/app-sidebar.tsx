@@ -18,6 +18,7 @@ import InstanceSettingsController from '@/actions/App/Http/Controllers/Settings/
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import AppLogo from '@/components/layout/app-logo';
 import { NavUser } from '@/components/layout/nav-user';
+import { SidebarFooterCard } from '@/components/layout/sidebar-footer-card';
 import { Kbd } from '@/components/ui/kbd';
 import {
     Sidebar,
@@ -68,7 +69,8 @@ const postsNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-    const { workspaces, features, instance, shell } = usePage().props;
+    const { workspaces, features, instance, shell, updateAvailable } =
+        usePage().props;
     const unreadReplies = shell?.unreadReplies ?? 0;
     const { isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
     const { state, setOpenMobile } = useSidebar();
@@ -99,15 +101,27 @@ export function AppSidebar() {
                         >
                             <AppLogo />
                         </SidebarMenuButton>
-                        <a
-                            href={githubReleaseUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none font-medium text-sidebar-foreground/60 transition-colors group-data-[collapsible=icon]:hidden hover:border-sidebar-accent-foreground/30 hover:text-sidebar-foreground"
-                            aria-label={`View Shoutrrr ${appVersion} release notes on GitHub`}
-                        >
-                            {appVersion}
-                        </a>
+                        <span className="relative flex group-data-[collapsible=icon]:hidden">
+                            <a
+                                href={githubReleaseUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none font-medium text-sidebar-foreground/60 transition-colors hover:border-sidebar-accent-foreground/30 hover:text-sidebar-foreground"
+                                aria-label={
+                                    updateAvailable
+                                        ? `Shoutrrr ${appVersion} — a newer release is available on GitHub`
+                                        : `View Shoutrrr ${appVersion} release notes on GitHub`
+                                }
+                            >
+                                {appVersion}
+                            </a>
+                            {updateAvailable && (
+                                <span
+                                    className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-sidebar"
+                                    aria-hidden="true"
+                                />
+                            )}
+                        </span>
                     </SidebarMenuItem>
                 </SidebarMenu>
                 <WorkspaceSelector />
@@ -243,6 +257,7 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
+                <SidebarFooterCard />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

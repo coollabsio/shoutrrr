@@ -84,3 +84,22 @@ describe('sidebar app version link', () => {
         expect(source).toContain('rel="noopener noreferrer"');
     });
 });
+
+describe('sidebar footer card + update dot', () => {
+    const source = readFileSync(
+        resolve(
+            process.cwd(),
+            'resources/js/components/layout/app-sidebar.tsx',
+        ),
+        'utf8',
+    );
+
+    it('renders the footer card above the user menu', () => {
+        expect(source).toContain('<SidebarFooterCard />');
+    });
+
+    it('shows a red update dot on the version badge', () => {
+        expect(source).toContain('updateAvailable');
+        expect(source).toContain('bg-red-500');
+    });
+});
