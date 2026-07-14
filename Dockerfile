@@ -125,6 +125,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         jq \
         ffmpeg \
+        supervisor \
     && rm -rf /var/lib/apt/lists/*
 # Install the Bun binary for the target architecture (amd64 -> x64, arm64 -> aarch64).
 # TARGETARCH is provided automatically by buildx.
@@ -167,8 +168,6 @@ ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
     QUEUE_WORKER_COUNT=${QUEUE_WORKER_COUNT}
 
 # Supervisor supervises the web/worker/scheduler/ssr processes
-RUN apt-get update && apt-get install -y --no-install-recommends supervisor \
-    && rm -rf /var/lib/apt/lists/*
 COPY docker/supervisord.conf /etc/supervisor/laravel.conf
 
 # Entrypoint init scripts (run by the serversideup ENTRYPOINT before the CMD)

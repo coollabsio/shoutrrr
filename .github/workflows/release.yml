@@ -16,21 +16,27 @@ permissions:
   contents: read
 
 jobs:
-  image:
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.platform }} image
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            cache: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            cache: arm64
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write # push to GHCR
-      id-token: write # sign the build provenance attestation
-      attestations: write # write the attestation to GHCR
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-
-      - name: Set up QEMU # emulation for the arm64 leg of the multi-arch build
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -57,26 +63,102 @@ jobs:
           flavor: |
             latest=false
 
-      - name: Build and push image
+      - name: Build and push image by digest
         id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # Disable buildx's inline provenance so the pushed index holds just the
-          # two platform manifests; provenance is attached to the index digest by
-          # actions/attest-build-provenance below.
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.cache }}
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.cache }},mode=max,image-manifest=true,oci-mediatypes=true
           provenance: false
+
+      - name: Export image digest
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${BUILD_DIGEST#sha256:}"
+        env:
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+
+      - name: Upload image digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digest-${{ matrix.cache }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  image:
+    name: Publish multi-platform image
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write # push the multi-platform manifest to GHCR
+      id-token: write # sign the build provenance attestation
+      attestations: write # write the attestation to GHCR
+    steps:
+      - name: Download image digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.release.prerelease == false }}
+            type=sha,enable=${{ github.event_name == 'workflow_dispatch' }}
+          flavor: |
+            latest=false
+
+      - name: Create and push multi-platform manifest
+        id: manifest
+        working-directory: /tmp/digests
+        run: |
+          mapfile -t tags < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+
+          tag_args=()
+          for tag in "${tags[@]}"; do
+            tag_args+=(--tag "$tag")
+          done
+
+          sources=()
+          for digest in *; do
+            sources+=("${IMAGE_NAME}@sha256:${digest}")
+          done
+
+          docker buildx imagetools create \
+            "${tag_args[@]}" \
+            --metadata-file /tmp/manifest-metadata.json \
+            "${sources[@]}"
+
+          echo "digest=$(jq -er '.\"containerimage.descriptor\".digest' /tmp/manifest-metadata.json)" >> "$GITHUB_OUTPUT"
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build.outputs.digest }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
           push-to-registry: true
