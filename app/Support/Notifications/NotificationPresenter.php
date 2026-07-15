@@ -11,6 +11,8 @@ use Illuminate\Pagination\Cursor;
 
 class NotificationPresenter
 {
+    private const string CURSOR_NAME = 'notification_cursor';
+
     /**
      * Number of notifications returned per page. The bell dropdown seeds the
      * first page and lazily loads subsequent pages as the user scrolls.
@@ -43,7 +45,7 @@ class NotificationPresenter
             ->cursorPaginate(
                 self::PER_PAGE,
                 ['*'],
-                'cursor',
+                self::CURSOR_NAME,
                 $cursor !== null ? Cursor::fromEncoded($cursor) : null,
             );
 

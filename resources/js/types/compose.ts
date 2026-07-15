@@ -74,6 +74,29 @@ export type MediaView = {
     source_url: string | null;
 };
 
+export type ExternalTweetMedia = {
+    type: string;
+    url: string;
+    alt_text: string | null;
+    width: number | null;
+    height: number | null;
+};
+
+export type ExternalQuotedTweet = {
+    id: string;
+    text: string;
+    author_name: string | null;
+    author_username: string | null;
+    author_avatar_url: string | null;
+    media: ExternalTweetMedia[];
+};
+
+export type ExternalPostContext = {
+    x?: {
+        quoted_tweet?: ExternalQuotedTweet | null;
+    };
+};
+
 /** An upload still in flight (or just failed) — rendered as a ghost chip. */
 export type PendingUpload = {
     tempId: string;
@@ -132,6 +155,7 @@ export type PostView = {
     published_at: string | null;
     updated_at: string;
     scheduled_at: string | null;
+    external_context?: ExternalPostContext | null;
     destination: { kind: string; id: string | null; ids?: string[] };
     targets: TargetView[];
     media: MediaView[];

@@ -8,6 +8,7 @@ use App\Models\Post;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Facades\Context;
 
 beforeEach(function (): void {
@@ -79,4 +80,78 @@ it('filters by text query on base_text', function (): void {
             ->loadDeferredProps(fn ($reload) => $reload
                 ->has('posts.data', 1)
                 ->where('posts.data.0.base_text', 'launch announcement')));
+});
+
+it('orders the all tab by the published time for published posts', function (): void {
+    $base = now()->subDays(10);
+
+    Post::factory()->for($this->workspace)->create([
+        'author_id' => $this->user->id,
+        'base_text' => 'older direct post',
+        'status' => PostStatus::Published->value,
+        'published_at' => $base,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    Post::factory()->for($this->workspace)->create([
+        'author_id' => $this->user->id,
+        'base_text' => 'newer direct post',
+        'status' => PostStatus::Published->value,
+        'published_at' => $base->copy()->addDay(),
+        'created_at' => now()->subHour(),
+        'updated_at' => now()->subHour(),
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('posts.index'))
+        ->assertInertia(fn ($page) => $page
+            ->loadDeferredProps(fn ($reload) => $reload
+                ->where('posts.data.0.base_text', 'newer direct post')
+                ->where('posts.data.1.base_text', 'older direct post')));
+});
+
+it('cursor paginates more than one page of posts', function (): void {
+    $base = now()->subHour();
+
+    for ($i = 0; $i < 25; $i++) {
+        Post::factory()->for($this->workspace)->create([
+            'author_id' => $this->user->id,
+            'base_text' => "Imported post {$i}",
+            'created_at' => $base->copy()->addMinute($i),
+            'updated_at' => $base->copy()->addMinute($i),
+        ]);
+    }
+
+    $initialPage = $this->actingAs($this->user)
+        ->get(route('posts.index'))
+        ->assertOk()
+        ->inertiaPage();
+
+    $headers = [
+        'X-Inertia-Version' => $initialPage['version'],
+        'X-Inertia-Partial-Component' => 'posts/index',
+        'X-Inertia-Partial-Data' => 'posts',
+    ];
+
+    $firstPage = $this->actingAs($this->user)
+        ->get(route('posts.index'), $headers)
+        ->assertOk()
+        ->inertiaProps('posts');
+
+    expect($firstPage['data'])->toHaveCount(20);
+    expect($firstPage['next_page_url'])->toBeString()->not->toBe('');
+
+    parse_str(parse_url($firstPage['next_page_url'], PHP_URL_QUERY) ?: '', $query);
+
+    $cursor = Cursor::fromEncoded($query['cursor'] ?? null);
+
+    expect($cursor?->parameter('list_sort_at'))->toBeString()->not->toBe('');
+
+    $secondPage = $this->actingAs($this->user)
+        ->get($firstPage['next_page_url'], $headers)
+        ->assertOk()
+        ->inertiaProps('posts');
+
+    expect($secondPage['data'])->toHaveCount(5);
 });

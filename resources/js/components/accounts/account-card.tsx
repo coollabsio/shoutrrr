@@ -46,6 +46,17 @@ const PLATFORM_FALLBACK = { tile: 'bg-muted', glyph: 'text-muted-foreground' };
 export const ACCOUNT_CARD_ACTIONS_CLASS =
     'mt-1 flex flex-wrap items-center gap-2 border-t border-border pt-4';
 
+function formatLastSync(value: string | null): string {
+    if (!value) {
+        return 'Not synced yet';
+    }
+
+    return `Last sync ${new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value))}`;
+}
+
 function ReconnectBlueskyDialog({ account }: { account: Account }) {
     const [open, setOpen] = useState(false);
 
@@ -142,6 +153,7 @@ export function AccountCard({
     onReconnectOAuth,
     onDisconnect,
     onToggle,
+    onToggleExternalPostSync,
 }: {
     account: Account;
     canManage: boolean;
@@ -149,6 +161,7 @@ export function AccountCard({
     onReconnectOAuth: (account: Account) => void;
     onDisconnect: (account: Account) => void;
     onToggle: (account: Account, enabled: boolean) => void;
+    onToggleExternalPostSync: (account: Account) => void;
 }) {
     const brand = PLATFORM_BRAND[account.platform] ?? PLATFORM_FALLBACK;
     const needsAttention = account.status !== 'active';
@@ -284,6 +297,44 @@ export function AccountCard({
                     </>
                 )}
             </div>
+
+            {canManage && !frozen && account.platform === 'x' && (
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={account.sync_external_posts}
+                    onClick={() => onToggleExternalPostSync(account)}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                >
+                    <span className="min-w-0">
+                        <span className="block text-[12.5px] font-medium">
+                            Sync posts from X
+                        </span>
+                        <span className="block truncate text-[11.5px] text-muted-foreground">
+                            {account.sync_external_posts
+                                ? formatLastSync(account.external_posts_synced_at)
+                                : 'Off'}
+                        </span>
+                    </span>
+                    <span
+                        className={cn(
+                            'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+                            account.sync_external_posts
+                                ? 'bg-primary'
+                                : 'bg-muted-foreground/30',
+                        )}
+                    >
+                        <span
+                            className={cn(
+                                'absolute top-0.5 size-4 rounded-full bg-background shadow transition-transform',
+                                account.sync_external_posts
+                                    ? 'translate-x-4'
+                                    : 'translate-x-0.5',
+                            )}
+                        />
+                    </span>
+                </button>
+            )}
 
             {canManage && (
                 <div className={ACCOUNT_CARD_ACTIONS_CLASS}>

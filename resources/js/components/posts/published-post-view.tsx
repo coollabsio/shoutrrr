@@ -24,6 +24,8 @@ import {
 import { platformLabel, postPermalink } from '@/lib/posts/permalink';
 import { cn } from '@/lib/utils';
 import type {
+    ExternalPostContext,
+    ExternalQuotedTweet,
     MediaView,
     PlatformName,
     PostView,
@@ -93,7 +95,7 @@ function MediaGrid({ media }: { media: MediaView[] }) {
     return (
         <div
             className={cn(
-                'mt-3 grid overflow-hidden rounded-2xl border border-border bg-muted/40',
+                'mt-3 grid w-full max-w-[560px] overflow-hidden rounded-2xl border border-border bg-muted/40',
                 media.length === 1 ? 'grid-cols-1' : 'grid-cols-2',
             )}
         >
@@ -118,6 +120,76 @@ function MediaGrid({ media }: { media: MediaView[] }) {
                 </div>
             ))}
         </div>
+    );
+}
+
+function quotedTweetPermalink(quote: ExternalQuotedTweet): string {
+    if (quote.author_username) {
+        return `https://x.com/${quote.author_username}/status/${quote.id}`;
+    }
+
+    return `https://x.com/i/web/status/${quote.id}`;
+}
+
+function QuotedTweetCard({ quote }: { quote: ExternalQuotedTweet }) {
+    const name =
+        quote.author_name ??
+        (quote.author_username ? `@${quote.author_username}` : 'Quoted tweet');
+
+    return (
+        <a
+            href={quotedTweetPermalink(quote)}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-3 block w-full max-w-[560px] overflow-hidden rounded-2xl border border-border bg-background/80 transition-colors hover:bg-muted/30"
+        >
+            <div className="flex gap-2.5 p-3">
+                <Avatar className="size-8 bg-background">
+                    <AvatarImage src={quote.author_avatar_url ?? undefined} />
+                    <AvatarFallback className="text-[10px] font-semibold">
+                        {initials(name)}
+                    </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-1.5 text-[12px] leading-5">
+                        <span className="truncate font-semibold text-foreground">
+                            {name}
+                        </span>
+                        {quote.author_username && (
+                            <span className="truncate text-muted-foreground">
+                                @{quote.author_username}
+                            </span>
+                        )}
+                    </div>
+                    <p className="mt-0.5 line-clamp-4 text-[13px] leading-5 wrap-anywhere whitespace-pre-wrap text-foreground">
+                        {quote.text || 'Quoted post unavailable'}
+                    </p>
+                    {quote.media.length > 0 && (
+                        <div
+                            className={cn(
+                                'mt-2 grid overflow-hidden rounded-xl border border-border bg-muted/40',
+                                quote.media.length === 1
+                                    ? 'grid-cols-1'
+                                    : 'grid-cols-2',
+                            )}
+                        >
+                            {quote.media.slice(0, 4).map((item) => (
+                                <div
+                                    key={item.url}
+                                    className="relative aspect-video overflow-hidden bg-muted"
+                                >
+                                    <img
+                                        src={item.url}
+                                        alt={item.alt_text ?? ''}
+                                        className="size-full object-cover"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </a>
     );
 }
 
@@ -221,6 +293,7 @@ function metricsBar(
 function PublishedCard({
     target,
     media,
+    externalContext,
     publishedAt,
     stat,
     showMetrics,
@@ -228,6 +301,7 @@ function PublishedCard({
 }: {
     target: TargetView;
     media: MediaView[];
+    externalContext: ExternalPostContext | null;
     publishedAt: string | null;
     stat: PostStatTarget | undefined;
     showMetrics: boolean;
@@ -241,11 +315,15 @@ function PublishedCard({
             : null;
     const when = publishedAt ? dayjs(publishedAt).fromNow() : 'now';
     const cardMedia = resolveMedia(target, media);
+    const quotedTweet =
+        target.platform === 'x'
+            ? (externalContext?.x?.quoted_tweet ?? null)
+            : null;
     const sections = target.sections.length > 0 ? target.sections : [''];
     const isThread = sections.length > 1;
 
     return (
-        <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm ring-1 ring-foreground/5">
+        <article className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card shadow-sm ring-1 ring-foreground/5">
             <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2">
                 <span
                     className={cn(
@@ -319,6 +397,9 @@ function PublishedCard({
                                         platform={target.platform}
                                     />
                                 </p>
+                                {index === 0 && quotedTweet && (
+                                    <QuotedTweetCard quote={quotedTweet} />
+                                )}
                                 {index === 0 && cardMedia.length > 0 && (
                                     <MediaGrid media={cardMedia} />
                                 )}
@@ -532,6 +613,7 @@ function PublishedBody({
                 <PublishedCard
                     target={selectedTarget}
                     media={post.media}
+                    externalContext={post.external_context ?? null}
                     publishedAt={post.published_at}
                     stat={statsById.get(selectedTarget.id)}
                     showMetrics={showMetrics}

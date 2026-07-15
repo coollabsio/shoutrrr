@@ -28,6 +28,7 @@ class PostTargetFactory extends Factory
             'content_override' => null,
             'auto_split' => true,
             'status' => PostTargetStatus::Pending->value,
+            'imported_from_remote' => false,
         ];
     }
 

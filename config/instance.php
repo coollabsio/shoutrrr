@@ -30,5 +30,6 @@ return [
                 'linkedin' => 1440,
             ],
         ],
+        'external_posts_sync_lookback_days' => env('INSTANCE_EXTERNAL_POSTS_SYNC_LOOKBACK_DAYS', 90),
     ],
 ];

@@ -4,6 +4,7 @@ import InstanceSettingsController from '@/actions/App/Http/Controllers/Settings/
 import Heading from '@/components/common/heading';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type InstanceSettings = {
@@ -11,6 +12,7 @@ type InstanceSettings = {
     workspace_creation_enabled: boolean;
     usage_tracking_enabled: boolean;
     quote_tweets_enabled: boolean;
+    external_posts_sync_lookback_days: number;
 };
 
 type PageProps = {
@@ -25,6 +27,8 @@ export default function Instance({ settings, workspaces_enabled }: PageProps) {
             workspaces_enabled && settings.workspace_creation_enabled,
         usage_tracking_enabled: settings.usage_tracking_enabled,
         quote_tweets_enabled: settings.quote_tweets_enabled,
+        external_posts_sync_lookback_days:
+            settings.external_posts_sync_lookback_days,
     });
 
     function handleSubmit(event: React.FormEvent) {
@@ -141,6 +145,42 @@ export default function Instance({ settings, workspaces_enabled }: PageProps) {
                                     leave off on other tiers. Off by default.
                                 </p>
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="external_posts_sync_lookback_days">
+                                X sync lookback
+                            </Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    id="external_posts_sync_lookback_days"
+                                    type="number"
+                                    min={1}
+                                    max={365}
+                                    className="w-24"
+                                    value={
+                                        data.external_posts_sync_lookback_days
+                                    }
+                                    onChange={(event) => {
+                                        const value = Number.parseInt(
+                                            event.currentTarget.value,
+                                            10,
+                                        );
+
+                                        setData(
+                                            'external_posts_sync_lookback_days',
+                                            Number.isNaN(value) ? 90 : value,
+                                        );
+                                    }}
+                                />
+                                <span className="text-sm text-muted-foreground">
+                                    days
+                                </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                                Connected X accounts import only posts created
+                                inside this window. Default is 90 days.
+                            </p>
                         </div>
                     </div>
 

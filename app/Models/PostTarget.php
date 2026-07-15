@@ -29,6 +29,7 @@ use Override;
  * @property PostTargetStatus $status
  * @property string|null $remote_id
  * @property list<string>|null $remote_ids
+ * @property bool $imported_from_remote
  * @property ErrorKind|null $error_kind
  * @property string|null $error_message
  * @property int $attempts
@@ -54,6 +55,7 @@ use Override;
     'status',
     'remote_id',
     'remote_ids',
+    'imported_from_remote',
     'error_kind',
     'error_message',
     'attempts',
@@ -87,6 +89,7 @@ class PostTarget extends Model
             'content_override' => 'array',
             'auto_split' => 'boolean',
             'remote_ids' => 'array',
+            'imported_from_remote' => 'boolean',
             'media_upload_state' => 'array',
             'error_kind' => ErrorKind::class,
             'attempts' => 'integer',

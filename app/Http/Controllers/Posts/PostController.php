@@ -75,7 +75,10 @@ class PostController extends Controller
                     ->where('status', '!=', PostStatus::Deleted->value)
                     ->when($status !== '' && $status !== 'all', fn ($query) => $query->where('status', $status))
             )
-                ->orderByRaw('COALESCE(scheduled_at, created_at) DESC')
+                ->select('posts.*')
+                ->selectRaw('COALESCE(published_at, scheduled_at, created_at) as list_sort_at')
+                ->orderByDesc('list_sort_at')
+                ->orderByDesc('id')
                 ->cursorPaginate(20)
                 ->withQueryString()
                 ->through(fn (Post $post): array => PostListItem::make($post)))->defer(),

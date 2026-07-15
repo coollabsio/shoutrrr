@@ -16,6 +16,7 @@ export type { PostStatus } from '@/types/compose';
 
 export type PostRowData = {
     id: string;
+    list_sort_at?: string;
     base_text: string;
     status: PostStatus;
     status_label: string;

@@ -49,6 +49,8 @@ class ConnectedAccountController extends Controller
                 'token_expires_at' => $account->token_expires_at?->toIso8601String(),
                 'max_text_length' => $account->maxTextLength(),
                 'x_premium' => $account->hasXPremium(),
+                'sync_external_posts' => $account->sync_external_posts,
+                'external_posts_synced_at' => $account->external_posts_synced_at?->toIso8601String(),
                 'is_default' => $account->id === $defaultAccountId,
                 'disabled' => $account->isDisabled(),
                 'pds_url' => $this->customPdsUrl($account),
@@ -183,6 +185,26 @@ class ConnectedAccountController extends Controller
             : "{$account->handle} is enabled.";
 
         return redirect()->route('accounts.index')->with('success', $message);
+    }
+
+    public function updateExternalPostSync(Request $request, ConnectedAccount $account): RedirectResponse
+    {
+        $request->user()->can('update', $account) ?: abort(403);
+
+        if ($account->platform !== Platform::X) {
+            return back()->with('error', 'External post sync is currently available for X accounts only.');
+        }
+
+        $validated = $request->validate([
+            'sync_external_posts' => ['required', 'boolean'],
+        ]);
+
+        $enabled = (bool) $validated['sync_external_posts'];
+        $account->forceFill(['sync_external_posts' => $enabled])->save();
+
+        return back()->with('success', $enabled
+            ? "We'll sync posts created directly on X for {$account->handle}."
+            : "External X post sync is off for {$account->handle}.");
     }
 
     public function destroy(Request $request, ConnectedAccount $account): RedirectResponse

@@ -14,7 +14,7 @@ use App\Services\Publishing\TokenManager;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
-function remoteDeleteTarget(): PostTarget
+function remoteDeleteTarget(bool $importedFromRemote = false): PostTarget
 {
     $post = Post::factory()->create();
     $account = ConnectedAccount::factory()->create([
@@ -27,6 +27,7 @@ function remoteDeleteTarget(): PostTarget
         'connected_account_id' => $account->id,
         'platform' => Platform::X->value,
         'remote_ids' => ['111'],
+        'imported_from_remote' => $importedFromRemote,
     ]);
 }
 
@@ -41,6 +42,22 @@ test('it transitions a published target to deleted', function () {
     );
 
     expect($target->refresh()->status)->toBe(PostTargetStatus::Deleted);
+});
+
+test('it remotely deletes imported targets with remote ids', function () {
+    Http::fake();
+
+    $target = remoteDeleteTarget(importedFromRemote: true);
+
+    (new DeletePostTarget($target))->handle(
+        app(PublishConnectorRegistry::class),
+        app(TokenManager::class),
+    );
+
+    expect($target->refresh()->status)->toBe(PostTargetStatus::Deleted);
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://api.twitter.com/2/tweets/111');
 });
 
 test('it does not mark a target deleted when remote deletion fails', function () {

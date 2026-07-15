@@ -24,6 +24,12 @@ describe('published post view', () => {
         expect(view).toContain('data="stats"');
     });
 
+    it('keeps imported X quote/media cards constrained inside the published card', () => {
+        expect(view).toContain('QuotedTweetCard');
+        expect(view).toContain('max-w-2xl');
+        expect(view).toContain('max-w-[560px]');
+    });
+
     it('replaces the editor with the published view only once a target is live', () => {
         expect(page).toContain('PublishedPostView');
         expect(page).toContain("t.status === 'published'");
