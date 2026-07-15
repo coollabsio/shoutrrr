@@ -43,6 +43,7 @@ use Override;
  * @property CarbonImmutable|null $metrics_captured_at
  * @property MetricsStatus|null $metrics_status
  * @property CarbonImmutable|null $reply_fetched_at
+ * @property int $reply_fetch_empty_streak
  */
 #[Fillable([
     'post_id',
@@ -68,6 +69,7 @@ use Override;
     'metrics_captured_at',
     'metrics_status',
     'reply_fetched_at',
+    'reply_fetch_empty_streak',
 ])]
 class PostTarget extends Model
 {
@@ -99,6 +101,7 @@ class PostTarget extends Model
             'metrics_captured_at' => 'immutable_datetime',
             'metrics_status' => MetricsStatus::class,
             'reply_fetched_at' => 'immutable_datetime',
+            'reply_fetch_empty_streak' => 'integer',
         ];
     }
 
