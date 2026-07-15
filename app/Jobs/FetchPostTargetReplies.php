@@ -132,6 +132,12 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
             }
         }
 
+        // Grow the empty-streak so the cadence backs off posts that keep coming
+        // back dry; any fresh reply resets it to the fast fresh-post cadence.
+        $target->forceFill([
+            'reply_fetch_empty_streak' => $inserted === [] ? $target->reply_fetch_empty_streak + 1 : 0,
+        ])->save();
+
         $this->recalculateConversations($target);
 
         $this->notify($target, $inserted);

@@ -114,6 +114,21 @@ test('the job resolves credentials for threads instead of passing an empty token
     expect($captured)->toBe(['access_token' => 'threads-token']);
 });
 
+test('an empty fetch increments the empty streak; a non-empty fetch resets it', function () {
+    $target = targetWithPost();
+    $target->forceFill(['reply_fetch_empty_streak' => 2])->save();
+
+    fakeFetch([]);
+    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+    expect($target->fresh()->reply_fetch_empty_streak)->toBe(3);
+
+    fakeFetch([
+        new FetchedReply('at://r1', 'c1', 'at://root', 'fan', 'Fan', null, 'nice', CarbonImmutable::now()),
+    ]);
+    (new FetchPostTargetReplies($target->fresh()))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+    expect($target->fresh()->reply_fetch_empty_streak)->toBe(0);
+});
+
 test('a failed fetch does not stamp reply_fetched_at', function () {
     $target = targetWithPost();
 
