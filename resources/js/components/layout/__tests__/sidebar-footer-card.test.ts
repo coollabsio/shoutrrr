@@ -36,6 +36,12 @@ describe('sidebar footer card variants', () => {
         expect(source).toContain('billing.manageUrl');
     });
 
+    it('hides the chip for subscribed workspaces', () => {
+        expect(source).toContain('billing.subscribed');
+        expect(source).not.toContain("'Manage'");
+        expect(source).not.toContain('Active subscription');
+    });
+
     it('links the community card to the repo and sponsor urls', () => {
         expect(source).toContain('community.repoUrl');
         expect(source).toContain('community.sponsorUrl');

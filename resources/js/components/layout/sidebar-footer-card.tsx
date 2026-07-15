@@ -18,7 +18,10 @@ export function SidebarFooterCard() {
     const { features, billing, community } = usePage().props;
 
     if (features?.billing) {
-        if (!billing) {
+        // Only surface the upgrade nudge for unsubscribed workspaces. A subscribed
+        // workspace already manages billing via the Subscription item in the sidebar
+        // nav, so an "Active" chip would just waste footer space.
+        if (!billing || billing.subscribed) {
             return null;
         }
 
@@ -28,15 +31,14 @@ export function SidebarFooterCard() {
                     Shoutrrr Cloud
                 </p>
                 <p className="text-[11px] text-sidebar-foreground/60">
-                    {billing.subscribed ? 'Active subscription' : 'Free plan'}
+                    Free plan
                 </p>
                 <Button
                     size="sm"
-                    variant={billing.subscribed ? 'outline' : 'default'}
                     className="mt-2 w-full"
                     render={<Link href={billing.manageUrl} />}
                 >
-                    {billing.subscribed ? 'Manage' : 'Upgrade'}
+                    Upgrade
                 </Button>
             </div>
         );
