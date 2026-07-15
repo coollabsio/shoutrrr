@@ -8,6 +8,7 @@ use App\Dto\Engagement\FetchedReply;
 use App\Dto\Engagement\ReplyActionResult;
 use App\Dto\Engagement\ReplyFetchResult;
 use App\Dto\Engagement\ReplyPostResult;
+use App\Enums\EngagementStatus;
 use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
@@ -124,7 +125,9 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
         $handle = ltrim((string) $account->handle, '@');
         $token = (string) ($credentials['access_token'] ?? '');
 
-        foreach ($this->chunkByQueryBudget($rootIds, $handle) as $chunk) {
+        $chunks = $this->chunkByQueryBudget($rootIds, $handle);
+
+        foreach ($chunks as $index => $chunk) {
             $ors = implode(' OR ', array_map(fn (string $id): string => "conversation_id:{$id}", $chunk));
             $query = $handle === '' ? "({$ors})" : "({$ors}) -from:{$handle}";
 
@@ -146,6 +149,7 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
                     ->acceptJson()
                     ->get(self::BASE.'/tweets/search/recent', $params);
             } catch (ConnectionException $e) {
+                // A network blip is chunk-local; keep trying the other chunks.
                 $this->assignToChunk($results, $chunk, ReplyFetchResult::failed($e->getMessage()));
 
                 continue;
@@ -154,7 +158,18 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
             $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response);
 
             if ($response->failed()) {
-                $this->assignToChunk($results, $chunk, $this->mapFetchFailure($response));
+                $failure = $this->mapFetchFailure($response);
+                $this->assignToChunk($results, $chunk, $failure);
+
+                // Rate-limit / auth failures are account-wide (shared token): stop
+                // hammering the API and propagate to every remaining chunk.
+                if (in_array($failure->status, [EngagementStatus::RateLimited, EngagementStatus::AuthExpired], true)) {
+                    foreach (array_slice($chunks, $index + 1) as $remaining) {
+                        $this->assignToChunk($results, $remaining, $failure);
+                    }
+
+                    break;
+                }
 
                 continue;
             }
@@ -215,15 +230,16 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
     }
 
     /**
-     * Split root ids into chunks whose OR-combined query stays under X's
-     * query-length limit (~512 on Basic, 1024 on Pro); 900 is a safe budget.
+     * Split root ids into chunks whose OR-combined query stays under X's Recent
+     * Search query-length limit (512 chars for self-serve access; docs.x.com).
+     * 480 leaves margin for the parentheses and the `-from:` clause.
      *
      * @param  list<string>  $rootIds
      * @return list<list<string>>
      */
     private function chunkByQueryBudget(array $rootIds, string $handle): array
     {
-        $budget = 900 - ($handle === '' ? 2 : mb_strlen(" -from:{$handle}") + 2);
+        $budget = 480 - ($handle === '' ? 2 : mb_strlen(" -from:{$handle}") + 2);
 
         $chunks = [];
         $current = [];

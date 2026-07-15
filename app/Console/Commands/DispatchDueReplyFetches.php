@@ -91,13 +91,9 @@ class DispatchDueReplyFetches extends Command
                 FetchPostTargetReplies::dispatch($target);
             });
 
-        foreach (array_keys($batchAccountIds) as $accountId) {
-            $account = ConnectedAccount::withoutGlobalScopes()->find($accountId);
-
-            if ($account !== null) {
-                FetchAccountReplies::dispatch($account);
-            }
-        }
+        ConnectedAccount::withoutGlobalScopes()
+            ->whereIn('id', array_keys($batchAccountIds))
+            ->each(fn (ConnectedAccount $account) => FetchAccountReplies::dispatch($account));
 
         return self::SUCCESS;
     }

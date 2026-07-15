@@ -70,7 +70,8 @@ test('it batches an account\'s due X targets into one call and routes replies ba
     expect($t500->fresh()->reply_fetched_at)->not->toBeNull();
 });
 
-test('a rate-limited batch parks the account', function () {
+test('a rate-limited batch parks the account for the retry-after window', function () {
+    $this->freezeTime();
     $account = xBatchAccountWithToken();
     xTargetFor($account, '500');
 
@@ -79,6 +80,5 @@ test('a rate-limited batch parks the account', function () {
     runAccountFetch($account);
 
     $fresh = ConnectedAccount::withoutGlobalScopes()->find($account->id);
-    expect($fresh->engagement_rate_limited_until)->not->toBeNull();
-    expect($fresh->engagement_rate_limited_until->diffInSeconds(now()))->toBeLessThanOrEqual(91);
+    expect($fresh->engagement_rate_limited_until->timestamp)->toBe(now()->addSeconds(90)->timestamp);
 });

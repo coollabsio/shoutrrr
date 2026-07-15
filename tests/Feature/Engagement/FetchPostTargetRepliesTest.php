@@ -149,6 +149,7 @@ test('the fetch outcome is logged for fleet visibility', function () {
 });
 
 test('a rate-limited fetch parks the account and does not stamp reply_fetched_at', function () {
+    $this->freezeTime();
     $target = targetWithPost();
 
     $connector = Mockery::mock(EngagementConnector::class);
@@ -161,8 +162,7 @@ test('a rate-limited fetch parks the account and does not stamp reply_fetched_at
 
     expect($target->fresh()->reply_fetched_at)->toBeNull();
     $account = $target->account()->withoutGlobalScopes()->first();
-    expect($account->engagement_rate_limited_until)->not->toBeNull();
-    expect($account->engagement_rate_limited_until->diffInSeconds(now()))->toBeLessThanOrEqual(121);
+    expect($account->engagement_rate_limited_until->timestamp)->toBe(now()->addSeconds(120)->timestamp);
 });
 
 test('a failed fetch does not stamp reply_fetched_at', function () {

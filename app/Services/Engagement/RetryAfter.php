@@ -24,8 +24,17 @@ final class RetryAfter
     {
         $retryAfter = $response->header('Retry-After');
 
-        if ($retryAfter !== '' && is_numeric($retryAfter)) {
-            return self::clamp((int) $retryAfter);
+        if ($retryAfter !== '') {
+            // RFC 7231: Retry-After is either a delta in seconds or an HTTP-date.
+            if (is_numeric($retryAfter)) {
+                return self::clamp((int) $retryAfter);
+            }
+
+            $timestamp = strtotime($retryAfter);
+
+            if ($timestamp !== false) {
+                return self::clamp($timestamp - Date::now()->getTimestamp());
+            }
         }
 
         foreach (['x-rate-limit-reset', 'ratelimit-reset'] as $header) {

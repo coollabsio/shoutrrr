@@ -19,9 +19,11 @@ return new class extends Migration
 
         // The reply dispatcher prefilters by (status, reply_fetched_at) at any post
         // age; index it so the per-tick scan stays cheap at fleet scale.
-        Schema::table('post_targets', function (Blueprint $table): void {
-            $table->index(['status', 'reply_fetched_at'], 'post_targets_status_reply_fetched_at_index');
-        });
+        if (! Schema::hasIndex('post_targets', 'post_targets_status_reply_fetched_at_index')) {
+            Schema::table('post_targets', function (Blueprint $table): void {
+                $table->index(['status', 'reply_fetched_at'], 'post_targets_status_reply_fetched_at_index');
+            });
+        }
     }
 
     /**
@@ -29,9 +31,11 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('post_targets', function (Blueprint $table): void {
-            $table->dropIndex('post_targets_status_reply_fetched_at_index');
-        });
+        if (Schema::hasIndex('post_targets', 'post_targets_status_reply_fetched_at_index')) {
+            Schema::table('post_targets', function (Blueprint $table): void {
+                $table->dropIndex('post_targets_status_reply_fetched_at_index');
+            });
+        }
 
         Schema::table('post_targets', function (Blueprint $table): void {
             if (Schema::hasColumn('post_targets', 'reply_fetch_empty_streak')) {

@@ -183,11 +183,19 @@ class FetchAccountReplies implements ReleasableJob, ShouldBeUnique, ShouldQueue
         foreach ($due as $target) {
             $latest = $latestByTarget[$target->id] ?? null;
 
-            if ($latest === null) {
+            if ($latest !== null) {
+                $sinces[] = Date::parse($latest)->toImmutable();
+
+                continue;
+            }
+
+            // No replies yet. If the target was already polled (just empty), floor
+            // at its last fetch; only a never-fetched target forces the full window.
+            if ($target->reply_fetched_at === null) {
                 return null;
             }
 
-            $sinces[] = Date::parse($latest)->toImmutable();
+            $sinces[] = $target->reply_fetched_at;
         }
 
         return $sinces === [] ? null : min($sinces);

@@ -33,8 +33,6 @@ class ReplyPersister
             return [];
         }
 
-        $target->forceFill(['reply_fetched_at' => Date::now()])->save();
-
         $inserted = [];
 
         foreach ($result->replies as $fetched) {
@@ -59,9 +57,12 @@ class ReplyPersister
             }
         }
 
-        // Grow the empty-streak so the cadence backs off posts that keep coming
-        // back dry; any fresh reply resets it to the fast fresh-post cadence.
+        // Stamp reply_fetched_at only after the upsert loop completes, so a mid-loop
+        // failure doesn't leave the target looking freshly polled. Combined with the
+        // empty-streak update into one write: grow the streak when a poll comes back
+        // dry (cadence backs off), reset it to the fast cadence on any fresh reply.
         $target->forceFill([
+            'reply_fetched_at' => Date::now(),
             'reply_fetch_empty_streak' => $inserted === [] ? $target->reply_fetch_empty_streak + 1 : 0,
         ])->save();
 
