@@ -25,15 +25,20 @@ function actingOwnerInWorkspace(): User
     return $user;
 }
 
-test('cloud shares a billing prop for billing managers and no community prop', function () {
+test('cloud defers a billing prop for billing managers and no community prop', function () {
     config(['subscriptions.enabled' => true]);
     actingOwnerInWorkspace();
 
     $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
-        ->where('billing.subscribed', false)
-        ->where('billing.manageUrl', route('billing.index'))
-        ->where('community', null)
-        ->where('updateAvailable', false)
+        ->missing('billing')
+        ->missing('community')
+        ->missing('updateAvailable')
+        ->loadDeferredProps('sidebar', fn ($reload) => $reload
+            ->where('billing.subscribed', false)
+            ->where('billing.manageUrl', route('billing.index'))
+            ->where('community', null)
+            ->where('updateAvailable', false)
+        )
     );
 });
 
@@ -50,11 +55,14 @@ test('members without billing.manage do not receive a billing prop', function ()
     Context::add('workspace_id', $workspace->id);
 
     $this->actingAs($user)->get(route('dashboard'))->assertInertia(fn ($page) => $page
-        ->where('billing', null)
+        ->missing('billing')
+        ->loadDeferredProps('sidebar', fn ($reload) => $reload
+            ->where('billing', null)
+        )
     );
 });
 
-test('self-hosted shares a community prop and the update flag, no billing prop', function () {
+test('self-hosted defers a community prop and the update flag, no billing prop', function () {
     config(['subscriptions.enabled' => false]);
     config(['instance.community.repo' => 'coollabsio/shoutrrr']);
     config(['instance.community.sponsor_url' => 'https://github.com/sponsors/coollabsio']);
@@ -63,11 +71,15 @@ test('self-hosted shares a community prop and the update flag, no billing prop',
     actingOwnerInWorkspace();
 
     $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
-        ->where('billing', null)
-        ->where('community.repoUrl', 'https://github.com/coollabsio/shoutrrr')
-        ->where('community.sponsorUrl', 'https://github.com/sponsors/coollabsio')
-        ->where('community.stars', 4210)
-        ->where('updateAvailable', true)
+        ->missing('community')
+        ->missing('updateAvailable')
+        ->loadDeferredProps('sidebar', fn ($reload) => $reload
+            ->where('billing', null)
+            ->where('community.repoUrl', 'https://github.com/coollabsio/shoutrrr')
+            ->where('community.sponsorUrl', 'https://github.com/sponsors/coollabsio')
+            ->where('community.stars', 4210)
+            ->where('updateAvailable', true)
+        )
     );
 });
 
@@ -78,9 +90,12 @@ test('self-hosted names the available version and links to its release', functio
     actingOwnerInWorkspace();
 
     $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
-        ->where('updateAvailable', true)
-        ->where('latestVersion', 'v99.0.0')
-        ->where('latestReleaseUrl', 'https://github.com/coollabsio/shoutrrr/releases/tag/v99.0.0')
+        ->missing('latestVersion')
+        ->loadDeferredProps('sidebar', fn ($reload) => $reload
+            ->where('updateAvailable', true)
+            ->where('latestVersion', 'v99.0.0')
+            ->where('latestReleaseUrl', 'https://github.com/coollabsio/shoutrrr/releases/tag/v99.0.0')
+        )
     );
 });
 
@@ -90,9 +105,12 @@ test('self-hosted up-to-date exposes no available version', function () {
     actingOwnerInWorkspace();
 
     $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
-        ->where('updateAvailable', false)
-        ->where('latestVersion', null)
-        ->where('latestReleaseUrl', null)
+        ->missing('updateAvailable')
+        ->loadDeferredProps('sidebar', fn ($reload) => $reload
+            ->where('updateAvailable', false)
+            ->where('latestVersion', null)
+            ->where('latestReleaseUrl', null)
+        )
     );
 });
 
@@ -102,8 +120,11 @@ test('cloud never exposes an available version', function () {
     actingOwnerInWorkspace();
 
     $this->get(route('dashboard'))->assertInertia(fn ($page) => $page
-        ->where('updateAvailable', false)
-        ->where('latestVersion', null)
-        ->where('latestReleaseUrl', null)
+        ->missing('updateAvailable')
+        ->loadDeferredProps('sidebar', fn ($reload) => $reload
+            ->where('updateAvailable', false)
+            ->where('latestVersion', null)
+            ->where('latestReleaseUrl', null)
+        )
     );
 });

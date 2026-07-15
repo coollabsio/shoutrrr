@@ -14,6 +14,7 @@ use App\Support\CommunityStats;
 use App\Support\InstanceSettings;
 use App\Support\Notifications\NotificationPresenter;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 use Override;
 
@@ -76,9 +77,11 @@ class HandleInertiaRequests extends Middleware
             'instance' => [
                 'isOwner' => $request->user()?->isInstanceOwner() ?? false,
             ],
-            'billing' => $this->billingData($request->user()),
-            'community' => $this->communityData(),
-            ...$this->updateData(),
+            'billing' => Inertia::defer(fn () => $this->billingData($request->user()), 'sidebar'),
+            'community' => Inertia::defer(fn () => $this->communityData(), 'sidebar')->once(),
+            'updateAvailable' => Inertia::defer(fn () => $this->updateData()['updateAvailable'], 'sidebar')->once(),
+            'latestVersion' => Inertia::defer(fn () => $this->updateData()['latestVersion'], 'sidebar')->once(),
+            'latestReleaseUrl' => Inertia::defer(fn () => $this->updateData()['latestReleaseUrl'], 'sidebar')->once(),
         ];
     }
 
