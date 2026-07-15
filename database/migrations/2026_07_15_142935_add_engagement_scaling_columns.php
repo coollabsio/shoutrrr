@@ -24,6 +24,12 @@ return new class extends Migration
                 $table->index(['status', 'reply_fetched_at'], 'post_targets_status_reply_fetched_at_index');
             });
         }
+
+        Schema::table('connected_accounts', function (Blueprint $table): void {
+            if (! Schema::hasColumn('connected_accounts', 'engagement_rate_limited_until')) {
+                $table->timestamp('engagement_rate_limited_until')->nullable()->after('metrics_status');
+            }
+        });
     }
 
     /**
@@ -31,6 +37,12 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('connected_accounts', function (Blueprint $table): void {
+            if (Schema::hasColumn('connected_accounts', 'engagement_rate_limited_until')) {
+                $table->dropColumn('engagement_rate_limited_until');
+            }
+        });
+
         if (Schema::hasIndex('post_targets', 'post_targets_status_reply_fetched_at_index')) {
             Schema::table('post_targets', function (Blueprint $table): void {
                 $table->dropIndex('post_targets_status_reply_fetched_at_index');
