@@ -165,6 +165,9 @@ class HandleInertiaRequests extends Middleware
         }
 
         $memberships = $user->workspaceMemberships()->with('workspace.postingSchedule')->get();
+        // Cache the eager-loaded memberships on the user so billingData() can reuse
+        // them within the same request instead of issuing a second query.
+        $user->setRelation('workspaceMemberships', $memberships);
 
         $all = $memberships->map(fn (WorkspaceMembership $m) => [
             'id' => $m->workspace->id,
@@ -206,10 +209,14 @@ class HandleInertiaRequests extends Middleware
             return null;
         }
 
-        $membership = $user->workspaceMemberships()
-            ->with('workspace')
-            ->where('workspace_id', $user->current_workspace_id)
-            ->first();
+        // Reuse the memberships eager-loaded by workspacesData() (which runs earlier
+        // in the same request); fall back to a scoped query if they aren't loaded.
+        $membership = $user->relationLoaded('workspaceMemberships')
+            ? $user->workspaceMemberships->firstWhere('workspace_id', $user->current_workspace_id)
+            : $user->workspaceMemberships()
+                ->with('workspace')
+                ->where('workspace_id', $user->current_workspace_id)
+                ->first();
 
         if (! $membership || ! in_array('workspace.billing.manage', $membership->permissions, true)) {
             return null;
