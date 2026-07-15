@@ -45,7 +45,14 @@ class XEngagementConnector implements EngagementConnector
             return ReplyFetchResult::failed('Target has no remote id.');
         }
 
-        $query = "conversation_id:{$rootId} -from:{$account->handle}";
+        // Stored X handles carry a leading '@' (see ConnectedAccountData::resolveHandle),
+        // but the search `from:` operator requires a bare username — an '@' makes the
+        // whole query invalid (HTTP 400) and no replies are ever returned.
+        $handle = ltrim((string) $account->handle, '@');
+
+        $query = $handle === ''
+            ? "conversation_id:{$rootId}"
+            : "conversation_id:{$rootId} -from:{$handle}";
 
         $params = [
             'query' => $query,
