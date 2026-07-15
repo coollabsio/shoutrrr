@@ -4,22 +4,24 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Enums\Platform;
+use App\Enums\EngagementStatus;
 use App\Exceptions\TokenRefreshException;
+use App\Jobs\Concerns\ReportsReplyFetch;
+use App\Jobs\Contracts\ReleasableJob;
+use App\Jobs\Middleware\ThrottlesEngagementFetch;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
-use App\Notifications\NewRepliesNotification;
 use App\Services\Engagement\EngagementConnectorRegistry;
+use App\Services\Engagement\ReplyPersister;
 use App\Services\Publishing\TokenManager;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Facades\Date;
 
-class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
+class FetchPostTargetReplies implements ReleasableJob, ShouldBeUnique, ShouldQueue
 {
-    use Queueable;
+    use Queueable, ReportsReplyFetch;
 
     public int $tries = 3;
 
@@ -43,14 +45,14 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * Throttle outbound fetch calls per platform so a large post list can't
-     * trip the platform's own rate limits.
+     * Throttle outbound fetch calls per connected account so one busy account
+     * can't starve the fleet or burst past the platform's own rate limit.
      *
      * @return array<int, object>
      */
     public function middleware(): array
     {
-        return [new RateLimited("engagement-{$this->target->platform->value}")];
+        return [new ThrottlesEngagementFetch($this->target->connected_account_id)];
     }
 
     /**
@@ -63,7 +65,7 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
         return [10, 30, 60];
     }
 
-    public function handle(EngagementConnectorRegistry $registry, TokenManager $tokens): void
+    public function handle(EngagementConnectorRegistry $registry, TokenManager $tokens, ReplyPersister $persister): void
     {
         if (! config('engagement.enabled')) {
             return;
@@ -82,11 +84,13 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        $scope = "target:{$target->id}";
+
         try {
-            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn, Platform::Facebook, Platform::Instagram, Platform::Threads], true)
-                ? $tokens->fresh($account)
-                : [];
+            $credentials = $tokens->fresh($account);
         } catch (TokenRefreshException) {
+            $this->logFetchOutcome($target->platform->value, $account->id, $scope, 'token_refresh_failed');
+
             return;
         }
 
@@ -103,96 +107,23 @@ class FetchPostTargetReplies implements ShouldBeUnique, ShouldQueue
         );
 
         if (! $result->isOk()) {
+            if ($result->status === EngagementStatus::RateLimited) {
+                $this->release($this->parkForRateLimit($account, $result->retryAfterSeconds));
+            }
+
+            $this->logFetchOutcome($target->platform->value, $account->id, $scope, $result->status->value, 0, $result->retryAfterSeconds);
+
             return;
         }
 
-        $target->forceFill(['reply_fetched_at' => Date::now()])->save();
+        $inserted = $persister->persist($target, $result);
 
-        $inserted = [];
-
-        foreach ($result->replies as $fetched) {
-            $reply = PostTargetReply::withoutGlobalScopes()->updateOrCreate(
-                ['post_target_id' => $target->id, 'remote_reply_id' => $fetched->remoteReplyId],
-                [
-                    'workspace_id' => $post->workspace_id,
-                    'platform' => $target->platform,
-                    'remote_cid' => $fetched->remoteCid,
-                    'parent_remote_id' => $fetched->parentRemoteId,
-                    'author_handle' => $fetched->authorHandle,
-                    'author_name' => $fetched->authorName,
-                    'author_avatar_url' => $fetched->authorAvatarUrl,
-                    'text' => $fetched->text,
-                    'remote_created_at' => $fetched->remoteCreatedAt,
-                    'fetched_at' => Date::now(),
-                ],
-            );
-
-            if ($reply->wasRecentlyCreated) {
-                $inserted[] = $reply;
-            }
-        }
-
-        // Grow the empty-streak so the cadence backs off posts that keep coming
-        // back dry; any fresh reply resets it to the fast fresh-post cadence.
-        $target->forceFill([
-            'reply_fetch_empty_streak' => $inserted === [] ? $target->reply_fetch_empty_streak + 1 : 0,
-        ])->save();
-
-        $this->recalculateConversations($target);
-
-        $this->notify($target, $inserted);
-    }
-
-    private function recalculateConversations(PostTarget $target): void
-    {
-        $replies = PostTargetReply::withoutGlobalScopes()
-            ->where('post_target_id', $target->id)
-            ->get(['id', 'post_target_id', 'remote_reply_id', 'parent_remote_id', 'conversation_remote_id']);
-
-        $byRemoteId = $replies->keyBy('remote_reply_id');
-        $resolved = [];
-
-        $conversationFor = function (PostTargetReply $reply, array $visited = []) use (&$conversationFor, &$resolved, $byRemoteId, $target): string {
-            if (isset($resolved[$reply->remote_reply_id])) {
-                return $resolved[$reply->remote_reply_id];
-            }
-
-            if (
-                $reply->parent_remote_id === null
-                || $reply->parent_remote_id === $target->remote_id
-                || in_array($reply->parent_remote_id, $visited, true)
-                || ! $byRemoteId->has($reply->parent_remote_id)
-            ) {
-                return $resolved[$reply->remote_reply_id] = $reply->remote_reply_id;
-            }
-
-            $visited[] = $reply->remote_reply_id;
-
-            return $resolved[$reply->remote_reply_id] = $conversationFor($byRemoteId->get($reply->parent_remote_id), $visited);
-        };
-
-        $replies->each(function (PostTargetReply $reply) use ($conversationFor): void {
-            $conversationRemoteId = $conversationFor($reply);
-
-            if ($reply->conversation_remote_id === $conversationRemoteId) {
-                return;
-            }
-
-            $reply->forceFill(['conversation_remote_id' => $conversationRemoteId])->saveQuietly();
-        });
-    }
-
-    /**
-     * @param  list<PostTargetReply>  $inserted
-     */
-    private function notify(PostTarget $target, array $inserted): void
-    {
-        if ($inserted === []) {
-            return;
-        }
-
-        $author = $target->post()->withoutGlobalScopes()->first()?->author()->first();
-
-        $author?->notify(new NewRepliesNotification($target, count($inserted)));
+        $this->logFetchOutcome(
+            $target->platform->value,
+            $account->id,
+            $scope,
+            $result->replies === [] ? 'empty' : 'ok',
+            count($inserted),
+        );
     }
 }

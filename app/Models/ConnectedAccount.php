@@ -39,6 +39,7 @@ use Override;
  * @property string|null $refresh_failure_reason
  * @property CarbonImmutable|null $metrics_captured_at
  * @property MetricsStatus|null $metrics_status
+ * @property CarbonImmutable|null $engagement_rate_limited_until
  */
 #[Fillable([
     'workspace_id',
@@ -58,6 +59,7 @@ use Override;
     'refresh_failure_reason',
     'metrics_captured_at',
     'metrics_status',
+    'engagement_rate_limited_until',
 ])]
 class ConnectedAccount extends Model
 {
@@ -80,6 +82,7 @@ class ConnectedAccount extends Model
             'refresh_failed_at' => 'immutable_datetime',
             'metrics_captured_at' => 'immutable_datetime',
             'metrics_status' => MetricsStatus::class,
+            'engagement_rate_limited_until' => 'immutable_datetime',
         ];
     }
 

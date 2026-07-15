@@ -13,6 +13,7 @@ use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Engagement\RetryAfter;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
@@ -201,7 +202,7 @@ class FacebookEngagementConnector implements EngagementConnector
         return match (true) {
             $response->status() === 401 => ReplyFetchResult::authExpired($this->excerpt($response)),
             $response->status() === 403 => ReplyFetchResult::unsupported($this->excerpt($response)),
-            $response->status() === 429 => ReplyFetchResult::rateLimited($this->excerpt($response)),
+            $response->status() === 429 => ReplyFetchResult::rateLimited($this->excerpt($response), RetryAfter::seconds($response)),
             default => ReplyFetchResult::failed($this->excerpt($response)),
         };
     }

@@ -4,11 +4,45 @@
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
+use App\Jobs\FetchAccountReplies;
 use App\Jobs\FetchPostTargetReplies;
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Queue;
+
+test('it collapses an X account\'s due posts into a single batched job', function () {
+    Queue::fake();
+
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::X, 'status' => ConnectedAccountStatus::Active]);
+    PostTarget::factory()->count(3)->for($account, 'account')->published()->create([
+        'platform' => Platform::X,
+        'posted_at' => now()->subHours(2),
+    ]);
+
+    $this->artisan('engagement:dispatch-due')->assertSuccessful();
+
+    Queue::assertPushed(FetchAccountReplies::class, 1);
+    Queue::assertNotPushed(FetchPostTargetReplies::class);
+});
+
+test('it skips accounts parked by a rate limit', function () {
+    Queue::fake();
+
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::X,
+        'status' => ConnectedAccountStatus::Active,
+        'engagement_rate_limited_until' => now()->addMinutes(30),
+    ]);
+    PostTarget::factory()->for($account, 'account')->published()->create([
+        'platform' => Platform::X,
+        'posted_at' => now()->subHours(2),
+    ]);
+
+    $this->artisan('engagement:dispatch-due')->assertSuccessful();
+
+    Queue::assertNothingPushed();
+});
 
 test('it dispatches a fetch job for a recently-published target', function () {
     Queue::fake();
@@ -16,6 +50,7 @@ test('it dispatches a fetch job for a recently-published target', function () {
     $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky, 'status' => ConnectedAccountStatus::Active]);
     PostTarget::factory()->for($account, 'account')->create([
         'status' => PostTargetStatus::Published,
+        'platform' => Platform::Bluesky,
         'remote_id' => 'at://root',
         'posted_at' => now()->subDays(2),
     ]);
@@ -33,6 +68,7 @@ test('it still dispatches an old never-fetched target at the steady cadence', fu
     $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky, 'status' => ConnectedAccountStatus::Active]);
     PostTarget::factory()->for($account, 'account')->create([
         'status' => PostTargetStatus::Published,
+        'platform' => Platform::Bluesky,
         'remote_id' => 'at://root',
         'posted_at' => now()->subDays(30),
     ]);

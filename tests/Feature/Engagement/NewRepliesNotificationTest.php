@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Notifications\NewRepliesNotification;
 use App\Services\Engagement\Contracts\EngagementConnector;
 use App\Services\Engagement\EngagementConnectorRegistry;
+use App\Services\Engagement\ReplyPersister;
 use App\Services\Publishing\TokenManager;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Notification;
@@ -54,7 +55,7 @@ test('one batched notification fires when new replies land', function () {
         new FetchedReply('at://r2', 'c2', 'at://root', 'b', 'B', null, 'yo', CarbonImmutable::now()),
     ], $author);
 
-    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class), app(ReplyPersister::class));
 
     Notification::assertSentToTimes($author, NewRepliesNotification::class, 1);
 });
@@ -64,7 +65,7 @@ test('no notification fires when nothing new', function () {
     $author = User::factory()->create();
     $target = fetchJobWith([], $author);
 
-    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class), app(ReplyPersister::class));
 
     Notification::assertNothingSent();
 });

@@ -7,8 +7,12 @@ namespace App\Console\Commands;
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
+use App\Jobs\FetchAccountReplies;
 use App\Jobs\FetchPostTargetReplies;
+use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
+use App\Services\Engagement\Contracts\BatchEngagementConnector;
+use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Engagement\ReplyFetchCadence;
 use App\Support\InstanceSettings;
 use Illuminate\Console\Command;
@@ -20,7 +24,7 @@ class DispatchDueReplyFetches extends Command
 
     protected $description = 'Fan out reply-fetch jobs for due published targets.';
 
-    public function handle(InstanceSettings $settings, ReplyFetchCadence $cadence): int
+    public function handle(InstanceSettings $settings, ReplyFetchCadence $cadence, EngagementConnectorRegistry $registry): int
     {
         if (! config('engagement.enabled') || ! $settings->engagementPollingEnabled()) {
             return self::SUCCESS;
@@ -35,6 +39,13 @@ class DispatchDueReplyFetches extends Command
             return self::SUCCESS;
         }
 
+        // Platforms whose connector can fetch a whole account's replies in one
+        // batched call are dispatched per-account; the rest stay per-target.
+        $batchableValues = array_map(
+            fn (Platform $platform): string => $platform->value,
+            array_filter($enabledPlatforms, fn (Platform $platform): bool => $registry->for($platform) instanceof BatchEngagementConnector),
+        );
+
         $now = Date::now()->toImmutable();
 
         // Coarse SQL prefilter: admit anything that *could* be due — never fetched,
@@ -47,6 +58,9 @@ class DispatchDueReplyFetches extends Command
         );
         $staleBefore = $now->subMinutes($finestInterval);
 
+        /** @var array<string, true> $batchAccountIds */
+        $batchAccountIds = [];
+
         PostTarget::query()
             ->where('status', PostTargetStatus::Published->value)
             ->whereNotNull('remote_id')
@@ -57,12 +71,33 @@ class DispatchDueReplyFetches extends Command
                     ->whereNull('reply_fetched_at')
                     ->orWhere('reply_fetched_at', '<=', $staleBefore);
             })
-            ->whereHas('account', fn ($q) => $q->where('status', ConnectedAccountStatus::Active->value))
-            ->each(function (PostTarget $target) use ($cadence, $now): void {
-                if ($cadence->isDue($target, $now)) {
-                    FetchPostTargetReplies::dispatch($target);
+            ->whereHas('account', fn ($q) => $q
+                ->where('status', ConnectedAccountStatus::Active->value)
+                ->where(fn ($q) => $q
+                    ->whereNull('engagement_rate_limited_until')
+                    ->orWhere('engagement_rate_limited_until', '<=', $now)))
+            ->each(function (PostTarget $target) use ($cadence, $now, $batchableValues, &$batchAccountIds): void {
+                if (! $cadence->isDue($target, $now)) {
+                    return;
                 }
+
+                if (in_array($target->platform->value, $batchableValues, true)) {
+                    // Collapse an account's due posts into one batched job.
+                    $batchAccountIds[$target->connected_account_id] = true;
+
+                    return;
+                }
+
+                FetchPostTargetReplies::dispatch($target);
             });
+
+        foreach (array_keys($batchAccountIds) as $accountId) {
+            $account = ConnectedAccount::withoutGlobalScopes()->find($accountId);
+
+            if ($account !== null) {
+                FetchAccountReplies::dispatch($account);
+            }
+        }
 
         return self::SUCCESS;
     }

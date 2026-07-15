@@ -13,7 +13,9 @@ use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
+use App\Services\Engagement\Contracts\BatchEngagementConnector;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Engagement\RetryAfter;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
@@ -23,7 +25,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Storage;
 
-class XEngagementConnector implements EngagementConnector
+class XEngagementConnector implements BatchEngagementConnector, EngagementConnector
 {
     use TracksUsage;
 
@@ -81,29 +83,183 @@ class XEngagementConnector implements EngagementConnector
             return $this->mapFetchFailure($response);
         }
 
-        /** @var array<string, array<string, mixed>> $users */
+        $users = $this->indexUsers($response);
+
+        $replies = [];
+        foreach ((array) $response->json('data', []) as $tweet) {
+            $replies[] = $this->toFetchedReply($tweet, $users, (string) $rootId);
+        }
+
+        return ReplyFetchResult::ok($replies);
+    }
+
+    /**
+     * Fetch replies for several of the account's posts in one search call by
+     * OR-combining their conversation ids (chunked to stay under X's query-length
+     * limit), then bucketing the returned tweets back to each root by the
+     * tweet's own `conversation_id`.
+     *
+     * @param  list<string>  $rootIds
+     * @param  array<string, mixed>  $credentials
+     * @return array<string, ReplyFetchResult>
+     */
+    public function fetchRepliesForConversations(ConnectedAccount $account, array $rootIds, array $credentials, ?CarbonImmutable $since): array
+    {
+        $rootIds = array_values(array_unique(array_filter(
+            array_map(fn ($id): string => (string) $id, $rootIds),
+            fn (string $id): bool => $id !== '',
+        )));
+
+        /** @var array<string, ReplyFetchResult> $results */
+        $results = [];
+        foreach ($rootIds as $id) {
+            // Default: no replies. Matched tweets and per-chunk failures overwrite this.
+            $results[$id] = ReplyFetchResult::ok([]);
+        }
+
+        if ($rootIds === []) {
+            return $results;
+        }
+
+        $handle = ltrim((string) $account->handle, '@');
+        $token = (string) ($credentials['access_token'] ?? '');
+
+        foreach ($this->chunkByQueryBudget($rootIds, $handle) as $chunk) {
+            $ors = implode(' OR ', array_map(fn (string $id): string => "conversation_id:{$id}", $chunk));
+            $query = $handle === '' ? "({$ors})" : "({$ors}) -from:{$handle}";
+
+            $params = [
+                'query' => $query,
+                'tweet.fields' => 'author_id,created_at,in_reply_to_user_id,conversation_id',
+                'expansions' => 'author_id',
+                'user.fields' => 'username,name,profile_image_url',
+                'max_results' => 100,
+            ];
+
+            if ($since !== null) {
+                $params['start_time'] = $since->toIso8601ZuluString();
+            }
+
+            try {
+                $response = $this->http
+                    ->withToken($token)
+                    ->acceptJson()
+                    ->get(self::BASE.'/tweets/search/recent', $params);
+            } catch (ConnectionException $e) {
+                $this->assignToChunk($results, $chunk, ReplyFetchResult::failed($e->getMessage()));
+
+                continue;
+            }
+
+            $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response);
+
+            if ($response->failed()) {
+                $this->assignToChunk($results, $chunk, $this->mapFetchFailure($response));
+
+                continue;
+            }
+
+            $users = $this->indexUsers($response);
+
+            /** @var array<string, list<FetchedReply>> $byConversation */
+            $byConversation = [];
+            foreach ((array) $response->json('data', []) as $tweet) {
+                $conversationId = (string) ($tweet['conversation_id'] ?? '');
+
+                if ($conversationId === '' || ! isset($results[$conversationId])) {
+                    continue;
+                }
+
+                $byConversation[$conversationId][] = $this->toFetchedReply($tweet, $users, $conversationId);
+            }
+
+            foreach ($byConversation as $conversationId => $replies) {
+                $results[$conversationId] = ReplyFetchResult::ok($replies);
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * @param  array<string, mixed>  $tweet
+     * @param  array<string, array<string, mixed>>  $users
+     */
+    private function toFetchedReply(array $tweet, array $users, string $parentRemoteId): FetchedReply
+    {
+        $author = $users[(string) ($tweet['author_id'] ?? '')] ?? [];
+
+        return new FetchedReply(
+            remoteReplyId: (string) $tweet['id'],
+            remoteCid: null,
+            parentRemoteId: $parentRemoteId,
+            authorHandle: (string) ($author['username'] ?? ''),
+            authorName: isset($author['name']) ? (string) $author['name'] : null,
+            authorAvatarUrl: isset($author['profile_image_url']) ? (string) $author['profile_image_url'] : null,
+            text: (string) ($tweet['text'] ?? ''),
+            remoteCreatedAt: isset($tweet['created_at']) ? CarbonImmutable::parse((string) $tweet['created_at']) : Date::now(),
+        );
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function indexUsers(Response $response): array
+    {
         $users = [];
         foreach ((array) $response->json('includes.users', []) as $user) {
             $users[(string) $user['id']] = $user;
         }
 
-        $replies = [];
-        foreach ((array) $response->json('data', []) as $tweet) {
-            $author = $users[(string) ($tweet['author_id'] ?? '')] ?? [];
+        return $users;
+    }
 
-            $replies[] = new FetchedReply(
-                remoteReplyId: (string) $tweet['id'],
-                remoteCid: null,
-                parentRemoteId: (string) $rootId,
-                authorHandle: (string) ($author['username'] ?? ''),
-                authorName: isset($author['name']) ? (string) $author['name'] : null,
-                authorAvatarUrl: isset($author['profile_image_url']) ? (string) $author['profile_image_url'] : null,
-                text: (string) ($tweet['text'] ?? ''),
-                remoteCreatedAt: isset($tweet['created_at']) ? CarbonImmutable::parse((string) $tweet['created_at']) : Date::now(),
-            );
+    /**
+     * Split root ids into chunks whose OR-combined query stays under X's
+     * query-length limit (~512 on Basic, 1024 on Pro); 900 is a safe budget.
+     *
+     * @param  list<string>  $rootIds
+     * @return list<list<string>>
+     */
+    private function chunkByQueryBudget(array $rootIds, string $handle): array
+    {
+        $budget = 900 - ($handle === '' ? 2 : mb_strlen(" -from:{$handle}") + 2);
+
+        $chunks = [];
+        $current = [];
+        $length = 0;
+
+        foreach ($rootIds as $id) {
+            $piece = mb_strlen("conversation_id:{$id}");
+            $add = ($current === [] ? 0 : 4) + $piece;
+
+            if ($current !== [] && $length + $add > $budget) {
+                $chunks[] = $current;
+                $current = [];
+                $length = 0;
+                $add = $piece;
+            }
+
+            $current[] = $id;
+            $length += $add;
         }
 
-        return ReplyFetchResult::ok($replies);
+        if ($current !== []) {
+            $chunks[] = $current;
+        }
+
+        return $chunks;
+    }
+
+    /**
+     * @param  array<string, ReplyFetchResult>  $results
+     * @param  list<string>  $chunk
+     */
+    private function assignToChunk(array &$results, array $chunk, ReplyFetchResult $result): void
+    {
+        foreach ($chunk as $id) {
+            $results[$id] = $result;
+        }
     }
 
     public function postReply(ConnectedAccount $account, PostTargetReply $parent, string $text, array $credentials, array $media = []): ReplyPostResult
@@ -336,7 +492,7 @@ class XEngagementConnector implements EngagementConnector
         return match (true) {
             $response->status() === 401 => ReplyFetchResult::authExpired($this->excerpt($response)),
             $response->status() === 403 => ReplyFetchResult::unsupported($this->excerpt($response)),
-            $response->status() === 429 => ReplyFetchResult::rateLimited($this->excerpt($response)),
+            $response->status() === 429 => ReplyFetchResult::rateLimited($this->excerpt($response), RetryAfter::seconds($response)),
             default => ReplyFetchResult::failed($this->excerpt($response)),
         };
     }

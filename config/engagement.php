@@ -27,4 +27,13 @@ return [
     // Each consecutive empty fetch multiplies the effective interval, capped here,
     // so a post that keeps returning nothing is polled ever less often — but never zero.
     'max_empty_backoff' => (int) env('ENGAGEMENT_MAX_EMPTY_BACKOFF', 8),
+
+    // Proactive per-connected-account budget for outbound reply-fetch calls. Kept
+    // well under the platforms' per-user limits; the reactive parking (below) still
+    // honors whatever the platform actually reports on a 429.
+    'fetch_rate_per_minute' => (int) env('ENGAGEMENT_FETCH_RATE_PER_MINUTE', 12),
+
+    // Fallback park duration (seconds) when a platform rate-limits us without a
+    // usable Retry-After / reset header.
+    'default_rate_limit_backoff' => (int) env('ENGAGEMENT_DEFAULT_RATE_LIMIT_BACKOFF', 900),
 ];

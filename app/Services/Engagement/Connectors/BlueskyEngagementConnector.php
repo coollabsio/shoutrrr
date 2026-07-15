@@ -16,6 +16,7 @@ use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Atproto\DPoP;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Engagement\RetryAfter;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
@@ -127,7 +128,7 @@ class BlueskyEngagementConnector implements EngagementConnector
 
         if ($response->failed()) {
             return $response->status() === 429
-                ? ReplyFetchResult::rateLimited($this->excerpt($response))
+                ? ReplyFetchResult::rateLimited($this->excerpt($response), RetryAfter::seconds($response))
                 : ReplyFetchResult::failed($this->excerpt($response));
         }
 

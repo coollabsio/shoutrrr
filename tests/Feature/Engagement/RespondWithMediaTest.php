@@ -17,6 +17,7 @@ use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use App\Services\Engagement\Contracts\EngagementConnector;
 use App\Services\Engagement\EngagementConnectorRegistry;
+use App\Services\Engagement\ReplyPersister;
 use App\Services\Publishing\TokenManager;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Queue;
@@ -118,7 +119,7 @@ test('SendReply fails the row without posting when the account is disabled', fun
     ]);
 
     (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic', Platform::X))
-        ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+        ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class), app(ReplyPersister::class));
 
     expect($ourRow->fresh()->send_status)->toBe(SendStatus::Failed);
 });
@@ -137,7 +138,7 @@ test('SendReply posts the media reply and marks it sent', function () {
     ]);
 
     (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic', Platform::X))
-        ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+        ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class), app(ReplyPersister::class));
 
     expect($ourRow->fresh()->send_status)->toBe(SendStatus::Sent);
     expect($ourRow->fresh()->remote_reply_id)->toBe('rid');
