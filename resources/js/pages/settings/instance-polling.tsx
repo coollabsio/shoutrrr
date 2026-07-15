@@ -119,13 +119,14 @@ export default function InstancePolling({ settings, sections }: Props) {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <PollingCard
                         title="Engagement"
-                        description="How often to check published posts for new replies."
+                        description="The minimum time between reply checks. Fresh posts are checked more often and back off as they age, so this sets the floor, not a fixed interval."
                         group="engagement"
                         platforms={sections.engagement}
                         values={data.engagement}
                         errors={errors}
                         onChange={setMinutes}
                         onEnabledChange={setPlatformEnabled}
+                        minutesHelp="Minimum interval in minutes."
                     />
 
                     <PollingCard
@@ -168,6 +169,7 @@ function PollingCard({
     errors,
     onChange,
     onEnabledChange,
+    minutesHelp = 'Interval in minutes.',
 }: {
     title: string;
     description: string;
@@ -185,6 +187,7 @@ function PollingCard({
         platform: PlatformName,
         enabled: boolean,
     ) => void;
+    minutesHelp?: string;
 }) {
     const hasDisabledPlatform = platforms.some(
         (p) => !values.enabled[p.platform],
@@ -241,7 +244,7 @@ function PollingCard({
                                 </div>
                                 <p className="text-sm text-muted-foreground">
                                     {isEnabled
-                                        ? 'Interval in minutes.'
+                                        ? minutesHelp
                                         : `Polling for ${p.label} is paused.`}
                                 </p>
                             </div>

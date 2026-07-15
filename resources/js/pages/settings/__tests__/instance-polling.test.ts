@@ -122,4 +122,19 @@ describe('instance polling section rendering', () => {
         expect(source).toContain('platforms={sections.');
         expect(source).toContain('sections.engagement');
     });
+
+    it('labels the engagement interval as a minimum floor, not a fixed cadence', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/pages/settings/instance-polling.tsx',
+            ),
+            'utf8',
+        );
+
+        // Engagement polling is adaptive (age bands + steady tail); the operator
+        // interval is a floor, so the copy must not imply a fixed cadence.
+        expect(source).toContain('minutesHelp="Minimum interval in minutes."');
+        expect(source).toMatch(/minimum time between reply checks/i);
+    });
 });
