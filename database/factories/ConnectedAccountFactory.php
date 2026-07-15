@@ -45,6 +45,15 @@ class ConnectedAccountFactory extends Factory
         ]);
     }
 
+    public function discord(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'platform' => Platform::Discord->value,
+            'auth_method' => 'webhook',
+            'remote_account_id' => (string) fake()->unique()->numerify('##########'),
+        ]);
+    }
+
     public function needsAttention(): static
     {
         return $this->state(fn (array $attributes): array => [
