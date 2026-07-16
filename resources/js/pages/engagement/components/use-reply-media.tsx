@@ -61,6 +61,12 @@ type ReplyMedia = {
         onDragOver: (e: React.DragEvent) => void;
         onDrop: (e: React.DragEvent) => void;
     };
+    /**
+     * Validate + attach a batch of files. Exposed for surfaces that source files
+     * themselves rather than through the picker or drop handlers — the editor's
+     * paste-to-upload passes its clipboard FileList straight in.
+     */
+    handleAddedFiles: (files: FileList | File[]) => Promise<void>;
 };
 
 function blobToFile(blob: Blob, name: string): File {
@@ -380,5 +386,6 @@ export function useReplyMedia({
                 }
             },
         },
+        handleAddedFiles,
     };
 }

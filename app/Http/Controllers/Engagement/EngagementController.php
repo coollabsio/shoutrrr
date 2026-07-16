@@ -9,11 +9,13 @@ use App\Enums\ReplyStatus;
 use App\Enums\SendStatus;
 use App\Exceptions\TokenRefreshException;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\WorkspaceMentionController;
 use App\Http\Requests\Engagement\RespondToReplyRequest;
 use App\Jobs\SendReply;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostTargetReply;
+use App\Models\WorkspaceMention;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
@@ -101,6 +103,14 @@ class EngagementController extends Controller
                 'bluesky' => $settings->engagementPollingEnabled(Platform::Bluesky),
                 'linkedin' => $settings->engagementPollingEnabled(Platform::LinkedIn),
             ],
+            // The reply box reuses the composer's @-mention picker, so it needs
+            // the same saved-mention library the composer receives.
+            'savedMentions' => WorkspaceMention::withoutGlobalScopes()
+                ->where('workspace_id', $request->user()->current_workspace_id)
+                ->orderBy('name')
+                ->get()
+                ->map(fn (WorkspaceMention $mention): array => WorkspaceMentionController::view($mention))
+                ->all(),
         ]);
     }
 
