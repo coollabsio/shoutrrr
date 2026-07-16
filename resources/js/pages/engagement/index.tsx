@@ -203,15 +203,10 @@ function EngagementDisabledBanner({
 
 type RightPaneProps = {
     selected: ReplyItem;
-<<<<<<< HEAD
     onArchived: (id: string) => void;
     onResponded: (id: string) => void;
-    replyTextareaRef?: RefObject<HTMLTextAreaElement | null>;
-=======
-    onArchived: () => void;
     replyEditorRef?: RefObject<EditorBodyHandle | null>;
     savedMentions: WorkspaceMention[];
->>>>>>> origin/main
     reserveCloseButtonSpace?: boolean;
 };
 
@@ -224,13 +219,9 @@ type RightPaneProps = {
 function RightPane({
     selected,
     onArchived,
-<<<<<<< HEAD
     onResponded,
-    replyTextareaRef,
-=======
     replyEditorRef,
     savedMentions,
->>>>>>> origin/main
     reserveCloseButtonSpace = false,
 }: RightPaneProps) {
     const [thread, setThread] = useState<ReplyItem[]>([]);
@@ -571,8 +562,7 @@ export default function EngagementIndex({
 }: PageProps) {
     const isMobile = useIsMobile();
     const [selected, setSelected] = useState<ReplyItem | null>(null);
-<<<<<<< HEAD
-    const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const replyEditorRef = useRef<EditorBodyHandle>(null);
     // Client-side overlay over the deferred `replies` scroll prop: archiving or
     // responding must update the left list without a visit that would refetch
     // (and blank) it. Inertia still owns `replies` itself — we only derive.
@@ -582,9 +572,6 @@ export default function EngagementIndex({
     // The keyboard `A` shortcut archives without an Inertia visit, mirroring the
     // conversation pane's plain-JSON action so the deferred list never blanks.
     const archiveHttp = useHttp<Record<string, never>, null>({});
-=======
-    const replyEditorRef = useRef<EditorBodyHandle>(null);
->>>>>>> origin/main
 
     const {
         account: filterAccount,
@@ -811,22 +798,10 @@ export default function EngagementIndex({
                         {selected ? (
                             <RightPane
                                 selected={selected}
-<<<<<<< HEAD
                                 onArchived={handleArchived}
                                 onResponded={handleResponded}
-                                replyTextareaRef={replyTextareaRef}
-=======
-                                onArchived={() =>
-                                    selectById(
-                                        nextAfterArchive(
-                                            items.map((item) => item.id),
-                                            selected.id,
-                                        ),
-                                    )
-                                }
                                 replyEditorRef={replyEditorRef}
                                 savedMentions={savedMentions}
->>>>>>> origin/main
                             />
                         ) : allEngagementDisabled ? (
                             <EngagementDisabledNotice />
@@ -857,22 +832,10 @@ export default function EngagementIndex({
                         {selected ? (
                             <RightPane
                                 selected={selected}
-<<<<<<< HEAD
                                 onArchived={handleArchived}
                                 onResponded={handleResponded}
-                                replyTextareaRef={replyTextareaRef}
-=======
-                                onArchived={() =>
-                                    selectById(
-                                        nextAfterArchive(
-                                            items.map((item) => item.id),
-                                            selected.id,
-                                        ),
-                                    )
-                                }
                                 replyEditorRef={replyEditorRef}
                                 savedMentions={savedMentions}
->>>>>>> origin/main
                                 reserveCloseButtonSpace
                             />
                         ) : null}
