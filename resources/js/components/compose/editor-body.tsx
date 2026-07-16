@@ -42,8 +42,8 @@ type EditorBodyProps = {
     /** When false, the post is read-only (e.g. already published/scheduled). */
     editable?: boolean;
     /**
-     * Single-message variant (the engagement reply box): drops the thread and
-     * mention extensions and shrinks the type scale. See `composerExtensions`
+     * Single-message variant (the engagement reply box): drops the thread
+     * extensions and shrinks the type scale. See `composerExtensions`
      * for why the extensions must be omitted rather than left unconfigured.
      */
     compact?: boolean;
