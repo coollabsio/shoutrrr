@@ -23,6 +23,10 @@ declare global {
  * so instances without Sentry configured pay nothing beyond the guard.
  */
 export function initSentry(): void {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
     const config = window.__sentry;
 
     if (!config?.dsn) {
