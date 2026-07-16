@@ -138,13 +138,13 @@ export function ReplyThread({
                                     !reply.is_read && 'border-primary/40',
                                 )}
                             >
-                                <div className="mb-0.5 flex min-w-0 flex-wrap items-baseline gap-1.5">
-                                    <span className="truncate text-xs font-semibold">
+                                <div className="mb-0.5 flex min-w-0 items-baseline gap-1.5">
+                                    <span className="min-w-0 truncate text-xs font-semibold">
                                         {reply.author_name ??
                                             atHandle(reply.author_handle)}
                                     </span>
                                     {reply.author_name ? (
-                                        <span className="truncate text-[11px] text-muted-foreground">
+                                        <span className="min-w-0 truncate text-[11px] text-muted-foreground">
                                             {atHandle(reply.author_handle)}
                                         </span>
                                     ) : null}

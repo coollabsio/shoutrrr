@@ -58,7 +58,7 @@ export function ReplyStream({ replies, selectedId, onSelect }: Props) {
                                 <div className="flex items-baseline gap-1.5">
                                     <span
                                         className={cn(
-                                            'truncate text-sm',
+                                            'min-w-0 truncate text-sm',
                                             unread
                                                 ? 'font-semibold text-foreground'
                                                 : 'font-medium text-foreground/90',
@@ -68,7 +68,7 @@ export function ReplyStream({ replies, selectedId, onSelect }: Props) {
                                             atHandle(reply.author_handle)}
                                     </span>
                                     {reply.author_name ? (
-                                        <span className="truncate text-xs text-muted-foreground">
+                                        <span className="min-w-0 truncate text-xs text-muted-foreground">
                                             {atHandle(reply.author_handle)}
                                         </span>
                                     ) : null}
