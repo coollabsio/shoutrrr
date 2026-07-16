@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
+import { type EditorBodyHandle } from '@/components/compose/editor-body';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,7 +53,7 @@ import {
     thread as threadRoute,
     unlike as unlikeRoute,
 } from '@/routes/engagement';
-import type { PlatformName } from '@/types/compose';
+import type { PlatformName, WorkspaceMention } from '@/types/compose';
 
 import { QuickReplyBox } from './components/quick-reply-box';
 import { ReplyFilters } from './components/reply-filters';
@@ -78,6 +79,7 @@ type PageProps = {
     filters: EngagementFilters;
     facets: { accounts: AccountFacet[]; posts: PostFacet[] };
     engagementEnabled: Record<PlatformName, boolean>;
+    savedMentions: WorkspaceMention[];
 };
 
 function StreamSkeleton() {
@@ -201,9 +203,15 @@ function EngagementDisabledBanner({
 
 type RightPaneProps = {
     selected: ReplyItem;
+<<<<<<< HEAD
     onArchived: (id: string) => void;
     onResponded: (id: string) => void;
     replyTextareaRef?: RefObject<HTMLTextAreaElement | null>;
+=======
+    onArchived: () => void;
+    replyEditorRef?: RefObject<EditorBodyHandle | null>;
+    savedMentions: WorkspaceMention[];
+>>>>>>> origin/main
     reserveCloseButtonSpace?: boolean;
 };
 
@@ -216,8 +224,13 @@ type RightPaneProps = {
 function RightPane({
     selected,
     onArchived,
+<<<<<<< HEAD
     onResponded,
     replyTextareaRef,
+=======
+    replyEditorRef,
+    savedMentions,
+>>>>>>> origin/main
     reserveCloseButtonSpace = false,
 }: RightPaneProps) {
     const [thread, setThread] = useState<ReplyItem[]>([]);
@@ -525,7 +538,12 @@ function RightPane({
                 onDelete={remove}
             />
 
+            {/* Key by conversation so switching replies gives a fresh draft:
+                remounting clears the editor text, mentions, and in-flight media
+                (all local state, incl. useReplyMedia's) instead of carrying the
+                previous conversation's reply over. */}
             <QuickReplyBox
+                key={selected.id}
                 replyId={selected.id}
                 platform={selected.platform}
                 replyingTo={atHandle(selected.author_handle)}
@@ -536,7 +554,8 @@ function RightPane({
                         ? 'This account is disabled in the workspace. Enable it in Accounts to reply.'
                         : undefined
                 }
-                textareaRef={replyTextareaRef}
+                editorRef={replyEditorRef}
+                savedMentions={savedMentions}
                 onSend={send}
             />
         </div>
@@ -548,9 +567,11 @@ export default function EngagementIndex({
     filters,
     facets,
     engagementEnabled,
+    savedMentions,
 }: PageProps) {
     const isMobile = useIsMobile();
     const [selected, setSelected] = useState<ReplyItem | null>(null);
+<<<<<<< HEAD
     const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
     // Client-side overlay over the deferred `replies` scroll prop: archiving or
     // responding must update the left list without a visit that would refetch
@@ -561,6 +582,9 @@ export default function EngagementIndex({
     // The keyboard `A` shortcut archives without an Inertia visit, mirroring the
     // conversation pane's plain-JSON action so the deferred list never blanks.
     const archiveHttp = useHttp<Record<string, never>, null>({});
+=======
+    const replyEditorRef = useRef<EditorBodyHandle>(null);
+>>>>>>> origin/main
 
     const {
         account: filterAccount,
@@ -663,7 +687,7 @@ export default function EngagementIndex({
             return;
         }
 
-        replyTextareaRef.current?.focus();
+        replyEditorRef.current?.focus();
     }
 
     function openSelectedComment() {
@@ -787,9 +811,22 @@ export default function EngagementIndex({
                         {selected ? (
                             <RightPane
                                 selected={selected}
+<<<<<<< HEAD
                                 onArchived={handleArchived}
                                 onResponded={handleResponded}
                                 replyTextareaRef={replyTextareaRef}
+=======
+                                onArchived={() =>
+                                    selectById(
+                                        nextAfterArchive(
+                                            items.map((item) => item.id),
+                                            selected.id,
+                                        ),
+                                    )
+                                }
+                                replyEditorRef={replyEditorRef}
+                                savedMentions={savedMentions}
+>>>>>>> origin/main
                             />
                         ) : allEngagementDisabled ? (
                             <EngagementDisabledNotice />
@@ -820,9 +857,22 @@ export default function EngagementIndex({
                         {selected ? (
                             <RightPane
                                 selected={selected}
+<<<<<<< HEAD
                                 onArchived={handleArchived}
                                 onResponded={handleResponded}
                                 replyTextareaRef={replyTextareaRef}
+=======
+                                onArchived={() =>
+                                    selectById(
+                                        nextAfterArchive(
+                                            items.map((item) => item.id),
+                                            selected.id,
+                                        ),
+                                    )
+                                }
+                                replyEditorRef={replyEditorRef}
+                                savedMentions={savedMentions}
+>>>>>>> origin/main
                                 reserveCloseButtonSpace
                             />
                         ) : null}

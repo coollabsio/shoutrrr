@@ -13,6 +13,7 @@ vi.mock('./use-reply-media', () => ({
         dropHandlers: {},
         editor: null,
         fileInput: null,
+        handleAddedFiles: vi.fn(),
         isUploading: false,
         openFilePicker: vi.fn(),
     }),
@@ -46,5 +47,5 @@ it('blurs the reply field on Escape so triage shortcuts work again', () => {
     );
 
     expect(source).toContain("e.key === 'Escape'");
-    expect(source).toContain('e.currentTarget.blur()');
+    expect(source).toContain('editorRef.current?.blur()');
 });

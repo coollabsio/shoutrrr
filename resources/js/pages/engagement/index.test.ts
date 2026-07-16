@@ -56,7 +56,7 @@ it('pins the engagement desk to the viewport and keeps the reply box in-flow', (
     expect(source).toContain('h-[calc(100svh-4rem)]');
     expect(source).toContain('overflow-hidden');
     expect(source).toContain('min-h-0 min-w-0 flex-col overflow-hidden');
-    expect(source).toContain('replyTextareaRef');
+    expect(source).toContain('replyEditorRef');
 });
 
 it('wires keyboard shortcuts for triage, archive, open comment, and reply focus', () => {
@@ -67,7 +67,7 @@ it('wires keyboard shortcuts for triage, archive, open comment, and reply focus'
     expect(source).toContain("case 'open'");
     expect(source).toContain("case 'reply'");
     expect(source).toContain('openSelectedComment');
-    expect(source).toContain('replyTextareaRef.current?.focus()');
+    expect(source).toContain('replyEditorRef.current?.focus()');
     expect(source).toContain('<Kbd>A</Kbd>');
     expect(source).toContain("keys={['↑', '↓']}");
     expect(source).toContain("keys={['O']}");

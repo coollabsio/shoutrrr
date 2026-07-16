@@ -37,10 +37,18 @@ import type {
 type EditorBodyProps = {
     value: string[];
     onChange: (segments: string[]) => void;
-    onBlur: () => void;
+    onBlur?: () => void;
     placeholder?: string;
     /** When false, the post is read-only (e.g. already published/scheduled). */
     editable?: boolean;
+    /**
+     * Single-message variant (the engagement reply box): drops the thread and
+     * mention extensions and shrinks the type scale. See `composerExtensions`
+     * for why the extensions must be omitted rather than left unconfigured.
+     */
+    compact?: boolean;
+    /** Fired on ⌘/Ctrl+Enter. Omit to leave the shortcut unhandled. */
+    onSubmit?: () => void;
     /** When true, render the ring-tinted override banner above the editor. */
     overrideBanner?: boolean;
     /** Human label of the active platform for the override banner copy. */
@@ -87,6 +95,10 @@ type EditorBodyProps = {
 export type EditorBodyHandle = {
     /** Insert text (e.g. an emoji) at the current selection and refocus. */
     insertText: (text: string) => void;
+    /** Move focus into the editor with the caret at the end. */
+    focus: () => void;
+    /** Release focus from the editor. */
+    blur: () => void;
 };
 
 export function shouldFocusEditorOnMount(
@@ -106,6 +118,18 @@ export function hasPasteableMedia(files: FileList | null | undefined): boolean {
     return !!files && Array.from(files).some(isPasteableMediaFile);
 }
 
+/**
+ * ⌘/Ctrl+Enter — the send shortcut. Plain Enter is deliberately excluded: it
+ * inserts a newline, and the emoji typeahead claims it while its popover is open.
+ */
+export function isSubmitShortcut(event: {
+    key: string;
+    metaKey: boolean;
+    ctrlKey: boolean;
+}): boolean {
+    return (event.metaKey || event.ctrlKey) && event.key === 'Enter';
+}
+
 function EditorBodyInner(
     {
         value,
@@ -113,6 +137,8 @@ function EditorBodyInner(
         onBlur,
         placeholder,
         autoFocus = false,
+        compact = false,
+        onSubmit,
         onPasteFiles,
         overrideBanner = false,
         activePlatformLabel,
@@ -153,10 +179,15 @@ function EditorBodyInner(
     // a ref so handlePaste always enforces the latest one-video / no-mixing rule.
     const onPasteFilesRef = useRef(onPasteFiles);
     onPasteFilesRef.current = onPasteFiles;
+    // Same reason as onPasteFilesRef: onSubmit reads the caller's current send
+    // state (text, uploads in flight), so it must not be frozen into editorProps.
+    const onSubmitRef = useRef(onSubmit);
+    onSubmitRef.current = onSubmit;
     const editor = useEditor({
         extensions: composerExtensions({
             placeholder,
             emojiOpenRef,
+            compact,
         }),
         content: segmentsToDoc(value) as object,
         editable,
@@ -168,6 +199,15 @@ function EditorBodyInner(
                 }
                 event.preventDefault();
                 onPasteFilesRef.current(files as FileList);
+
+                return true;
+            },
+            handleKeyDown: (_view, event) => {
+                if (!onSubmitRef.current || !isSubmitShortcut(event)) {
+                    return false;
+                }
+                event.preventDefault();
+                onSubmitRef.current();
 
                 return true;
             },
@@ -191,6 +231,12 @@ function EditorBodyInner(
         () => ({
             insertText: (text: string) => {
                 editor?.chain().focus().insertContent(text).run();
+            },
+            focus: () => {
+                editor?.commands.focus('end');
+            },
+            blur: () => {
+                editor?.commands.blur();
             },
         }),
         [editor],
@@ -502,10 +548,26 @@ function EditorBodyInner(
                 activeIndex={emoji.activeIndex}
                 onSelect={emoji.select}
             />
-            <div className="px-4 pt-[22px] pb-[18px] sm:px-[26px]">
+            <div
+                className={cn(
+                    compact
+                        ? 'px-3 py-2'
+                        : 'px-4 pt-[22px] pb-[18px] sm:px-[26px]',
+                )}
+            >
                 <EditorContent
                     editor={editor}
-                    className="max-w-none text-[16px] leading-5 tracking-[-0.005em] text-foreground focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:m-0 [&_.ProseMirror_p+p]:mt-0.5!"
+                    className={cn(
+                        'max-w-none leading-5 tracking-[-0.005em] text-foreground focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:m-0 [&_.ProseMirror_p+p]:mt-0.5!',
+                        compact
+                            ? // Replaces the old textarea's rows={3}: roughly three
+                              // lines tall, then scrolls instead of growing the pane.
+                              // The min-height sits on .ProseMirror, not this wrapper,
+                              // so the whole box is clickable-to-focus the way the
+                              // textarea it replaced was.
+                              'max-h-32 overflow-y-auto text-[14px] [&_.ProseMirror]:min-h-[3.75rem]'
+                            : 'text-[16px]',
+                    )}
                 />
             </div>
         </div>
