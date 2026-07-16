@@ -73,3 +73,12 @@ test('account metrics follow their platform interval', function () {
     expect($this->cadence->accountDue($x, $this->now))->toBeFalse();
     expect($this->cadence->accountDue($bluesky, $this->now))->toBeTrue();
 });
+
+test('discord accounts are never due for account metrics', function () {
+    $discord = ConnectedAccount::factory()->make([
+        'platform' => Platform::Discord,
+        'metrics_captured_at' => null,
+    ]);
+
+    expect($this->cadence->accountDue($discord, $this->now))->toBeFalse();
+});

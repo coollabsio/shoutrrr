@@ -1,7 +1,11 @@
 import { Head, Link } from '@inertiajs/react';
 import { PauseCircle, TrendingUp } from 'lucide-react';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState } from 'react';
 
+import {
+    accountChartColor,
+    nextHiddenAccountIds,
+} from '@/components/analytics/follower-chart-utils';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import {
     Empty,
@@ -176,6 +180,14 @@ export default function AnalyticsIndex({
     polling,
     rangeDays,
 }: AnalyticsPageProps) {
+    const [hiddenAccountIds, setHiddenAccountIds] = useState<Set<string>>(
+        () => new Set(),
+    );
+
+    function toggleAccountOnGraph(accountId: string) {
+        setHiddenAccountIds((prev) => nextHiddenAccountIds(prev, accountId));
+    }
+
     const hasSeries = accounts.some((a) => a.series.length > 0);
     const disabledAccountMetricPlatforms = disabledPlatformLabels(
         polling.account_metrics_enabled,
@@ -318,45 +330,78 @@ export default function AnalyticsIndex({
                                 <FollowerChart
                                     accounts={accounts}
                                     posts={posts}
+                                    hiddenAccountIds={hiddenAccountIds}
+                                    onToggleAccount={toggleAccountOnGraph}
                                 />
                             </Suspense>
                         </>
                     )}
                 </div>
 
-                {/* Account follower counts */}
+                {/* Account follower counts — click to show/hide on the graph */}
                 {accounts.length > 0 && (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                        {accounts.map((account) => (
-                            <div
-                                key={account.id}
-                                className="overflow-hidden rounded-xl border border-border bg-card px-4 py-3 shadow-sm ring-1 ring-foreground/5 dark:ring-foreground/10"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
-                                        <PlatformGlyph
-                                            platform={account.platform}
-                                            size={11}
-                                        />
-                                    </span>
-                                    <p className="truncate text-[11px] text-muted-foreground">
-                                        {account.display_name ?? account.handle}
+                        {accounts.map((account, index) => {
+                            const hidden = hiddenAccountIds.has(account.id);
+                            const label =
+                                account.display_name ?? account.handle;
+                            const color = accountChartColor(index);
+
+                            return (
+                                <button
+                                    key={account.id}
+                                    type="button"
+                                    onClick={() =>
+                                        toggleAccountOnGraph(account.id)
+                                    }
+                                    aria-pressed={!hidden}
+                                    aria-label={
+                                        hidden
+                                            ? `Show ${label} on graph`
+                                            : `Hide ${label} from graph`
+                                    }
+                                    className={cn(
+                                        'overflow-hidden rounded-xl border bg-card px-4 py-3 text-left shadow-sm ring-1 ring-foreground/5 transition-all dark:ring-foreground/10',
+                                        hidden
+                                            ? 'border-border opacity-45 hover:opacity-75'
+                                            : 'border-border hover:border-border/80',
+                                    )}
+                                    style={
+                                        hidden
+                                            ? undefined
+                                            : {
+                                                  boxShadow: `inset 3px 0 0 0 ${color}`,
+                                              }
+                                    }
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+                                            <PlatformGlyph
+                                                platform={account.platform}
+                                                size={11}
+                                            />
+                                        </span>
+                                        <p className="truncate text-[11px] text-muted-foreground">
+                                            {label}
+                                        </p>
+                                    </div>
+                                    <p className="mt-2 text-[22px] leading-tight font-semibold tracking-tight tabular-nums">
+                                        {account.latest_followers !== null
+                                            ? account.latest_followers.toLocaleString()
+                                            : '—'}
                                     </p>
-                                </div>
-                                <p className="mt-2 text-[22px] leading-tight font-semibold tracking-tight tabular-nums">
-                                    {account.latest_followers !== null
-                                        ? account.latest_followers.toLocaleString()
-                                        : '—'}
-                                </p>
-                                <p className="text-[11px] text-muted-foreground">
-                                    {polling.account_metrics_enabled[
-                                        account.platform
-                                    ]
-                                        ? 'followers'
-                                        : 'account metrics temporarily disabled'}
-                                </p>
-                            </div>
-                        ))}
+                                    <p className="text-[11px] text-muted-foreground">
+                                        {polling.account_metrics_enabled[
+                                            account.platform
+                                        ]
+                                            ? hidden
+                                                ? 'hidden from graph'
+                                                : 'followers'
+                                            : 'account metrics temporarily disabled'}
+                                    </p>
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
 

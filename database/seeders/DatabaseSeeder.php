@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             $this->call([
                 DefaultUserSeeder::class,
                 DummyEngagementSeeder::class,
+                DummyAnalyticsSeeder::class,
             ]);
         }
     }

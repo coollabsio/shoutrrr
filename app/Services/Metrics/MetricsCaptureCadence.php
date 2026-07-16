@@ -62,6 +62,12 @@ class MetricsCaptureCadence
 
     public function accountDue(ConnectedAccount $account, CarbonImmutable $now): bool
     {
+        // Discord (and any other platform without account metrics) must never be
+        // scheduled for follower capture.
+        if (! $account->platform->supportsAccountMetrics()) {
+            return false;
+        }
+
         if (! app(InstanceSettings::class)->accountMetricsPollingEnabled($account->platform)) {
             return false;
         }

@@ -112,7 +112,7 @@ class DummyEngagementSeeder extends Seeder
             ?? Workspace::query()->first();
 
         if ($workspace === null) {
-            $this->command?->warn('No workspace found — run DefaultUserSeeder first.');
+            $this->command->warn('No workspace found — run DefaultUserSeeder first.');
 
             return;
         }
@@ -133,7 +133,7 @@ class DummyEngagementSeeder extends Seeder
             $createdConversations++;
         }
 
-        $this->command?->info(
+        $this->command->info(
             "Seeded {$createdConversations} engagement conversations ({$createdRows} reply rows) into '{$workspace->name}'.",
         );
     }
@@ -307,9 +307,9 @@ class DummyEngagementSeeder extends Seeder
                 'remote_cid' => $platform === Platform::Bluesky ? 'cid-'.Str::lower(Str::random(10)) : null,
                 'parent_remote_id' => $conversationId,
                 'conversation_remote_id' => $conversationId,
-                'author_handle' => $target->account?->handle ?? '@you',
-                'author_name' => $target->account?->display_name ?? 'You',
-                'author_avatar_url' => $target->account?->avatar_url,
+                'author_handle' => $target->account->handle ?? '@you',
+                'author_name' => $target->account->display_name ?? 'You',
+                'author_avatar_url' => $target->account->avatar_url,
                 'text' => match ($index % 3) {
                     0 => 'Thanks for the feedback — this is on the roadmap!',
                     1 => 'Great question. Docs update coming this week.',

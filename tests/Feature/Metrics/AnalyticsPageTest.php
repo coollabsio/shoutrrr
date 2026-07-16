@@ -119,6 +119,27 @@ test('comparison collapses to single ranked list when fewer than 10 eligible pos
             ->where('comparison.top.2.engagement', 10));
 });
 
+test('discord accounts are excluded from follower analytics', function (): void {
+    $x = ConnectedAccount::factory()->for($this->workspace)->create([
+        'platform' => Platform::X,
+    ]);
+    ConnectedAccount::factory()->for($this->workspace)->discord()->create();
+
+    AccountMetric::factory()->create([
+        'connected_account_id' => $x->id,
+        'captured_at' => Date::now(),
+        'followers' => 42,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('analytics.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('accounts', 1)
+            ->where('accounts.0.id', $x->id)
+            ->where('accounts.0.platform', Platform::X->value));
+});
+
 test('the follower series is downsampled to one point per day', function (): void {
     $account = ConnectedAccount::factory()->for($this->workspace)->create();
 
