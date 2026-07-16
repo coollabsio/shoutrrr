@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { instanceSettingsLabel, workspaceSettingsLabel } from '../app-sidebar';
 
 describe('workspaceSettingsLabel', () => {
-    it('identifies the sidebar destination as settings under workspace', () => {
-        expect(workspaceSettingsLabel).toBe('Settings');
+    it('labels workspace settings as Workspace', () => {
+        expect(workspaceSettingsLabel).toBe('Workspace');
     });
 
     it('identifies the owner-only instance settings destination', () => {
@@ -16,7 +16,7 @@ describe('workspaceSettingsLabel', () => {
 });
 
 describe('settings sidebar active states', () => {
-    it('keeps instance settings active on child pages via the shared nav builder', () => {
+    it('marks each settings destination active directly', () => {
         const source = readFileSync(
             resolve(
                 process.cwd(),
@@ -26,21 +26,10 @@ describe('settings sidebar active states', () => {
         );
 
         expect(source).toContain('instanceSettingsNavItems(');
-        expect(source).toContain('instanceActive');
+        expect(source).toContain('isActive={isItemActive(item)}');
         expect(source).toContain("item.key === 'general'");
-    });
-
-    it('highlights only the active child while nested settings are expanded', () => {
-        const source = readFileSync(
-            resolve(
-                process.cwd(),
-                'resources/js/components/layout/app-sidebar.tsx',
-            ),
-            'utf8',
-        );
-
-        expect(source).toContain('isActive={collapsed && active}');
-        expect(source).not.toContain('isActive={active}');
+        expect(source).not.toContain('settingsActive');
+        expect(source).not.toContain('instanceActive');
     });
 });
 
@@ -137,7 +126,7 @@ describe('version badge update tooltip', () => {
     });
 });
 
-describe('hoisted workspace settings nav', () => {
+describe('settings navbar items', () => {
     const source = readFileSync(
         resolve(
             process.cwd(),
@@ -146,26 +135,23 @@ describe('hoisted workspace settings nav', () => {
         'utf8',
     );
 
-    it('renders workspace settings as a collapsible under the Workspace group', () => {
+    it('renders every workspace settings item directly in the navbar', () => {
         expect(source).toContain('workspaceSettingsNavItems(');
-        expect(source).toContain('<Collapsible');
-        expect(source).toContain('<SidebarMenuSub>');
-        expect(source).toContain('SidebarGroupLabel>Workspace');
+        expect(source).toContain('workspaceSettingsIcons');
         expect(source).toContain('workspaceSettingsLabel');
-        expect(source).not.toContain('workspaceSettingsIcons');
+        expect(source).toContain('settingsItems.map((item)');
     });
 
-    it('renders instance settings as a collapsible under the Workspace group', () => {
+    it('renders every instance settings item directly in the navbar', () => {
         expect(source).toContain('instanceSettingsNavItems(');
+        expect(source).toContain('instanceSettingsIcons');
         expect(source).toContain('instanceSettingsLabel');
-        expect(source).toContain('instanceOpen');
-        expect(source).toContain('setInstanceOpen');
+        expect(source).toContain('instanceItems.map((item)');
     });
 
-    it('opens nested settings as flyout dropdowns when the sidebar is collapsed', () => {
-        expect(source).toContain('function NestedSidebarNav');
-        expect(source).toContain('<DropdownMenu>');
-        expect(source).toContain('side="right"');
-        expect(source).toContain('collapsed={collapsed}');
+    it('does not hide settings items behind collapsibles or dropdowns', () => {
+        expect(source).not.toContain('NestedSidebarNav');
+        expect(source).not.toContain('<Collapsible');
+        expect(source).not.toContain('<DropdownMenu>');
     });
 });

@@ -1,35 +1,28 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import {
+    Blocks,
     CalendarDays,
     ChartColumn,
-    ChevronDown,
+    CreditCard,
     Inbox,
+    KeyRound,
     ListChecks,
     MessageCircle,
     Pencil,
+    RefreshCw,
     Settings,
     Share2,
+    Shield,
+    Users,
     Wrench,
     type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import AppLogo from '@/components/layout/app-logo';
 import { NavUser } from '@/components/layout/nav-user';
 import { SidebarFooterCard } from '@/components/layout/sidebar-footer-card';
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Kbd } from '@/components/ui/kbd';
 import {
     Sidebar,
@@ -42,9 +35,6 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
-    SidebarMenuSub,
-    SidebarMenuSubButton,
-    SidebarMenuSubItem,
     useSidebar,
 } from '@/components/ui/sidebar';
 import {
@@ -60,13 +50,12 @@ import {
 } from '@/lib/navigation/compose-nav';
 import {
     instanceSettingsNavItems,
-    type InstanceSettingsNavItem,
+    type InstanceSettingsNavKey,
 } from '@/lib/navigation/instance-settings-nav';
 import {
     workspaceSettingsNavItems,
-    type WorkspaceSettingsNavItem,
+    type WorkspaceSettingsNavKey,
 } from '@/lib/navigation/workspace-settings-nav';
-import { cn } from '@/lib/utils';
 import { appVersion, githubReleaseUrl } from '@/lib/version';
 import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
@@ -81,113 +70,23 @@ type NavItem = {
     icon: LucideIcon;
 };
 
-type NestedNavItem = WorkspaceSettingsNavItem | InstanceSettingsNavItem;
-
-export const workspaceSettingsLabel = 'Settings';
+export const workspaceSettingsLabel = 'Workspace';
 export const instanceSettingsLabel = 'Instance settings';
 
-function NestedSidebarNav({
-    label,
-    icon: Icon,
-    items,
-    active,
-    open,
-    onOpenChange,
-    collapsed,
-    isItemActive,
-}: {
-    label: string;
-    icon: LucideIcon;
-    items: NestedNavItem[];
-    active: boolean;
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    collapsed: boolean;
-    isItemActive: (item: NestedNavItem) => boolean;
-}) {
-    if (collapsed) {
-        return (
-            <SidebarMenuItem>
-                <DropdownMenu>
-                    <DropdownMenuTrigger
-                        render={
-                            <SidebarMenuButton
-                                tooltip={label}
-                                isActive={collapsed && active}
-                                className="data-[popup-open]:bg-sidebar-accent"
-                            />
-                        }
-                    >
-                        <Icon aria-hidden="true" />
-                        <span>{label}</span>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                        side="right"
-                        align="start"
-                        sideOffset={4}
-                        className="min-w-44 rounded-lg"
-                    >
-                        <DropdownMenuLabel>{label}</DropdownMenuLabel>
-                        {items.map((item) => (
-                            <DropdownMenuItem
-                                key={item.key}
-                                render={
-                                    <Link
-                                        href={item.href}
-                                        className="cursor-pointer"
-                                    />
-                                }
-                                className={cn(
-                                    isItemActive(item) &&
-                                        'bg-accent font-medium',
-                                )}
-                            >
-                                {item.title}
-                            </DropdownMenuItem>
-                        ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </SidebarMenuItem>
-        );
-    }
+const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, LucideIcon> = {
+    overview: Settings,
+    members: Users,
+    apiKeys: KeyRound,
+    subscription: CreditCard,
+};
 
-    return (
-        <Collapsible
-            open={open}
-            onOpenChange={onOpenChange}
-            className="group/collapsible"
-        >
-            <SidebarMenuItem>
-                <CollapsibleTrigger
-                    render={
-                        <SidebarMenuButton className="[&[data-panel-open]>svg:last-child]:rotate-180" />
-                    }
-                >
-                    <Icon aria-hidden="true" />
-                    <span>{label}</span>
-                    <ChevronDown
-                        aria-hidden="true"
-                        className="ml-auto transition-transform"
-                    />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                    <SidebarMenuSub>
-                        {items.map((item) => (
-                            <SidebarMenuSubItem key={item.key}>
-                                <SidebarMenuSubButton
-                                    isActive={isItemActive(item)}
-                                    render={<Link href={item.href} />}
-                                >
-                                    <span>{item.title}</span>
-                                </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                        ))}
-                    </SidebarMenuSub>
-                </CollapsibleContent>
-            </SidebarMenuItem>
-        </Collapsible>
-    );
-}
+const instanceSettingsIcons: Record<InstanceSettingsNavKey, LucideIcon> = {
+    general: Wrench,
+    polling: RefreshCw,
+    platforms: Blocks,
+    usage: ChartColumn,
+    admins: Shield,
+};
 
 const versionBadgeClassName =
     'rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none font-medium text-sidebar-foreground/60 transition-colors hover:border-sidebar-accent-foreground/30 hover:text-sidebar-foreground';
@@ -242,30 +141,12 @@ export function AppSidebar() {
     const instanceItems = showInstanceSettings
         ? instanceSettingsNavItems()
         : [];
-    const settingsActive = settingsItems.some((item) =>
-        item.key === 'overview'
+    const isItemActive = (
+        item: (typeof settingsItems)[number] | (typeof instanceItems)[number],
+    ) =>
+        item.key === 'overview' || item.key === 'general'
             ? isCurrentUrl(item.href)
-            : isCurrentOrParentUrl(item.href),
-    );
-    const instanceActive = instanceItems.some((item) =>
-        item.key === 'general'
-            ? isCurrentUrl(item.href)
-            : isCurrentOrParentUrl(item.href),
-    );
-    const [settingsOpen, setSettingsOpen] = useState(settingsActive);
-    const [instanceOpen, setInstanceOpen] = useState(instanceActive);
-
-    useEffect(() => {
-        if (settingsActive) {
-            setSettingsOpen(true);
-        }
-    }, [settingsActive]);
-
-    useEffect(() => {
-        if (instanceActive) {
-            setInstanceOpen(true);
-        }
-    }, [instanceActive]);
+            : isCurrentOrParentUrl(item.href);
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -409,41 +290,61 @@ export function AppSidebar() {
 
                 {showWorkspaceSettings && (
                     <SidebarGroup>
-                        <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+                        <SidebarGroupLabel>
+                            {workspaceSettingsLabel}
+                        </SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
-                                <NestedSidebarNav
-                                    label={workspaceSettingsLabel}
-                                    icon={Settings}
-                                    items={settingsItems}
-                                    active={settingsActive}
-                                    open={settingsOpen}
-                                    onOpenChange={setSettingsOpen}
-                                    collapsed={collapsed}
-                                    isItemActive={(item) =>
-                                        item.key === 'overview'
-                                            ? isCurrentUrl(item.href)
-                                            : isCurrentOrParentUrl(item.href)
-                                    }
-                                />
-                                {showInstanceSettings && (
-                                    <NestedSidebarNav
-                                        label={instanceSettingsLabel}
-                                        icon={Wrench}
-                                        items={instanceItems}
-                                        active={instanceActive}
-                                        open={instanceOpen}
-                                        onOpenChange={setInstanceOpen}
-                                        collapsed={collapsed}
-                                        isItemActive={(item) =>
-                                            item.key === 'general'
-                                                ? isCurrentUrl(item.href)
-                                                : isCurrentOrParentUrl(
-                                                      item.href,
-                                                  )
-                                        }
-                                    />
-                                )}
+                                {settingsItems.map((item) => {
+                                    const Icon =
+                                        workspaceSettingsIcons[item.key];
+
+                                    return (
+                                        <SidebarMenuItem key={item.key}>
+                                            <SidebarMenuButton
+                                                tooltip={item.title}
+                                                isActive={isItemActive(item)}
+                                                render={
+                                                    <Link href={item.href} />
+                                                }
+                                            >
+                                                <Icon aria-hidden="true" />
+                                                <span>{item.title}</span>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    );
+                                })}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                )}
+
+                {showInstanceSettings && (
+                    <SidebarGroup>
+                        <SidebarGroupLabel>
+                            {instanceSettingsLabel}
+                        </SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {instanceItems.map((item) => {
+                                    const Icon =
+                                        instanceSettingsIcons[item.key];
+
+                                    return (
+                                        <SidebarMenuItem key={item.key}>
+                                            <SidebarMenuButton
+                                                tooltip={item.title}
+                                                isActive={isItemActive(item)}
+                                                render={
+                                                    <Link href={item.href} />
+                                                }
+                                            >
+                                                <Icon aria-hidden="true" />
+                                                <span>{item.title}</span>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    );
+                                })}
                             </SidebarMenu>
                         </SidebarGroupContent>
                     </SidebarGroup>
