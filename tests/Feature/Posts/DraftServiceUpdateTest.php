@@ -329,3 +329,32 @@ test('updateDraft drops an unresolvable LinkedIn org reference and keeps plain t
     expect($updated->mentions[0]['handles'])->not->toHaveKey('linkedin_urn')
         ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)->toBe(['Hi Coolify']);
 });
+
+test('updateDraft routes an org reference typed into the LinkedIn name field to the URN key', function () {
+    [$user, $workspace] = draftSetup(0);
+    $linkedin = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+    ]);
+
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['Hi @Coolify']);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'Hi @Coolify',
+        'mentions' => [[
+            'id' => 'coolifyio',
+            'label' => '@Coolify',
+            // A URN pasted into the display field is an org reference, not a name.
+            'handles' => ['linkedin' => 'urn:li:organization:12345'],
+        ]],
+        'destination' => ['kind' => 'accounts', 'ids' => [$linkedin->id]],
+        'targets' => [['connected_account_id' => $linkedin->id, 'auto_split' => true]],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->mentions[0]['handles'])->not->toHaveKey('linkedin')
+        ->and($updated->mentions[0]['handles']['linkedin_urn'])->toBe('urn:li:organization:12345')
+        // Display falls back to the label since the field held a reference, not a name.
+        ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)
+        ->toBe(['Hi @[Coolify](urn:li:organization:12345)']);
+});

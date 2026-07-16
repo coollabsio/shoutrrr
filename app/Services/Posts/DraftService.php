@@ -282,6 +282,17 @@ class DraftService
                 }
 
                 if ($platform === Platform::LinkedIn->value) {
+                    // A URN/company URL typed into the display field is an org
+                    // reference, not a name — route it to the urn key instead.
+                    if (LinkedInOrg::looksLikeReference($handle)) {
+                        $urn = LinkedInOrg::normalizeUrn($handle);
+                        if ($urn !== null) {
+                            $handles[self::LINKEDIN_URN_KEY] = $urn;
+                        }
+
+                        continue;
+                    }
+
                     // '@'-only handles collapse to empty; drop so the label is used instead.
                     $handle = ltrim($handle, '@');
                     if ($handle === '') {

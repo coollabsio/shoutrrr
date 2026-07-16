@@ -76,4 +76,22 @@ final class LinkedInOrg
     {
         return preg_match('/^urn:li:organization:\d+$/', trim($value)) === 1;
     }
+
+    /**
+     * Whether a value is an explicit LinkedIn org reference (a `urn:li:...`
+     * string or a company page URL) rather than a plain display name.
+     *
+     * A bare number is deliberately excluded — it is far more likely to be
+     * display text than an org id when typed into the LinkedIn name field.
+     */
+    public static function looksLikeReference(string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+
+        return preg_match('/^urn:li:organization:\d+$/', $value) === 1
+            || preg_match('~linkedin\.com/company/~i', $value) === 1;
+    }
 }

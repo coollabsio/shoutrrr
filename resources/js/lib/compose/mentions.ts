@@ -103,6 +103,94 @@ export function updateMentionLinkedInUrn(
     return { ...mention, handles };
 }
 
+/**
+ * Coerce a user-supplied LinkedIn reference into a canonical org URN, or null
+ * when it cannot be resolved to a numeric organization id without an API lookup.
+ * Mirrors {@link \App\Support\LinkedInOrg::normalizeUrn} exactly.
+ *
+ * Accepts `urn:li:organization:<digits>`, a bare `<digits>`, or a
+ * `linkedin.com/company/<digits>` URL. A vanity slug returns null.
+ */
+export function normalizeLinkedInUrn(reference: string): string | null {
+    const trimmed = reference.trim();
+    if (trimmed === '') {
+        return null;
+    }
+
+    const urnMatch = trimmed.match(/^urn:li:organization:(\d+)$/);
+    if (urnMatch) {
+        return `urn:li:organization:${urnMatch[1]}`;
+    }
+
+    if (/^\d+$/.test(trimmed)) {
+        return `urn:li:organization:${trimmed}`;
+    }
+
+    const urlMatch = trimmed.match(/linkedin\.com\/company\/(\d+)/i);
+    if (urlMatch) {
+        return `urn:li:organization:${urlMatch[1]}`;
+    }
+
+    return null;
+}
+
+const LINKEDIN_URN_TOKEN = /urn:li:organization:\d+/;
+const LINKEDIN_COMPANY_TOKEN = /\S*linkedin\.com\/company\/([^\s/?#]+)\S*/i;
+
+/**
+ * Pull an explicit LinkedIn org reference out of free text typed into the
+ * display-name field. Only a `urn:li:organization:<digits>` token or a
+ * `linkedin.com/company/<slug>` URL counts — a bare number is treated as
+ * display text (mirrors {@link \App\Support\LinkedInOrg::looksLikeReference}).
+ *
+ * Returns the canonical `urn` (numeric company URL / urn), a `vanity` slug when
+ * the company URL has no numeric id, and `rest` = the value with the matched
+ * token stripped out and whitespace tidied.
+ */
+export function extractLinkedInOrgRef(value: string): {
+    urn: string | null;
+    vanity: string | null;
+    rest: string;
+} {
+    const urnMatch = value.match(LINKEDIN_URN_TOKEN);
+    if (urnMatch) {
+        return {
+            urn: normalizeLinkedInUrn(urnMatch[0]),
+            vanity: null,
+            rest: stripLinkedInToken(value, urnMatch.index ?? 0, urnMatch[0]),
+        };
+    }
+
+    const companyMatch = value.match(LINKEDIN_COMPANY_TOKEN);
+    if (companyMatch) {
+        const slug = companyMatch[1];
+        const rest = stripLinkedInToken(
+            value,
+            companyMatch.index ?? 0,
+            companyMatch[0],
+        );
+
+        if (/^\d+$/.test(slug)) {
+            return { urn: `urn:li:organization:${slug}`, vanity: null, rest };
+        }
+
+        return { urn: null, vanity: slug, rest };
+    }
+
+    return { urn: null, vanity: null, rest: value };
+}
+
+/** Remove a matched org-reference token and collapse the whitespace seam. */
+function stripLinkedInToken(
+    value: string,
+    index: number,
+    token: string,
+): string {
+    return `${value.slice(0, index)}${value.slice(index + token.length)}`
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
 export function usesPlatformMention(
     mention: MentionPlaceholder,
     platform: PlatformName,
