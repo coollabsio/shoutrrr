@@ -7,7 +7,9 @@ import {
 } from '@/lib/compose/precheck';
 import type { Account, MediaView, PlatformLimits } from '@/types/compose';
 
-function limitsFor(over: Partial<PlatformLimits> & { platform: PlatformLimits['platform'] }): PlatformLimits {
+function limitsFor(
+    over: Partial<PlatformLimits> & { platform: PlatformLimits['platform'] },
+): PlatformLimits {
     return {
         maxLength: 300,
         maxBytes: null,
@@ -23,7 +25,9 @@ function limitsFor(over: Partial<PlatformLimits> & { platform: PlatformLimits['p
     };
 }
 
-function accountFor(over: Partial<Account> & { platform: Account['platform'] }): Account {
+function accountFor(
+    over: Partial<Account> & { platform: Account['platform'] },
+): Account {
     return {
         id: 'acc-1',
         handle: '@user',
@@ -45,7 +49,11 @@ describe('precheckAccount', () => {
             autoSplit: false,
             mentions: [],
             mediaCount: 0,
-            limits: limitsFor({ platform: 'bluesky', maxLength: 300, maxBytes: 3000 }),
+            limits: limitsFor({
+                platform: 'bluesky',
+                maxLength: 300,
+                maxBytes: 3000,
+            }),
         });
         expect(reasons).toContain('section_too_long');
     });
@@ -69,7 +77,11 @@ describe('precheckAccount', () => {
             autoSplit: true,
             mentions: [],
             mediaCount: 0,
-            limits: limitsFor({ platform: 'linkedin', maxLength: 3000, threadMax: 1 }),
+            limits: limitsFor({
+                platform: 'linkedin',
+                maxLength: 3000,
+                threadMax: 1,
+            }),
         });
         expect(reasons).toContain('section_too_long');
     });
@@ -124,14 +136,22 @@ describe('precheckDestinations', () => {
 
 describe('describeReason', () => {
     it('describes an over-length non-capped platform with the auto-split hint', () => {
-        const text = describeReason('section_too_long', 'bluesky', limitsFor({ platform: 'bluesky', maxLength: 300 }));
+        const text = describeReason(
+            'section_too_long',
+            'bluesky',
+            limitsFor({ platform: 'bluesky', maxLength: 300 }),
+        );
         expect(text).toContain('Bluesky');
         expect(text).toContain('300');
         expect(text).toContain('auto-split');
     });
 
     it('describes too many media', () => {
-        const text = describeReason('too_many_media', 'x', limitsFor({ platform: 'x', maxMedia: 4 }));
+        const text = describeReason(
+            'too_many_media',
+            'x',
+            limitsFor({ platform: 'x', maxMedia: 4 }),
+        );
         expect(text).toContain('4 media');
     });
 });

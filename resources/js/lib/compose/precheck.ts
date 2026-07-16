@@ -58,20 +58,22 @@ export function precheckAccount({
         .filter((segment) => segment !== '');
 
     const capped = limits.threadMax !== null;
-    const sections = capped
-        ? [clean.join('\n')]
-        : autoSplit
-          ? []
-          : clean;
+    const sections = capped ? [clean.join('\n')] : autoSplit ? [] : clean;
 
     const limit = account.max_text_length || limits.maxLength;
     const overLength = sections.some((section) => {
-        const resolved = replaceMentionTokens(section, mentions, account.platform);
+        const resolved = replaceMentionTokens(
+            section,
+            mentions,
+            account.platform,
+        );
         if (limit > 0 && measure(resolved, account.platform) > limit) {
             return true;
         }
 
-        return limits.maxBytes !== null && byteLength(resolved) > limits.maxBytes;
+        return (
+            limits.maxBytes !== null && byteLength(resolved) > limits.maxBytes
+        );
     });
     if (overLength) {
         reasons.push('section_too_long');
