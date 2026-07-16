@@ -572,17 +572,14 @@ export default function EngagementIndex({
     } = filters;
 
     // Filter changes refetch replies with reset:['replies']; stale overrides
-    // would wrongly hide rows in, say, the archived view.
-    useEffect(() => {
+    // would wrongly hide rows in, say, the archived view. Reset during render
+    // (not an effect) so no wasted commit fires with the old overrides applied.
+    const filterKey = `${filterAccount}|${filterPlatform}|${filterTarget}|${filterPost}|${filterUnread}|${filterArchived}`;
+    const prevFilterKey = useRef(filterKey);
+    if (prevFilterKey.current !== filterKey) {
+        prevFilterKey.current = filterKey;
         setOverrides({});
-    }, [
-        filterAccount,
-        filterPlatform,
-        filterTarget,
-        filterPost,
-        filterUnread,
-        filterArchived,
-    ]);
+    }
 
     const items = (replies?.data ?? [])
         .filter((r) => overrides[r.id] !== 'archived')
