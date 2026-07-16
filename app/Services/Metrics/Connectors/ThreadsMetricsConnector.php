@@ -36,6 +36,8 @@ class ThreadsMetricsConnector implements MetricsConnector
 
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->get(self::BASE_URL.'/'.$mediaId.'/insights', [
                     'metric' => 'views,likes,replies,reposts,quotes,shares',
@@ -80,6 +82,8 @@ class ThreadsMetricsConnector implements MetricsConnector
     {
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->get(self::BASE_URL.'/'.$account->remote_account_id.'/threads_insights', [
                     'metric' => 'followers_count',

@@ -34,6 +34,8 @@ class XMetricsConnector implements MetricsConnector
 
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->withToken((string) ($credentials['access_token'] ?? ''))
                 ->acceptJson()
                 ->get(self::BASE.'/tweets', [
@@ -79,6 +81,8 @@ class XMetricsConnector implements MetricsConnector
     {
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->withToken((string) ($credentials['access_token'] ?? ''))
                 ->acceptJson()
                 ->get(self::BASE.'/users/'.$account->remote_account_id, ['user.fields' => 'public_metrics']);
