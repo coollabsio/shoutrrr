@@ -248,7 +248,10 @@ export function useReplyMedia({
         }
 
         const videos = all.filter((f) => f.type.startsWith('video/'));
-        const images = all.filter((f) => !f.type.startsWith('video/'));
+        // The paste path supplies raw clipboard batches, so filter to real images
+        // rather than "anything non-video" — otherwise a pasted PDF is queued into
+        // the crop/beautify editor as if it were an image.
+        const images = all.filter((f) => f.type.startsWith('image/'));
 
         if (wouldMixVideoAndImages(media, all)) {
             toast.error('A reply can contain one video or images, not both.');
