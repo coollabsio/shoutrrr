@@ -11,7 +11,7 @@ use Carbon\CarbonImmutable;
 
 class MetricsCaptureCadence
 {
-    /** Sampling interval (seconds) for a post of the given age, or null once polling stops. */
+    /** Age-banded sampling interval (seconds), clamped to the platform floor, or null once polling stops. */
     public function postIntervalSeconds(PostTarget $target, CarbonImmutable $now): ?int
     {
         if (! app(InstanceSettings::class)->postMetricsPollingEnabled($target->platform)) {
@@ -24,17 +24,33 @@ class MetricsCaptureCadence
 
         $postedAt = $target->posted_at;
         $ageHours = $postedAt->diffInHours($now);
+        $floor = app(InstanceSettings::class)->postMetricsPollIntervalMinutes($target->platform);
 
-        /** @var list<array{max_age_hours: int}> $bands */
+        /** @var list<array{max_age_hours: int, interval_minutes: int}> $bands */
         $bands = config('metrics.post_refresh');
 
         foreach ($bands as $band) {
             if ($ageHours < $band['max_age_hours']) {
-                return app(InstanceSettings::class)->postMetricsPollIntervalMinutes($target->platform) * 60;
+                return max($band['interval_minutes'], $floor) * 60;
             }
         }
 
         return null;
+    }
+
+    /** Base band interval widened by the consecutive-unchanged streak, capped. Null once polling stops. */
+    public function effectiveIntervalSeconds(PostTarget $target, CarbonImmutable $now): ?int
+    {
+        $base = $this->postIntervalSeconds($target, $now);
+
+        if ($base === null) {
+            return null;
+        }
+
+        $cap = (int) config('metrics.max_unchanged_backoff', 8);
+        $multiplier = min(2 ** max(0, $target->metrics_unchanged_streak), $cap);
+
+        return $base * $multiplier;
     }
 
     public function postTargetDue(PostTarget $target, CarbonImmutable $now): bool
@@ -47,7 +63,7 @@ class MetricsCaptureCadence
             return false;
         }
 
-        $interval = $this->postIntervalSeconds($target, $now);
+        $interval = $this->effectiveIntervalSeconds($target, $now);
 
         if ($interval === null) {
             return false;

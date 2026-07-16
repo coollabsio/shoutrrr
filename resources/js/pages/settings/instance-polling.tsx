@@ -131,13 +131,14 @@ export default function InstancePolling({ settings, sections }: Props) {
 
                     <PollingCard
                         title="Post metrics"
-                        description="How often to refresh likes, replies, reposts, and impressions for published posts."
+                        description="The minimum time between metric refreshes. Fresh posts are refreshed more often and back off as they age, so this sets the floor, not a fixed interval."
                         group="post_metrics"
                         platforms={sections.post_metrics}
                         values={data.post_metrics}
                         errors={errors}
                         onChange={setMinutes}
                         onEnabledChange={setPlatformEnabled}
+                        minutesHelp="Minimum interval in minutes."
                     />
 
                     <PollingCard

@@ -17,7 +17,7 @@ class PostMetricsRefreshController extends Controller
 {
     public function store(Request $request, Post $post): JsonResponse
     {
-        $request->user()->can('viewAny', Post::class) ?: abort(403);
+        $request->user()->can('view', $post) ?: abort(403);
 
         $post->targets()
             ->where('status', PostTargetStatus::Published->value)

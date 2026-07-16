@@ -12,6 +12,7 @@ use App\Http\Controllers\Posts\PostController;
 use App\Http\Controllers\Posts\PostImageEditController;
 use App\Http\Controllers\Posts\PostingScheduleController;
 use App\Http\Controllers\Posts\PostMediaController;
+use App\Http\Controllers\Posts\PostMetricsRefreshController;
 use App\Http\Controllers\Posts\PostQueueController;
 use App\Http\Controllers\Posts\PostScheduleController;
 use App\Http\Controllers\Posts\PostShareController;
@@ -73,6 +74,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('posts/{post}/queue', [PostQueueController::class, 'store'])->name('posts.queue');
     Route::post('posts/{post}/publish', [PublishController::class, 'store'])->name('posts.publish');
     Route::post('posts/{post}/targets/{target}/retry', [PostTargetRetryController::class, 'store'])->name('posts.targets.retry');
+    // Bypasses the queued job's own per-platform rate limiting (dispatchSync runs
+    // inline, skipping queue middleware), so throttle here — each hit is a real,
+    // metered X API read across every published target on the post.
+    Route::post('posts/{post}/metrics/refresh', [PostMetricsRefreshController::class, 'store'])
+        ->middleware(['metrics.enabled', 'throttle:10,1'])->name('posts.metrics.refresh');
     // Media uploads are throttled to bound abuse (presigned-URL minting / storage flooding).
     Route::middleware('throttle:60,1')->group(function (): void {
         Route::post('posts/{post}/media', [PostMediaController::class, 'store'])->name('posts.media.store');

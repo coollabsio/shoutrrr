@@ -96,6 +96,12 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
         if ($result->isOk()) {
             $now = Date::now();
 
+            $unchanged = $target->metrics_captured_at !== null
+                && $target->likes === $result->likes
+                && $target->comments === $result->comments
+                && $target->reposts === $result->reposts
+                && $target->impressions === $result->impressions;
+
             PostTargetMetric::updateOrCreate(
                 ['post_target_id' => $target->id, 'captured_at' => $now],
                 [
@@ -113,6 +119,7 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
                 'impressions' => $result->impressions,
                 'metrics_status' => $result->status->value,
                 'metrics_captured_at' => $now,
+                'metrics_unchanged_streak' => $unchanged ? $target->metrics_unchanged_streak + 1 : 0,
             ])->save();
 
             return;

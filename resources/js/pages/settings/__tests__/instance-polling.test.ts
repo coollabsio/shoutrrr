@@ -137,4 +137,23 @@ describe('instance polling section rendering', () => {
         expect(source).toContain('minutesHelp="Minimum interval in minutes."');
         expect(source).toMatch(/minimum time between reply checks/i);
     });
+
+    it('labels the post-metrics interval as a minimum floor, not a fixed cadence', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/pages/settings/instance-polling.tsx',
+            ),
+            'utf8',
+        );
+
+        // Post-metrics polling is now age-banded with unchanged-streak backoff;
+        // the operator interval is a floor, so the copy must not imply a fixed
+        // cadence. Two "PollingCard"s now share this exact minutesHelp string
+        // (engagement + post metrics) — assert it appears at least twice.
+        expect(
+            source.match(/minutesHelp="Minimum interval in minutes\."/g),
+        ).toHaveLength(2);
+        expect(source).toMatch(/minimum time between metric refreshes/i);
+    });
 });

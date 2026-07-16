@@ -124,6 +124,98 @@ test('jobs no-op when feature disabled', function () {
     expect($account->metrics()->count())->toBe(0);
 });
 
+test('a read that matches the prior totals increments the unchanged streak', function () {
+    Http::fake(['public.api.bsky.app/*' => Http::response(['posts' => [
+        ['likeCount' => 7, 'repostCount' => 1, 'quoteCount' => 0, 'replyCount' => 2],
+    ]])]);
+
+    $account = ConnectedAccount::factory()->bluesky()->create();
+
+    $target = PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Bluesky,
+        'remote_id' => 'at://a/app.bsky.feed.post/1',
+        'remote_ids' => ['at://a/app.bsky.feed.post/1'],
+        'likes' => 7,
+        'comments' => 2,
+        'reposts' => 1,
+        'impressions' => null,
+        'metrics_captured_at' => now()->subHours(2),
+        'metrics_unchanged_streak' => 2,
+    ]);
+
+    CapturePostTargetMetrics::dispatchSync($target);
+
+    expect($target->fresh()->metrics_unchanged_streak)->toBe(3);
+});
+
+test('a read that differs from the prior totals resets the unchanged streak', function () {
+    Http::fake(['public.api.bsky.app/*' => Http::response(['posts' => [
+        ['likeCount' => 7, 'repostCount' => 1, 'quoteCount' => 0, 'replyCount' => 2],
+    ]])]);
+
+    $account = ConnectedAccount::factory()->bluesky()->create();
+
+    $target = PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Bluesky,
+        'remote_id' => 'at://a/app.bsky.feed.post/1',
+        'remote_ids' => ['at://a/app.bsky.feed.post/1'],
+        'likes' => 5,
+        'comments' => 2,
+        'reposts' => 1,
+        'impressions' => null,
+        'metrics_captured_at' => now()->subHours(2),
+        'metrics_unchanged_streak' => 4,
+    ]);
+
+    CapturePostTargetMetrics::dispatchSync($target);
+
+    expect($target->fresh()->metrics_unchanged_streak)->toBe(0);
+});
+
+test('the first-ever capture never counts as unchanged, even when totals happen to match zero defaults', function () {
+    Http::fake(['public.api.bsky.app/*' => Http::response(['posts' => [
+        ['likeCount' => 0, 'repostCount' => 0, 'quoteCount' => 0, 'replyCount' => 0],
+    ]])]);
+
+    $account = ConnectedAccount::factory()->bluesky()->create();
+
+    $target = PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Bluesky,
+        'remote_id' => 'at://a/app.bsky.feed.post/1',
+        'remote_ids' => ['at://a/app.bsky.feed.post/1'],
+    ]);
+
+    expect($target->metrics_captured_at)->toBeNull();
+
+    CapturePostTargetMetrics::dispatchSync($target);
+
+    expect($target->fresh()->metrics_unchanged_streak)->toBe(0);
+});
+
+test('a failed fetch leaves the unchanged streak untouched', function () {
+    Http::fake(['public.api.bsky.app/*' => Http::response(['error' => 'InternalServerError'], 500)]);
+
+    $account = ConnectedAccount::factory()->bluesky()->create();
+
+    $target = PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Bluesky,
+        'remote_id' => 'at://a/app.bsky.feed.post/1',
+        'remote_ids' => ['at://a/app.bsky.feed.post/1'],
+        'metrics_captured_at' => now()->subHours(2),
+        'metrics_unchanged_streak' => 4,
+    ]);
+
+    CapturePostTargetMetrics::dispatchSync($target);
+
+    $fresh = $target->fresh();
+    expect($fresh->metrics_status)->toBe(MetricsStatus::Failed)
+        ->and($fresh->metrics_unchanged_streak)->toBe(4);
+});
+
 test('jobs no-op for disabled accounts', function () {
     Http::preventStrayRequests();
 

@@ -42,6 +42,7 @@ use Override;
  * @property int|null $impressions
  * @property CarbonImmutable|null $metrics_captured_at
  * @property MetricsStatus|null $metrics_status
+ * @property int $metrics_unchanged_streak
  * @property CarbonImmutable|null $reply_fetched_at
  * @property int $reply_fetch_empty_streak
  */
@@ -68,6 +69,7 @@ use Override;
     'impressions',
     'metrics_captured_at',
     'metrics_status',
+    'metrics_unchanged_streak',
     'reply_fetched_at',
     'reply_fetch_empty_streak',
 ])]
@@ -100,6 +102,7 @@ class PostTarget extends Model
             'impressions' => 'integer',
             'metrics_captured_at' => 'immutable_datetime',
             'metrics_status' => MetricsStatus::class,
+            'metrics_unchanged_streak' => 'integer',
             'reply_fetched_at' => 'immutable_datetime',
             'reply_fetch_empty_streak' => 'integer',
         ];
