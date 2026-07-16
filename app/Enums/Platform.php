@@ -52,7 +52,11 @@ enum Platform: string
             // scope that call 403s ("Missing required OAuth2 scopes: users.email").
             // `media.write` is required to upload media to the v2 /2/media/upload
             // endpoint (the v1.1 endpoint was deprecated 2025-03-31).
-            self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'media.write', 'offline.access'],
+            // `like.write` is required to like/unlike from the engagement inbox
+            // (POST + DELETE /2/users/{id}/likes); without it those calls 403
+            // ("Missing required OAuth2 scopes: like.write"), which the connector
+            // maps to `unsupported`. One scope covers both like and unlike.
+            self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'media.write', 'like.write', 'offline.access'],
             self::LinkedIn => ['openid', 'profile', 'email', 'w_member_social'],
             self::Bluesky => [],
             self::Facebook => ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_read_user_content', 'pages_manage_engagement', 'read_insights', 'business_management'],
@@ -118,6 +122,16 @@ enum Platform: string
     public function supportsAccountMetrics(): bool
     {
         return $this !== self::LinkedIn && $this !== self::Discord;
+    }
+
+    /**
+     * Whether this platform's engagement connector can like/unlike a reply.
+     * Instagram and Threads return `unsupported` (neither Graph API exposes a
+     * like/unlike write for comments), so their hearts are inert affordances.
+     */
+    public function supportsReplyLikes(): bool
+    {
+        return $this !== self::Instagram && $this !== self::Threads;
     }
 
     /**

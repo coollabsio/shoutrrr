@@ -168,12 +168,19 @@ export function ReplyThread({
                                 <button
                                     type="button"
                                     onClick={() => onToggleLike(reply)}
+                                    disabled={!reply.can_like}
+                                    title={
+                                        reply.can_like
+                                            ? undefined
+                                            : `${platformLabel(reply.platform)} does not support liking replies`
+                                    }
                                     aria-label={
                                         reply.is_liked ? 'Unlike' : 'Like'
                                     }
                                     aria-pressed={reply.is_liked}
                                     className={cn(
                                         actionButton,
+                                        'disabled:cursor-not-allowed disabled:opacity-40',
                                         reply.is_liked
                                             ? 'text-rose-500'
                                             : 'hover:text-foreground',

@@ -26,6 +26,10 @@ final class ReplyListItem
             'remote_created_at' => $reply->remote_created_at->toIso8601String(),
             'is_read' => $reply->read_at !== null,
             'is_liked' => $reply->liked_at !== null,
+            // `??` uses isset() semantics, so this stays safe when $target is
+            // null (the reply's own platform is the fallback). Not `?->`:
+            // Larastan reads the belongsTo as non-null and flags it redundant.
+            'can_like' => ($target->platform ?? $reply->platform)->supportsReplyLikes(),
             'is_ours' => $reply->is_ours,
             'send_status' => $reply->send_status?->value,
             'status' => $reply->status->value,

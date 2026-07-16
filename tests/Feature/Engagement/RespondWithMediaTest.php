@@ -47,17 +47,19 @@ test('a text-only reply still posts synchronously (no job)', function () {
     $registry->shouldReceive('for')->andReturn($connector);
     app()->instance(EngagementConnectorRegistry::class, $registry);
 
-    $this->post(route('engagement.respond', $this->reply), ['text' => 'hi'])->assertRedirect();
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => 'hi'])->assertCreated();
     Queue::assertNothingPushed();
     expect($this->reply->fresh()->status->value)->toBe('responded');
 });
 
+// JSON-encoded (not multipart): `media` is an array of string ids, never Files,
+// so the client can drop forceFormData. These tests are what prove that.
 test('a reply with media creates a sending row and dispatches SendReply', function () {
     Queue::fake();
 
-    $this->post(route('engagement.respond', $this->reply), [
+    $this->postJson(route('engagement.respond', $this->reply), [
         'text' => 'with pic', 'media' => [$this->media->id],
-    ])->assertRedirect();
+    ])->assertCreated()->assertJsonPath('reply.is_ours', true);
 
     $ourRow = PostTargetReply::withoutGlobalScopes()->where('is_ours', true)->firstOrFail();
     expect($ourRow->send_status)->toBe(SendStatus::Sending);
@@ -67,9 +69,9 @@ test('a reply with media creates a sending row and dispatches SendReply', functi
 test('a media-only reply with empty text is accepted', function () {
     Queue::fake();
 
-    $this->post(route('engagement.respond', $this->reply), [
+    $this->postJson(route('engagement.respond', $this->reply), [
         'text' => '', 'media' => [$this->media->id],
-    ])->assertRedirect()->assertSessionHasNoErrors();
+    ])->assertCreated();
 
     Queue::assertPushed(SendReply::class, 1);
 });
@@ -77,8 +79,8 @@ test('a media-only reply with empty text is accepted', function () {
 test('a reply with neither text nor media is rejected', function () {
     Queue::fake();
 
-    $this->post(route('engagement.respond', $this->reply), [])
-        ->assertSessionHasErrors('text');
+    $this->postJson(route('engagement.respond', $this->reply), [])
+        ->assertJsonValidationErrors('text');
 
     Queue::assertNothingPushed();
 });
@@ -89,9 +91,9 @@ test('a foreign-workspace media id is rejected', function () {
     $otherWorkspace = Workspace::factory()->create();
     $foreignMedia = PostMedia::factory()->create(['workspace_id' => $otherWorkspace->id, 'kind' => 'image']);
 
-    $this->post(route('engagement.respond', $this->reply), [
+    $this->postJson(route('engagement.respond', $this->reply), [
         'text' => 'with pic', 'media' => [$foreignMedia->id],
-    ])->assertSessionHasErrors('media.0');
+    ])->assertJsonValidationErrors('media.0');
 
     Queue::assertNothingPushed();
 });

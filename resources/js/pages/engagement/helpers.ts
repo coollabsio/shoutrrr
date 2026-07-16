@@ -43,6 +43,31 @@ export function initials(
     return letters.toUpperCase();
 }
 
+/**
+ * Message for a failed reply action, read from `useHttp`'s `onHttpException`
+ * response. That response carries the **raw body string**, and a non-2xx can
+ * come from anywhere in the stack — a proxy's HTML 502 page must not throw
+ * inside an error handler, so parsing is guarded and falls back.
+ */
+export function actionErrorMessage(
+    response: { data: string },
+    fallback: string,
+): string {
+    try {
+        const parsed: unknown = JSON.parse(response.data);
+        if (parsed !== null && typeof parsed === 'object') {
+            const { message } = parsed as { message?: unknown };
+            if (typeof message === 'string' && message.trim() !== '') {
+                return message;
+            }
+        }
+    } catch {
+        // Not JSON (e.g. a gateway HTML error page) — use the fallback.
+    }
+
+    return fallback;
+}
+
 /** Display handle with a leading @ when it isn't already a URL-style handle. */
 export function atHandle(handle: string | null): string {
     if (!handle) {

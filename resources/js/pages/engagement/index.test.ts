@@ -16,6 +16,31 @@ it('shows disabled engagement platforms to end users', () => {
     expect(source).toContain('disabledPlatformLabels');
 });
 
+it('runs reply actions as JSON requests, not Inertia visits', () => {
+    // An Inertia visit follows the response into a fresh GET /engagement, which
+    // drops the deferred `replies` scroll prop and blanks the left list.
+    const source = readFileSync(
+        resolve(import.meta.dirname, 'index.tsx'),
+        'utf8',
+    );
+
+    expect(source).toContain('useHttp');
+    expect(source).not.toContain('router.post(');
+    expect(source).not.toContain('router.delete(');
+});
+
+it('overlays archived and responded rows onto the deferred replies prop', () => {
+    const source = readFileSync(
+        resolve(import.meta.dirname, 'index.tsx'),
+        'utf8',
+    );
+
+    expect(source).toContain("overrides[r.id] !== 'archived'");
+    expect(source).toContain("overrides[r.id] === 'responded'");
+    // The unread badge rides on the shared `shell` prop; `replies` stays put.
+    expect(source).toContain("router.reload({ only: ['shell'] })");
+});
+
 it('uses shared disabled platform label helpers', () => {
     const platformSource = readFileSync(
         resolve(import.meta.dirname, '../../lib/platforms.ts'),

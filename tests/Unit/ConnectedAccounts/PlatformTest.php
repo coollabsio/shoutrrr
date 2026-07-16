@@ -20,6 +20,25 @@ test('x scopes include users.email so Socialite can read confirmed_email', funct
         ->and(Platform::X->scopes())->toContain('media.write');
 });
 
+test('x scopes include like.write so the engagement inbox can like and unlike', function () {
+    // Regression guard for a real production bug: without like.write, X 403s
+    // POST/DELETE /2/users/{id}/likes ("Missing required OAuth2 scopes"), the
+    // connector maps that 403 to `unsupported`, and likes silently never persist.
+    // One scope covers both like and unlike. Do not drop it.
+    expect(Platform::X->scopes())->toContain('like.write');
+});
+
+test('platforms report whether their connector can like a reply', function () {
+    // Instagram and Threads have no like/unlike write for comments.
+    expect(Platform::X->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::Bluesky->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::LinkedIn->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::Facebook->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::Discord->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::Instagram->supportsReplyLikes())->toBeFalse()
+        ->and(Platform::Threads->supportsReplyLikes())->toBeFalse();
+});
+
 test('socialite driver names match core socialite keys', function () {
     expect(Platform::X->socialiteDriver())->toBe('x')
         ->and(Platform::LinkedIn->socialiteDriver())->toBe('linkedin-openid')
