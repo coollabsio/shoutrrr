@@ -29,14 +29,19 @@ test('x scopes include like.write so the engagement inbox can like and unlike', 
 });
 
 test('platforms report whether their connector can like a reply', function () {
-    // Instagram and Threads have no like/unlike write for comments.
+    // Only Threads still has no like/unlike write for replies; Instagram gained
+    // it with the Like Media and Comments API (2026-04-22).
     expect(Platform::X->supportsReplyLikes())->toBeTrue()
         ->and(Platform::Bluesky->supportsReplyLikes())->toBeTrue()
         ->and(Platform::LinkedIn->supportsReplyLikes())->toBeTrue()
         ->and(Platform::Facebook->supportsReplyLikes())->toBeTrue()
         ->and(Platform::Discord->supportsReplyLikes())->toBeTrue()
-        ->and(Platform::Instagram->supportsReplyLikes())->toBeFalse()
+        ->and(Platform::Instagram->supportsReplyLikes())->toBeTrue()
         ->and(Platform::Threads->supportsReplyLikes())->toBeFalse();
+});
+
+test('instagram requests the engagement scope that powers reply likes', function () {
+    expect(Platform::Instagram->scopes())->toContain('instagram_manage_engagement');
 });
 
 test('socialite driver names match core socialite keys', function () {

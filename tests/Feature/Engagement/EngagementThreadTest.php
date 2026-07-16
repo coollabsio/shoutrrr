@@ -69,7 +69,7 @@ test('thread replies include the published post remote id for platform links', f
 });
 
 test('thread replies expose whether the platform can like them', function (): void {
-    // Drives the heart's disabled state. Instagram/Threads have no like write.
+    // Drives the heart's disabled state. Only Threads has no like write.
     $likeable = PostTargetReply::factory()->for($this->target, 'target')->create([
         'workspace_id' => $this->workspace->id,
         'platform' => Platform::X,
@@ -79,12 +79,12 @@ test('thread replies expose whether the platform can like them', function (): vo
         ->assertOk()
         ->assertJsonPath('thread.0.can_like', true);
 
-    $instagramTarget = PostTarget::factory()
+    $threadsTarget = PostTarget::factory()
         ->for(Post::factory()->create(['workspace_id' => $this->workspace->id]))
-        ->create(['platform' => Platform::Instagram, 'remote_id' => 'ig-1']);
-    $notLikeable = PostTargetReply::factory()->for($instagramTarget, 'target')->create([
+        ->create(['platform' => Platform::Threads, 'remote_id' => 'th-1']);
+    $notLikeable = PostTargetReply::factory()->for($threadsTarget, 'target')->create([
         'workspace_id' => $this->workspace->id,
-        'platform' => Platform::Instagram,
+        'platform' => Platform::Threads,
     ]);
 
     $this->getJson(route('engagement.thread', $notLikeable))

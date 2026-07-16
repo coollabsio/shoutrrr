@@ -60,7 +60,10 @@ enum Platform: string
             self::LinkedIn => ['openid', 'profile', 'email', 'w_member_social'],
             self::Bluesky => [],
             self::Facebook => ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_read_user_content', 'pages_manage_engagement', 'read_insights', 'business_management'],
-            self::Instagram => ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'pages_show_list', 'business_management'],
+            // `instagram_manage_engagement` powers the Like Media and Comments
+            // API (2026-04-22) used to like/unlike replies from the inbox;
+            // without it the like call 403s → Unsupported.
+            self::Instagram => ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'instagram_manage_engagement', 'pages_show_list', 'business_management'],
             self::Threads => ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights'],
             self::Discord => [],
         };
@@ -126,12 +129,13 @@ enum Platform: string
 
     /**
      * Whether this platform's engagement connector can like/unlike a reply.
-     * Instagram and Threads return `unsupported` (neither Graph API exposes a
-     * like/unlike write for comments), so their hearts are inert affordances.
+     * Threads returns `unsupported` (its Graph API exposes no like/unlike write
+     * for replies), so its heart is an inert affordance. Instagram gained the
+     * capability with the Like Media and Comments API (2026-04-22).
      */
     public function supportsReplyLikes(): bool
     {
-        return $this !== self::Instagram && $this !== self::Threads;
+        return $this !== self::Threads;
     }
 
     /**
