@@ -90,6 +90,20 @@ test('POST /posts accepts the real client payload with segments and no base_text
         ->assertJsonPath('post.base_text', "first post\nsecond post");
 });
 
+test('POST /posts rejects an over-long linkedin_urn handle', function () {
+    [$user, $workspace, $accounts] = actingMember(1);
+
+    test()->postJson('/posts', [
+        'destination' => ['kind' => 'all'],
+        'segments' => ['hello'],
+        'mentions' => [[
+            'id' => 'coolify',
+            'label' => '@coolify',
+            'handles' => ['linkedin_urn' => str_repeat('a', 256)],
+        ]],
+    ])->assertInvalid(['mentions.0.handles.linkedin_urn']);
+});
+
 test('PUT /posts/{post} accepts the real buildPutBody payload with no base_text', function () {
     [$user, $workspace, $accounts] = actingMember(1);
     $created = test()->postJson('/posts', [

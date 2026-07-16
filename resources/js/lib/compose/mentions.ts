@@ -49,9 +49,12 @@ export function updateMentionName(
     const handles = Object.fromEntries(
         Object.entries(mention.handles).map(([platform, handle]) => [
             platform,
-            handle === mention.label ||
-            handle === previousText ||
-            (mention.label === '@' && handle === '')
+            // `linkedin_urn` is an org reference, never a display-name-derived
+            // handle, so keep it verbatim even if it happens to match the label.
+            platform !== 'linkedin_urn' &&
+            (handle === mention.label ||
+                handle === previousText ||
+                (mention.label === '@' && handle === ''))
                 ? mentionTextInput(platform as PlatformName, label)
                 : handle,
         ]),

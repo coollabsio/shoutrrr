@@ -158,6 +158,24 @@ describe('mention helpers', () => {
         });
     });
 
+    it('preserves linkedin_urn when renaming even if it matches the label', () => {
+        const mention: MentionPlaceholder = {
+            id: 'coolify',
+            label: '@coolify',
+            handles: {
+                x: '@coolify',
+                linkedin: 'coolify',
+                linkedin_urn: 'coolify',
+            },
+        };
+
+        const updated = updateMentionName(mention, 'coolify-labs');
+
+        expect(updated.handles.x).toBe('@coolify-labs');
+        expect(updated.handles.linkedin).toBe('coolify-labs');
+        expect(updated.handles.linkedin_urn).toBe('coolify');
+    });
+
     it('forces LinkedIn values to text only', () => {
         const mention: MentionPlaceholder = {
             id: 'guest',
