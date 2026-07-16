@@ -14,6 +14,7 @@ use App\Models\PostTargetReply;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Engagement\ReplyPersister;
 use App\Services\Publishing\TokenManager;
+use App\Support\InstanceSettings;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -65,9 +66,9 @@ class FetchPostTargetReplies implements ReleasableJob, ShouldBeUnique, ShouldQue
         return [10, 30, 60];
     }
 
-    public function handle(EngagementConnectorRegistry $registry, TokenManager $tokens, ReplyPersister $persister): void
+    public function handle(EngagementConnectorRegistry $registry, TokenManager $tokens, ReplyPersister $persister, InstanceSettings $settings): void
     {
-        if (! config('engagement.enabled')) {
+        if (! $settings->engagementEnabled()) {
             return;
         }
 

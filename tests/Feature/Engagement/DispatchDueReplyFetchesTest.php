@@ -26,6 +26,22 @@ test('it collapses an X account\'s due posts into a single batched job', functio
     Queue::assertNotPushed(FetchPostTargetReplies::class);
 });
 
+test('command is a no-op when the instance-settings override disables engagement, even though config is on', function () {
+    Queue::fake();
+    config(['engagement.enabled' => true]);
+    app(InstanceSettings::class)->update(['engagement_enabled' => false]);
+
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::X, 'status' => ConnectedAccountStatus::Active]);
+    PostTarget::factory()->for($account, 'account')->published()->create([
+        'platform' => Platform::X,
+        'posted_at' => now()->subHours(2),
+    ]);
+
+    $this->artisan('engagement:dispatch-due')->assertSuccessful();
+
+    Queue::assertNothingPushed();
+});
+
 test('it skips accounts parked by a rate limit', function () {
     Queue::fake();
 

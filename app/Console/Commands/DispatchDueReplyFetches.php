@@ -26,7 +26,7 @@ class DispatchDueReplyFetches extends Command
 
     public function handle(InstanceSettings $settings, ReplyFetchCadence $cadence, EngagementConnectorRegistry $registry): int
     {
-        if (! config('engagement.enabled') || ! $settings->engagementPollingEnabled()) {
+        if (! $settings->engagementEnabled() || ! $settings->engagementPollingEnabled()) {
             return self::SUCCESS;
         }
 

@@ -13,6 +13,7 @@ use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Engagement\ReplyFetchCadence;
 use App\Services\Engagement\ReplyPersister;
 use App\Services\Publishing\TokenManager;
+use App\Support\InstanceSettings;
 
 function runAccountFetch(ConnectedAccount $account): void
 {
@@ -21,6 +22,7 @@ function runAccountFetch(ConnectedAccount $account): void
         app(TokenManager::class),
         app(ReplyPersister::class),
         app(ReplyFetchCadence::class),
+        app(InstanceSettings::class),
     );
 }
 

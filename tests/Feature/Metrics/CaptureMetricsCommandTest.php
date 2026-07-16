@@ -63,6 +63,18 @@ test('command is a no-op when feature disabled', function () {
     Queue::assertNothingPushed();
 });
 
+test('command is a no-op when the instance-settings override disables metrics, even though config is on', function () {
+    Queue::fake();
+    config(['metrics.enabled' => true]);
+    app(InstanceSettings::class)->update(['metrics_enabled' => false]);
+
+    ConnectedAccount::factory()->create(['platform' => Platform::Bluesky, 'status' => ConnectedAccountStatus::Active]);
+
+    $this->artisan('metrics:capture')->assertSuccessful();
+
+    Queue::assertNothingPushed();
+});
+
 test('command skips disabled metric polling groups', function () {
     Queue::fake();
     app(InstanceSettings::class)->update([

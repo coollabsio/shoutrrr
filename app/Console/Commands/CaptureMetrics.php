@@ -24,7 +24,7 @@ class CaptureMetrics extends Command
 
     public function handle(MetricsCaptureCadence $cadence, InstanceSettings $settings): int
     {
-        if (! config('metrics.enabled')) {
+        if (! $settings->metricsEnabled()) {
             return self::SUCCESS;
         }
 

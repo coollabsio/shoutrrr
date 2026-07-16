@@ -19,6 +19,7 @@ use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Engagement\ReplyFetchCadence;
 use App\Services\Engagement\ReplyPersister;
 use App\Services\Publishing\TokenManager;
+use App\Support\InstanceSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -69,8 +70,9 @@ class FetchAccountReplies implements ReleasableJob, ShouldBeUnique, ShouldQueue
         TokenManager $tokens,
         ReplyPersister $persister,
         ReplyFetchCadence $cadence,
+        InstanceSettings $settings,
     ): void {
-        if (! config('engagement.enabled')) {
+        if (! $settings->engagementEnabled()) {
             return;
         }
 

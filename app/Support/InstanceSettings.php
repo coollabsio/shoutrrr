@@ -58,6 +58,18 @@ class InstanceSettings
         return $this->boolean('quote_tweets_enabled');
     }
 
+    /** Instance-wide metrics master switch. Defaults to `metrics.enabled` (env) until overridden here. */
+    public function metricsEnabled(): bool
+    {
+        return $this->boolean('metrics_enabled', (bool) config('metrics.enabled'));
+    }
+
+    /** Instance-wide engagement master switch. Defaults to `engagement.enabled` (env) until overridden here. */
+    public function engagementEnabled(): bool
+    {
+        return $this->boolean('engagement_enabled', (bool) config('engagement.enabled'));
+    }
+
     public function platformAvailable(?Platform $platform = null): bool
     {
         return $this->platformEnabled('platforms_enabled', $platform);
@@ -118,7 +130,9 @@ class InstanceSettings
      * @return array{
      *     engagement: array<string, array<string, bool>|int>,
      *     post_metrics: array<string, array<string, bool>|int>,
-     *     account_metrics: array<string, array<string, bool>|int>
+     *     account_metrics: array<string, array<string, bool>|int>,
+     *     metrics_enabled: bool,
+     *     engagement_enabled: bool
      * }
      */
     public function polling(): array
@@ -136,6 +150,10 @@ class InstanceSettings
                 'enabled' => $this->platformEnabledValues('account_metrics_polling_enabled'),
                 ...$this->platformMinutes('account_metrics_poll_interval_minutes', 'account_metrics'),
             ],
+            // Instance-wide master switches: when off, the sections above are moot
+            // (nothing polls regardless of their per-platform settings).
+            'metrics_enabled' => $this->metricsEnabled(),
+            'engagement_enabled' => $this->engagementEnabled(),
         ];
     }
 

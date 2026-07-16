@@ -10,6 +10,8 @@ import {
 } from '../instance-polling';
 
 const settings: PollingSettings = {
+    metrics_enabled: true,
+    engagement_enabled: true,
     engagement: {
         x: 15,
         bluesky: 30,
@@ -155,5 +157,25 @@ describe('instance polling section rendering', () => {
             source.match(/minutesHelp="Minimum interval in minutes\."/g),
         ).toHaveLength(2);
         expect(source).toMatch(/minimum time between metric refreshes/i);
+    });
+
+    it('offers instance-wide master switches for metrics and engagement, above the per-platform cards', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/pages/settings/instance-polling.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('id="engagement_enabled"');
+        expect(source).toContain('id="metrics_enabled"');
+        expect(source).toMatch(/setData\(\s*'engagement_enabled'/);
+        expect(source).toMatch(/setData\(\s*'metrics_enabled'/);
+        // The metrics master switch disables both metrics cards; engagement's disables its own.
+        expect(source).toContain('disabled={!data.engagement_enabled}');
+        expect(source).toMatch(
+            /disabled=\{!data\.metrics_enabled\}[\s\S]*disabled=\{!data\.metrics_enabled\}/,
+        );
     });
 });

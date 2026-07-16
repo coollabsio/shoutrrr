@@ -7,6 +7,7 @@ use App\Jobs\CapturePostTargetMetrics;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Models\PostTarget;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Http;
 
 test('post job writes latest totals and ok status for bluesky', function () {
@@ -122,6 +123,18 @@ test('jobs no-op when feature disabled', function () {
     CaptureAccountMetrics::dispatchSync($account);
 
     expect($account->metrics()->count())->toBe(0);
+});
+
+test('jobs no-op when the instance-settings override disables metrics, even though config is on', function () {
+    Http::preventStrayRequests();
+    config(['metrics.enabled' => true]);
+    app(InstanceSettings::class)->update(['metrics_enabled' => false]);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky]);
+
+    CaptureAccountMetrics::dispatchSync($account);
+
+    expect($account->metrics()->count())->toBe(0);
+    Http::assertNothingSent();
 });
 
 test('a read that matches the prior totals increments the unchanged streak', function () {
