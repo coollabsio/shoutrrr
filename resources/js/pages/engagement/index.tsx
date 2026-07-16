@@ -1,4 +1,4 @@
-import { Deferred, Head, Link, router } from '@inertiajs/react';
+import { Deferred, Head, Link, router, useHttp } from '@inertiajs/react';
 import {
     Archive,
     ChevronDown,
@@ -8,6 +8,7 @@ import {
     SearchX,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { toast } from 'sonner';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -59,6 +60,7 @@ import { ReplyFilters } from './components/reply-filters';
 import { ReplyStream } from './components/reply-stream';
 import { ReplyThread } from './components/reply-thread';
 import {
+    actionErrorMessage,
     adjacentIndex,
     atHandle,
     engagementShortcut,
@@ -201,15 +203,23 @@ function EngagementDisabledBanner({
 
 type RightPaneProps = {
     selected: ReplyItem;
-    onArchived: () => void;
+    onArchived: (id: string) => void;
+    onResponded: (id: string) => void;
     replyEditorRef?: RefObject<EditorBodyHandle | null>;
     savedMentions: WorkspaceMention[];
     reserveCloseButtonSpace?: boolean;
 };
 
+/**
+ * The conversation pane is a self-owned client island: its actions are plain
+ * JSON requests (`useHttp`), never Inertia visits. A visit would follow the
+ * response into a fresh `GET /engagement`, which drops the deferred `replies`
+ * scroll prop and blanks the left list to a skeleton.
+ */
 function RightPane({
     selected,
     onArchived,
+    onResponded,
     replyEditorRef,
     savedMentions,
     reserveCloseButtonSpace = false,
@@ -217,6 +227,14 @@ function RightPane({
     const [thread, setThread] = useState<ReplyItem[]>([]);
     const [postExcerpt, setPostExcerpt] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+
+    const likeHttp = useHttp<Record<string, never>, { is_liked: boolean }>({});
+    const deleteHttp = useHttp<Record<string, never>, null>({});
+    const archiveHttp = useHttp<Record<string, never>, null>({});
+    const respondHttp = useHttp<
+        { text: string; media: string[] },
+        { reply: ReplyItem }
+    >({ text: '', media: [] });
 
     const selectedId = selected.id;
     const platformName = platformLabel(selected.platform);
@@ -259,6 +277,12 @@ function RightPane({
             .finally(() => setLoading(false));
     }, [selectedId]);
 
+    function setSendStatus(id: string, status: ReplyItem['send_status']) {
+        setThread((prev) =>
+            prev.map((r) => (r.id === id ? { ...r, send_status: status } : r)),
+        );
+    }
+
     async function send(text: string, mediaIds: string[]) {
         const tempId = `temp-${Date.now()}`;
         setThread((prev) => [
@@ -273,89 +297,108 @@ function RightPane({
                 send_status: 'sending' as const,
             },
         ]);
-        await new Promise<void>((resolve, reject) => {
-            router.post(
-                respondRoute(selected.id).url,
-                { text, media: mediaIds },
-                {
-                    forceFormData: true,
-                    preserveScroll: true,
-                    onSuccess: () => {
-                        // Text replies post synchronously, so they're done. Media
-                        // replies hand off to an async job — keep them "sending"
-                        // until a later thread refetch reflects the real outcome.
-                        const stillSending = mediaIds.length > 0;
-                        setThread((prev) =>
-                            prev.map((r) =>
-                                r.id === tempId
-                                    ? {
-                                          ...r,
-                                          send_status: stillSending
-                                              ? ('sending' as const)
-                                              : null,
-                                      }
-                                    : r,
-                            ),
-                        );
-                        resolve();
-                    },
-                    onError: () => {
-                        setThread((prev) =>
-                            prev.map((r) =>
-                                r.id === tempId
-                                    ? {
-                                          ...r,
-                                          send_status: 'failed' as const,
-                                      }
-                                    : r,
-                            ),
-                        );
-                        reject(new Error('send failed'));
-                    },
-                },
-            );
+        // `media` is an array of already-uploaded media ids, not Files, so this
+        // stays a JSON request — no `forceFormData`.
+        respondHttp.transform(() => ({ text, media: mediaIds }));
+        // Failures rethrow so QuickReplyBox's `await onSend(...)` still sees them.
+        await respondHttp.post(respondRoute(selected.id).url, {
+            onSuccess: ({ reply }) => {
+                // The server row carries the real id and send_status (media
+                // replies hand off to a job and stay "sending").
+                setThread((prev) =>
+                    prev.map((r) => (r.id === tempId ? reply : r)),
+                );
+                onResponded(selected.id);
+            },
+            onError: () => setSendStatus(tempId, 'failed'),
+            onHttpException: (r) => {
+                setSendStatus(tempId, 'failed');
+                toast.error(actionErrorMessage(r, 'Could not send the reply.'));
+            },
+            onNetworkError: () => {
+                setSendStatus(tempId, 'failed');
+                toast.error('Could not reach the server.');
+            },
         });
     }
 
     function toggleLike(reply: ReplyItem) {
         const wasLiked = reply.is_liked;
-        setThread((prev) =>
-            prev.map((r) =>
-                r.id === reply.id ? { ...r, is_liked: !wasLiked } : r,
-            ),
-        );
-        const restore = () =>
+        const setLiked = (isLiked: boolean) =>
             setThread((prev) =>
                 prev.map((r) =>
-                    r.id === reply.id ? { ...r, is_liked: wasLiked } : r,
+                    r.id === reply.id ? { ...r, is_liked: isLiked } : r,
                 ),
             );
-        if (wasLiked) {
-            router.delete(unlikeRoute(reply.id).url, {
-                preserveScroll: true,
+        const restore = () => setLiked(wasLiked);
+        const fallback = wasLiked
+            ? 'Could not remove the like.'
+            : 'Could not like this reply.';
+
+        setLiked(!wasLiked);
+
+        void likeHttp[wasLiked ? 'delete' : 'post'](
+            (wasLiked ? unlikeRoute : likeRoute)(reply.id).url,
+            {
+                // Reconcile against the server rather than trusting the flip.
+                onSuccess: ({ is_liked }) => setLiked(is_liked),
                 onError: restore,
-            });
-        } else {
-            router.post(
-                likeRoute(reply.id).url,
-                {},
-                { preserveScroll: true, onError: restore },
-            );
-        }
+                onHttpException: (r) => {
+                    restore();
+                    toast.error(actionErrorMessage(r, fallback));
+                },
+                onNetworkError: () => {
+                    restore();
+                    toast.error('Could not reach the server.');
+                },
+            },
+            // `submit()` rethrows after the callbacks; they already handled it.
+        ).catch(() => {});
     }
 
     function remove(reply: ReplyItem) {
         const index = thread.findIndex((r) => r.id === reply.id);
+        const restore = () =>
+            setThread((prev) => {
+                const next = [...prev];
+                next.splice(index < 0 ? next.length : index, 0, reply);
+
+                return next;
+            });
+
         setThread((prev) => prev.filter((r) => r.id !== reply.id));
-        router.delete(destroyRoute(reply.id).url, {
-            preserveScroll: true,
-            onError: () =>
-                setThread((prev) => {
-                    const next = [...prev];
-                    next.splice(index < 0 ? next.length : index, 0, reply);
-                    return next;
-                }),
-        });
+
+        void deleteHttp
+            .delete(destroyRoute(reply.id).url, {
+                onError: restore,
+                onHttpException: (r) => {
+                    restore();
+                    toast.error(
+                        actionErrorMessage(r, 'Could not delete the reply.'),
+                    );
+                },
+                onNetworkError: () => {
+                    restore();
+                    toast.error('Could not reach the server.');
+                },
+            })
+            .catch(() => {});
+    }
+
+    function archive() {
+        void archiveHttp
+            .post(archiveRoute(selected.id).url, {
+                onSuccess: () => onArchived(selected.id),
+                onHttpException: (r) => {
+                    toast.error(
+                        actionErrorMessage(r, 'Could not archive the reply.'),
+                    );
+                },
+                onNetworkError: () => {
+                    toast.error('Could not reach the server.');
+                },
+            })
+            .catch(() => {});
     }
 
     return (
@@ -461,16 +504,7 @@ function RightPane({
                                 size="sm"
                                 aria-label="Archive reply"
                                 className="gap-1.5 text-muted-foreground hover:text-foreground"
-                                onClick={() =>
-                                    router.post(
-                                        archiveRoute(selected.id).url,
-                                        {},
-                                        {
-                                            preserveScroll: true,
-                                            onSuccess: onArchived,
-                                        },
-                                    )
-                                }
+                                onClick={archive}
                             />
                         }
                     >
@@ -529,8 +563,42 @@ export default function EngagementIndex({
     const isMobile = useIsMobile();
     const [selected, setSelected] = useState<ReplyItem | null>(null);
     const replyEditorRef = useRef<EditorBodyHandle>(null);
+    // Client-side overlay over the deferred `replies` scroll prop: archiving or
+    // responding must update the left list without a visit that would refetch
+    // (and blank) it. Inertia still owns `replies` itself — we only derive.
+    const [overrides, setOverrides] = useState<
+        Record<string, 'archived' | 'responded'>
+    >({});
+    // The keyboard `A` shortcut archives without an Inertia visit, mirroring the
+    // conversation pane's plain-JSON action so the deferred list never blanks.
+    const archiveHttp = useHttp<Record<string, never>, null>({});
 
-    const items = replies?.data ?? [];
+    const {
+        account: filterAccount,
+        platform: filterPlatform,
+        target: filterTarget,
+        post: filterPost,
+        unread: filterUnread,
+        archived: filterArchived,
+    } = filters;
+
+    // Filter changes refetch replies with reset:['replies']; stale overrides
+    // would wrongly hide rows in, say, the archived view. Reset during render
+    // (not an effect) so no wasted commit fires with the old overrides applied.
+    const filterKey = `${filterAccount}|${filterPlatform}|${filterTarget}|${filterPost}|${filterUnread}|${filterArchived}`;
+    const prevFilterKey = useRef(filterKey);
+    if (prevFilterKey.current !== filterKey) {
+        prevFilterKey.current = filterKey;
+        setOverrides({});
+    }
+
+    const items = (replies?.data ?? [])
+        .filter((r) => overrides[r.id] !== 'archived')
+        .map((r) =>
+            overrides[r.id] === 'responded'
+                ? { ...r, status: 'responded' as const }
+                : r,
+        );
     const disabledPlatforms = disabledPlatformLabels(engagementEnabled);
     const allEngagementDisabled =
         disabledPlatforms.length === platformKeys(engagementEnabled).length;
@@ -585,21 +653,20 @@ export default function EngagementIndex({
         }
 
         const archivedId = selected.id;
-        const nextId = nextAfterArchive(
-            items.map((item) => item.id),
-            archivedId,
-        );
 
-        router.post(
-            archiveRoute(archivedId).url,
-            {},
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    selectById(nextId);
+        void archiveHttp
+            .post(archiveRoute(archivedId).url, {
+                onSuccess: () => handleArchived(archivedId),
+                onHttpException: (r) => {
+                    toast.error(
+                        actionErrorMessage(r, 'Could not archive the reply.'),
+                    );
                 },
-            },
-        );
+                onNetworkError: () => {
+                    toast.error('Could not reach the server.');
+                },
+            })
+            .catch(() => {});
     }
 
     function focusReply() {
@@ -662,6 +729,23 @@ export default function EngagementIndex({
         return () => document.removeEventListener('keydown', onKeyDown);
     });
 
+    function handleArchived(id: string) {
+        const nextId = nextAfterArchive(
+            items.map((item) => item.id),
+            id,
+        );
+        setOverrides((prev) => ({ ...prev, [id]: 'archived' }));
+        selectById(nextId);
+        // The sidebar's unread badge lives on the shared `shell` prop, which the
+        // old redirect refreshed incidentally. `replies` isn't in `only`, so the
+        // list keeps its data instead of falling back to the skeleton.
+        router.reload({ only: ['shell'] });
+    }
+
+    function handleResponded(id: string) {
+        setOverrides((prev) => ({ ...prev, [id]: 'responded' }));
+    }
+
     return (
         <>
             <Head title="Engagement" />
@@ -714,14 +798,8 @@ export default function EngagementIndex({
                         {selected ? (
                             <RightPane
                                 selected={selected}
-                                onArchived={() =>
-                                    selectById(
-                                        nextAfterArchive(
-                                            items.map((item) => item.id),
-                                            selected.id,
-                                        ),
-                                    )
-                                }
+                                onArchived={handleArchived}
+                                onResponded={handleResponded}
                                 replyEditorRef={replyEditorRef}
                                 savedMentions={savedMentions}
                             />
@@ -754,14 +832,8 @@ export default function EngagementIndex({
                         {selected ? (
                             <RightPane
                                 selected={selected}
-                                onArchived={() =>
-                                    selectById(
-                                        nextAfterArchive(
-                                            items.map((item) => item.id),
-                                            selected.id,
-                                        ),
-                                    )
-                                }
+                                onArchived={handleArchived}
+                                onResponded={handleResponded}
                                 replyEditorRef={replyEditorRef}
                                 savedMentions={savedMentions}
                                 reserveCloseButtonSpace
