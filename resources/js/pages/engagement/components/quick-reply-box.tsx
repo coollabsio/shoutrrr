@@ -1,7 +1,8 @@
 import { Paperclip } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type Ref } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Kbd } from '@/components/ui/kbd';
 import { Textarea } from '@/components/ui/textarea';
 import {
     Tooltip,
@@ -23,6 +24,7 @@ type Props = {
     maxLength?: number;
     disabled?: boolean;
     disabledReason?: string;
+    textareaRef?: Ref<HTMLTextAreaElement>;
     onSend: (text: string, mediaIds: string[]) => Promise<void>;
 };
 
@@ -33,6 +35,7 @@ export function QuickReplyBox({
     maxLength,
     disabled,
     disabledReason,
+    textareaRef,
     onSend,
 }: Props) {
     const [text, setText] = useState('');
@@ -65,14 +68,23 @@ export function QuickReplyBox({
     }
 
     return (
-        <div className="border-t bg-background/60 p-3" {...rm.dropHandlers}>
+        <div
+            className="shrink-0 border-t bg-background p-3"
+            {...rm.dropHandlers}
+        >
             {rm.fileInput}
 
             <Textarea
+                ref={textareaRef}
                 value={text}
                 disabled={disabled || sending}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                        e.currentTarget.blur();
+                        return;
+                    }
+
                     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                         void send();
                     }
@@ -132,12 +144,12 @@ export function QuickReplyBox({
                             ) : (
                                 <>
                                     <span>Reply</span>
-                                    <kbd
+                                    <Kbd
                                         aria-hidden="true"
-                                        className="ml-0.5 hidden h-4 items-center rounded border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex"
+                                        className="ml-0.5 hidden h-4 min-w-0 border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex"
                                     >
                                         {QUICK_REPLY_SEND_SHORTCUT}
-                                    </kbd>
+                                    </Kbd>
                                 </>
                             )}
                         </Button>

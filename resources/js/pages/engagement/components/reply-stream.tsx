@@ -24,6 +24,7 @@ export function ReplyStream({ replies, selectedId, onSelect }: Props) {
                     <li key={reply.id}>
                         <button
                             type="button"
+                            id={`engagement-reply-${reply.id}`}
                             onClick={() => onSelect(reply)}
                             aria-current={selected}
                             className={cn(

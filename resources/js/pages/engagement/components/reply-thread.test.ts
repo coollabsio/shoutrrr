@@ -1,18 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ReplyItem } from '../types';
 import { ReplyThread } from './reply-thread';
 
-const platforms: ReplyItem['platform'][] = ['x', 'bluesky', 'linkedin'];
-
-function render(platform: ReplyItem['platform']): string {
+function render(): string {
     return renderToStaticMarkup(
         createElement(ReplyThread, {
             postExcerpt: 'hello, this is just a test',
-            postUrl: 'https://example.com/post',
-            platform,
             thread: [],
             loading: false,
             onToggleLike: vi.fn(),
@@ -22,16 +20,24 @@ function render(platform: ReplyItem['platform']): string {
 }
 
 describe('ReplyThread', () => {
-    it('labels the source post link with the platform name', () => {
-        expect(render('x')).toContain('Open post on X');
-        expect(render('bluesky')).toContain('Open post on Bluesky');
-        expect(render('linkedin')).toContain('Open post on LinkedIn');
+    it('shows the your-post excerpt without a platform open link', () => {
+        const html = render();
+
+        expect(html).toContain('Your post');
+        expect(html).toContain('hello, this is just a test');
+        expect(html).not.toContain('Open post on');
     });
 
-    it.each(platforms)(
-        'does not render the generic open post label for %s',
-        (platform) => {
-            expect(render(platform)).not.toContain('>Open post<');
-        },
-    );
+    it('keeps long thread content scrollable without growing the pane', () => {
+        const source = readFileSync(
+            resolve(import.meta.dirname, 'reply-thread.tsx'),
+            'utf8',
+        );
+
+        expect(source).toContain(
+            'min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4',
+        );
+        expect(source).toContain('break-words whitespace-pre-wrap');
+        expect(source).not.toContain('postUrl');
+    });
 });

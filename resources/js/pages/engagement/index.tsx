@@ -1,18 +1,24 @@
 import { Deferred, Head, Link, router } from '@inertiajs/react';
 import {
     Archive,
-    ArrowUpRight,
+    ChevronDown,
     Inbox,
     MessagesSquare,
     PauseCircle,
     SearchX,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
     Empty,
     EmptyDescription,
@@ -20,8 +26,14 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { Kbd } from '@/components/ui/kbd';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
     disabledPlatformLabels,
@@ -45,7 +57,13 @@ import { QuickReplyBox } from './components/quick-reply-box';
 import { ReplyFilters } from './components/reply-filters';
 import { ReplyStream } from './components/reply-stream';
 import { ReplyThread } from './components/reply-thread';
-import { atHandle, initials } from './helpers';
+import {
+    adjacentIndex,
+    atHandle,
+    engagementShortcut,
+    initials,
+    nextAfterArchive,
+} from './helpers';
 import type {
     AccountFacet,
     EngagementFilters,
@@ -96,6 +114,19 @@ function StreamEmpty({ filtered }: { filtered: boolean }) {
     );
 }
 
+function ShortcutHint({ keys, label }: { keys: string[]; label: string }) {
+    return (
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-0.5">
+                {keys.map((key) => (
+                    <Kbd key={key}>{key}</Kbd>
+                ))}
+            </span>
+            <span>{label}</span>
+        </span>
+    );
+}
+
 function ConversationPrompt() {
     return (
         <Empty className="h-full">
@@ -109,6 +140,12 @@ function ConversationPrompt() {
                     respond.
                 </EmptyDescription>
             </EmptyHeader>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-6">
+                <ShortcutHint keys={['↑', '↓']} label="move" />
+                <ShortcutHint keys={['A']} label="archive" />
+                <ShortcutHint keys={['O']} label="open comment" />
+                <ShortcutHint keys={['R']} label="reply" />
+            </div>
         </Empty>
     );
 }
@@ -163,12 +200,14 @@ function EngagementDisabledBanner({
 type RightPaneProps = {
     selected: ReplyItem;
     onArchived: () => void;
+    replyTextareaRef?: RefObject<HTMLTextAreaElement | null>;
     reserveCloseButtonSpace?: boolean;
 };
 
 function RightPane({
     selected,
     onArchived,
+    replyTextareaRef,
     reserveCloseButtonSpace = false,
 }: RightPaneProps) {
     const [thread, setThread] = useState<ReplyItem[]>([]);
@@ -176,6 +215,23 @@ function RightPane({
     const [loading, setLoading] = useState(false);
 
     const selectedId = selected.id;
+    const platformName = platformLabel(selected.platform);
+    const commentOnPlatformUrl = postPermalink(
+        selected.platform,
+        selected.author_handle,
+        selected.remote_reply_id,
+    );
+    const postOnPlatformUrl = postPermalink(
+        selected.platform,
+        selected.account_handle,
+        selected.post_remote_id,
+    );
+    const postInShoutrrrUrl = selected.post_id
+        ? ComposerController.show(selected.post_id).url
+        : null;
+    const hasOpenTargets = Boolean(
+        commentOnPlatformUrl || postOnPlatformUrl || postInShoutrrrUrl,
+    );
 
     useEffect(() => {
         setLoading(true);
@@ -299,10 +355,10 @@ function RightPane({
     }
 
     return (
-        <div className="flex h-full flex-col">
+        <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
             <header
                 className={cn(
-                    'flex items-center gap-2.5 border-b px-4 py-3',
+                    'flex shrink-0 items-center gap-2.5 border-b px-4 py-3',
                     reserveCloseButtonSpace && 'pr-14',
                 )}
             >
@@ -334,50 +390,101 @@ function RightPane({
                             : ''}
                     </div>
                 </div>
-                {selected.post_id ? (
-                    <Button
-                        nativeButton={false}
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1 text-muted-foreground hover:text-foreground"
+                {hasOpenTargets ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            render={
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="gap-1 text-muted-foreground hover:text-foreground"
+                                />
+                            }
+                        >
+                            Open in
+                            <ChevronDown className="size-3.5 opacity-70" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            className="min-w-64 whitespace-nowrap"
+                        >
+                            {commentOnPlatformUrl ? (
+                                <DropdownMenuItem
+                                    render={
+                                        <a
+                                            href={commentOnPlatformUrl}
+                                            target="_blank"
+                                            rel="noreferrer noopener"
+                                        />
+                                    }
+                                >
+                                    <span className="flex-1">
+                                        Open comment on {platformName}
+                                    </span>
+                                    <Kbd className="ml-2 h-5 min-w-5 px-1 text-[10px]">
+                                        O
+                                    </Kbd>
+                                </DropdownMenuItem>
+                            ) : null}
+                            {postOnPlatformUrl ? (
+                                <DropdownMenuItem
+                                    render={
+                                        <a
+                                            href={postOnPlatformUrl}
+                                            target="_blank"
+                                            rel="noreferrer noopener"
+                                        />
+                                    }
+                                >
+                                    Open post on {platformName}
+                                </DropdownMenuItem>
+                            ) : null}
+                            {postInShoutrrrUrl ? (
+                                <DropdownMenuItem
+                                    render={<Link href={postInShoutrrrUrl} />}
+                                >
+                                    Open in Shoutrrr
+                                </DropdownMenuItem>
+                            ) : null}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : null}
+                <Tooltip>
+                    <TooltipTrigger
                         render={
-                            <Link
-                                href={
-                                    ComposerController.show(selected.post_id)
-                                        .url
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label="Archive reply"
+                                className="gap-1.5 text-muted-foreground hover:text-foreground"
+                                onClick={() =>
+                                    router.post(
+                                        archiveRoute(selected.id).url,
+                                        {},
+                                        {
+                                            preserveScroll: true,
+                                            onSuccess: onArchived,
+                                        },
+                                    )
                                 }
                             />
                         }
                     >
-                        Post
-                        <ArrowUpRight className="size-3.5" />
-                    </Button>
-                ) : null}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Archive reply"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() =>
-                        router.post(
-                            archiveRoute(selected.id).url,
-                            {},
-                            { preserveScroll: true, onSuccess: onArchived },
-                        )
-                    }
-                >
-                    <Archive className="size-4" />
-                </Button>
+                        <Archive className="size-4" />
+                        <Kbd className="h-5 min-w-5 px-1 text-[10px]">A</Kbd>
+                    </TooltipTrigger>
+                    <TooltipContent
+                        side="bottom"
+                        className="flex items-center gap-1.5"
+                    >
+                        Archive
+                        <Kbd>A</Kbd>
+                    </TooltipContent>
+                </Tooltip>
             </header>
 
             <ReplyThread
                 postExcerpt={postExcerpt}
-                postUrl={postPermalink(
-                    selected.platform,
-                    selected.account_handle,
-                    selected.post_remote_id,
-                )}
-                platform={selected.platform}
                 thread={thread}
                 loading={loading}
                 onToggleLike={toggleLike}
@@ -395,6 +502,7 @@ function RightPane({
                         ? 'This account is disabled in the workspace. Enable it in Accounts to reply.'
                         : undefined
                 }
+                textareaRef={replyTextareaRef}
                 onSend={send}
             />
         </div>
@@ -409,6 +517,7 @@ export default function EngagementIndex({
 }: PageProps) {
     const isMobile = useIsMobile();
     const [selected, setSelected] = useState<ReplyItem | null>(null);
+    const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
     const items = replies?.data ?? [];
     const disabledPlatforms = disabledPlatformLabels(engagementEnabled);
@@ -426,21 +535,143 @@ export default function EngagementIndex({
         setSelected(null);
     }
 
+    function selectById(id: string | null) {
+        if (id === null) {
+            setSelected(null);
+            return;
+        }
+
+        const next = items.find((item) => item.id === id) ?? null;
+        setSelected(next);
+    }
+
+    function moveSelection(delta: 1 | -1) {
+        if (items.length === 0) {
+            return;
+        }
+
+        const currentIndex = selected
+            ? items.findIndex((item) => item.id === selected.id)
+            : -1;
+        const nextIndex = adjacentIndex(items.length, currentIndex, delta);
+        const next = items[nextIndex];
+
+        if (!next) {
+            return;
+        }
+
+        setSelected(next);
+        requestAnimationFrame(() => {
+            document
+                .getElementById(`engagement-reply-${next.id}`)
+                ?.scrollIntoView({ block: 'nearest' });
+        });
+    }
+
+    function archiveSelected() {
+        if (!selected) {
+            return;
+        }
+
+        const archivedId = selected.id;
+        const nextId = nextAfterArchive(
+            items.map((item) => item.id),
+            archivedId,
+        );
+
+        router.post(
+            archiveRoute(archivedId).url,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    selectById(nextId);
+                },
+            },
+        );
+    }
+
+    function focusReply() {
+        if (!selected) {
+            return;
+        }
+
+        replyTextareaRef.current?.focus();
+    }
+
+    function openSelectedComment() {
+        if (!selected) {
+            return;
+        }
+
+        const url = postPermalink(
+            selected.platform,
+            selected.author_handle,
+            selected.remote_reply_id,
+        );
+
+        if (!url) {
+            return;
+        }
+
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    useEffect(() => {
+        function onKeyDown(event: KeyboardEvent) {
+            const shortcut = engagementShortcut(event);
+
+            if (!shortcut) {
+                return;
+            }
+
+            event.preventDefault();
+
+            switch (shortcut.type) {
+                case 'next':
+                    moveSelection(1);
+                    break;
+                case 'prev':
+                    moveSelection(-1);
+                    break;
+                case 'archive':
+                    archiveSelected();
+                    break;
+                case 'open':
+                    openSelectedComment();
+                    break;
+                case 'reply':
+                    focusReply();
+                    break;
+            }
+        }
+
+        document.addEventListener('keydown', onKeyDown);
+
+        return () => document.removeEventListener('keydown', onKeyDown);
+    });
+
     return (
         <>
             <Head title="Engagement" />
 
-            <div className="grid h-full grid-cols-1 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            {/*
+              Fill the viewport below the sticky app header (h-16) so each
+              column owns its own scroll and the reply box stays pinned.
+            */}
+            <div className="grid h-[calc(100svh-4rem)] min-h-0 grid-cols-1 overflow-hidden md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                 {/* Left: triage column */}
-                <div className="flex min-h-0 flex-col border-r">
+                <div className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r">
                     <EngagementDisabledBanner
                         disabledPlatforms={disabledPlatforms}
                     />
-                    <ReplyFilters
-                        filters={filters}
-                        accounts={facets.accounts}
-                        posts={facets.posts}
-                    />
+                    <div className="shrink-0">
+                        <ReplyFilters
+                            filters={filters}
+                            accounts={facets.accounts}
+                            posts={facets.posts}
+                        />
+                    </div>
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         <Deferred data="replies" fallback={<StreamSkeleton />}>
                             {allEngagementDisabled && items.length === 0 ? (
@@ -456,15 +687,31 @@ export default function EngagementIndex({
                             )}
                         </Deferred>
                     </div>
+                    {items.length > 0 ? (
+                        <div className="hidden shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t px-3 py-2 md:flex">
+                            <ShortcutHint keys={['↑', '↓']} label="move" />
+                            <ShortcutHint keys={['A']} label="archive" />
+                            <ShortcutHint keys={['O']} label="open comment" />
+                            <ShortcutHint keys={['R']} label="reply" />
+                        </div>
+                    ) : null}
                 </div>
 
                 {/* Right: conversation desk (desktop) */}
                 {!isMobile ? (
-                    <div className="hidden min-h-0 flex-col md:flex">
+                    <div className="hidden min-h-0 min-w-0 flex-col overflow-hidden md:flex">
                         {selected ? (
                             <RightPane
                                 selected={selected}
-                                onArchived={clearSelection}
+                                onArchived={() =>
+                                    selectById(
+                                        nextAfterArchive(
+                                            items.map((item) => item.id),
+                                            selected.id,
+                                        ),
+                                    )
+                                }
+                                replyTextareaRef={replyTextareaRef}
                             />
                         ) : allEngagementDisabled ? (
                             <EngagementDisabledNotice />
@@ -487,7 +734,7 @@ export default function EngagementIndex({
                 >
                     <SheetContent
                         side="right"
-                        className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+                        className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
                     >
                         <SheetTitle className="sr-only">
                             Conversation
@@ -495,7 +742,15 @@ export default function EngagementIndex({
                         {selected ? (
                             <RightPane
                                 selected={selected}
-                                onArchived={clearSelection}
+                                onArchived={() =>
+                                    selectById(
+                                        nextAfterArchive(
+                                            items.map((item) => item.id),
+                                            selected.id,
+                                        ),
+                                    )
+                                }
+                                replyTextareaRef={replyTextareaRef}
                                 reserveCloseButtonSpace
                             />
                         ) : null}
