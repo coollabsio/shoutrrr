@@ -1,9 +1,13 @@
-import type { PlatformName, WorkspaceMention } from '@/types/compose';
+import type {
+    MentionHandles,
+    PlatformName,
+    WorkspaceMention,
+} from '@/types/compose';
 
 export type MentionPlaceholder = {
     id: string;
     label: string;
-    handles: Partial<Record<PlatformName, string>>;
+    handles: MentionHandles;
 };
 
 const PLATFORMS: PlatformName[] = [
@@ -51,7 +55,7 @@ export function updateMentionName(
                 ? mentionTextInput(platform as PlatformName, label)
                 : handle,
         ]),
-    ) as Partial<Record<PlatformName, string>>;
+    ) as MentionHandles;
 
     return {
         ...mention,
@@ -73,6 +77,27 @@ export function updateMentionHandle(
         delete handles[platform];
     } else {
         handles[platform] = mentionTextInput(platform, trimmed, useMention);
+    }
+
+    return { ...mention, handles };
+}
+
+/**
+ * Set (or clear) the non-platform `linkedin_urn` handle key — the raw LinkedIn
+ * company URL / numeric id / `urn:li:organization:ID` used to emit a real
+ * LinkedIn @tag at publish time. The value is stored verbatim (trimmed); the
+ * server normalizes it into a canonical URN on save.
+ */
+export function updateMentionLinkedInUrn(
+    mention: MentionPlaceholder,
+    value: string,
+): MentionPlaceholder {
+    const handles = { ...mention.handles };
+    const trimmed = value.trim();
+    if (trimmed === '') {
+        delete handles.linkedin_urn;
+    } else {
+        handles.linkedin_urn = trimmed;
     }
 
     return { ...mention, handles };

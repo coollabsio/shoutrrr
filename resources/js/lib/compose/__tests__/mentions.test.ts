@@ -6,8 +6,10 @@ import {
     mentionToken,
     replaceMentionLabel,
     replaceMentionTokens,
+    savedMentionToPlaceholder,
     setPlatformMentionMode,
     updateMentionHandle,
+    updateMentionLinkedInUrn,
     updateMentionName,
     syncMentionsFromText,
     usesPlatformMention,
@@ -281,6 +283,61 @@ describe('syncMentionsFromText', () => {
             x: '@guest_x',
             bluesky: '@guest.bsky.social',
         });
+    });
+});
+
+describe('linkedin org reference', () => {
+    it('carries linkedin_urn through the saved-mention round-trip', () => {
+        const placeholder = savedMentionToPlaceholder({
+            id: 'acme-id',
+            name: '@acme',
+            handles: {
+                linkedin: 'Acme Corp',
+                linkedin_urn: 'https://www.linkedin.com/company/acme/',
+            },
+        });
+
+        expect(placeholder.handles.linkedin_urn).toBe(
+            'https://www.linkedin.com/company/acme/',
+        );
+        // Serializing (as save/autosave payloads do) preserves the key.
+        expect(JSON.parse(JSON.stringify(placeholder.handles))).toEqual({
+            linkedin: 'Acme Corp',
+            linkedin_urn: 'https://www.linkedin.com/company/acme/',
+        });
+    });
+
+    it('leaves the LinkedIn preview output as the plain display name', () => {
+        const mention = savedMentionToPlaceholder({
+            id: 'acme-id',
+            name: '@acme',
+            handles: {
+                linkedin: 'Acme Corp',
+                linkedin_urn: 'urn:li:organization:123',
+            },
+        });
+
+        expect(
+            replaceMentionTokens('Hi {{mention:acme}}', [mention], 'linkedin'),
+        ).toBe('Hi Acme Corp');
+    });
+
+    it('sets a trimmed linkedin_urn and clears it when emptied', () => {
+        const mention: MentionPlaceholder = {
+            id: 'acme',
+            label: '@acme',
+            handles: { linkedin: 'Acme Corp' },
+        };
+
+        const withUrn = updateMentionLinkedInUrn(
+            mention,
+            '  urn:li:organization:123  ',
+        );
+        expect(withUrn.handles.linkedin_urn).toBe('urn:li:organization:123');
+        expect(withUrn.handles.linkedin).toBe('Acme Corp');
+
+        const cleared = updateMentionLinkedInUrn(withUrn, '   ');
+        expect(cleared.handles.linkedin_urn).toBeUndefined();
     });
 });
 

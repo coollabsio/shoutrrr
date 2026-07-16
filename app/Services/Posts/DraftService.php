@@ -15,12 +15,19 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Support\InstanceSettings;
+use App\Support\LinkedInOrg;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 
 class DraftService
 {
+    /**
+     * Handle-map key holding a mention's LinkedIn organization URN. Not a real
+     * platform — it augments the `linkedin` display handle to produce a tag.
+     */
+    private const string LINKEDIN_URN_KEY = 'linkedin_urn';
+
     public function __construct(private readonly PostSplitter $splitter) {}
 
     /**
@@ -259,13 +266,30 @@ class DraftService
 
             $handles = [];
             foreach (($mention['handles'] ?? []) as $platform => $handle) {
+                $platform = (string) $platform;
                 $handle = trim((string) $handle);
-                if ($handle !== '') {
-                    $platform = (string) $platform;
-                    $handles[$platform] = $platform === Platform::LinkedIn->value
-                        ? ltrim($handle, '@')
-                        : $handle;
+                if ($handle === '') {
+                    continue;
                 }
+
+                if ($platform === self::LINKEDIN_URN_KEY) {
+                    $urn = LinkedInOrg::normalizeUrn($handle);
+                    if ($urn !== null) {
+                        $handles[$platform] = $urn;
+                    }
+
+                    continue;
+                }
+
+                if ($platform === Platform::LinkedIn->value) {
+                    // '@'-only handles collapse to empty; drop so the label is used instead.
+                    $handle = ltrim($handle, '@');
+                    if ($handle === '') {
+                        continue;
+                    }
+                }
+
+                $handles[$platform] = $handle;
             }
 
             $normalized[] = [
@@ -310,9 +334,28 @@ class DraftService
      */
     private function mentionTextForPlatform(array $mention, string $platform): string
     {
-        $handle = $mention['handles'][$platform] ?? $mention['label'];
+        $handle = trim((string) ($mention['handles'][$platform] ?? ''));
+        if ($handle === '') {
+            $handle = (string) $mention['label'];
+        }
 
-        return $platform === Platform::LinkedIn->value ? ltrim($handle, '@') : $handle;
+        if ($platform !== Platform::LinkedIn->value) {
+            return $handle;
+        }
+
+        // LinkedIn tags are plain text unless a real org URN is stored, in which
+        // case emit the inline `@[Name](urn:li:organization:ID)` annotation.
+        $display = ltrim($handle, '@');
+        if ($display === '') {
+            $display = (string) $mention['label'];
+        }
+
+        $urn = trim((string) ($mention['handles'][self::LINKEDIN_URN_KEY] ?? ''));
+        if ($urn !== '' && LinkedInOrg::isOrgUrn($urn)) {
+            return '@['.$display.']('.$urn.')';
+        }
+
+        return $display;
     }
 
     /**

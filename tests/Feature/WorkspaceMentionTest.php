@@ -79,3 +79,40 @@ it('preserves saved display text for people without a platform mention', functio
         ->assertSuccessful()
         ->assertJsonPath('mention.handles.linkedin', 'Taylor Otwell');
 });
+
+it('normalizes a saved LinkedIn org reference into a canonical URN', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    $this->actingAs($user)
+        ->postJson(route('workspace-mentions.store'), [
+            'name' => '@coolify',
+            'handles' => [
+                'linkedin' => 'Coolify',
+                'linkedin_urn' => 'https://www.linkedin.com/company/12345/',
+            ],
+        ])
+        ->assertSuccessful()
+        ->assertJsonPath('mention.handles.linkedin', 'Coolify')
+        ->assertJsonPath('mention.handles.linkedin_urn', 'urn:li:organization:12345');
+});
+
+it('drops an unresolvable LinkedIn org reference (vanity slug needs the lookup API)', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    $this->actingAs($user)
+        ->postJson(route('workspace-mentions.store'), [
+            'name' => '@coolify',
+            'handles' => [
+                'linkedin' => 'Coolify',
+                'linkedin_urn' => 'coolify',
+            ],
+        ])
+        ->assertSuccessful()
+        ->assertJsonMissingPath('mention.handles.linkedin_urn');
+});
