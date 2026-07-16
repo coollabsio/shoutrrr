@@ -1,4 +1,4 @@
-import { ArrowLeft, Pencil, Plus } from 'lucide-react';
+import { ArrowLeft, Building2, Info, Pencil, Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -14,14 +14,17 @@ import {
 import {
     InputGroup,
     InputGroupAddon,
+    InputGroupButton,
     InputGroupInput,
 } from '@/components/ui/input-group';
 import {
+    extractLinkedInOrgRef,
     mentionInputValue,
     normalizeMentionName,
     savedMentionToPlaceholder,
     setPlatformMentionMode,
     updateMentionHandle,
+    updateMentionLinkedInUrn,
     updateMentionName,
     usesPlatformMention,
 } from '@/lib/compose/mentions';
@@ -358,10 +361,22 @@ function MentionHandleEditor({
             </div>
             <div className="flex flex-col gap-2">
                 {activePlatforms.map((platform) => {
-                    const canUseMention = platform !== 'linkedin';
-                    const useMention =
-                        canUseMention &&
-                        usesPlatformMention(activeMention, platform);
+                    if (platform === 'linkedin') {
+                        // Keyed on the mention id so the local tag-mode/vanity
+                        // state resets when a different mention is edited.
+                        return (
+                            <LinkedInMentionField
+                                key={`linkedin-${activeMention.id}`}
+                                activeMention={activeMention}
+                                onUpdateMention={onUpdateMention}
+                            />
+                        );
+                    }
+
+                    const useMention = usesPlatformMention(
+                        activeMention,
+                        platform,
+                    );
                     const handleValue =
                         activeMention.handles[platform] ?? activeMention.label;
 
@@ -378,40 +393,34 @@ function MentionHandleEditor({
                                 />
                                 <span className="capitalize">{platform}</span>
                             </span>
-                            <div className="flex gap-2">
-                                <InputGroup className="h-9 min-w-0 flex-1 rounded-lg border-border bg-background">
-                                    {useMention && (
-                                        <InputGroupAddon>@</InputGroupAddon>
-                                    )}
-                                    <InputGroupInput
-                                        value={mentionInputValue(handleValue)}
-                                        placeholder={
-                                            useMention
-                                                ? 'handle'
-                                                : 'display name'
-                                        }
-                                        aria-label={`${platform} ${
-                                            useMention
-                                                ? 'handle'
-                                                : 'display text'
-                                        } for ${activeMention.label}`}
-                                        onChange={(event) =>
-                                            onUpdateMention(
+                            <InputGroup className="min-h-9 w-full min-w-0 rounded-lg border-border bg-background">
+                                {useMention && (
+                                    <InputGroupAddon className="pr-0 text-foreground">
+                                        @
+                                    </InputGroupAddon>
+                                )}
+                                <InputGroupInput
+                                    value={mentionInputValue(handleValue)}
+                                    placeholder={
+                                        useMention ? 'handle' : 'display name'
+                                    }
+                                    aria-label={`${platform} ${
+                                        useMention ? 'handle' : 'display text'
+                                    } for ${activeMention.label}`}
+                                    onChange={(event) =>
+                                        onUpdateMention(
+                                            activeMention,
+                                            updateMentionHandle(
                                                 activeMention,
-                                                updateMentionHandle(
-                                                    activeMention,
-                                                    platform,
-                                                    event.target.value,
-                                                    useMention,
-                                                ),
-                                            )
-                                        }
-                                    />
-                                </InputGroup>
-                                {canUseMention && (
-                                    <button
-                                        type="button"
-                                        className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                                                platform,
+                                                event.target.value,
+                                                useMention,
+                                            ),
+                                        )
+                                    }
+                                />
+                                <InputGroupAddon align="inline-end">
+                                    <InputGroupButton
                                         onClick={() =>
                                             onUpdateMention(
                                                 activeMention,
@@ -424,11 +433,11 @@ function MentionHandleEditor({
                                         }
                                     >
                                         {useMention
-                                            ? 'Use text only'
-                                            : 'Use @ mention'}
-                                    </button>
-                                )}
-                            </div>
+                                            ? 'Plain text'
+                                            : '@ mention'}
+                                    </InputGroupButton>
+                                </InputGroupAddon>
+                            </InputGroup>
                         </label>
                     );
                 })}
@@ -450,5 +459,143 @@ function MentionHandleEditor({
                 </button>
             )}
         </>
+    );
+}
+
+type LinkedInMentionFieldProps = {
+    activeMention: MentionPlaceholder;
+    onUpdateMention: (
+        previous: MentionPlaceholder,
+        next: MentionPlaceholder,
+    ) => void;
+};
+
+/**
+ * The LinkedIn display-name field with a plain-text ⇄ tag toggle. In tag mode a
+ * pasted company URL / org URN is auto-detected: the URN is routed to
+ * `linkedin_urn` and stripped from the field, leaving only the display name.
+ * Local state (pre-URN toggle intent + vanity hint) resets per mention because
+ * the parent keys this element on the mention id.
+ */
+function LinkedInMentionField({
+    activeMention,
+    onUpdateMention,
+}: LinkedInMentionFieldProps) {
+    const [tagIntent, setTagIntent] = useState(false);
+    const [vanityHint, setVanityHint] = useState<string | null>(null);
+    const urn = activeMention.handles.linkedin_urn;
+    const tagMode = Boolean(urn) || tagIntent;
+    const displayValue = mentionInputValue(
+        activeMention.handles.linkedin ?? activeMention.label,
+    );
+
+    function handleChange(value: string) {
+        if (!tagMode) {
+            onUpdateMention(
+                activeMention,
+                updateMentionHandle(activeMention, 'linkedin', value, false),
+            );
+
+            return;
+        }
+
+        const { urn: foundUrn, vanity, rest } = extractLinkedInOrgRef(value);
+        let next = updateMentionHandle(activeMention, 'linkedin', rest, false);
+        if (foundUrn) {
+            next = updateMentionLinkedInUrn(next, foundUrn);
+        }
+
+        setVanityHint(foundUrn ? null : vanity);
+        onUpdateMention(activeMention, next);
+    }
+
+    function toggleMode() {
+        if (tagMode) {
+            setTagIntent(false);
+            setVanityHint(null);
+            onUpdateMention(
+                activeMention,
+                updateMentionLinkedInUrn(activeMention, ''),
+            );
+
+            return;
+        }
+
+        setTagIntent(true);
+    }
+
+    function removeUrn() {
+        setVanityHint(null);
+        onUpdateMention(
+            activeMention,
+            updateMentionLinkedInUrn(activeMention, ''),
+        );
+    }
+
+    return (
+        <label className="flex flex-col gap-1.5 text-xs">
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <PlatformGlyph
+                    platform="linkedin"
+                    size={14}
+                    className="text-foreground"
+                />
+                <span className="capitalize">linkedin</span>
+            </span>
+            <InputGroup className="min-h-9 w-full min-w-0 rounded-lg border-border bg-background">
+                <InputGroupInput
+                    value={displayValue}
+                    placeholder={
+                        tagMode ? 'Company name' : 'Name shown on LinkedIn'
+                    }
+                    aria-label={`linkedin ${
+                        tagMode ? 'company name' : 'display text'
+                    } for ${activeMention.label}`}
+                    onChange={(event) => handleChange(event.target.value)}
+                />
+                <InputGroupAddon align="inline-end">
+                    <InputGroupButton onClick={toggleMode}>
+                        {tagMode ? 'Plain text' : 'Tag company'}
+                    </InputGroupButton>
+                </InputGroupAddon>
+            </InputGroup>
+            {tagMode &&
+                (urn ? (
+                    <span className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-2 py-1.5">
+                        <Building2 className="size-3.5 shrink-0 text-primary" />
+                        <span className="text-foreground">Company linked</span>
+                        <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+                            {urn}
+                        </code>
+                        <button
+                            type="button"
+                            onClick={removeUrn}
+                            aria-label="Remove company tag"
+                            className="inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted-foreground/15 hover:text-foreground"
+                        >
+                            <X className="size-3" />
+                        </button>
+                    </span>
+                ) : vanityHint ? (
+                    <span className="flex items-start gap-1.5 text-muted-foreground">
+                        <Info className="mt-px size-3.5 shrink-0" />
+                        <span>
+                            That link doesn&rsquo;t include the company ID.
+                            Paste the URL with its number, or the
+                            company&rsquo;s URN.
+                        </span>
+                    </span>
+                ) : (
+                    <span className="text-muted-foreground">
+                        Paste the company&rsquo;s LinkedIn page URL to tag them.
+                    </span>
+                ))}
+            {tagMode && urn && (
+                <span className="text-[11px] text-muted-foreground/80">
+                    Match the company&rsquo;s exact name above, or LinkedIn
+                    won&rsquo;t link it.
+                </span>
+            )}
+        </label>
     );
 }

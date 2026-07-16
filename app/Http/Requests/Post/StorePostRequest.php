@@ -31,6 +31,7 @@ class StorePostRequest extends FormRequest
             'mentions.*.handles.x' => ['nullable', 'string'],
             'mentions.*.handles.bluesky' => ['nullable', 'string'],
             'mentions.*.handles.linkedin' => ['nullable', 'string'],
+            'mentions.*.handles.linkedin_urn' => ['nullable', 'string', 'max:255'],
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account', 'accounts'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],

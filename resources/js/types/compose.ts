@@ -11,16 +11,26 @@ export type PlatformName =
     | 'threads'
     | 'discord';
 
+/**
+ * Per-platform display text / handles for a mention, plus the non-platform
+ * `linkedin_urn` key which carries a raw LinkedIn company URL / numeric id /
+ * `urn:li:organization:ID`. The server normalizes it into a canonical URN on
+ * save; the client only captures and round-trips the raw string.
+ */
+export type MentionHandles = Partial<
+    Record<PlatformName | 'linkedin_urn', string>
+>;
+
 export type WorkspaceMention = {
     id: string;
     name: string;
-    handles: Partial<Record<PlatformName, string>>;
+    handles: MentionHandles;
 };
 
 export type MentionPlaceholder = {
     id: string;
     label: string;
-    handles: Partial<Record<PlatformName, string>>;
+    handles: MentionHandles;
 };
 
 export type Destination =
