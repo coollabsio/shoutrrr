@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
+import { type EditorBodyHandle } from '@/components/compose/editor-body';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,7 +52,7 @@ import {
     thread as threadRoute,
     unlike as unlikeRoute,
 } from '@/routes/engagement';
-import type { PlatformName } from '@/types/compose';
+import type { PlatformName, WorkspaceMention } from '@/types/compose';
 
 import { QuickReplyBox } from './components/quick-reply-box';
 import { ReplyFilters } from './components/reply-filters';
@@ -76,6 +77,7 @@ type PageProps = {
     filters: EngagementFilters;
     facets: { accounts: AccountFacet[]; posts: PostFacet[] };
     engagementEnabled: Record<PlatformName, boolean>;
+    savedMentions: WorkspaceMention[];
 };
 
 function StreamSkeleton() {
@@ -200,14 +202,16 @@ function EngagementDisabledBanner({
 type RightPaneProps = {
     selected: ReplyItem;
     onArchived: () => void;
-    replyTextareaRef?: RefObject<HTMLTextAreaElement | null>;
+    replyEditorRef?: RefObject<EditorBodyHandle | null>;
+    savedMentions: WorkspaceMention[];
     reserveCloseButtonSpace?: boolean;
 };
 
 function RightPane({
     selected,
     onArchived,
-    replyTextareaRef,
+    replyEditorRef,
+    savedMentions,
     reserveCloseButtonSpace = false,
 }: RightPaneProps) {
     const [thread, setThread] = useState<ReplyItem[]>([]);
@@ -491,7 +495,12 @@ function RightPane({
                 onDelete={remove}
             />
 
+            {/* Key by conversation so switching replies gives a fresh draft:
+                remounting clears the editor text, mentions, and in-flight media
+                (all local state, incl. useReplyMedia's) instead of carrying the
+                previous conversation's reply over. */}
             <QuickReplyBox
+                key={selected.id}
                 replyId={selected.id}
                 platform={selected.platform}
                 replyingTo={atHandle(selected.author_handle)}
@@ -502,7 +511,8 @@ function RightPane({
                         ? 'This account is disabled in the workspace. Enable it in Accounts to reply.'
                         : undefined
                 }
-                textareaRef={replyTextareaRef}
+                editorRef={replyEditorRef}
+                savedMentions={savedMentions}
                 onSend={send}
             />
         </div>
@@ -514,10 +524,11 @@ export default function EngagementIndex({
     filters,
     facets,
     engagementEnabled,
+    savedMentions,
 }: PageProps) {
     const isMobile = useIsMobile();
     const [selected, setSelected] = useState<ReplyItem | null>(null);
-    const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const replyEditorRef = useRef<EditorBodyHandle>(null);
 
     const items = replies?.data ?? [];
     const disabledPlatforms = disabledPlatformLabels(engagementEnabled);
@@ -596,7 +607,7 @@ export default function EngagementIndex({
             return;
         }
 
-        replyTextareaRef.current?.focus();
+        replyEditorRef.current?.focus();
     }
 
     function openSelectedComment() {
@@ -711,7 +722,8 @@ export default function EngagementIndex({
                                         ),
                                     )
                                 }
-                                replyTextareaRef={replyTextareaRef}
+                                replyEditorRef={replyEditorRef}
+                                savedMentions={savedMentions}
                             />
                         ) : allEngagementDisabled ? (
                             <EngagementDisabledNotice />
@@ -750,7 +762,8 @@ export default function EngagementIndex({
                                         ),
                                     )
                                 }
-                                replyTextareaRef={replyTextareaRef}
+                                replyEditorRef={replyEditorRef}
+                                savedMentions={savedMentions}
                                 reserveCloseButtonSpace
                             />
                         ) : null}
