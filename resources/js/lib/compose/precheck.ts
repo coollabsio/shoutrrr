@@ -10,6 +10,7 @@ import type {
 } from '@/types/compose';
 
 export type BlockReason =
+    | 'empty'
     | 'section_too_long'
     | 'too_many_sections'
     | 'too_many_media';
@@ -37,6 +38,8 @@ function byteLength(text: string): number {
 /**
  * Blocking reasons for one account, mirroring the sections the server's
  * PostSplitter will actually store:
+ *  - no text and no media: nothing to post, so `empty` is the only reason —
+ *    the length/media checks below are meaningless on it.
  *  - thread-capped platform (threadMax !== null): all segments collapse into a
  *    single joined section.
  *  - non-capped + auto-split ON: the server hard-splits any over-limit paragraph
@@ -56,6 +59,10 @@ export function precheckAccount({
     const clean = segments
         .map((segment) => segment.trim())
         .filter((segment) => segment !== '');
+
+    if (clean.length === 0 && mediaCount === 0) {
+        return ['empty'];
+    }
 
     const capped = limits.threadMax !== null;
     const sections = capped ? [clean.join('\n')] : autoSplit ? [] : clean;
@@ -152,6 +159,8 @@ export function describeReason(
 ): string {
     const label = platformLabel(platform);
     switch (reason) {
+        case 'empty':
+            return 'add some text or media before publishing';
         case 'section_too_long': {
             const base = `over ${label}'s ${limits.maxLength.toLocaleString()}-character limit`;
 

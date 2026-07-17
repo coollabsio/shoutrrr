@@ -3,6 +3,7 @@
 use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Posts\PublishPrecheck;
 
@@ -29,6 +30,45 @@ test('blockingTargets passes a within-limit target', function () {
     PostTarget::factory()->for($post)->create([
         'platform' => Platform::X->value,
         'sections' => ['hello world'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
+test('blockingTargets flags a target with no text and no media', function () {
+    $post = Post::factory()->create();
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => [''],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toBe(['empty']);
+});
+
+test('blockingTargets flags a target whose sections are only whitespace', function () {
+    $post = Post::factory()->create();
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['   ', "\n"],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toBe(['empty']);
+});
+
+test('blockingTargets passes a media-only target with no text', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create();
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => [''],
     ]);
 
     $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));

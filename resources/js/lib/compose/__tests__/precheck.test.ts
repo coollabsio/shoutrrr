@@ -134,7 +134,66 @@ describe('precheckDestinations', () => {
     });
 });
 
+describe('precheckAccount empty content', () => {
+    it('flags an account with no text and no media', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'x' }),
+            segments: [],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 0,
+            limits: limitsFor({ platform: 'x', maxLength: 280 }),
+        });
+        expect(reasons).toEqual(['empty']);
+    });
+
+    it('flags an account whose segments are only whitespace', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'x' }),
+            segments: ['   ', '\n'],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 0,
+            limits: limitsFor({ platform: 'x', maxLength: 280 }),
+        });
+        expect(reasons).toEqual(['empty']);
+    });
+
+    it('allows a media-only post with no text', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'x' }),
+            segments: [],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 1,
+            limits: limitsFor({ platform: 'x', maxLength: 280 }),
+        });
+        expect(reasons).toEqual([]);
+    });
+
+    it('does not flag empty on a thread-capped platform with text', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'linkedin' }),
+            segments: ['hello'],
+            autoSplit: false,
+            mentions: [],
+            mediaCount: 0,
+            limits: limitsFor({ platform: 'linkedin', threadMax: 1 }),
+        });
+        expect(reasons).toEqual([]);
+    });
+});
+
 describe('describeReason', () => {
+    it('describes empty content without a platform limit', () => {
+        const text = describeReason(
+            'empty',
+            'x',
+            limitsFor({ platform: 'x', maxLength: 280 }),
+        );
+        expect(text).toContain('text or media');
+    });
+
     it('describes an over-length non-capped platform with the auto-split hint', () => {
         const text = describeReason(
             'section_too_long',
