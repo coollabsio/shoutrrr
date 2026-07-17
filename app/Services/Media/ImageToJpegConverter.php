@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Media;
 
 use App\Models\PostMedia;
+use Illuminate\Support\Facades\Image;
 use Illuminate\Support\Facades\Storage;
-use Intervention\Image\Drivers\Gd\Driver as GdDriver;
-use Intervention\Image\Format;
-use Intervention\Image\ImageManager;
 use Throwable;
 
 /**
@@ -55,8 +53,10 @@ class ImageToJpegConverter
             // JPEG has no alpha; the GD JPEG encoder flattens onto the driver's
             // configured background (white), so transparent PNGs keep a white
             // backdrop rather than picking up black fringing.
-            $image = ImageManager::usingDriver(GdDriver::class)->decodeBinary($bytes);
-            $encoded = (string) $image->encodeUsingFormat(Format::JPEG, quality: self::QUALITY);
+            $encoded = Image::fromBytes($bytes)
+                ->toJpg()
+                ->quality(self::QUALITY)
+                ->toBytes();
         } catch (Throwable $e) {
             throw new ImageConversionFailed('Could not convert the image to JPEG.', previous: $e);
         }
