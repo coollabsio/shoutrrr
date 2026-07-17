@@ -70,6 +70,9 @@ test('the inbox exposes which engagement platforms are disabled', function (): v
             'bluesky' => true,
             'linkedin' => true,
         ],
+        // LinkedIn reply-fetching also requires the Community Management gate;
+        // without it LinkedIn stays disabled regardless of the polling toggle.
+        'linkedin_community_management_enabled' => true,
     ]);
 
     $this->actingAs($this->user)

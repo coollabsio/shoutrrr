@@ -103,6 +103,22 @@ class ConnectedAccount extends Model
     }
 
     /**
+     * Whether this account's credentials can read replies for the engagement
+     * inbox. Only LinkedIn is capability-gated: reading member comments needs the
+     * restricted `r_member_social_feed` scope, recorded at connect. Accounts
+     * connected before that grant (null capability) — or whose grant lacked it —
+     * are skipped so we don't hammer LinkedIn with calls that 403.
+     */
+    public function canFetchEngagement(): bool
+    {
+        if ($this->platform !== Platform::LinkedIn) {
+            return true;
+        }
+
+        return (bool) ($this->capabilities['linkedin_engagement'] ?? false);
+    }
+
+    /**
      * @param  Builder<ConnectedAccount>  $query
      */
     public function scopeEnabled(Builder $query): void

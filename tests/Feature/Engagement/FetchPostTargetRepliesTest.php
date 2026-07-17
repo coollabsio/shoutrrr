@@ -206,3 +206,51 @@ test('the job stores the base conversation id when fetched replies are out of or
 
     expect($child->conversation_remote_id)->toBe('at://base');
 });
+
+function linkedInTargetWithCapability(?bool $capable): PostTarget
+{
+    $post = Post::factory()->create();
+
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::LinkedIn,
+        'token_expires_at' => now()->addHour(),
+        'capabilities' => $capable === null ? null : ['linkedin_engagement' => $capable],
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'li-token',
+    ]);
+
+    return PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::LinkedIn,
+        'remote_id' => 'urn:li:share:1',
+        'remote_ids' => ['urn:li:share:1'],
+    ]);
+}
+
+test('linkedin reply fetch is skipped for an account without the engagement capability', function () {
+    $target = linkedInTargetWithCapability(null);
+
+    // The connector must never be reached — we know the call would 403.
+    $registry = Mockery::mock(EngagementConnectorRegistry::class);
+    $registry->shouldNotReceive('for');
+
+    (new FetchPostTargetReplies($target))->handle($registry, app(TokenManager::class), app(ReplyPersister::class), app(InstanceSettings::class));
+
+    expect($target->fresh()->reply_fetched_at)->toBeNull();
+});
+
+test('a linkedin unsupported fetch disables the account engagement capability', function () {
+    $target = linkedInTargetWithCapability(true);
+
+    $connector = Mockery::mock(EngagementConnector::class);
+    $connector->shouldReceive('fetchReplies')->andReturn(ReplyFetchResult::unsupported('no access'));
+    $registry = Mockery::mock(EngagementConnectorRegistry::class);
+    $registry->shouldReceive('for')->andReturn($connector);
+    app()->instance(EngagementConnectorRegistry::class, $registry);
+
+    (new FetchPostTargetReplies($target))->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class), app(ReplyPersister::class), app(InstanceSettings::class));
+
+    expect($target->account->fresh()->capabilities['linkedin_engagement'])->toBeFalse();
+});

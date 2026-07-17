@@ -39,11 +39,13 @@ test('instance owner can update instance settings', function () {
             'workspace_creation_enabled' => false,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
+            'linkedin_community_management_enabled' => true,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->registrationsEnabled())->toBeFalse()
-        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
+        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse()
+        ->and(app(InstanceSettings::class)->linkedinCommunityManagementEnabled())->toBeTrue();
 });
 
 test('workspace creation setting is disabled when workspaces are globally disabled', function () {
@@ -72,10 +74,23 @@ test('workspace creation setting cannot be enabled when workspaces are globally 
             'workspace_creation_enabled' => true,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
+            'linkedin_community_management_enabled' => false,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
+});
+
+test('linkedin engagement polling is gated on the community management setting', function () {
+    $settings = app(InstanceSettings::class);
+
+    // Off by default: LinkedIn must never be polled for replies (every fetch 403s
+    // without the restricted r_member_social_feed scope).
+    expect($settings->engagementPollingEnabled(Platform::LinkedIn))->toBeFalse();
+
+    $settings->update(['linkedin_community_management_enabled' => true]);
+
+    expect($settings->engagementPollingEnabled(Platform::LinkedIn))->toBeTrue();
 });
 
 test('instance owner can view polling settings', function () {

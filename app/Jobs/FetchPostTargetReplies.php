@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Enums\EngagementStatus;
+use App\Enums\Platform;
 use App\Exceptions\TokenRefreshException;
 use App\Jobs\Concerns\ReportsReplyFetch;
 use App\Jobs\Contracts\ReleasableJob;
@@ -87,6 +88,16 @@ class FetchPostTargetReplies implements ReleasableJob, ShouldBeUnique, ShouldQue
 
         $scope = "target:{$target->id}";
 
+        // Skip accounts whose credentials can't read replies (LinkedIn without the
+        // restricted Community Management scope), so we never issue a call we know
+        // will 403 — the dispatcher's platform gate stops most of this, but old
+        // LinkedIn accounts linger until they reconnect.
+        if (! $account->canFetchEngagement()) {
+            $this->logFetchOutcome($target->platform->value, $account->id, $scope, EngagementStatus::Unsupported->value);
+
+            return;
+        }
+
         try {
             $credentials = $tokens->fresh($account);
         } catch (TokenRefreshException) {
@@ -110,6 +121,15 @@ class FetchPostTargetReplies implements ReleasableJob, ShouldBeUnique, ShouldQue
         if (! $result->isOk()) {
             if ($result->status === EngagementStatus::RateLimited) {
                 $this->release($this->parkForRateLimit($account, $result->retryAfterSeconds));
+            }
+
+            // A LinkedIn 403 despite a positive capability means the restricted
+            // scope was revoked (or never truly effective) — record it so the
+            // account stops being polled until it reconnects.
+            if ($result->status === EngagementStatus::Unsupported && $target->platform === Platform::LinkedIn) {
+                $account->forceFill([
+                    'capabilities' => [...($account->capabilities ?? []), 'linkedin_engagement' => false],
+                ])->save();
             }
 
             $this->logFetchOutcome($target->platform->value, $account->id, $scope, $result->status->value, 0, $result->retryAfterSeconds);

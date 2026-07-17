@@ -37,6 +37,13 @@ class InstanceSettings
             return false;
         }
 
+        // LinkedIn reply-fetching needs the restricted `r_member_social_feed`
+        // Community Management scope. Unless the operator declares their app is
+        // approved for it, never poll LinkedIn — otherwise every fetch 403s.
+        if ($platform === Platform::LinkedIn && ! $this->linkedinCommunityManagementEnabled()) {
+            return false;
+        }
+
         return $this->platformAvailable($platform)
             && $this->platformEnabled('engagement_polling_enabled', $platform);
     }
@@ -56,6 +63,18 @@ class InstanceSettings
     public function quoteTweetsEnabled(): bool
     {
         return $this->boolean('quote_tweets_enabled');
+    }
+
+    /**
+     * Whether the operator has declared this instance's LinkedIn app is approved
+     * for the Community Management API. Gates requesting the restricted
+     * `r_member_social_feed`/`w_member_social_feed` scopes at connect and polling
+     * LinkedIn for replies. Off by default — the scopes are a closed LinkedIn
+     * product, so requesting them on an unapproved app breaks the connect flow.
+     */
+    public function linkedinCommunityManagementEnabled(): bool
+    {
+        return $this->boolean('linkedin_community_management_enabled');
     }
 
     /** Instance-wide metrics master switch. Defaults to `metrics.enabled` (env) until overridden here. */
@@ -111,7 +130,7 @@ class InstanceSettings
     }
 
     /**
-     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool}
+     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool, linkedin_community_management_enabled: bool}
      */
     public function all(): array
     {
@@ -120,6 +139,7 @@ class InstanceSettings
             'workspace_creation_enabled' => $this->workspaceCreationEnabled(),
             'usage_tracking_enabled' => $this->usageTrackingEnabled(),
             'quote_tweets_enabled' => $this->quoteTweetsEnabled(),
+            'linkedin_community_management_enabled' => $this->linkedinCommunityManagementEnabled(),
         ];
     }
 
@@ -173,7 +193,7 @@ class InstanceSettings
     }
 
     /**
-     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, engagement_polling_enabled?: bool|array<string, bool>, post_metrics_polling_enabled?: bool|array<string, bool>, account_metrics_polling_enabled?: bool|array<string, bool>, engagement_poll_interval_minutes?: array<string, int>, post_metrics_poll_interval_minutes?: array<string, int>, account_metrics_poll_interval_minutes?: array<string, int>}  $values
+     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, linkedin_community_management_enabled?: bool, engagement_polling_enabled?: bool|array<string, bool>, post_metrics_polling_enabled?: bool|array<string, bool>, account_metrics_polling_enabled?: bool|array<string, bool>, engagement_poll_interval_minutes?: array<string, int>, post_metrics_poll_interval_minutes?: array<string, int>, account_metrics_poll_interval_minutes?: array<string, int>}  $values
      */
     public function update(array $values): void
     {
