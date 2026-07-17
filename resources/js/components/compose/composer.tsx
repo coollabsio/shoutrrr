@@ -574,9 +574,10 @@ export default function Composer({
             state.overrideByAccount[accountId] !== undefined
                 ? (state.overrideByAccount[accountId] as string[])
                 : state.segments;
-        const mediaCount = state.media.filter(
-            (item) => !state.mediaSubsetExcludes.has(`${item.id}:${accountId}`),
-        ).length;
+        // Global media count — the connector publishes the full post media set to
+        // every target (see precheckDestinations), so per-account exclusions must
+        // not change the severity a destination shows.
+        const mediaCount = state.media.length;
         const reasons = precheckAccount({
             account,
             segments,
@@ -775,7 +776,6 @@ export default function Composer({
         autoSplitByAccount: state.autoSplitByAccount,
         overrideByAccount: state.overrideByAccount,
         media: state.media,
-        mediaSubsetExcludes: state.mediaSubsetExcludes,
         limits,
     });
 

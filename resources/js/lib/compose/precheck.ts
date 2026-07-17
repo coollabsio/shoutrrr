@@ -115,10 +115,18 @@ type PrecheckDestinationsInput = {
     autoSplitByAccount: Record<string, boolean>;
     overrideByAccount: Record<string, string[] | undefined>;
     media: MediaView[];
-    mediaSubsetExcludes: Set<string>;
     limits: PlatformLimits[];
 };
 
+/**
+ * Every target is judged against the FULL post media set, not a per-account
+ * subset. The publish path (PublishPostTarget::context) hands each connector the
+ * global `$post->media`, so that is what actually publishes; per-account media
+ * exclusions are not honored server-side. Filtering the count here would let the
+ * composer greenlight a destination the connector would then botch (e.g. dropping
+ * silently-mixed images), and disagree with the server PublishPrecheck. Keep this
+ * global so the client, the server precheck, and the connectors all agree.
+ */
 export function precheckDestinations({
     accounts,
     segments,
@@ -126,10 +134,10 @@ export function precheckDestinations({
     autoSplitByAccount,
     overrideByAccount,
     media,
-    mediaSubsetExcludes,
     limits,
 }: PrecheckDestinationsInput): AccountBlock[] {
     const blocks: AccountBlock[] = [];
+    const mediaCount = media.length;
 
     for (const account of accounts) {
         const platformLimits = limits.find(
@@ -139,9 +147,6 @@ export function precheckDestinations({
             continue;
         }
         const accountSegments = overrideByAccount[account.id] ?? segments;
-        const mediaCount = media.filter(
-            (item) => !mediaSubsetExcludes.has(`${item.id}:${account.id}`),
-        ).length;
         const reasons = precheckAccount({
             account,
             segments: accountSegments,

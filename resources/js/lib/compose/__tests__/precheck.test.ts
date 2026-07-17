@@ -112,6 +112,20 @@ describe('precheckAccount', () => {
     });
 });
 
+function mediaItem(over: Partial<MediaView> & { id: string }): MediaView {
+    return {
+        url: 'https://example.test/m.jpg',
+        mime: 'image/jpeg',
+        kind: 'image',
+        alt_text: null,
+        duration_seconds: null,
+        position: 0,
+        edit_settings: null,
+        source_url: null,
+        ...over,
+    };
+}
+
 describe('precheckDestinations', () => {
     it('returns one block per failing account with its handle', () => {
         const blocks = precheckDestinations({
@@ -124,7 +138,6 @@ describe('precheckDestinations', () => {
             autoSplitByAccount: { a: false, b: true },
             overrideByAccount: {},
             media: NO_MEDIA,
-            mediaSubsetExcludes: new Set<string>(),
             limits: [
                 limitsFor({ platform: 'bluesky', maxLength: 300 }),
                 limitsFor({ platform: 'x', maxLength: 280 }),
@@ -132,6 +145,30 @@ describe('precheckDestinations', () => {
         });
         expect(blocks).toHaveLength(1);
         expect(blocks[0]).toMatchObject({ accountId: 'a', handle: '@bsky' });
+    });
+
+    it('counts the full media set for every target — a per-account media exclusion does not reduce the count', () => {
+        // Five images over X's limit of 4. The composer may let a user "exclude"
+        // one image from X, but the connector publishes the full post media set,
+        // so the precheck must still block on the global count of 5.
+        const media = [
+            mediaItem({ id: 'm1' }),
+            mediaItem({ id: 'm2' }),
+            mediaItem({ id: 'm3' }),
+            mediaItem({ id: 'm4' }),
+            mediaItem({ id: 'm5' }),
+        ];
+        const blocks = precheckDestinations({
+            accounts: [accountFor({ id: 'x1', platform: 'x', handle: '@x' })],
+            segments: ['hi'],
+            mentions: [],
+            autoSplitByAccount: { x1: true },
+            overrideByAccount: {},
+            media,
+            limits: [limitsFor({ platform: 'x', maxMedia: 4 })],
+        });
+        expect(blocks).toHaveLength(1);
+        expect(blocks[0].reasons).toContain('too_many_media');
     });
 });
 
