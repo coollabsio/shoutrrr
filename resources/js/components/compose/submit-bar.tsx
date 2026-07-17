@@ -192,6 +192,13 @@ export function SubmitBar({
               : 'Schedule';
 
     async function handleSubmit() {
+        if (hasBlockingIssues(blockedAccounts)) {
+            setShowBlocked(true);
+            setServerBlocked([]);
+
+            return;
+        }
+
         if (
             !shouldAllowSubmit({
                 disabled,
@@ -202,13 +209,6 @@ export function SubmitBar({
                 queueDisabled,
             })
         ) {
-            return;
-        }
-
-        if (hasBlockingIssues(blockedAccounts)) {
-            setShowBlocked(true);
-            setServerBlocked([]);
-
             return;
         }
 
