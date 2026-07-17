@@ -219,6 +219,16 @@ test('linkedin preserves mention annotations while escaping surrounding text', f
     Http::assertSent(fn ($request) => $request['commentary'] === 'Built with @[coolLabs](urn:li:organization:2414183) \(open source\)');
 });
 
+test('linkedin leaves hashtags unescaped so LinkedIn links them', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    app(LinkedInConnector::class)->publish(liContext(['Shipping #v2 today (really) in C# too']));
+
+    Http::assertSent(fn ($request) => $request['commentary'] === 'Shipping #v2 today \(really\) in C\# too');
+});
+
 test('linkedin maps 401 to AuthExpired', function () {
     Http::fake(['https://api.linkedin.com/rest/posts' => Http::response(['message' => 'expired'], 401)]);
 

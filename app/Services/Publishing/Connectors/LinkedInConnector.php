@@ -171,22 +171,22 @@ class LinkedInConnector implements PublishConnector
             PREG_SPLIT_DELIM_CAPTURE,
         ) ?: [$text];
 
-        $escaped = array_map(function (string $part, int $index): string {
+        $escaped = '';
+
+        foreach ($parts as $index => $part) {
             // preg_split with DELIM_CAPTURE puts the captured mentions at odd offsets.
-            if ($index % 2 === 1) {
-                return $this->escapeMention($part);
-            }
+            $escaped .= $index % 2 === 1
+                ? $this->escapeMention($part)
+                : $this->escapePlainText($part);
+        }
 
-            return $this->escapePlainText($part);
-        }, $parts, array_keys($parts));
-
-        return implode('', $escaped);
+        return $escaped;
     }
 
     private function escapePlainText(string $text): string
     {
         return (string) preg_replace_callback(
-            '/#[\p{L}\p{N}_]+|[\\\\|{}@\[\]()<>#*_~]/u',
+            '/[\\\\|{}@\[\]()<>#*_~]/u',
             static fn (array $matches): string => mb_strlen($matches[0]) > 1 ? $matches[0] : '\\'.$matches[0],
             $text,
         );
