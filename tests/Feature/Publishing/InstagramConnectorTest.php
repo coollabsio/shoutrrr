@@ -172,11 +172,13 @@ test('instagram builds a carousel from two images then publishes the parent cont
     Http::assertSent(fn ($request) => str_contains($request->url(), '/ig123/media')
         && ! str_contains($request->url(), 'media_publish')
         && ($request['is_carousel_item'] ?? null) === 'true'
+        && ($request['media_type'] ?? null) === 'IMAGE'
         && str_contains((string) ($request['image_url'] ?? ''), 'a.jpg'));
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/ig123/media')
         && ! str_contains($request->url(), 'media_publish')
         && ($request['is_carousel_item'] ?? null) === 'true'
+        && ($request['media_type'] ?? null) === 'IMAGE'
         && str_contains((string) ($request['image_url'] ?? ''), 'b.jpg'));
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/ig123/media')
@@ -184,6 +186,34 @@ test('instagram builds a carousel from two images then publishes the parent cont
         && ($request['media_type'] ?? null) === 'CAROUSEL'
         && ($request['children'] ?? null) === 'child-1,child-2'
         && ($request['caption'] ?? null) === 'carousel caption');
+});
+
+test('instagram sets media_type=VIDEO on a carousel video child container', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/a.jpg', 'a-bytes');
+    Storage::disk('public')->put('media/clip.mp4', 'mp4-bytes');
+
+    $image = PostMedia::factory()->create(['disk' => 'public', 'path' => 'media/a.jpg', 'mime' => 'image/jpeg']);
+    $video = PostMedia::factory()->video()->create(['disk' => 'public', 'path' => 'media/clip.mp4']);
+
+    Http::fake([
+        'https://graph.facebook.com/*/ig123/media' => Http::sequence()
+            ->push(['id' => 'child-1'])
+            ->push(['id' => 'child-2'])
+            ->push(['id' => 'parent-1']),
+        'https://graph.facebook.com/*/parent-1*' => Http::response(['status_code' => 'FINISHED']),
+        'https://graph.facebook.com/*/ig123/media_publish' => Http::response(['id' => 'media-carousel']),
+    ]);
+
+    $result = app(InstagramConnector::class)->publish(igContext(['carousel caption'], [$image, $video]));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/ig123/media')
+        && ! str_contains($request->url(), 'media_publish')
+        && ($request['is_carousel_item'] ?? null) === 'true'
+        && ($request['media_type'] ?? null) === 'VIDEO'
+        && str_contains((string) ($request['video_url'] ?? ''), 'clip.mp4'));
 });
 
 test('instagram publishes a video as a REELS container', function () {

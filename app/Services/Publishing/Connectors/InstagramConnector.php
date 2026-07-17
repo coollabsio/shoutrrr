@@ -206,6 +206,7 @@ class InstagramConnector implements PublishConnector
     {
         $body = [
             'is_carousel_item' => 'true',
+            'media_type' => $media->isVideo() ? 'VIDEO' : 'IMAGE',
             'access_token' => $token,
         ];
         $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media, Platform::Instagram);

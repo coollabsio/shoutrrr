@@ -310,6 +310,45 @@ enum Platform: string
         };
     }
 
+    /**
+     * Whether a post is rejected without at least one image or video. Instagram
+     * is a media-first platform: its container flow has no text-only post type.
+     */
+    public function requiresMedia(): bool
+    {
+        return $this === self::Instagram;
+    }
+
+    /**
+     * Whether a post mixing a video with images survives publish intact.
+     * Instagram/Threads build a real mixed carousel (each item keeps its own
+     * media_type) and Discord attaches every file to the webhook message
+     * untouched — none of them lose content. X, Bluesky, Facebook, and LinkedIn
+     * each take only the first video and silently drop every image, so mixing
+     * there is blocked before publish rather than discovered after.
+     */
+    public function combinesVideoAndImages(): bool
+    {
+        return match ($this) {
+            self::Instagram, self::Threads, self::Discord => true,
+            self::X, self::Bluesky, self::Facebook, self::LinkedIn => false,
+        };
+    }
+
+    /**
+     * Whether the platform permits an animated GIF alongside other media. X and
+     * Bluesky treat a GIF as a video-like embed: at most one per post, never
+     * mixed with images or a second GIF. Both reject the mix at publish, so the
+     * precheck blocks it up front.
+     */
+    public function allowsGifWithOtherMedia(): bool
+    {
+        return match ($this) {
+            self::X, self::Bluesky => false,
+            default => true,
+        };
+    }
+
     public function maxMediaBytes(): int
     {
         return match ($this) {
@@ -407,7 +446,7 @@ enum Platform: string
     }
 
     /**
-     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
+     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
      */
     public function limits(): array
     {
@@ -416,6 +455,7 @@ enum Platform: string
             'maxLength' => $this->maxLength(),
             'maxBytes' => $this->maxBytes(),
             'maxMedia' => $this->maxMedia(),
+            'requiresMedia' => $this->requiresMedia(),
             'maxMediaBytes' => $this->maxMediaBytes(),
             'allowedMime' => $this->allowedMime(),
             'threadMax' => $this->threadMax(),
@@ -427,7 +467,7 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
+     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
      */
     public static function allLimits(): array
     {
