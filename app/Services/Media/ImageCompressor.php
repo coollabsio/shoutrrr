@@ -10,11 +10,13 @@ use Intervention\Image\ImageManager;
 use Throwable;
 
 /**
- * Re-encodes an oversized image to fit a target byte limit while keeping as much quality
- * as the budget allows: it picks the highest encoder quality that fits before downscaling,
- * and prefers WebP over JPEG when the target platform accepts it (WebP is smaller at equal
- * quality and preserves alpha). Images already within the limit (or GIFs, oversized-canvas
- * images, or undecodable bytes) are returned untouched.
+ * Re-encodes an image to fit a target byte limit AND a target platform's accepted mime
+ * types, keeping as much quality as the budget allows: it picks the highest encoder
+ * quality that fits before downscaling, and prefers WebP over JPEG when the target
+ * platform accepts it (WebP is smaller at equal quality and preserves alpha). An image
+ * already within the byte limit in an accepted mime is returned untouched; GIFs,
+ * oversized-canvas images, and undecodable bytes are always returned untouched (the
+ * connectors that hit those cases route GIFs through their own dedicated path instead).
  */
 class ImageCompressor
 {
@@ -45,7 +47,7 @@ class ImageCompressor
      */
     public function compressToFit(string $bytes, int $maxBytes, string $mime, array $allowedMimes): CompressionResult
     {
-        if (strlen($bytes) <= $maxBytes) {
+        if (strlen($bytes) <= $maxBytes && in_array($mime, $allowedMimes, true)) {
             return CompressionResult::untouched($bytes, $mime);
         }
 
