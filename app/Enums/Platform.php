@@ -320,18 +320,18 @@ enum Platform: string
     }
 
     /**
-     * Whether an image whose mime is outside allowedMime() is rejected at publish.
-     * Instagram and Threads hand Meta a URL it fetches as-is — nothing converts
-     * the file server-side — so a non-conforming image (a GIF, or a PNG attached
-     * before the account was selected) fails at the API. The other platforms run
-     * the bytes through ImageCompressor, which can re-encode to a supported mime,
-     * so a hard precheck block there would be a false positive.
+     * Whether a post mixing a video with images survives publish intact.
+     * Instagram/Threads build a real mixed carousel (each item keeps its own
+     * media_type) and Discord attaches every file to the webhook message
+     * untouched — none of them lose content. X, Bluesky, Facebook, and LinkedIn
+     * each take only the first video and silently drop every image, so mixing
+     * there is blocked before publish rather than discovered after.
      */
-    public function strictImageMime(): bool
+    public function combinesVideoAndImages(): bool
     {
         return match ($this) {
-            self::Instagram, self::Threads => true,
-            default => false,
+            self::Instagram, self::Threads, self::Discord => true,
+            self::X, self::Bluesky, self::Facebook, self::LinkedIn => false,
         };
     }
 

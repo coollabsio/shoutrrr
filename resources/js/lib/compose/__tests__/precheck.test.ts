@@ -306,16 +306,6 @@ describe('describeReason', () => {
         expect(text).toContain('GIF');
     });
 
-    it('describes an unsupported image format', () => {
-        const text = describeReason(
-            'media_wrong_format',
-            'instagram',
-            limitsFor({ platform: 'instagram' }),
-        );
-        expect(text).toContain('Instagram');
-        expect(text).toContain('image format');
-    });
-
     it('describes an over-length non-capped platform with the auto-split hint', () => {
         const text = describeReason(
             'section_too_long',

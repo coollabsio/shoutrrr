@@ -18,8 +18,7 @@ export type BlockReason =
     | 'mixed_video_and_images'
     | 'video_too_long'
     | 'video_too_large'
-    | 'gif_not_mixable'
-    | 'media_wrong_format';
+    | 'gif_not_mixable';
 
 export type AccountBlock = {
     accountId: string;
@@ -197,7 +196,5 @@ export function describeReason(
             return `the video is larger than ${label}'s ${Math.floor(limits.maxVideoBytes / (1024 * 1024))} MB limit`;
         case 'gif_not_mixable':
             return `${label} allows only one GIF and won't mix it with other media`;
-        case 'media_wrong_format':
-            return `${label} doesn't accept one of the attached image formats`;
     }
 }

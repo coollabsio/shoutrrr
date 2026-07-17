@@ -132,6 +132,71 @@ test('blockingTargets flags a post mixing a video with an image', function () {
         ->and($blocked[0]['issues'])->toContain('mixed_video_and_images');
 });
 
+test('blockingTargets allows a post mixing a video with an image on Instagram (real mixed carousel)', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['kind' => 'image']);
+    PostMedia::factory()->for($post)->video()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Instagram]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Instagram->value,
+        'sections' => ['caption'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
+test('blockingTargets allows a post mixing a video with an image on Threads (real mixed carousel)', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['kind' => 'image']);
+    PostMedia::factory()->for($post)->video()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Threads]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Threads->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
+test('blockingTargets allows a post mixing a video with an image on Discord (attaches every file)', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['kind' => 'image']);
+    PostMedia::factory()->for($post)->video()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Discord]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Discord->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
+test('blockingTargets flags a post mixing a video with an image on LinkedIn', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['kind' => 'image']);
+    PostMedia::factory()->for($post)->video()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::LinkedIn]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::LinkedIn->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toContain('mixed_video_and_images');
+});
+
 test('blockingTargets flags a video longer than the platform allows', function () {
     $post = Post::factory()->create();
     PostMedia::factory()->for($post)->video()->create([
@@ -194,7 +259,7 @@ test('blockingTargets allows a single GIF on X', function () {
     expect($blocked)->toBe([]);
 });
 
-test('blockingTargets flags a non-JPEG image on Instagram', function () {
+test('blockingTargets passes a non-JPEG image on Instagram (converted at publish)', function () {
     $post = Post::factory()->create();
     PostMedia::factory()->for($post)->create(['mime' => 'image/png']);
     $account = ConnectedAccount::factory()->create(['platform' => Platform::Instagram]);
@@ -206,8 +271,7 @@ test('blockingTargets flags a non-JPEG image on Instagram', function () {
 
     $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
 
-    expect($blocked)->toHaveCount(1)
-        ->and($blocked[0]['issues'])->toContain('media_wrong_format');
+    expect($blocked)->toBe([]);
 });
 
 test('blockingTargets passes a JPEG image on Instagram', function () {

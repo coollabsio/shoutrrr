@@ -79,7 +79,6 @@ class PublishPrecheck
             'video_too_long' => "The video is longer than {$label} allows.",
             'video_too_large' => "The video is larger than {$label} allows.",
             'gif_not_mixable' => "{$label} allows only one GIF and won't mix it with other media.",
-            'media_wrong_format' => "{$label} doesn't accept one of the attached image formats.",
             default => "{$label} can't publish this post yet.",
         }, $issues);
 
@@ -117,9 +116,9 @@ class PublishPrecheck
 
     /**
      * Media-attribute rules the connectors enforce only at publish time — video
-     * caps, image/video mixing, and GIF mixing. These are validated per target
-     * because the same post media set is judged against each platform's rules,
-     * and none of them self-heal (video is never re-encoded server-side).
+     * caps, image/video mixing, and GIF mixing. Validated per target because the
+     * same post media set is judged against each platform's rules, and video is
+     * never re-encoded server-side (so its caps can't self-heal the way images can).
      *
      * @param  Collection<int, PostMedia>  $media
      * @return list<string>
@@ -135,23 +134,11 @@ class PublishPrecheck
         $videos = $media->filter(fn (PostMedia $item): bool => $item->isVideo());
         $images = $media->reject(fn (PostMedia $item): bool => $item->isVideo());
 
-        // A post carries one video OR images, never both — the connectors silently
-        // drop the odd one out, so a "successful" publish would be missing content.
-        if ($videos->isNotEmpty() && $images->isNotEmpty()) {
+        // On platforms that don't build a real mixed carousel, the connector keeps
+        // only the first video and silently drops every image — a "successful"
+        // publish would be missing content.
+        if ($videos->isNotEmpty() && $images->isNotEmpty() && ! $platform->combinesVideoAndImages()) {
             $issues[] = 'mixed_video_and_images';
-        }
-
-        // Platforms that publish images by URL without server-side conversion
-        // reject any image outside their allowed formats.
-        if ($platform->strictImageMime()) {
-            $allowed = $platform->allowedMime();
-            foreach ($images as $image) {
-                if (! in_array($image->mime, $allowed, true)) {
-                    $issues[] = 'media_wrong_format';
-
-                    break;
-                }
-            }
         }
 
         foreach ($videos as $video) {
