@@ -12,6 +12,7 @@ use App\Enums\Platform;
 use App\Enums\UsageCategory;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\ImageConversionFailed;
 use App\Services\Media\PublicMediaUrl;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
@@ -99,6 +100,10 @@ class InstagramConnector implements PublishConnector
             $mediaId = (string) $publish->json('id');
         } catch (InstagramRequestFailed $e) {
             return $this->mapFailure($e->response);
+        } catch (ImageConversionFailed $e) {
+            // The image can't be re-encoded to the JPEG Instagram requires; retrying
+            // won't change that, so fail with the reason rather than looping.
+            return PublishResult::failure(ErrorKind::Unsupported, $e->getMessage());
         } catch (ConnectionException $e) {
             return PublishResult::failure(ErrorKind::Network, $e->getMessage());
         }
@@ -143,9 +148,9 @@ class InstagramConnector implements PublishConnector
 
         if ($media->isVideo()) {
             $body['media_type'] = 'REELS';
-            $body['video_url'] = $this->publicMediaUrl->for($media);
+            $body['video_url'] = $this->publicMediaUrl->for($media, Platform::Instagram);
         } else {
-            $body['image_url'] = $this->publicMediaUrl->for($media);
+            $body['image_url'] = $this->publicMediaUrl->for($media, Platform::Instagram);
         }
 
         $response = $this->http->asForm()->post($this->baseUrl().'/'.$igUserId.'/media', $body);
@@ -203,7 +208,7 @@ class InstagramConnector implements PublishConnector
             'is_carousel_item' => 'true',
             'access_token' => $token,
         ];
-        $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media);
+        $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media, Platform::Instagram);
 
         $response = $this->http->asForm()->post($this->baseUrl().'/'.$igUserId.'/media', $body);
 
