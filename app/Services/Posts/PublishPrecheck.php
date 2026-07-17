@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Posts;
 
+use App\Enums\Platform;
 use App\Models\Post;
 use App\Models\PostTarget;
 
@@ -52,6 +53,29 @@ class PublishPrecheck
         }
 
         return $blocking;
+    }
+
+    /**
+     * A human-readable reason a target was blocked, for the stored error_message
+     * on the non-interactive dispatch paths (scheduler, MCP) where there is no
+     * client to render the raw issue codes.
+     *
+     * @param  list<string>  $issues
+     */
+    public function describe(array $issues, Platform $platform): string
+    {
+        $label = $platform->label();
+
+        $messages = array_map(static fn (string $issue): string => match ($issue) {
+            'empty' => 'Add text or media before publishing.',
+            'media_required' => "{$label} needs at least one image or video.",
+            'section_too_long' => "A section is over {$label}'s length limit.",
+            'too_many_sections' => "Too many thread sections for {$label}.",
+            'too_many_media' => "Too many media items for {$label}.",
+            default => "{$label} can't publish this post yet.",
+        }, $issues);
+
+        return implode(' ', array_values(array_unique($messages)));
     }
 
     /**
