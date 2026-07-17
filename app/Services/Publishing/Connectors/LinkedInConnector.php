@@ -185,10 +185,14 @@ class LinkedInConnector implements PublishConnector
 
     private function escapePlainText(string $text): string
     {
-        return (string) preg_replace_callback(
-            '/[\\\\|{}@\[\]()<>#*_~]/u',
+        $escaped = preg_replace_callback(
+            '/#[\p{L}\p{N}_]+|[\\\\|{}@\[\]()<>#*_~]/u',
             static fn (array $matches): string => mb_strlen($matches[0]) > 1 ? $matches[0] : '\\'.$matches[0],
             $text,
+        );
+
+        return $escaped ?? throw new RuntimeException(
+            'Failed to escape LinkedIn commentary: '.preg_last_error_msg()
         );
     }
 
@@ -198,12 +202,25 @@ class LinkedInConnector implements PublishConnector
      */
     private function escapeMention(string $mention): string
     {
-        return (string) preg_replace_callback(
+        $escaped = preg_replace_callback(
             '/^@\[([^\]]*)\]\((.+)\)$/',
             fn (array $matches): string => '@['
-                .preg_replace('/[\\\\|{}@\[\]()<>#*_~]/u', '\\\\$0', $matches[1])
+                .$this->escapeMentionName($matches[1])
                 .']('.$matches[2].')',
             $mention,
+        );
+
+        return $escaped ?? throw new RuntimeException(
+            'Failed to escape LinkedIn mention: '.preg_last_error_msg()
+        );
+    }
+
+    private function escapeMentionName(string $name): string
+    {
+        $escaped = preg_replace('/[\\\\|{}@\[\]()<>#*_~]/u', '\\\\$0', $name);
+
+        return $escaped ?? throw new RuntimeException(
+            'Failed to escape LinkedIn mention name: '.preg_last_error_msg()
         );
     }
 

@@ -229,6 +229,18 @@ test('linkedin leaves hashtags unescaped so LinkedIn links them', function () {
     Http::assertSent(fn ($request) => $request['commentary'] === 'Shipping #v2 today \(really\) in C\# too');
 });
 
+test('linkedin throws rather than publishing empty commentary when escaping fails', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    // Truncated multibyte sequence: the /u escape pattern bails with PREG_BAD_UTF8_ERROR.
+    expect(fn () => app(LinkedInConnector::class)->publish(liContext(["broken \xC3 text"])))
+        ->toThrow(RuntimeException::class, 'Failed to escape LinkedIn commentary');
+
+    Http::assertNothingSent();
+});
+
 test('linkedin maps 401 to AuthExpired', function () {
     Http::fake(['https://api.linkedin.com/rest/posts' => Http::response(['message' => 'expired'], 401)]);
 
