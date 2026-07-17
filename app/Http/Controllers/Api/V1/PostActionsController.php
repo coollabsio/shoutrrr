@@ -12,6 +12,7 @@ use App\Jobs\PublishPostTarget;
 use App\Models\PostTarget;
 use App\Models\Workspace;
 use App\Services\Posts\NextSlotResolver;
+use App\Services\Posts\PublishPrecheck;
 use App\Services\Publishing\PostStatusRollup;
 use App\Services\Publishing\PublishDispatcher;
 use App\Support\PostView;
@@ -65,10 +66,18 @@ class PostActionsController extends Controller
         return response()->json(['post' => PostView::make($model->fresh(['targets.account', 'media']))]);
     }
 
-    public function publish(string $id, PublishDispatcher $dispatcher): JsonResponse
+    public function publish(string $id, PublishDispatcher $dispatcher, PublishPrecheck $precheck): JsonResponse
     {
         $model = $this->findPostOrFail($id);
         $this->authorize('update', $model);
+
+        $blocked = $precheck->blockingTargets($model->loadMissing(['targets.account', 'media']));
+        if ($blocked !== []) {
+            return response()->json([
+                'message' => "Some accounts can't be published yet.",
+                'blocked' => $blocked,
+            ], 422);
+        }
 
         $model->forceFill(['status' => PostStatus::Publishing->value])->save();
         $dispatcher->dispatchForPost($model);
