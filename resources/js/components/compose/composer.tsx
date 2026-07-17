@@ -30,6 +30,7 @@ import {
     syncMentionsFromText,
 } from '@/lib/compose/mentions';
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
+import { precheckAccount, precheckDestinations } from '@/lib/compose/precheck';
 import { readVideoMetadata } from '@/lib/compose/video';
 import {
     defaultSettings,
@@ -563,10 +564,30 @@ export default function Composer({
         if (!account) {
             return 'ok';
         }
+        const platformLimits = limits.find(
+            (l) => l.platform === account.platform,
+        );
+        if (!platformLimits) {
+            return 'ok';
+        }
         const segments =
             state.overrideByAccount[accountId] !== undefined
                 ? (state.overrideByAccount[accountId] as string[])
                 : state.segments;
+        const mediaCount = state.media.filter(
+            (item) => !state.mediaSubsetExcludes.has(`${item.id}:${accountId}`),
+        ).length;
+        const reasons = precheckAccount({
+            account,
+            segments,
+            autoSplit: state.autoSplitByAccount[accountId] ?? true,
+            mentions: state.mentions,
+            mediaCount,
+            limits: platformLimits,
+        });
+        if (reasons.length > 0) {
+            return 'over';
+        }
         const resolvedText = replaceMentionTokens(
             segments.join('\n'),
             state.mentions,
@@ -574,9 +595,6 @@ export default function Composer({
         );
         const limit = limitForAccount(account);
         const count = measure(resolvedText, account.platform);
-        if (limit > 0 && count > limit) {
-            return 'over';
-        }
 
         return limit > 0 && count >= limit * 0.9 ? 'warn' : 'ok';
     }
@@ -749,6 +767,17 @@ export default function Composer({
               limit: limitForPlatform('x'),
               autoSplit: true,
           });
+
+    const blockedAccounts = precheckDestinations({
+        accounts: tabAccounts,
+        segments: state.segments,
+        mentions: state.mentions,
+        autoSplitByAccount: state.autoSplitByAccount,
+        overrideByAccount: state.overrideByAccount,
+        media: state.media,
+        mediaSubsetExcludes: state.mediaSubsetExcludes,
+        limits,
+    });
 
     return (
         <div
@@ -1101,6 +1130,8 @@ export default function Composer({
                             onEnsurePost={ensurePost}
                             onOptimisticSubmit={publishStatus.applyOptimistic}
                             onServerPost={publishStatus.applyServerPost}
+                            blockedAccounts={blockedAccounts}
+                            limits={limits}
                         />
                     </div>
                 )}

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { isSubmitShortcut, shouldAllowSubmit } from '../submit-bar';
+import type { AccountBlock } from '@/lib/compose/precheck';
+
+import {
+    hasBlockingIssues,
+    isSubmitShortcut,
+    shouldAllowSubmit,
+} from '../submit-bar';
 
 const baseEvent = {
     altKey: false,
@@ -74,5 +80,23 @@ describe('shouldAllowSubmit', () => {
                 uploading: false,
             }),
         ).toBe(true);
+    });
+});
+
+describe('hasBlockingIssues', () => {
+    it('is false with no blocks', () => {
+        expect(hasBlockingIssues([])).toBe(false);
+    });
+
+    it('is true when any account is blocked', () => {
+        const blocked: AccountBlock[] = [
+            {
+                accountId: 'a',
+                handle: '@bsky',
+                platform: 'bluesky',
+                reasons: ['section_too_long'],
+            },
+        ];
+        expect(hasBlockingIssues(blocked)).toBe(true);
     });
 });
