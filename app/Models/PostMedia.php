@@ -75,9 +75,7 @@ class PostMedia extends Model
 
             // Publish-time format conversions (JPEG for Meta, MP4 for GIFs) live
             // beside the original and would otherwise be left behind.
-            foreach (DerivedMedia::pathsFor($media) as $derived) {
-                FileStorage::disk($media->disk)->delete($derived);
-            }
+            FileStorage::disk($media->disk)->delete(DerivedMedia::pathsFor($media));
 
             if ($media->source_path !== null) {
                 FileStorage::disk($media->source_disk ?? $media->disk)->delete($media->source_path);
