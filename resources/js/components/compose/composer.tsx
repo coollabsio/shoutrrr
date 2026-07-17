@@ -232,9 +232,6 @@ export default function Composer({
     const mediaUploads = useMediaUploads({
         media: state.media,
         videoLimits: selectedVideoLimits,
-        // Instagram accepts JPEG only, so convert non-JPEG uploads to JPEG in the
-        // browser whenever Instagram is one of the selected destinations.
-        requiresJpeg: tabAccounts.some((a) => a.platform === 'instagram'),
         onEnsurePost: ensurePost,
         onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
     });
