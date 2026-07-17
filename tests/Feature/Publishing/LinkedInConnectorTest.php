@@ -197,6 +197,28 @@ test('linkedin joins every segment into one post', function () {
         && $request['commentary'] === "first\nsecond");
 });
 
+test('linkedin escapes little-text reserved characters in commentary', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    app(LinkedInConnector::class)->publish(liContext(['We shipped v2 (finally). Read more_here!']));
+
+    Http::assertSent(fn ($request) => $request['commentary'] === 'We shipped v2 \(finally\). Read more\_here!');
+});
+
+test('linkedin preserves mention annotations while escaping surrounding text', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    app(LinkedInConnector::class)->publish(liContext([
+        'Built with @[coolLabs](urn:li:organization:2414183) (open source)',
+    ]));
+
+    Http::assertSent(fn ($request) => $request['commentary'] === 'Built with @[coolLabs](urn:li:organization:2414183) \(open source\)');
+});
+
 test('linkedin maps 401 to AuthExpired', function () {
     Http::fake(['https://api.linkedin.com/rest/posts' => Http::response(['message' => 'expired'], 401)]);
 

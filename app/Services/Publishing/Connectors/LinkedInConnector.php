@@ -88,7 +88,7 @@ class LinkedInConnector implements PublishConnector
         try {
             $body = [
                 'author' => $author,
-                'commentary' => $text,
+                'commentary' => $this->escapeCommentary($text),
                 'visibility' => 'PUBLIC',
                 'lifecycleState' => 'PUBLISHED',
                 'distribution' => [
@@ -147,6 +147,64 @@ class LinkedInConnector implements PublishConnector
         }
 
         return PublishResult::success([$urn]);
+    }
+
+    /**
+     * `commentary` is little Text Format, not plain text. Every reserved character
+     * must be backslash-escaped; an unescaped one (a `(` is the common case) makes
+     * LinkedIn's parser silently drop the rest of the post body rather than reject
+     * the request, so posts publish looking truncated.
+     *
+     * Two constructs are deliberately left intact because they are real little
+     * elements the app relies on:
+     *  - `@[Name](urn:li:...)` mention annotations emitted by DraftService.
+     *  - `#hashtag`, which LinkedIn links only while the `#` stays unescaped.
+     *
+     * @see https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/little-text-format
+     */
+    private function escapeCommentary(string $text): string
+    {
+        $parts = preg_split(
+            '/(@\[[^\]]*\]\(urn:li:(?:organization|person):\d+\))/',
+            $text,
+            -1,
+            PREG_SPLIT_DELIM_CAPTURE,
+        ) ?: [$text];
+
+        $escaped = array_map(function (string $part, int $index): string {
+            // preg_split with DELIM_CAPTURE puts the captured mentions at odd offsets.
+            if ($index % 2 === 1) {
+                return $this->escapeMention($part);
+            }
+
+            return $this->escapePlainText($part);
+        }, $parts, array_keys($parts));
+
+        return implode('', $escaped);
+    }
+
+    private function escapePlainText(string $text): string
+    {
+        return (string) preg_replace_callback(
+            '/#[\p{L}\p{N}_]+|[\\\\|{}@\[\]()<>#*_~]/u',
+            static fn (array $matches): string => mb_strlen($matches[0]) > 1 ? $matches[0] : '\\'.$matches[0],
+            $text,
+        );
+    }
+
+    /**
+     * Keep a mention's `@[...](urn)` scaffolding but escape reserved characters in
+     * the display name, which is free-form and would otherwise break the element.
+     */
+    private function escapeMention(string $mention): string
+    {
+        return (string) preg_replace_callback(
+            '/^@\[([^\]]*)\]\((.+)\)$/',
+            fn (array $matches): string => '@['
+                .preg_replace('/[\\\\|{}@\[\]()<>#*_~]/u', '\\\\$0', $matches[1])
+                .']('.$matches[2].')',
+            $mention,
+        );
     }
 
     /**
