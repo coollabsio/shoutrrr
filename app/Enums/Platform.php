@@ -319,6 +319,20 @@ enum Platform: string
         return $this === self::Instagram;
     }
 
+    /**
+     * Whether the platform permits an animated GIF alongside other media. X and
+     * Bluesky treat a GIF as a video-like embed: at most one per post, never
+     * mixed with images or a second GIF. Both reject the mix at publish, so the
+     * precheck blocks it up front.
+     */
+    public function allowsGifWithOtherMedia(): bool
+    {
+        return match ($this) {
+            self::X, self::Bluesky => false,
+            default => true,
+        };
+    }
+
     public function maxMediaBytes(): int
     {
         return match ($this) {

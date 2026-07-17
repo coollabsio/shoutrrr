@@ -116,3 +116,96 @@ test('blockingTargets passes a media-only target with no text', function () {
 
     expect($blocked)->toBe([]);
 });
+
+test('blockingTargets flags a post mixing a video with an image', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['kind' => 'image']);
+    PostMedia::factory()->for($post)->video()->create();
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toContain('mixed_video_and_images');
+});
+
+test('blockingTargets flags a video longer than the platform allows', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->video()->create([
+        'duration_seconds' => Platform::X->maxVideoDurationSeconds() + 10,
+    ]);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toContain('video_too_long');
+});
+
+test('blockingTargets flags a video larger than the platform allows', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->video()->create([
+        'size_bytes' => Platform::Bluesky->maxVideoBytes() + 1,
+    ]);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Bluesky->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toContain('video_too_large');
+});
+
+test('blockingTargets flags a GIF mixed with another image on X', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['mime' => 'image/gif']);
+    PostMedia::factory()->for($post)->create(['mime' => 'image/jpeg']);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toContain('gif_not_mixable');
+});
+
+test('blockingTargets allows a single GIF on X', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['mime' => 'image/gif']);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
+test('blockingTargets allows a GIF mixed with an image on LinkedIn', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['mime' => 'image/gif']);
+    PostMedia::factory()->for($post)->create(['mime' => 'image/jpeg']);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::LinkedIn]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::LinkedIn->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});

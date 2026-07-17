@@ -6,7 +6,9 @@ namespace App\Services\Posts;
 
 use App\Enums\Platform;
 use App\Models\Post;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
+use Illuminate\Support\Collection;
 
 class PublishPrecheck
 {
@@ -29,7 +31,8 @@ class PublishPrecheck
      */
     public function blockingTargets(Post $post): array
     {
-        $mediaCount = $post->media->count();
+        $media = $post->media;
+        $mediaCount = $media->count();
 
         /** @var list<array{connected_account_id: string, handle: ?string, platform: string, issues: list<string>}> $blocking */
         $blocking = [];
@@ -37,7 +40,7 @@ class PublishPrecheck
         foreach ($post->targets as $target) {
             /** @var PostTarget $target */
             $issues = $this->hasContent($target, $mediaCount)
-                ? $this->targetIssues($target, $mediaCount)
+                ? $this->targetIssues($target, $media)
                 : ['empty'];
 
             if ($issues === []) {
@@ -72,6 +75,10 @@ class PublishPrecheck
             'section_too_long' => "A section is over {$label}'s length limit.",
             'too_many_sections' => "Too many thread sections for {$label}.",
             'too_many_media' => "Too many media items for {$label}.",
+            'mixed_video_and_images' => 'A post can contain one video or images, not both.',
+            'video_too_long' => "The video is longer than {$label} allows.",
+            'video_too_large' => "The video is larger than {$label} allows.",
+            'gif_not_mixable' => "{$label} allows only one GIF and won't mix it with other media.",
             default => "{$label} can't publish this post yet.",
         }, $issues);
 
@@ -79,22 +86,75 @@ class PublishPrecheck
     }
 
     /**
-     * Platform-limit issues for a target that has content, plus the
-     * media-required rule the platform limits don't cover.
+     * Platform-limit issues for a target that has content, plus the media rules
+     * the section-length limits don't cover.
      *
+     * @param  Collection<int, PostMedia>  $media
      * @return list<string>
      */
-    private function targetIssues(PostTarget $target, int $mediaCount): array
+    private function targetIssues(PostTarget $target, Collection $media): array
     {
+        $platform = $target->platform;
+
         $issues = $this->splitter->validateSections(
             $target->sections,
-            $target->platform,
-            $mediaCount,
+            $platform,
+            $media->count(),
             $target->account?->maxTextLength(),
         );
 
-        if ($mediaCount === 0 && $target->platform->requiresMedia()) {
+        if ($media->count() === 0 && $platform->requiresMedia()) {
             $issues[] = 'media_required';
+        }
+
+        foreach ($this->mediaIssues($platform, $media) as $issue) {
+            $issues[] = $issue;
+        }
+
+        return array_values(array_unique($issues));
+    }
+
+    /**
+     * Media-attribute rules the connectors enforce only at publish time — video
+     * caps, image/video mixing, and GIF mixing. These are validated per target
+     * because the same post media set is judged against each platform's rules,
+     * and none of them self-heal (video is never re-encoded server-side).
+     *
+     * @param  Collection<int, PostMedia>  $media
+     * @return list<string>
+     */
+    private function mediaIssues(Platform $platform, Collection $media): array
+    {
+        if ($media->isEmpty()) {
+            return [];
+        }
+
+        $issues = [];
+
+        $videos = $media->filter(fn (PostMedia $item): bool => $item->isVideo());
+        $images = $media->reject(fn (PostMedia $item): bool => $item->isVideo());
+
+        // A post carries one video OR images, never both — the connectors silently
+        // drop the odd one out, so a "successful" publish would be missing content.
+        if ($videos->isNotEmpty() && $images->isNotEmpty()) {
+            $issues[] = 'mixed_video_and_images';
+        }
+
+        foreach ($videos as $video) {
+            if ($video->duration_seconds !== null && $video->duration_seconds > $platform->maxVideoDurationSeconds()) {
+                $issues[] = 'video_too_long';
+            }
+
+            if ($video->size_bytes > $platform->maxVideoBytes()) {
+                $issues[] = 'video_too_large';
+            }
+        }
+
+        if (! $platform->allowsGifWithOtherMedia()) {
+            $gifCount = $media->filter(fn (PostMedia $item): bool => $item->mime === 'image/gif')->count();
+            if ($gifCount >= 1 && ($media->count() > 1 || $gifCount > 1)) {
+                $issues[] = 'gif_not_mixable';
+            }
         }
 
         return $issues;

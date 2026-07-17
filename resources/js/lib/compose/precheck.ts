@@ -14,7 +14,11 @@ export type BlockReason =
     | 'media_required'
     | 'section_too_long'
     | 'too_many_sections'
-    | 'too_many_media';
+    | 'too_many_media'
+    | 'mixed_video_and_images'
+    | 'video_too_long'
+    | 'video_too_large'
+    | 'gif_not_mixable';
 
 export type AccountBlock = {
     accountId: string;
@@ -184,5 +188,13 @@ export function describeReason(
         }
         case 'too_many_media':
             return `${label} allows only ${limits.maxMedia} media item${limits.maxMedia === 1 ? '' : 's'}`;
+        case 'mixed_video_and_images':
+            return 'a post can contain one video or images, not both';
+        case 'video_too_long':
+            return `the video is longer than ${label}'s ${limits.maxVideoDurationSeconds}s limit`;
+        case 'video_too_large':
+            return `the video is larger than ${label}'s ${Math.floor(limits.maxVideoBytes / (1024 * 1024))} MB limit`;
+        case 'gif_not_mixable':
+            return `${label} allows only one GIF and won't mix it with other media`;
     }
 }

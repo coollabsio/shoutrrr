@@ -267,6 +267,45 @@ describe('describeReason', () => {
         expect(text).toContain('text or media');
     });
 
+    it('describes a video that is too long', () => {
+        const text = describeReason(
+            'video_too_long',
+            'x',
+            limitsFor({ platform: 'x', maxVideoDurationSeconds: 140 }),
+        );
+        expect(text).toContain('140s');
+    });
+
+    it('describes a video that is too large', () => {
+        const text = describeReason(
+            'video_too_large',
+            'bluesky',
+            limitsFor({
+                platform: 'bluesky',
+                maxVideoBytes: 100 * 1024 * 1024,
+            }),
+        );
+        expect(text).toContain('100 MB');
+    });
+
+    it('describes mixing a video with images', () => {
+        const text = describeReason(
+            'mixed_video_and_images',
+            'x',
+            limitsFor({ platform: 'x' }),
+        );
+        expect(text).toContain('one video or images');
+    });
+
+    it('describes a GIF that cannot be mixed', () => {
+        const text = describeReason(
+            'gif_not_mixable',
+            'x',
+            limitsFor({ platform: 'x' }),
+        );
+        expect(text).toContain('GIF');
+    });
+
     it('describes an over-length non-capped platform with the auto-split hint', () => {
         const text = describeReason(
             'section_too_long',
