@@ -63,6 +63,47 @@ test('blockingTargets flags a target whose sections are only whitespace', functi
         ->and($blocked[0]['issues'])->toBe(['empty']);
 });
 
+test('blockingTargets flags an Instagram target with text but no media', function () {
+    $post = Post::factory()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Instagram, 'handle' => '@insta']);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Instagram->value,
+        'sections' => ['Test'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['platform'])->toBe('instagram')
+        ->and($blocked[0]['issues'])->toBe(['media_required']);
+});
+
+test('blockingTargets passes an Instagram target with text and media', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create();
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::Instagram->value,
+        'sections' => ['Test'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
+test('blockingTargets passes a text-only target on a platform that does not require media', function () {
+    $post = Post::factory()->create();
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['Test'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
 test('blockingTargets passes a media-only target with no text', function () {
     $post = Post::factory()->create();
     PostMedia::factory()->for($post)->create();

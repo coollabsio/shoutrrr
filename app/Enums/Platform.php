@@ -310,6 +310,15 @@ enum Platform: string
         };
     }
 
+    /**
+     * Whether a post is rejected without at least one image or video. Instagram
+     * is a media-first platform: its container flow has no text-only post type.
+     */
+    public function requiresMedia(): bool
+    {
+        return $this === self::Instagram;
+    }
+
     public function maxMediaBytes(): int
     {
         return match ($this) {
@@ -407,7 +416,7 @@ enum Platform: string
     }
 
     /**
-     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
+     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
      */
     public function limits(): array
     {
@@ -416,6 +425,7 @@ enum Platform: string
             'maxLength' => $this->maxLength(),
             'maxBytes' => $this->maxBytes(),
             'maxMedia' => $this->maxMedia(),
+            'requiresMedia' => $this->requiresMedia(),
             'maxMediaBytes' => $this->maxMediaBytes(),
             'allowedMime' => $this->allowedMime(),
             'threadMax' => $this->threadMax(),
@@ -427,7 +437,7 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
+     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
      */
     public static function allLimits(): array
     {

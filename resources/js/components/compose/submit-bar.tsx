@@ -69,6 +69,7 @@ function limitsFor(
             maxLength: 0,
             maxBytes: null,
             maxMedia: 0,
+            requiresMedia: false,
             maxMediaBytes: 0,
             allowedMime: [],
             threadMax: null,

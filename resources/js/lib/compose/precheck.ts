@@ -11,6 +11,7 @@ import type {
 
 export type BlockReason =
     | 'empty'
+    | 'media_required'
     | 'section_too_long'
     | 'too_many_sections'
     | 'too_many_media';
@@ -40,6 +41,8 @@ function byteLength(text: string): number {
  * PostSplitter will actually store:
  *  - no text and no media: nothing to post, so `empty` is the only reason —
  *    the length/media checks below are meaningless on it.
+ *  - media-first platform (requiresMedia): text alone is rejected by the
+ *    platform, so a caption with no attachment blocks as `media_required`.
  *  - thread-capped platform (threadMax !== null): all segments collapse into a
  *    single joined section.
  *  - non-capped + auto-split ON: the server hard-splits any over-limit paragraph
@@ -92,6 +95,10 @@ export function precheckAccount({
 
     if (mediaCount > limits.maxMedia) {
         reasons.push('too_many_media');
+    }
+
+    if (mediaCount === 0 && limits.requiresMedia) {
+        reasons.push('media_required');
     }
 
     return reasons;
@@ -161,6 +168,8 @@ export function describeReason(
     switch (reason) {
         case 'empty':
             return 'add some text or media before publishing';
+        case 'media_required':
+            return `${label} needs at least one image or video`;
         case 'section_too_long': {
             const base = `over ${label}'s ${limits.maxLength.toLocaleString()}-character limit`;
 

@@ -14,6 +14,7 @@ function limitsFor(
         maxLength: 300,
         maxBytes: null,
         maxMedia: 4,
+        requiresMedia: false,
         maxMediaBytes: 1_000_000,
         allowedMime: [],
         threadMax: null,
@@ -184,7 +185,79 @@ describe('precheckAccount empty content', () => {
     });
 });
 
+describe('precheckAccount media-first platforms', () => {
+    it('flags an Instagram caption with no media', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'instagram' }),
+            segments: ['Test'],
+            autoSplit: false,
+            mentions: [],
+            mediaCount: 0,
+            limits: limitsFor({
+                platform: 'instagram',
+                requiresMedia: true,
+                threadMax: 1,
+            }),
+        });
+        expect(reasons).toEqual(['media_required']);
+    });
+
+    it('allows an Instagram caption with media', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'instagram' }),
+            segments: ['Test'],
+            autoSplit: false,
+            mentions: [],
+            mediaCount: 1,
+            limits: limitsFor({
+                platform: 'instagram',
+                requiresMedia: true,
+                threadMax: 1,
+            }),
+        });
+        expect(reasons).toEqual([]);
+    });
+
+    it('reports empty rather than media_required when there is no text either', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'instagram' }),
+            segments: [],
+            autoSplit: false,
+            mentions: [],
+            mediaCount: 0,
+            limits: limitsFor({
+                platform: 'instagram',
+                requiresMedia: true,
+                threadMax: 1,
+            }),
+        });
+        expect(reasons).toEqual(['empty']);
+    });
+
+    it('does not flag a text-only post on a platform that allows it', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'x' }),
+            segments: ['Test'],
+            autoSplit: false,
+            mentions: [],
+            mediaCount: 0,
+            limits: limitsFor({ platform: 'x', maxLength: 280 }),
+        });
+        expect(reasons).toEqual([]);
+    });
+});
+
 describe('describeReason', () => {
+    it('describes a media-first platform needing an attachment', () => {
+        const text = describeReason(
+            'media_required',
+            'instagram',
+            limitsFor({ platform: 'instagram', requiresMedia: true }),
+        );
+        expect(text).toContain('Instagram');
+        expect(text).toContain('image or video');
+    });
+
     it('describes empty content without a platform limit', () => {
         const text = describeReason(
             'empty',

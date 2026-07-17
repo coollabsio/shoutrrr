@@ -19,6 +19,11 @@ class PublishPrecheck
      * A target with neither text nor media is blocked as `empty` — there is
      * nothing to post, and the platform limit checks are meaningless on it.
      *
+     * The media-required rule lives here rather than in
+     * PostSplitter::validateSections() because split() calls that method with a
+     * hardcoded media count of 0 (it runs before media is known), which would
+     * report a false `media_required` on every Instagram draft.
+     *
      * @return list<array{connected_account_id: string, handle: ?string, platform: string, issues: list<string>}>
      */
     public function blockingTargets(Post $post): array
@@ -31,12 +36,7 @@ class PublishPrecheck
         foreach ($post->targets as $target) {
             /** @var PostTarget $target */
             $issues = $this->hasContent($target, $mediaCount)
-                ? $this->splitter->validateSections(
-                    $target->sections,
-                    $target->platform,
-                    $mediaCount,
-                    $target->account?->maxTextLength(),
-                )
+                ? $this->targetIssues($target, $mediaCount)
                 : ['empty'];
 
             if ($issues === []) {
@@ -52,6 +52,28 @@ class PublishPrecheck
         }
 
         return $blocking;
+    }
+
+    /**
+     * Platform-limit issues for a target that has content, plus the
+     * media-required rule the platform limits don't cover.
+     *
+     * @return list<string>
+     */
+    private function targetIssues(PostTarget $target, int $mediaCount): array
+    {
+        $issues = $this->splitter->validateSections(
+            $target->sections,
+            $target->platform,
+            $mediaCount,
+            $target->account?->maxTextLength(),
+        );
+
+        if ($mediaCount === 0 && $target->platform->requiresMedia()) {
+            $issues[] = 'media_required';
+        }
+
+        return $issues;
     }
 
     /**

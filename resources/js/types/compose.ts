@@ -63,6 +63,8 @@ export type PlatformLimits = {
     maxLength: number;
     maxBytes: number | null;
     maxMedia: number;
+    /** Platform rejects a post with no image or video (Instagram). */
+    requiresMedia: boolean;
     maxMediaBytes: number;
     allowedMime: string[];
     threadMax: number | null;

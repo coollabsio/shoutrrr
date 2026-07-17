@@ -162,6 +162,24 @@ test('publish-now is blocked (422) for an empty post and does not dispatch', fun
     Bus::assertNotDispatched(PublishPostTarget::class);
 });
 
+test('publish-now is blocked (422) for an Instagram target with a caption but no media', function () {
+    Bus::fake();
+    [$user, $workspace] = publishingMember();
+    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'status' => PostStatus::Draft]);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::Instagram->value,
+        'sections' => ['Test'],
+    ]);
+
+    test()->postJson("/posts/{$post->id}/publish")
+        ->assertStatus(422)
+        ->assertJsonPath('blocked.0.platform', 'instagram')
+        ->assertJsonPath('blocked.0.issues.0', 'media_required');
+
+    expect($post->refresh()->status)->toBe(PostStatus::Draft);
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
 test('publish-now is blocked (422) when a target is over the limit and does not dispatch', function () {
     Bus::fake();
     [$user, $workspace] = publishingMember();
