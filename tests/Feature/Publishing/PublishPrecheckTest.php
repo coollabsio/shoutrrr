@@ -194,6 +194,50 @@ test('blockingTargets allows a single GIF on X', function () {
     expect($blocked)->toBe([]);
 });
 
+test('blockingTargets flags a non-JPEG image on Instagram', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['mime' => 'image/png']);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Instagram]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Instagram->value,
+        'sections' => ['caption'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toContain('media_wrong_format');
+});
+
+test('blockingTargets passes a JPEG image on Instagram', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['mime' => 'image/jpeg']);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Instagram]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Instagram->value,
+        'sections' => ['caption'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
+test('blockingTargets passes a PNG image on X (compressed at publish)', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->create(['mime' => 'image/png']);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
 test('blockingTargets allows a GIF mixed with an image on LinkedIn', function () {
     $post = Post::factory()->create();
     PostMedia::factory()->for($post)->create(['mime' => 'image/gif']);

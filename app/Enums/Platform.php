@@ -320,6 +320,22 @@ enum Platform: string
     }
 
     /**
+     * Whether an image whose mime is outside allowedMime() is rejected at publish.
+     * Instagram and Threads hand Meta a URL it fetches as-is — nothing converts
+     * the file server-side — so a non-conforming image (a GIF, or a PNG attached
+     * before the account was selected) fails at the API. The other platforms run
+     * the bytes through ImageCompressor, which can re-encode to a supported mime,
+     * so a hard precheck block there would be a false positive.
+     */
+    public function strictImageMime(): bool
+    {
+        return match ($this) {
+            self::Instagram, self::Threads => true,
+            default => false,
+        };
+    }
+
+    /**
      * Whether the platform permits an animated GIF alongside other media. X and
      * Bluesky treat a GIF as a video-like embed: at most one per post, never
      * mixed with images or a second GIF. Both reject the mix at publish, so the
