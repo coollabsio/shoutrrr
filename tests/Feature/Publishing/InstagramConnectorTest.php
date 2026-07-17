@@ -10,6 +10,16 @@ use App\Services\Publishing\Connectors\InstagramConnector;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
+/** A real, decodable 2x2 PNG so the JPEG conversion path has actual bytes to work on. */
+function pngBytes(): string
+{
+    $image = imagecreatetruecolor(2, 2);
+    ob_start();
+    imagepng($image);
+
+    return (string) ob_get_clean();
+}
+
 /**
  * @param  list<PostMedia>  $media
  * @param  array<string, mixed>  $targetOverrides
@@ -66,6 +76,30 @@ test('instagram publishes a single image through the container flow', function (
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/ig123/media_publish')
         && $request['creation_id'] === 'container-1');
+});
+
+test('instagram converts a non-jpeg image and hands Meta the derived jpeg url', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/pic.png', pngBytes());
+
+    $media = PostMedia::factory()->create(['disk' => 'public', 'path' => 'media/pic.png', 'mime' => 'image/png']);
+
+    Http::fake([
+        'https://graph.facebook.com/*/ig123/media' => Http::response(['id' => 'container-png']),
+        'https://graph.facebook.com/*/container-png*' => Http::response(['status_code' => 'FINISHED']),
+        'https://graph.facebook.com/*/ig123/media_publish' => Http::response(['id' => 'media-png']),
+    ]);
+
+    $result = app(InstagramConnector::class)->publish(igContext(['a png'], [$media]));
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    // Instagram accepts JPEG only (Platform::Instagram->allowedMime()); a .png url is
+    // rejected by Meta with "Only image and video media type is allowed".
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/ig123/media')
+        && ! str_contains($request->url(), 'media_publish')
+        && ! str_contains((string) $request['image_url'], '.png')
+        && str_contains((string) $request['image_url'], '.jpg'));
 });
 
 test('instagram returns a MediaProcessing failure and persists the container id while the status is IN_PROGRESS', function () {

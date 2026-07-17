@@ -107,7 +107,7 @@ class GifToMp4Converter
 
     private function derivedPath(PostMedia $media): string
     {
-        return 'media/'.$media->workspace_id.'/derived/'.$media->id.'.mp4';
+        return DerivedMedia::path($media, 'mp4');
     }
 
     private function encode(string $ffmpeg, string $input, string $output, int $maxBytes): void
