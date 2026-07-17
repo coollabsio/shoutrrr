@@ -119,6 +119,8 @@ type ComposerProps = {
     /** Focus the editor as soon as it mounts. */
     autoFocusEditor?: boolean;
     initialSavedMentions?: WorkspaceMention[];
+    /** Fired after each successful autosave (create or update). */
+    onSaved?: () => void;
 };
 
 const EMPTY_SAVED_MENTIONS: WorkspaceMention[] = [];
@@ -160,6 +162,7 @@ export default function Composer({
     initialDestination = null,
     autoFocusEditor = false,
     initialSavedMentions = EMPTY_SAVED_MENTIONS,
+    onSaved,
 }: ComposerProps) {
     const schedulingTz = useSchedulingTimezone();
     const saveMentionHttp = useHttp<
@@ -219,6 +222,7 @@ export default function Composer({
         state,
         accountIds: destinationAccountIds,
         dispatch,
+        onSaved,
     });
     const publishStatus = usePublishStatus({ pagePost: post });
 
