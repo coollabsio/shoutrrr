@@ -1,4 +1,5 @@
 import { router } from '@inertiajs/react';
+import { Film, Image as ImageIcon } from 'lucide-react';
 import { Fragment } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
@@ -26,6 +27,8 @@ export type PostRowData = {
     published_at: string | null;
     platforms: PlatformName[];
     targets: ChipTarget[];
+    media_count: number;
+    media_preview: { kind: 'image' | 'video'; url: string | null } | null;
 };
 
 function formatWhen(dateStr: string): { when: string; time: string } {
@@ -49,6 +52,53 @@ function formatWhen(dateStr: string): { when: string; time: string } {
 function StatusBadge({ status }: { status: PostStatus }) {
     const meta = postStatusMeta[status] ?? postStatusMeta.draft;
     return <Badge variant={meta.variant}>{meta.label}</Badge>;
+}
+
+/**
+ * A glanceable attachment preview so a row reveals whether media is attached
+ * without opening the post. Images render their own thumbnail; videos (served
+ * from a private, signed URL an <img> can't load) fall back to an icon tile. A
+ * "+N" badge marks additional attachments beyond the first.
+ */
+function MediaThumb({
+    preview,
+    count,
+}: {
+    preview: NonNullable<PostRowData['media_preview']>;
+    count: number;
+}) {
+    const extra = count - 1;
+    const showImage = preview.kind === 'image' && preview.url !== null;
+
+    return (
+        <div
+            role="img"
+            aria-label={`${count} ${count === 1 ? 'attachment' : 'attachments'}`}
+            className="relative size-11 shrink-0 overflow-hidden rounded-lg bg-muted ring-1 ring-border/60"
+        >
+            {showImage ? (
+                <img
+                    src={preview.url ?? ''}
+                    alt=""
+                    loading="lazy"
+                    className="size-full object-cover"
+                />
+            ) : (
+                <div className="grid size-full place-items-center text-muted-foreground">
+                    {preview.kind === 'video' ? (
+                        <Film size={16} strokeWidth={1.75} />
+                    ) : (
+                        <ImageIcon size={16} strokeWidth={1.75} />
+                    )}
+                </div>
+            )}
+            {extra > 0 && (
+                <span className="absolute right-0.5 bottom-0.5 rounded bg-background/85 px-1 text-[10px] font-medium text-foreground tabular-nums backdrop-blur-sm">
+                    +{extra}
+                </span>
+            )}
+        </div>
+    );
 }
 
 /**
@@ -78,6 +128,8 @@ export function PostRow({ post }: { post: PostRowData }) {
     // page loaded before the index exposed per-target data) must not crash the row.
     const platforms = post.platforms ?? [];
     const accounts = post.target_count ?? 0;
+    const mediaCount = post.media_count ?? 0;
+    const mediaPreview = post.media_preview ?? null;
     const failedCount = (post.targets ?? []).filter(
         (t: ChipTarget) => t.status === 'failed',
     ).length;
@@ -153,29 +205,35 @@ export function PostRow({ post }: { post: PostRowData }) {
                     <div className="mt-0.5">{time}</div>
                 </div>
 
-                {/* Middle: text + meta. The text block reserves two lines so
+                {/* Middle: text + meta, with an optional attachment thumbnail
+                    pinned to the right. The text block reserves two lines so
                     every row lines up regardless of status or content length. */}
-                <div className="min-w-0">
-                    <p className="line-clamp-2 min-h-[2.75em] text-[13.5px] leading-snug tracking-tight text-foreground">
-                        {post.base_text.trim() || (
-                            <span className="text-muted-foreground">
-                                Untitled draft
-                            </span>
-                        )}
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted-foreground">
-                        {metaParts.map((part, i) => (
-                            <Fragment key={part.key}>
-                                {i > 0 && (
-                                    <span
-                                        className="size-[3px] rounded-full bg-muted-foreground/50"
-                                        aria-hidden="true"
-                                    />
-                                )}
-                                {part.node}
-                            </Fragment>
-                        ))}
+                <div className="flex min-w-0 items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 min-h-[2.75em] text-[13.5px] leading-snug tracking-tight text-foreground">
+                            {post.base_text.trim() || (
+                                <span className="text-muted-foreground">
+                                    Untitled draft
+                                </span>
+                            )}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted-foreground">
+                            {metaParts.map((part, i) => (
+                                <Fragment key={part.key}>
+                                    {i > 0 && (
+                                        <span
+                                            className="size-[3px] rounded-full bg-muted-foreground/50"
+                                            aria-hidden="true"
+                                        />
+                                    )}
+                                    {part.node}
+                                </Fragment>
+                            ))}
+                        </div>
                     </div>
+                    {mediaPreview && (
+                        <MediaThumb preview={mediaPreview} count={mediaCount} />
+                    )}
                 </div>
 
                 {/* Right: badge + actions */}

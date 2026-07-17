@@ -71,7 +71,7 @@ class PostController extends Controller
         return Inertia::render('posts/index', [
             'posts' => Inertia::scroll(fn () => $applyFilters(
                 Post::query()
-                    ->with(['author:id,name', 'targets'])
+                    ->with(['author:id,name', 'targets', 'media'])
                     ->where('status', '!=', PostStatus::Deleted->value)
                     ->when($status !== '' && $status !== 'all', fn ($query) => $query->where('status', $status))
             )

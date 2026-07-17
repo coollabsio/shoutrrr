@@ -35,7 +35,7 @@ class PostsController extends Controller
         ]);
 
         $paginator = Post::query()
-            ->with(['author:id,name', 'targets'])
+            ->with(['author:id,name', 'targets', 'media'])
             ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($validated['q'] ?? null, fn ($query, $q) => $query->whereLike('base_text', "%{$q}%"))
             ->orderBy('id', 'desc')

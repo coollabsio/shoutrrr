@@ -18,6 +18,12 @@ type UseAutosave = {
     state: ComposerState;
     accountIds: string[];
     dispatch: (action: ComposerAction) => void;
+    /**
+     * Called after each successful create/update so the host page can refresh
+     * anything derived from the saved draft (e.g. the dashboard's recent-posts
+     * feed, which is a deferred prop and otherwise stays stale until reload).
+     */
+    onSaved?: () => void;
 };
 
 /**
@@ -28,7 +34,12 @@ type UseAutosave = {
  * inject the dynamic payload via `transform()`, which runs at submit time (so it
  * always reflects the latest reducer state, avoiding React state-timing bugs).
  */
-export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
+export function useAutosave({
+    state,
+    accountIds,
+    dispatch,
+    onSaved,
+}: UseAutosave) {
     // TForm must satisfy FormDataType; the hook's own data is unused (we submit
     // via transform), so Record<string, never> is the minimal valid shape.
     const http = useHttp<Record<string, never>, SaveResponse>({});
@@ -72,6 +83,7 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
             updatedAt: created.post.updated_at,
         });
         dispatch({ type: 'saveSucceeded', post: created.post });
+        onSaved?.();
 
         return created.post.id;
     }
@@ -103,6 +115,7 @@ export function useAutosave({ state, accountIds, dispatch }: UseAutosave) {
             onSuccess: (data) => {
                 baselineRef.current = data.post.updated_at;
                 dispatch({ type: 'saveSucceeded', post: data.post });
+                onSaved?.();
             },
             // onHttpException's response.data is typed `string` but may arrive
             // parsed at runtime — handle both.
