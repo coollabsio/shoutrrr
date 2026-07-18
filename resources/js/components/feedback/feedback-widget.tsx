@@ -25,7 +25,7 @@ import {
 
 const TYPES: { value: FeedbackType; label: string }[] = [
     { value: 'bug', label: '🐞 Bug' },
-    { value: 'feedback', label: '💡 Idea' },
+    { value: 'feedback', label: '💡 Feedback' },
     { value: 'question', label: '❓ Question' },
 ];
 
@@ -114,11 +114,25 @@ export default function FeedbackWidget() {
                 screenshot: includeShot ? screenshot : null,
             }),
         );
-        void http.post(FeedbackController.url(), {
+        http.post(FeedbackController.url(), {
             onSuccess: () => {
                 toast.success("Thanks — we've got it.");
                 setOpen(false);
                 reset();
+            },
+            onError: (errors) => {
+                if (errors?.screenshot) {
+                    toast.error(
+                        'Screenshot is too large to send. Turn it off and try again.',
+                    );
+                } else {
+                    const first = errors ? Object.values(errors)[0] : undefined;
+                    toast.error(
+                        typeof first === 'string'
+                            ? first
+                            : 'Please check your input and try again.',
+                    );
+                }
             },
             onHttpException: () => {
                 toast.error('Could not send feedback. Try again in a moment.');
@@ -127,7 +141,7 @@ export default function FeedbackWidget() {
                 toast.error('No connection. Try again in a moment.');
             },
             onFinish: () => setSending(false),
-        });
+        }).catch(() => {});
     }
 
     const canSend = message.trim() !== '' && !capturing && !sending;

@@ -46,16 +46,26 @@ class FeedbackService
     {
         return [
             'title' => $report->type->label(),
-            'description' => $report->message,
+            'description' => $this->truncate($report->message, 4096),
             'color' => $report->type->color(),
             'fields' => [
-                ['name' => 'Workspace', 'value' => "{$report->workspaceName} (`{$report->workspaceId}`)", 'inline' => true],
-                ['name' => "User ({$report->userName})", 'value' => $report->userEmail, 'inline' => true],
-                ['name' => 'Subscription', 'value' => $report->subscriptionStatus, 'inline' => true],
-                ['name' => 'Page', 'value' => $report->url, 'inline' => false],
-                ['name' => 'Browser', 'value' => $report->browser, 'inline' => false],
+                ['name' => 'Workspace', 'value' => $this->truncate("{$report->workspaceName} (`{$report->workspaceId}`)", 1024), 'inline' => true],
+                ['name' => "User ({$report->userName})", 'value' => $this->truncate($report->userEmail, 1024), 'inline' => true],
+                ['name' => 'Subscription', 'value' => $this->truncate($report->subscriptionStatus, 1024), 'inline' => true],
+                ['name' => 'Page', 'value' => $this->truncate($report->url, 1024), 'inline' => false],
+                ['name' => 'Browser', 'value' => $this->truncate($report->browser, 1024), 'inline' => false],
             ],
         ];
+    }
+
+    /**
+     * Discord rejects embeds whose field values or description exceed its
+     * length limits (1024 for fields, 4096 for description); truncate
+     * defensively so an oversized value never turns into a lost report.
+     */
+    private function truncate(string $value, int $limit): string
+    {
+        return mb_strlen($value) <= $limit ? $value : mb_substr($value, 0, $limit - 1).'…';
     }
 
     private function http(): PendingRequest

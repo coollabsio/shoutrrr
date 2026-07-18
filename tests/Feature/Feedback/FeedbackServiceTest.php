@@ -62,3 +62,17 @@ it('throws when the webhook responds with an error status', function () {
 
     app(FeedbackService::class)->send(makeReport());
 })->throws(RuntimeException::class);
+
+it('truncates an oversized url to fit the Discord field value limit', function () {
+    Http::fake([FEEDBACK_HOOK => Http::response('', 204)]);
+
+    $longUrl = 'https://app.test/dashboard?'.str_repeat('a', 2000);
+
+    app(FeedbackService::class)->send(makeReport(['url' => $longUrl]));
+
+    Http::assertSent(function ($request) {
+        $field = collect($request['embeds'][0]['fields'])->firstWhere('name', 'Page');
+
+        return $field !== null && mb_strlen($field['value']) <= 1024;
+    });
+});
