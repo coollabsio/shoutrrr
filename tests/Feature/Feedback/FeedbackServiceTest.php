@@ -14,6 +14,7 @@ function makeReport(array $overrides = []): FeedbackReport
         message: $overrides['message'] ?? 'It broke',
         url: $overrides['url'] ?? 'https://app.test/dashboard',
         browser: $overrides['browser'] ?? 'Mozilla/5.0',
+        environment: $overrides['environment'] ?? 'production',
         userName: $overrides['userName'] ?? 'Ada',
         userEmail: $overrides['userEmail'] ?? 'ada@test.co',
         workspaceName: $overrides['workspaceName'] ?? 'Acme',
@@ -40,6 +41,18 @@ it('posts a JSON embed to the webhook when there is no screenshot', function () 
             && $embed['color'] === FeedbackType::Bug->color()
             && collect($embed['fields'])->contains(fn ($f) => $f['value'] === 'ada@test.co')
             && collect($embed['fields'])->contains(fn ($f) => str_contains($f['value'], 'Acme'));
+    });
+});
+
+it('includes the environment as an embed field', function () {
+    Http::fake([FEEDBACK_HOOK => Http::response('', 204)]);
+
+    app(FeedbackService::class)->send(makeReport(['environment' => 'staging']));
+
+    Http::assertSent(function ($request) {
+        $field = collect($request['embeds'][0]['fields'])->firstWhere('name', 'Environment');
+
+        return $field !== null && $field['value'] === 'staging';
     });
 });
 

@@ -13,6 +13,7 @@ class FeedbackReport
         public string $message,
         public string $url,
         public string $browser,
+        public string $environment,
         public string $userName,
         public string $userEmail,
         public string $workspaceName,

@@ -52,6 +52,7 @@ class FeedbackService
                 ['name' => 'Workspace', 'value' => $this->truncate("{$report->workspaceName} (`{$report->workspaceId}`)", 1024), 'inline' => true],
                 ['name' => "User ({$report->userName})", 'value' => $this->truncate($report->userEmail, 1024), 'inline' => true],
                 ['name' => 'Subscription', 'value' => $this->truncate($report->subscriptionStatus, 1024), 'inline' => true],
+                ['name' => 'Environment', 'value' => $this->truncate($report->environment, 1024), 'inline' => true],
                 ['name' => 'Page', 'value' => $this->truncate($report->url, 1024), 'inline' => false],
                 ['name' => 'Browser', 'value' => $this->truncate($report->browser, 1024), 'inline' => false],
             ],

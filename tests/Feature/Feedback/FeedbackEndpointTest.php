@@ -70,6 +70,72 @@ it('sends a report to discord with server-derived context', function () {
     });
 });
 
+it('keeps the full page url on cloud instances', function () {
+    config([
+        'feedback.enabled' => true,
+        'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok',
+        'instance.self_hosted' => false,
+    ]);
+    Http::fake(['https://discord.com/*' => Http::response('', 204)]);
+
+    $this->actingAs(actingWorkspaceUser())
+        ->postJson(route('feedback.store'), [
+            'type' => 'bug',
+            'message' => 'It broke',
+            'url' => 'https://acme.example.com/dashboard/posts?tab=drafts',
+            'browser' => 'Mozilla/5.0',
+        ])
+        ->assertOk();
+
+    Http::assertSent(function ($request) {
+        $page = collect($request['embeds'][0]['fields'])->firstWhere('name', 'Page');
+
+        return $page['value'] === 'https://acme.example.com/dashboard/posts?tab=drafts';
+    });
+});
+
+it('hides the host in the page url on self-hosted instances', function () {
+    config([
+        'feedback.enabled' => true,
+        'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok',
+        'instance.self_hosted' => true,
+    ]);
+    Http::fake(['https://discord.com/*' => Http::response('', 204)]);
+
+    $this->actingAs(actingWorkspaceUser())
+        ->postJson(route('feedback.store'), [
+            'type' => 'bug',
+            'message' => 'It broke',
+            'url' => 'https://acme.example.com/dashboard/posts?tab=drafts',
+            'browser' => 'Mozilla/5.0',
+        ])
+        ->assertOk();
+
+    Http::assertSent(function ($request) {
+        $page = collect($request['embeds'][0]['fields'])->firstWhere('name', 'Page');
+
+        return $page['value'] === '/dashboard/posts?tab=drafts'
+            && ! str_contains($page['value'], 'acme.example.com');
+    });
+});
+
+it('includes the app environment in the embed', function () {
+    config(['feedback.enabled' => true, 'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok']);
+    Http::fake(['https://discord.com/*' => Http::response('', 204)]);
+
+    $this->actingAs(actingWorkspaceUser())
+        ->postJson(route('feedback.store'), [
+            'type' => 'bug', 'message' => 'hi', 'url' => 'https://app.test', 'browser' => 'UA',
+        ])
+        ->assertOk();
+
+    Http::assertSent(function ($request) {
+        $env = collect($request['embeds'][0]['fields'])->firstWhere('name', 'Environment');
+
+        return $env !== null && $env['value'] === app()->environment();
+    });
+});
+
 it('attaches an uploaded screenshot as multipart', function () {
     config(['feedback.enabled' => true, 'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok']);
     Http::fake(['https://discord.com/*' => Http::response('', 204)]);

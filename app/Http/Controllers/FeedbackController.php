@@ -34,8 +34,9 @@ class FeedbackController extends Controller
         $this->feedback->send(new FeedbackReport(
             type: FeedbackType::from($validated['type']),
             message: $validated['message'],
-            url: $validated['url'] ?? 'unknown',
+            url: $this->presentableUrl($validated['url'] ?? 'unknown'),
             browser: $validated['browser'] ?? 'unknown',
+            environment: app()->environment(),
             userName: $user->name,
             userEmail: $user->email,
             // Larastan infers currentWorkspace as never-null from the BelongsTo
@@ -66,6 +67,31 @@ class FeedbackController extends Controller
         }
 
         return $workspace->subscribed('default') ? 'subscribed' : 'unsubscribed';
+    }
+
+    /**
+     * On self-hosted instances the page host reveals the operator's private
+     * domain, so strip the scheme/host/credentials and keep only the path
+     * (plus query/fragment) — enough to know which screen without leaking
+     * where the instance lives. Cloud reports keep the full URL.
+     */
+    private function presentableUrl(string $url): string
+    {
+        if (! config('instance.self_hosted') || $url === 'unknown') {
+            return $url;
+        }
+
+        $parts = parse_url($url);
+
+        if ($parts === false) {
+            return '(hidden)';
+        }
+
+        $path = $parts['path'] ?? '/';
+        $query = isset($parts['query']) ? '?'.$parts['query'] : '';
+        $fragment = isset($parts['fragment']) ? '#'.$parts['fragment'] : '';
+
+        return $path.$query.$fragment;
     }
 
     private function screenshotBytes(Request $request): ?string
