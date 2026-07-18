@@ -77,7 +77,7 @@ class InstagramConnector implements PublishConnector
             static fn (string $segment): bool => $segment !== '',
         )));
 
-        $format = $context->target->format ?? PostFormat::Feed;
+        $format = $context->target->format;
         if (! $format->allowsCaption()) {
             $caption = '';
         }
@@ -139,7 +139,7 @@ class InstagramConnector implements PublishConnector
 
         $containerId = match (true) {
             $format === PostFormat::Story => $this->createStoryContainer($context, $media[0], $igUserId, $token),
-            $format === PostFormat::Reels => $this->createReelContainer($context, $this->firstVideo($context->media), $igUserId, $caption, $token),
+            $format === PostFormat::Reels => $this->createReelContainer($context, $this->firstVideo($media), $igUserId, $caption, $token),
             count($media) === 1 => $this->createSingleContainer($context, $media[0], $igUserId, $caption, $token),
             default => $this->createCarouselContainer($context, $state, $media, $igUserId, $caption, $token),
         };
