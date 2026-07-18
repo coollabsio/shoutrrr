@@ -5,7 +5,12 @@ import { useRef } from 'react';
 import { EmojiPopover } from '@/components/compose/emoji-popover';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { cn } from '@/lib/utils';
-import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
+import type {
+    MediaView,
+    PendingUpload,
+    PlatformName,
+    PostFormat,
+} from '@/types/compose';
 
 import { MediaChips } from './media-chips';
 
@@ -13,6 +18,9 @@ type Props = {
     /** Active account's platform; undefined on the generic "Post" tab. */
     activePlatform?: PlatformName;
     autoSplit: boolean;
+    /** Per-account post format; only meaningful for Instagram & Facebook. */
+    format?: PostFormat;
+    onFormatChange?: (format: PostFormat) => void;
     overrideActive: boolean;
     /** When false, hides Override + Auto-split (generic tab has no platform). */
     showSplitControls?: boolean;
@@ -48,6 +56,8 @@ type Props = {
 export function ComposerToolbar({
     activePlatform,
     autoSplit,
+    format = 'feed',
+    onFormatChange,
     overrideActive,
     showSplitControls = true,
     media,
@@ -82,6 +92,15 @@ export function ComposerToolbar({
     }
 
     const hasVideo = media.some((m) => m.kind === 'video');
+    const showFormatPicker =
+        !readOnly &&
+        onFormatChange !== undefined &&
+        (activePlatform === 'instagram' || activePlatform === 'facebook');
+    const formatOptions: { value: PostFormat; label: string }[] = [
+        { value: 'feed', label: 'Feed' },
+        { value: 'reels', label: 'Reels' },
+        { value: 'story', label: 'Stories' },
+    ];
     // Count confirmed media plus uploads still in flight so the badge bumps the
     // instant a file is picked, and settles back if an upload fails. "processing"
     // (client-side compression) is in flight too, so it counts.
@@ -148,6 +167,31 @@ export function ComposerToolbar({
             />
 
             <div className="ml-auto sm:flex-1" />
+
+            {showFormatPicker && (
+                <div
+                    role="group"
+                    aria-label="Post format"
+                    className="inline-flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5"
+                >
+                    {formatOptions.map((option) => (
+                        <button
+                            key={option.value}
+                            type="button"
+                            title={`Post as ${option.label}`}
+                            data-active={format === option.value}
+                            onClick={() => onFormatChange?.(option.value)}
+                            className={cn(
+                                'inline-flex h-7 items-center rounded-[5px] px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-6',
+                                'hover:text-foreground',
+                                'data-[active=true]:bg-muted data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
+                            )}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {showSplitControls && !readOnly && (
                 <>

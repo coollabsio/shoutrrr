@@ -960,6 +960,22 @@ export default function Composer({
                                   true)
                                 : false
                         }
+                        format={
+                            activeAccount
+                                ? (state.formatByAccount[activeAccount.id] ??
+                                  'feed')
+                                : 'feed'
+                        }
+                        onFormatChange={
+                            activeAccount
+                                ? (format) =>
+                                      dispatch({
+                                          type: 'setFormat',
+                                          accountId: activeAccount.id,
+                                          format,
+                                      })
+                                : undefined
+                        }
                         overrideActive={overrideActive}
                         showSplitControls={activeAccount !== null}
                         media={state.media}
