@@ -24,6 +24,9 @@ void createInertiaApp({
             // Public, unauthenticated share viewer — no app shell/sidebar.
             case name.startsWith('share/'):
                 return null;
+            // Public, unauthenticated legal pages (Terms / Privacy) — no shell.
+            case name.startsWith('legal/'):
+                return null;
             case name === 'error':
                 return null;
             // Public MCP endpoint landing page — humans who hit /mcp in a

@@ -8,6 +8,7 @@ import {
     ListChecks,
     MessageCircle,
     Pencil,
+    ScrollText,
     Settings,
     Share2,
     Users,
@@ -86,6 +87,7 @@ const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, LucideIcon> = {
     overview: Settings,
     members: Users,
     apiKeys: KeyRound,
+    legal: ScrollText,
     subscription: CreditCard,
 };
 

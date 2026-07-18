@@ -345,3 +345,144 @@
    via Portal `keepMounted` while closed to avoid a heavy remount on reopen. The
    Base UI Positioner that wraps them is made click-through while closed inline
    (`data-closed:pointer-events-none`), so no global rule is needed here. */
+
+/* Long-form typography for the public Terms/Privacy documents. Scoped to
+   `.legal-prose` and built on the design tokens so it reads well in light and
+   dark (no @tailwindcss/typography in this project). */
+.legal-prose {
+    color: var(--foreground);
+    font-size: 0.95rem;
+    line-height: 1.75;
+    overflow-wrap: break-word;
+}
+.legal-prose > :first-child {
+    margin-top: 0;
+}
+.legal-prose > :last-child {
+    margin-bottom: 0;
+}
+.legal-prose h1,
+.legal-prose h2,
+.legal-prose h3,
+.legal-prose h4 {
+    font-family: var(--font-display);
+    color: var(--foreground);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    text-wrap: balance;
+}
+.legal-prose h1 {
+    font-size: 1.6rem;
+    margin: 2.25rem 0 1rem;
+}
+.legal-prose h2 {
+    font-size: 1.3rem;
+    margin: 2rem 0 0.85rem;
+}
+.legal-prose h3 {
+    font-size: 1.1rem;
+    margin: 1.6rem 0 0.6rem;
+}
+.legal-prose h4 {
+    font-size: 1rem;
+    margin: 1.4rem 0 0.5rem;
+}
+.legal-prose h2 + p,
+.legal-prose h3 + p,
+.legal-prose h4 + p {
+    margin-top: 0;
+}
+.legal-prose p {
+    margin: 0 0 1rem;
+}
+.legal-prose ul,
+.legal-prose ol {
+    margin: 0 0 1rem;
+    padding-left: 1.5rem;
+}
+.legal-prose ul {
+    list-style: disc;
+}
+.legal-prose ol {
+    list-style: decimal;
+}
+.legal-prose li {
+    margin: 0.35rem 0;
+}
+.legal-prose li::marker {
+    color: var(--muted-foreground);
+}
+.legal-prose li > ul,
+.legal-prose li > ol {
+    margin: 0.35rem 0;
+}
+.legal-prose a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+}
+.legal-prose a:hover {
+    text-decoration-thickness: 2px;
+}
+.legal-prose strong {
+    color: var(--foreground);
+    font-weight: 600;
+}
+.legal-prose em {
+    font-style: italic;
+}
+.legal-prose blockquote {
+    margin: 0 0 1rem;
+    padding: 0.25rem 0 0.25rem 1rem;
+    border-left: 3px solid var(--border);
+    color: var(--muted-foreground);
+    font-style: italic;
+}
+.legal-prose blockquote p:last-child {
+    margin-bottom: 0;
+}
+.legal-prose hr {
+    margin: 2rem 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+}
+.legal-prose code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    background: color-mix(in oklch, var(--muted) 60%, transparent);
+    padding: 0.15em 0.4em;
+    border-radius: var(--radius-sm);
+}
+.legal-prose pre {
+    margin: 0 0 1rem;
+    padding: 0.9rem 1.1rem;
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    line-height: 1.6;
+}
+.legal-prose pre code {
+    padding: 0;
+    font-size: 0.85rem;
+    color: var(--foreground);
+    background: transparent;
+}
+.legal-prose table {
+    width: 100%;
+    margin: 0 0 1rem;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+.legal-prose th,
+.legal-prose td {
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--border);
+    text-align: left;
+}
+.legal-prose th {
+    background: color-mix(in oklch, var(--muted) 50%, transparent);
+    font-weight: 600;
+}
