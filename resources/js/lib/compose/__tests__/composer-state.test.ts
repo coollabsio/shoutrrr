@@ -46,6 +46,7 @@ function hydrated(): ReturnType<typeof composerReducer> {
                 sections: ['hello'],
                 content_override: null,
                 auto_split: true,
+                format: 'feed',
                 issues: [],
                 status: 'pending',
                 error_kind: null,
@@ -63,6 +64,7 @@ function hydrated(): ReturnType<typeof composerReducer> {
                 sections: ['hello'],
                 content_override: null,
                 auto_split: true,
+                format: 'feed',
                 issues: [],
                 status: 'pending',
                 error_kind: null,
@@ -645,6 +647,7 @@ describe('buildPutBody', () => {
         expect(body.targets[0]).toEqual({
             connected_account_id: 'a1',
             auto_split: true,
+            format: 'feed',
             content_override: null,
         });
         expect(body.targets[0].content_override).toBeNull();
@@ -816,6 +819,36 @@ describe('initialComposerState with a destination', () => {
 
     it('defaults to all', () => {
         expect(initialComposerState().destination).toEqual({ kind: 'all' });
+    });
+});
+
+describe('composer format state', () => {
+    it('setFormat records the per-account format and marks dirty', () => {
+        const state = initialComposerState();
+        const next = composerReducer(state, {
+            type: 'setFormat',
+            accountId: 'acc-1',
+            format: 'story',
+        });
+
+        expect(next.formatByAccount['acc-1']).toBe('story');
+        expect(next.saveState).toBe('dirty');
+    });
+
+    it('buildPutBody emits format per target, defaulting to feed', () => {
+        let state = initialComposerState();
+        state = composerReducer(state, {
+            type: 'setFormat',
+            accountId: 'acc-1',
+            format: 'reels',
+        });
+
+        const body = buildPutBody(state, ['acc-1', 'acc-2']);
+        expect(body.targets[0]).toMatchObject({
+            connected_account_id: 'acc-1',
+            format: 'reels',
+        });
+        expect(body.targets[1].format).toBe('feed');
     });
 });
 

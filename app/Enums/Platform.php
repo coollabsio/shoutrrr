@@ -52,11 +52,18 @@ enum Platform: string
             // scope that call 403s ("Missing required OAuth2 scopes: users.email").
             // `media.write` is required to upload media to the v2 /2/media/upload
             // endpoint (the v1.1 endpoint was deprecated 2025-03-31).
-            self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'media.write', 'offline.access'],
+            // `like.write` is required to like/unlike from the engagement inbox
+            // (POST + DELETE /2/users/{id}/likes); without it those calls 403
+            // ("Missing required OAuth2 scopes: like.write"), which the connector
+            // maps to `unsupported`. One scope covers both like and unlike.
+            self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'media.write', 'like.write', 'offline.access'],
             self::LinkedIn => ['openid', 'profile', 'email', 'w_member_social'],
             self::Bluesky => [],
             self::Facebook => ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_read_user_content', 'pages_manage_engagement', 'read_insights', 'business_management'],
-            self::Instagram => ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'pages_show_list', 'business_management'],
+            // `instagram_manage_engagement` powers the Like Media and Comments
+            // API (2026-04-22) used to like/unlike replies from the inbox;
+            // without it the like call 403s → Unsupported.
+            self::Instagram => ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'instagram_manage_engagement', 'pages_show_list', 'business_management'],
             self::Threads => ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights'],
             self::Discord => [],
         };
@@ -118,6 +125,17 @@ enum Platform: string
     public function supportsAccountMetrics(): bool
     {
         return $this !== self::LinkedIn && $this !== self::Discord;
+    }
+
+    /**
+     * Whether this platform's engagement connector can like/unlike a reply.
+     * Threads returns `unsupported` (its Graph API exposes no like/unlike write
+     * for replies), so its heart is an inert affordance. Instagram gained the
+     * capability with the Like Media and Comments API (2026-04-22).
+     */
+    public function supportsReplyLikes(): bool
+    {
+        return $this !== self::Threads;
     }
 
     /**
@@ -292,6 +310,45 @@ enum Platform: string
         };
     }
 
+    /**
+     * Whether a post is rejected without at least one image or video. Instagram
+     * is a media-first platform: its container flow has no text-only post type.
+     */
+    public function requiresMedia(): bool
+    {
+        return $this === self::Instagram;
+    }
+
+    /**
+     * Whether a post mixing a video with images survives publish intact.
+     * Instagram/Threads build a real mixed carousel (each item keeps its own
+     * media_type) and Discord attaches every file to the webhook message
+     * untouched — none of them lose content. X, Bluesky, Facebook, and LinkedIn
+     * each take only the first video and silently drop every image, so mixing
+     * there is blocked before publish rather than discovered after.
+     */
+    public function combinesVideoAndImages(): bool
+    {
+        return match ($this) {
+            self::Instagram, self::Threads, self::Discord => true,
+            self::X, self::Bluesky, self::Facebook, self::LinkedIn => false,
+        };
+    }
+
+    /**
+     * Whether the platform permits an animated GIF alongside other media. X and
+     * Bluesky treat a GIF as a video-like embed: at most one per post, never
+     * mixed with images or a second GIF. Both reject the mix at publish, so the
+     * precheck blocks it up front.
+     */
+    public function allowsGifWithOtherMedia(): bool
+    {
+        return match ($this) {
+            self::X, self::Bluesky => false,
+            default => true,
+        };
+    }
+
     public function maxMediaBytes(): int
     {
         return match ($this) {
@@ -389,7 +446,7 @@ enum Platform: string
     }
 
     /**
-     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
+     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
      */
     public function limits(): array
     {
@@ -398,6 +455,7 @@ enum Platform: string
             'maxLength' => $this->maxLength(),
             'maxBytes' => $this->maxBytes(),
             'maxMedia' => $this->maxMedia(),
+            'requiresMedia' => $this->requiresMedia(),
             'maxMediaBytes' => $this->maxMediaBytes(),
             'allowedMime' => $this->allowedMime(),
             'threadMax' => $this->threadMax(),
@@ -409,7 +467,7 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
+     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
      */
     public static function allLimits(): array
     {

@@ -70,6 +70,9 @@ test('the inbox exposes which engagement platforms are disabled', function (): v
             'bluesky' => true,
             'linkedin' => true,
         ],
+        // LinkedIn reply-fetching also requires the Community Management gate;
+        // without it LinkedIn stays disabled regardless of the polling toggle.
+        'linkedin_community_management_enabled' => true,
     ]);
 
     $this->actingAs($this->user)
@@ -80,6 +83,26 @@ test('the inbox exposes which engagement platforms are disabled', function (): v
             ->where('engagementEnabled.x', false)
             ->where('engagementEnabled.bluesky', true)
             ->where('engagementEnabled.linkedin', true));
+});
+
+test('the inbox exposes whether the LinkedIn community management scope is enabled', function (): void {
+    $this->actingAs($this->user)
+        ->get(route('engagement.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('engagement/index')
+            ->where('linkedinCommunityManagementEnabled', false));
+
+    app(InstanceSettings::class)->update([
+        'linkedin_community_management_enabled' => true,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('engagement.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('engagement/index')
+            ->where('linkedinCommunityManagementEnabled', true));
 });
 
 test('the posts facet lists posts that drew replies with a count', function (): void {

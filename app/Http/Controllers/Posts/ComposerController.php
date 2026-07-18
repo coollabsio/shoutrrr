@@ -63,7 +63,7 @@ class ComposerController extends Controller
                 ->get()
                 ->map(fn (WorkspaceMention $mention): array => WorkspaceMentionController::view($mention))
                 ->all(),
-            'stats' => config('metrics.enabled')
+            'stats' => $settings->metricsEnabled()
                 ? Inertia::defer(fn (): ?array => $post->targets()
                     ->where('status', PostTargetStatus::Published->value)
                     ->exists()

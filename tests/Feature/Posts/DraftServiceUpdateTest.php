@@ -234,3 +234,127 @@ test('updateDraft resolves typed at-mention placeholders per target platform bef
         ->and($updated->mentions[0]['handles']['linkedin'])->toBe('GuestLinkedIn')
         ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)->toBe(['Hello GuestLinkedIn']);
 });
+
+test('updateDraft falls back to the label when a LinkedIn handle is empty or @-only', function () {
+    [$user, $workspace] = draftSetup(0);
+    $linkedin = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+    ]);
+
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['Hello @guest']);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'Hello @guest',
+        'mentions' => [[
+            'id' => 'guest',
+            'label' => '@guest',
+            // An '@'-only LinkedIn handle previously collapsed to '' and deleted the name.
+            'handles' => ['linkedin' => '@'],
+        ]],
+        'destination' => ['kind' => 'accounts', 'ids' => [$linkedin->id]],
+        'targets' => [['connected_account_id' => $linkedin->id, 'auto_split' => true]],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    // The '@'-only handle is dropped on normalize, so the label is used (with @ stripped).
+    expect($updated->mentions[0]['handles'])->not->toHaveKey('linkedin')
+        ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)->toBe(['Hello guest']);
+});
+
+test('updateDraft emits a LinkedIn org tag when a mention carries an org URN', function () {
+    [$user, $workspace] = draftSetup(0);
+    $x = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::X->value,
+    ]);
+    $linkedin = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+    ]);
+
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['Hi @coolifyio']);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'Hi @coolifyio',
+        'mentions' => [[
+            'id' => 'coolifyio',
+            'label' => '@coolifyio',
+            'handles' => [
+                'x' => '@coolifyio',
+                'linkedin' => 'Coolify',
+                // Accepts a company URL / bare id / URN — normalized to the canonical URN.
+                'linkedin_urn' => 'https://www.linkedin.com/company/12345/',
+            ],
+        ]],
+        'destination' => ['kind' => 'accounts', 'ids' => [$x->id, $linkedin->id]],
+        'targets' => [
+            ['connected_account_id' => $x->id, 'auto_split' => true],
+            ['connected_account_id' => $linkedin->id, 'auto_split' => true],
+        ],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->mentions[0]['handles']['linkedin_urn'])->toBe('urn:li:organization:12345')
+        ->and($updated->targets->firstWhere('connected_account_id', $x->id)->sections)->toBe(['Hi @coolifyio'])
+        ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)
+        ->toBe(['Hi @[Coolify](urn:li:organization:12345)']);
+});
+
+test('updateDraft drops an unresolvable LinkedIn org reference and keeps plain text', function () {
+    [$user, $workspace] = draftSetup(0);
+    $linkedin = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+    ]);
+
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['Hi @coolifyio']);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'Hi @coolifyio',
+        'mentions' => [[
+            'id' => 'coolifyio',
+            'label' => '@coolifyio',
+            'handles' => [
+                'linkedin' => 'Coolify',
+                // A vanity slug has no numeric id and can't be resolved without the lookup API.
+                'linkedin_urn' => 'coolify',
+            ],
+        ]],
+        'destination' => ['kind' => 'accounts', 'ids' => [$linkedin->id]],
+        'targets' => [['connected_account_id' => $linkedin->id, 'auto_split' => true]],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->mentions[0]['handles'])->not->toHaveKey('linkedin_urn')
+        ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)->toBe(['Hi Coolify']);
+});
+
+test('updateDraft routes an org reference typed into the LinkedIn name field to the URN key', function () {
+    [$user, $workspace] = draftSetup(0);
+    $linkedin = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+    ]);
+
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['Hi @Coolify']);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'Hi @Coolify',
+        'mentions' => [[
+            'id' => 'coolifyio',
+            'label' => '@Coolify',
+            // A URN pasted into the display field is an org reference, not a name.
+            'handles' => ['linkedin' => 'urn:li:organization:12345'],
+        ]],
+        'destination' => ['kind' => 'accounts', 'ids' => [$linkedin->id]],
+        'targets' => [['connected_account_id' => $linkedin->id, 'auto_split' => true]],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->mentions[0]['handles'])->not->toHaveKey('linkedin')
+        ->and($updated->mentions[0]['handles']['linkedin_urn'])->toBe('urn:li:organization:12345')
+        // Display falls back to the label since the field held a reference, not a name.
+        ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)
+        ->toBe(['Hi @[Coolify](urn:li:organization:12345)']);
+});

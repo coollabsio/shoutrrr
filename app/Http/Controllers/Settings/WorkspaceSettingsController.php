@@ -14,10 +14,10 @@ use App\Models\User;
 use App\Models\WorkspaceInvitation;
 use App\Models\WorkspaceMembership;
 use App\Notifications\WorkspaceInviteNotification;
+use App\Support\FileStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -71,7 +71,8 @@ class WorkspaceSettingsController extends Controller
 
         if ($request->hasFile('photo')) {
             $oldLogo = $workspace->getRawOriginal('logo');
-            $path = $request->file('photo')->store('workspace-photos', 'public');
+            $disk = FileStorage::publicImageDiskName();
+            $path = $request->file('photo')->store('workspace-photos', $disk);
 
             if ($path === false) {
                 return back()->withErrors(['photo' => 'The workspace photo could not be saved.']);
@@ -80,7 +81,7 @@ class WorkspaceSettingsController extends Controller
             $validated['logo'] = $path;
 
             if (is_string($oldLogo) && $oldLogo !== '' && ! str_starts_with($oldLogo, 'http') && ! str_starts_with($oldLogo, '/')) {
-                Storage::disk('public')->delete($oldLogo);
+                FileStorage::disk($disk)->delete($oldLogo);
             }
         }
 

@@ -39,11 +39,13 @@ test('instance owner can update instance settings', function () {
             'workspace_creation_enabled' => false,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
+            'linkedin_community_management_enabled' => true,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->registrationsEnabled())->toBeFalse()
-        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
+        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse()
+        ->and(app(InstanceSettings::class)->linkedinCommunityManagementEnabled())->toBeTrue();
 });
 
 test('workspace creation setting is disabled when workspaces are globally disabled', function () {
@@ -72,10 +74,23 @@ test('workspace creation setting cannot be enabled when workspaces are globally 
             'workspace_creation_enabled' => true,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
+            'linkedin_community_management_enabled' => false,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
+});
+
+test('linkedin engagement polling is gated on the community management setting', function () {
+    $settings = app(InstanceSettings::class);
+
+    // Off by default: LinkedIn must never be polled for replies (every fetch 403s
+    // without the restricted r_member_social_feed scope).
+    expect($settings->engagementPollingEnabled(Platform::LinkedIn))->toBeFalse();
+
+    $settings->update(['linkedin_community_management_enabled' => true]);
+
+    expect($settings->engagementPollingEnabled(Platform::LinkedIn))->toBeTrue();
 });
 
 test('instance owner can view polling settings', function () {
@@ -384,6 +399,8 @@ test('instance owner can update polling settings', function () {
                 'enabled' => ['x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
                 'x' => 1440, 'bluesky' => 240, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
+            'metrics_enabled' => true,
+            'engagement_enabled' => true,
         ])
         ->assertRedirect();
 
@@ -413,6 +430,32 @@ test('instance owner can update polling settings', function () {
     // (enabled + per-platform fallback) even though we never sent it.
     expect($polling['post_metrics']['enabled']['linkedin'])->toBeTrue()
         ->and($polling['account_metrics']['enabled']['linkedin'])->toBeTrue();
+});
+
+test('instance owner can toggle the metrics and engagement master switches from the polling page', function () {
+    $owner = User::factory()->instanceOwner()->create();
+
+    $this->actingAs($owner)
+        ->put(route('instance-settings.polling.update'), [
+            'engagement' => [
+                'enabled' => ['x' => true, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 360, 'bluesky' => 15, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+            ],
+            'post_metrics' => [
+                'enabled' => ['x' => true, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
+                'x' => 360, 'bluesky' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 15,
+            ],
+            'account_metrics' => [
+                'enabled' => ['x' => true, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 1440, 'bluesky' => 1440, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+            ],
+            'metrics_enabled' => false,
+            'engagement_enabled' => false,
+        ])
+        ->assertRedirect();
+
+    expect(app(InstanceSettings::class)->metricsEnabled())->toBeFalse()
+        ->and(app(InstanceSettings::class)->engagementEnabled())->toBeFalse();
 });
 
 test('regular users cannot view polling settings', function () {

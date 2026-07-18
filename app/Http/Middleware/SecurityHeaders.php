@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Support\FileStorage;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Vite;
@@ -108,7 +109,7 @@ class SecurityHeaders
      */
     private function storageOrigins(): array
     {
-        if (config('filesystems.default') !== 's3') {
+        if (FileStorage::diskName() !== 's3') {
             return [];
         }
 

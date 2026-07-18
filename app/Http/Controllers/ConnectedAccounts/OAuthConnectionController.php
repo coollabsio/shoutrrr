@@ -28,6 +28,7 @@ class OAuthConnectionController extends Controller
         private readonly AccountConnectionService $connections,
         private readonly XAccountCapabilities $xCapabilities,
         private readonly ThreadsTokenExchanger $threadsExchanger,
+        private readonly InstanceSettings $settings,
     ) {}
 
     public function redirect(Request $request, string $platform): Response
@@ -36,7 +37,7 @@ class OAuthConnectionController extends Controller
 
         $request->user()->can('create', ConnectedAccount::class) ?: abort(403);
 
-        return $this->driver($resolved)->setScopes($resolved->scopes())->redirect();
+        return $this->driver($resolved)->setScopes($this->scopesFor($resolved))->redirect();
     }
 
     public function callback(Request $request, string $platform): RedirectResponse
@@ -83,6 +84,17 @@ class OAuthConnectionController extends Controller
 
         if ($resolved === Platform::X) {
             $data = $data->withCapabilities($this->xCapabilities->forAccessToken($data->accessToken));
+        }
+
+        if ($resolved === Platform::LinkedIn) {
+            // Record whether LinkedIn actually granted the restricted Community
+            // Management read scope, so the engagement inbox only polls accounts
+            // that can read replies (others 403). `approvedScopes` comes from the
+            // token response's `scope` field.
+            $granted = (array) $oauthUser->approvedScopes;
+            $data = $data->withCapabilities([
+                'linkedin_engagement' => in_array('r_member_social_feed', $granted, true),
+            ]);
         }
 
         if ($resolved === Platform::Threads) {
@@ -148,6 +160,25 @@ class OAuthConnectionController extends Controller
             str_contains($message, '401'), str_contains($message, '403'), str_contains($message, 'Unauthorized'), str_contains($message, 'Forbidden') => "{$platform->label()} refused the request. Check your {$platform->label()} app's credentials and permissions, then try again.",
             default => "We couldn't connect your {$platform->label()} account. Please try again.",
         };
+    }
+
+    /**
+     * OAuth scopes to request for a platform. LinkedIn's engagement inbox needs
+     * the restricted Community Management feed scopes; they are only appended
+     * when the operator has declared the app is approved for them, because
+     * requesting a scope an app lacks makes LinkedIn reject the whole authorize.
+     *
+     * @return list<string>
+     */
+    private function scopesFor(Platform $platform): array
+    {
+        $scopes = $platform->scopes();
+
+        if ($platform === Platform::LinkedIn && $this->settings->linkedinCommunityManagementEnabled()) {
+            $scopes = [...$scopes, 'r_member_social_feed', 'w_member_social_feed'];
+        }
+
+        return $scopes;
     }
 
     private function resolveOAuthPlatform(string $platform): Platform

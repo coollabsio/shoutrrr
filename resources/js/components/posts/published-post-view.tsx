@@ -1,17 +1,21 @@
-import { Deferred, usePage } from '@inertiajs/react';
+import { Deferred, router, useHttp, usePage } from '@inertiajs/react';
 import {
     CheckCircle2,
     ExternalLink,
     Eye,
     Heart,
     MessageCircle,
+    RefreshCw,
     Repeat2,
 } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
+import PostMetricsRefreshController from '@/actions/App/Http/Controllers/Posts/PostMetricsRefreshController';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { TargetStatusChips } from '@/components/compose/target-status-chips';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { dayjs } from '@/lib/datetime/dayjs';
@@ -396,6 +400,22 @@ function SummaryStrip({
         ? dayjs(stats.captured_at).fromNow()
         : null;
 
+    const refreshHttp = useHttp<Record<string, never>, unknown>({});
+
+    function refreshMetrics() {
+        void refreshHttp
+            .post(PostMetricsRefreshController.store(post.id).url, {
+                onSuccess: () => router.reload({ only: ['stats'] }),
+                onHttpException: () => {
+                    toast.error('Could not refresh metrics.');
+                },
+                onNetworkError: () => {
+                    toast.error('Could not reach the server.');
+                },
+            })
+            .catch(() => {});
+    }
+
     return (
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm ring-1 ring-foreground/5">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -420,6 +440,26 @@ function SummaryStrip({
                             <span className="text-[12px] text-muted-foreground">
                                 Synced {synced}
                             </span>
+                        )}
+                        {!loading && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 gap-1.5 px-2 text-[12px] text-muted-foreground hover:text-foreground"
+                                disabled={refreshHttp.processing}
+                                onClick={refreshMetrics}
+                            >
+                                <RefreshCw
+                                    className={cn(
+                                        'size-3.5',
+                                        refreshHttp.processing &&
+                                            'animate-spin',
+                                    )}
+                                    aria-hidden
+                                />
+                                Refresh
+                            </Button>
                         )}
                     </div>
                 )}

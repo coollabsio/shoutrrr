@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Exceptions\CannotDeleteInitialWorkspace;
+use App\Support\FileStorage;
 use Database\Factories\WorkspaceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -15,9 +16,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Support\Facades\Storage;
 use Laravel\Cashier\Billable;
 use Laravel\Cashier\Subscription;
+use Override;
 use Stripe\Subscription as StripeSubscription;
 
 #[Fillable([
@@ -33,7 +34,7 @@ class Workspace extends Model
     /** @use HasFactory<WorkspaceFactory> */
     use Billable, HasFactory, HasUuids;
 
-    #[\Override]
+    #[Override]
     protected static function booted(): void
     {
         // The very first workspace created on the instance is flagged as the free
@@ -71,7 +72,7 @@ class Workspace extends Model
      * first attempt runs in a savepoint — the same guard Eloquent's own
      * `createOrFirst()` uses.
      */
-    #[\Override]
+    #[Override]
     protected function performInsert(EloquentBuilder $query): bool
     {
         try {
@@ -125,7 +126,7 @@ class Workspace extends Model
                 return $value;
             }
 
-            return Storage::disk('public')->url($value);
+            return FileStorage::url($value, FileStorage::publicImageDiskName());
         }
 
         return "https://api.dicebear.com/9.x/glass/svg?seed={$this->attributes['id']}";
@@ -171,7 +172,7 @@ class Workspace extends Model
     /**
      * @return array<string, string>
      */
-    #[\Override]
+    #[Override]
     protected function casts(): array
     {
         return [

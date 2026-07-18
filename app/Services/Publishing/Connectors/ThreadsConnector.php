@@ -12,6 +12,7 @@ use App\Enums\Platform;
 use App\Enums\UsageCategory;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\ImageConversionFailed;
 use App\Services\Media\PublicMediaUrl;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
@@ -117,6 +118,10 @@ class ThreadsConnector implements PublishConnector
             }
         } catch (ThreadsRequestFailed $e) {
             return $this->mapFailure($e->response);
+        } catch (ImageConversionFailed $e) {
+            // The image can't be re-encoded to a format Threads accepts; retrying
+            // won't change that, so fail with the reason rather than looping.
+            return PublishResult::failure(ErrorKind::Unsupported, $e->getMessage());
         } catch (ConnectionException $e) {
             return PublishResult::failure(ErrorKind::Network, $e->getMessage());
         }
@@ -188,7 +193,7 @@ class ThreadsConnector implements PublishConnector
             'text' => $text,
             'access_token' => $token,
         ];
-        $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media);
+        $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media, Platform::Threads);
 
         if ($replyToId !== null) {
             $body['reply_to_id'] = $replyToId;
@@ -240,7 +245,7 @@ class ThreadsConnector implements PublishConnector
             'media_type' => $media->isVideo() ? 'VIDEO' : 'IMAGE',
             'access_token' => $token,
         ];
-        $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media);
+        $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media, Platform::Threads);
 
         return $this->createContainer($context, $threadsUserId, $body);
     }

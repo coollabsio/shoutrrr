@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\PostMedia;
+use App\Support\FileStorage;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class PruneAbandonedUploads extends Command
 {
@@ -18,7 +18,7 @@ class PruneAbandonedUploads extends Command
 
     public function handle(): int
     {
-        $disk = Storage::disk(config('filesystems.default'));
+        $disk = FileStorage::disk();
         $cutoff = Carbon::now()->subHours(6)->getTimestamp();
         $deleted = 0;
 

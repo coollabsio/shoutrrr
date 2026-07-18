@@ -13,6 +13,7 @@ final readonly class ReplyFetchResult
         public EngagementStatus $status,
         public array $replies = [],
         public ?string $message = null,
+        public ?int $retryAfterSeconds = null,
     ) {}
 
     /** @param list<FetchedReply> $replies */
@@ -26,9 +27,9 @@ final readonly class ReplyFetchResult
         return new self(EngagementStatus::Unsupported, message: $message);
     }
 
-    public static function rateLimited(?string $message = null): self
+    public static function rateLimited(?string $message = null, ?int $retryAfterSeconds = null): self
     {
-        return new self(EngagementStatus::RateLimited, message: $message);
+        return new self(EngagementStatus::RateLimited, message: $message, retryAfterSeconds: $retryAfterSeconds);
     }
 
     public static function authExpired(?string $message = null): self

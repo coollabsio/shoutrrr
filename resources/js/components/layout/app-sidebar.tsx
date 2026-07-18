@@ -1,5 +1,6 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import {
+    Blocks,
     CalendarDays,
     ChartColumn,
     CreditCard,
@@ -8,9 +9,11 @@ import {
     ListChecks,
     MessageCircle,
     Pencil,
+    RefreshCw,
     ScrollText,
     Settings,
     Share2,
+    Shield,
     Users,
     Wrench,
     type LucideIcon,
@@ -18,7 +21,6 @@ import {
 import { useEffect } from 'react';
 
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
-import InstanceSettingsController from '@/actions/App/Http/Controllers/Settings/InstanceSettingsController';
 import AppLogo from '@/components/layout/app-logo';
 import { NavUser } from '@/components/layout/nav-user';
 import { SidebarFooterCard } from '@/components/layout/sidebar-footer-card';
@@ -48,6 +50,10 @@ import {
     composeIconClassName,
 } from '@/lib/navigation/compose-nav';
 import {
+    instanceSettingsNavItems,
+    type InstanceSettingsNavKey,
+} from '@/lib/navigation/instance-settings-nav';
+import {
     workspaceSettingsNavItems,
     type WorkspaceSettingsNavKey,
 } from '@/lib/navigation/workspace-settings-nav';
@@ -65,8 +71,24 @@ type NavItem = {
     icon: LucideIcon;
 };
 
-export const workspaceSettingsLabel = 'Workspace settings';
+export const workspaceSettingsLabel = 'Workspace';
 export const instanceSettingsLabel = 'Instance settings';
+
+const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, LucideIcon> = {
+    overview: Settings,
+    members: Users,
+    apiKeys: KeyRound,
+    legal: ScrollText,
+    subscription: CreditCard,
+};
+
+const instanceSettingsIcons: Record<InstanceSettingsNavKey, LucideIcon> = {
+    general: Wrench,
+    polling: RefreshCw,
+    platforms: Blocks,
+    usage: ChartColumn,
+    admins: Shield,
+};
 
 const versionBadgeClassName =
     'rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none font-medium text-sidebar-foreground/60 transition-colors hover:border-sidebar-accent-foreground/30 hover:text-sidebar-foreground';
@@ -82,14 +104,6 @@ const postsNavItems: NavItem[] = [
     { title: 'Accounts', href: accountsRoute(), icon: Share2 },
     { title: 'Engagement', href: engagementRoute(), icon: MessageCircle },
 ];
-
-const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, LucideIcon> = {
-    overview: Settings,
-    members: Users,
-    apiKeys: KeyRound,
-    legal: ScrollText,
-    subscription: CreditCard,
-};
 
 export function AppSidebar() {
     const {
@@ -119,6 +133,22 @@ export function AppSidebar() {
 
     const composeHref = dashboard();
     const showWorkspaceSettings = workspaces.enabled && workspaces.current;
+    const showInstanceSettings = instance.isOwner;
+    const settingsItems = showWorkspaceSettings
+        ? workspaceSettingsNavItems({
+              permissions: workspaces.current?.permissions ?? [],
+              billingEnabled: !!features?.billing,
+          })
+        : [];
+    const instanceItems = showInstanceSettings
+        ? instanceSettingsNavItems()
+        : [];
+    const isItemActive = (
+        item: (typeof settingsItems)[number] | (typeof instanceItems)[number],
+    ) =>
+        item.key === 'overview' || item.key === 'general'
+            ? isCurrentUrl(item.href)
+            : isCurrentOrParentUrl(item.href);
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -262,26 +292,20 @@ export function AppSidebar() {
 
                 {showWorkspaceSettings && (
                     <SidebarGroup>
-                        <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+                        <SidebarGroupLabel>
+                            {workspaceSettingsLabel}
+                        </SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
-                                {workspaceSettingsNavItems({
-                                    permissions:
-                                        workspaces.current?.permissions ?? [],
-                                    billingEnabled: !!features?.billing,
-                                }).map((item) => {
+                                {settingsItems.map((item) => {
                                     const Icon =
                                         workspaceSettingsIcons[item.key];
-                                    const active =
-                                        item.key === 'overview'
-                                            ? isCurrentUrl(item.href)
-                                            : isCurrentOrParentUrl(item.href);
 
                                     return (
                                         <SidebarMenuItem key={item.key}>
                                             <SidebarMenuButton
                                                 tooltip={item.title}
-                                                isActive={active}
+                                                isActive={isItemActive(item)}
                                                 render={
                                                     <Link href={item.href} />
                                                 }
@@ -292,24 +316,37 @@ export function AppSidebar() {
                                         </SidebarMenuItem>
                                     );
                                 })}
-                                {instance.isOwner && (
-                                    <SidebarMenuItem>
-                                        <SidebarMenuButton
-                                            tooltip={instanceSettingsLabel}
-                                            isActive={isCurrentOrParentUrl(
-                                                InstanceSettingsController.edit(),
-                                            )}
-                                            render={
-                                                <Link
-                                                    href={InstanceSettingsController.edit()}
-                                                />
-                                            }
-                                        >
-                                            <Wrench aria-hidden="true" />
-                                            <span>{instanceSettingsLabel}</span>
-                                        </SidebarMenuButton>
-                                    </SidebarMenuItem>
-                                )}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                )}
+
+                {showInstanceSettings && (
+                    <SidebarGroup>
+                        <SidebarGroupLabel>
+                            {instanceSettingsLabel}
+                        </SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {instanceItems.map((item) => {
+                                    const Icon =
+                                        instanceSettingsIcons[item.key];
+
+                                    return (
+                                        <SidebarMenuItem key={item.key}>
+                                            <SidebarMenuButton
+                                                tooltip={item.title}
+                                                isActive={isItemActive(item)}
+                                                render={
+                                                    <Link href={item.href} />
+                                                }
+                                            >
+                                                <Icon aria-hidden="true" />
+                                                <span>{item.title}</span>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    );
+                                })}
                             </SidebarMenu>
                         </SidebarGroupContent>
                     </SidebarGroup>

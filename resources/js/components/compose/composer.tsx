@@ -1,5 +1,5 @@
 import { Link, useHttp } from '@inertiajs/react';
-import { Eye, Pin, Plug } from 'lucide-react';
+import { Eye, Pin, Plug, TriangleAlert } from 'lucide-react';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -20,6 +20,10 @@ import {
     type ComposerState,
 } from '@/lib/compose/composer-state';
 import {
+    describeFormatNotice,
+    precheckNotices,
+} from '@/lib/compose/format-notices';
+import {
     wouldMixVideoAndImages,
     wouldViolateBlueskyGif,
 } from '@/lib/compose/media-rules';
@@ -30,6 +34,7 @@ import {
     syncMentionsFromText,
 } from '@/lib/compose/mentions';
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
+import { precheckAccount, precheckDestinations } from '@/lib/compose/precheck';
 import { readVideoMetadata } from '@/lib/compose/video';
 import {
     defaultSettings,
@@ -118,6 +123,8 @@ type ComposerProps = {
     /** Focus the editor as soon as it mounts. */
     autoFocusEditor?: boolean;
     initialSavedMentions?: WorkspaceMention[];
+    /** Fired after each successful autosave (create or update). */
+    onSaved?: () => void;
 };
 
 const EMPTY_SAVED_MENTIONS: WorkspaceMention[] = [];
@@ -159,6 +166,7 @@ export default function Composer({
     initialDestination = null,
     autoFocusEditor = false,
     initialSavedMentions = EMPTY_SAVED_MENTIONS,
+    onSaved,
 }: ComposerProps) {
     const schedulingTz = useSchedulingTimezone();
     const saveMentionHttp = useHttp<
@@ -218,6 +226,7 @@ export default function Composer({
         state,
         accountIds: destinationAccountIds,
         dispatch,
+        onSaved,
     });
     const publishStatus = usePublishStatus({ pagePost: post });
 
@@ -227,9 +236,6 @@ export default function Composer({
     const mediaUploads = useMediaUploads({
         media: state.media,
         videoLimits: selectedVideoLimits,
-        // Instagram accepts JPEG only, so convert non-JPEG uploads to JPEG in the
-        // browser whenever Instagram is one of the selected destinations.
-        requiresJpeg: tabAccounts.some((a) => a.platform === 'instagram'),
         onEnsurePost: ensurePost,
         onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
     });
@@ -563,10 +569,34 @@ export default function Composer({
         if (!account) {
             return 'ok';
         }
+        const platformLimits = limits.find(
+            (l) => l.platform === account.platform,
+        );
+        if (!platformLimits) {
+            return 'ok';
+        }
         const segments =
             state.overrideByAccount[accountId] !== undefined
                 ? (state.overrideByAccount[accountId] as string[])
                 : state.segments;
+        // Global media count — the connector publishes the full post media set to
+        // every target (see precheckDestinations), so per-account exclusions must
+        // not change the severity a destination shows.
+        const mediaCount = state.media.length;
+        const hasVideo = state.media.some((item) => item.kind === 'video');
+        const reasons = precheckAccount({
+            account,
+            segments,
+            autoSplit: state.autoSplitByAccount[accountId] ?? true,
+            mentions: state.mentions,
+            mediaCount,
+            hasVideo,
+            format: state.formatByAccount[accountId] ?? 'feed',
+            limits: platformLimits,
+        });
+        if (reasons.length > 0) {
+            return 'over';
+        }
         const resolvedText = replaceMentionTokens(
             segments.join('\n'),
             state.mentions,
@@ -574,9 +604,6 @@ export default function Composer({
         );
         const limit = limitForAccount(account);
         const count = measure(resolvedText, account.platform);
-        if (limit > 0 && count > limit) {
-            return 'over';
-        }
 
         return limit > 0 && count >= limit * 0.9 ? 'warn' : 'ok';
     }
@@ -750,6 +777,27 @@ export default function Composer({
               autoSplit: true,
           });
 
+    const blockedAccounts = precheckDestinations({
+        accounts: tabAccounts,
+        segments: state.segments,
+        mentions: state.mentions,
+        autoSplitByAccount: state.autoSplitByAccount,
+        overrideByAccount: state.overrideByAccount,
+        formatByAccount: state.formatByAccount,
+        media: state.media,
+        limits,
+    });
+    const notices = precheckNotices({
+        accounts: tabAccounts,
+        segments: state.segments,
+        overrideByAccount: state.overrideByAccount,
+        formatByAccount: state.formatByAccount,
+        media: state.media,
+    });
+    const activeNotices = activeAccount
+        ? (notices.find((n) => n.accountId === activeAccount.id)?.notices ?? [])
+        : [];
+
     return (
         <div
             className={cn(
@@ -777,6 +825,9 @@ export default function Composer({
                             hasOverride={(accountId) =>
                                 state.overrideByAccount[accountId] !== undefined
                             }
+                            noticeAccountIds={notices.map(
+                                (notice) => notice.accountId,
+                            )}
                         />
                     </div>
                     <div className="ml-auto flex min-w-0 items-center justify-end gap-1.5 pr-1 sm:gap-2">
@@ -911,6 +962,28 @@ export default function Composer({
                     </div>
                 ) : null}
 
+                {activeAccount && activeNotices.length > 0 && (
+                    <div className="-mt-1 space-y-1 px-4 pb-3.5 sm:px-[26px]">
+                        {activeNotices.map((notice) => (
+                            <p
+                                key={notice}
+                                className="flex items-start gap-1.5 text-[12px] text-amber-700 dark:text-amber-500"
+                            >
+                                <TriangleAlert
+                                    className="mt-0.5 size-3.5 shrink-0"
+                                    aria-hidden="true"
+                                />
+                                <span>
+                                    {describeFormatNotice(
+                                        notice,
+                                        activeAccount.platform,
+                                    )}
+                                </span>
+                            </p>
+                        ))}
+                    </div>
+                )}
+
                 {/* Toolbar — editing controls when editable; just the attached
                 media when read-only (skipped entirely if there's none). */}
                 {(!readOnly || state.media.length > 0) && (
@@ -926,6 +999,22 @@ export default function Composer({
                                 ? (state.autoSplitByAccount[activeAccount.id] ??
                                   true)
                                 : false
+                        }
+                        format={
+                            activeAccount
+                                ? (state.formatByAccount[activeAccount.id] ??
+                                  'feed')
+                                : 'feed'
+                        }
+                        onFormatChange={
+                            activeAccount
+                                ? (format) =>
+                                      dispatch({
+                                          type: 'setFormat',
+                                          accountId: activeAccount.id,
+                                          format,
+                                      })
+                                : undefined
                         }
                         overrideActive={overrideActive}
                         showSplitControls={activeAccount !== null}
@@ -1101,6 +1190,8 @@ export default function Composer({
                             onEnsurePost={ensurePost}
                             onOptimisticSubmit={publishStatus.applyOptimistic}
                             onServerPost={publishStatus.applyServerPost}
+                            blockedAccounts={blockedAccounts}
+                            limits={limits}
                         />
                     </div>
                 )}

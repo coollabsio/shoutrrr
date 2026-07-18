@@ -37,6 +37,7 @@ void createInertiaApp({
                 return AuthLayout;
             case name === 'settings/instance' ||
                 name === 'settings/instance-polling' ||
+                name === 'settings/instance-platforms' ||
                 name === 'settings/instance-usage' ||
                 name === 'settings/instance-admins':
                 return [AppLayout, InstanceSettingsLayout];

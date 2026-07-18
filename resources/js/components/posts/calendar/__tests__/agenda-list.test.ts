@@ -20,6 +20,8 @@ function post(overrides: Partial<PostRowData>): PostRowData {
         published_at: null,
         platforms: [],
         targets: [],
+        media_count: 0,
+        media_preview: null,
         ...overrides,
     };
 }

@@ -10,6 +10,7 @@ use App\Http\Requests\Post\SignVideoUploadRequest;
 use App\Http\Requests\Post\StoreVideoRequest;
 use App\Models\Post;
 use App\Models\PostMedia;
+use App\Support\FileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -25,7 +26,7 @@ class PostVideoUploadController extends Controller
     {
         abort_unless($post->status->isEditable(), 422, 'This post can no longer be edited.');
 
-        $disk = config('filesystems.default');
+        $disk = FileStorage::diskName();
         $key = 'tmp/media/'.$post->workspace_id.'/'.Str::uuid().'.mp4';
 
         ['url' => $uploadUrl, 'headers' => $headers] = Storage::disk($disk)->temporaryUploadUrl(
@@ -50,7 +51,7 @@ class PostVideoUploadController extends Controller
 
         $validated = $request->validated();
         $key = $validated['key'];
-        $disk = config('filesystems.default');
+        $disk = FileStorage::diskName();
 
         // Security: reject any key that is not within tmp/media/{workspace_id}/<uuid>.mp4
         // This prevents clients from finalizing objects in other workspaces or bypassing the

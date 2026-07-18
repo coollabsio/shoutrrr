@@ -47,6 +47,10 @@ function fakeOAuthUser(string $driver, array $data): SocialiteUser
         $user->setExpiresIn($data['expiresIn']);
     }
 
+    if (array_key_exists('approvedScopes', $data)) {
+        $user->setApprovedScopes($data['approvedScopes']);
+    }
+
     $provider = Mockery::mock(AbstractProvider::class);
     $provider->shouldReceive('setScopes')->andReturnSelf();
     $provider->shouldReceive('redirectUrl')->andReturnSelf();
@@ -181,6 +185,72 @@ test('callback maps a linkedin-openid user', function () {
     expect($account->platform)->toBe(Platform::LinkedIn)
         ->and($account->handle)->toBe('Grace Hopper')
         ->and($account->token_expires_at)->not->toBeNull();
+});
+
+test('linkedin connect requests the community management feed scopes only when enabled', function () {
+    config()->set('services.linkedin-openid.client_id', 'cid');
+    config()->set('services.linkedin-openid.client_secret', 'secret');
+    config()->set('services.linkedin-openid.redirect', 'https://app.test/accounts/callback/linkedin');
+    ownerActingIn();
+
+    $captured = [];
+    $provider = Mockery::mock(AbstractProvider::class);
+    $provider->shouldReceive('setScopes')->andReturnUsing(function (array $scopes) use ($provider, &$captured) {
+        $captured = $scopes;
+
+        return $provider;
+    });
+    $provider->shouldReceive('redirectUrl')->andReturnSelf();
+    $provider->shouldReceive('redirect')->andReturn(redirect('https://provider.test/oauth'));
+    Socialite::shouldReceive('driver')->with('linkedin-openid')->andReturn($provider);
+
+    // Off by default: never request the restricted scope (it would break authorize).
+    test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
+    expect($captured)->not->toContain('r_member_social_feed');
+
+    app(App\Support\InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+
+    test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
+    expect($captured)->toContain('r_member_social_feed')
+        ->and($captured)->toContain('w_member_social_feed');
+});
+
+test('linkedin connect records the engagement capability from the granted scopes', function () {
+    config()->set('services.linkedin-openid.client_id', 'cid');
+    config()->set('services.linkedin-openid.client_secret', 'secret');
+    config()->set('services.linkedin-openid.redirect', 'https://app.test/accounts/callback/linkedin');
+    ownerActingIn();
+    fakeOAuthUser('linkedin-openid', [
+        'id' => 'sub-cap',
+        'name' => 'Ada Lovelace',
+        'expiresIn' => 5184000,
+        'approvedScopes' => ['openid', 'profile', 'email', 'w_member_social', 'r_member_social_feed'],
+    ]);
+
+    test()->get('/accounts/callback/linkedin')->assertRedirect(route('accounts.index'));
+
+    $account = ConnectedAccount::withoutGlobalScopes()->firstWhere('remote_account_id', 'sub-cap');
+    expect($account->capabilities['linkedin_engagement'])->toBeTrue()
+        ->and($account->canFetchEngagement())->toBeTrue();
+});
+
+test('linkedin connect marks engagement unavailable when the feed scope is not granted', function () {
+    config()->set('services.linkedin-openid.client_id', 'cid');
+    config()->set('services.linkedin-openid.client_secret', 'secret');
+    config()->set('services.linkedin-openid.redirect', 'https://app.test/accounts/callback/linkedin');
+    ownerActingIn();
+    fakeOAuthUser('linkedin-openid', [
+        'id' => 'sub-nocap',
+        'name' => 'Alan Turing',
+        'expiresIn' => 5184000,
+        'approvedScopes' => ['openid', 'profile', 'email', 'w_member_social'],
+    ]);
+
+    test()->get('/accounts/callback/linkedin')->assertRedirect(route('accounts.index'));
+
+    $account = ConnectedAccount::withoutGlobalScopes()->firstWhere('remote_account_id', 'sub-nocap');
+    expect($account->capabilities['linkedin_engagement'])->toBeFalse()
+        ->and($account->canFetchEngagement())->toBeFalse();
 });
 
 test('duplicate callback after a successful OAuth connection keeps the success flash', function () {

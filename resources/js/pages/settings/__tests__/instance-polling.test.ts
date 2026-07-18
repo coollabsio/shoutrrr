@@ -10,6 +10,8 @@ import {
 } from '../instance-polling';
 
 const settings: PollingSettings = {
+    metrics_enabled: true,
+    engagement_enabled: true,
     engagement: {
         x: 15,
         bluesky: 30,
@@ -121,5 +123,59 @@ describe('instance polling section rendering', () => {
         // PollingCard is driven by a per-section platforms prop sourced from `sections`.
         expect(source).toContain('platforms={sections.');
         expect(source).toContain('sections.engagement');
+    });
+
+    it('labels the engagement interval as a minimum floor, not a fixed cadence', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/pages/settings/instance-polling.tsx',
+            ),
+            'utf8',
+        );
+
+        // Engagement polling is adaptive (age bands + steady tail); the operator
+        // interval is a floor, so the copy must not imply a fixed cadence.
+        expect(source).toContain('minutesHelp="Minimum interval in minutes."');
+        expect(source).toMatch(/minimum time between reply checks/i);
+    });
+
+    it('labels the post-metrics interval as a minimum floor, not a fixed cadence', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/pages/settings/instance-polling.tsx',
+            ),
+            'utf8',
+        );
+
+        // Post-metrics polling is now age-banded with unchanged-streak backoff;
+        // the operator interval is a floor, so the copy must not imply a fixed
+        // cadence. Two "PollingCard"s now share this exact minutesHelp string
+        // (engagement + post metrics) — assert it appears at least twice.
+        expect(
+            source.match(/minutesHelp="Minimum interval in minutes\."/g),
+        ).toHaveLength(2);
+        expect(source).toMatch(/minimum time between metric refreshes/i);
+    });
+
+    it('offers instance-wide master switches for metrics and engagement, above the per-platform cards', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/pages/settings/instance-polling.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('id="engagement_enabled"');
+        expect(source).toContain('id="metrics_enabled"');
+        expect(source).toMatch(/setData\(\s*'engagement_enabled'/);
+        expect(source).toMatch(/setData\(\s*'metrics_enabled'/);
+        // The metrics master switch disables both metrics cards; engagement's disables its own.
+        expect(source).toContain('disabled={!data.engagement_enabled}');
+        expect(source).toMatch(
+            /disabled=\{!data\.metrics_enabled\}[\s\S]*disabled=\{!data\.metrics_enabled\}/,
+        );
     });
 });

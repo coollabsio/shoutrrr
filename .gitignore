@@ -38,3 +38,6 @@ frankenphp-worker.php
 
 # Transient Claude Code agent worktrees
 /.claude/worktrees
+
+# Per-task scratchpad, not tracked
+/.ai/todo.md

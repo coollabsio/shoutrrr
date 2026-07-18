@@ -38,7 +38,11 @@ test('profile information can be updated', function () {
 });
 
 test('profile photo can be uploaded', function () {
-    Storage::fake('public');
+    config([
+        'filesystems.default' => 's3',
+        'filesystems.public_images' => null,
+    ]);
+    Storage::fake('s3');
 
     $user = User::factory()->create();
     $photo = UploadedFile::fake()->image('avatar.jpg');
@@ -55,8 +59,37 @@ test('profile photo can be uploaded', function () {
     $user->refresh();
 
     expect($user->avatar_path)->toStartWith('profile-photos/');
-    expect($user->avatar)->toBe('/storage/'.$user->avatar_path);
-    Storage::disk('public')->assertExists($user->avatar_path);
+    expect($user->avatar)->toContain($user->avatar_path);
+    Storage::disk('s3')->assertExists($user->avatar_path);
+});
+
+test('profile photo uses the configured public image disk', function () {
+    config([
+        'filesystems.default' => 's3',
+        'filesystems.public_images' => 'public-images',
+        'filesystems.disks.public-images.url' => 'https://cdn.shoutrrr.com',
+        'filesystems.disks.public-images.visibility' => 'public',
+    ]);
+    Storage::fake('s3');
+    Storage::fake('public-images', ['url' => 'https://cdn.shoutrrr.com']);
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->patch(route('profile.update'), [
+            'name' => $user->name,
+            'email' => $user->email,
+            'photo' => UploadedFile::fake()->image('avatar.jpg'),
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('profile.edit'));
+
+    $user->refresh();
+
+    expect($user->avatar_path)->toStartWith('profile-photos/');
+    expect($user->avatar)->toBe("https://cdn.shoutrrr.com/{$user->avatar_path}");
+    Storage::disk('public-images')->assertExists($user->avatar_path);
+    Storage::disk('s3')->assertMissing($user->avatar_path);
 });
 
 test('profile photo must be an image', function () {

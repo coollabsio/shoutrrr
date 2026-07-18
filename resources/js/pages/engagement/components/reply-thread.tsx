@@ -1,4 +1,4 @@
-import { ArrowUpRight, ExternalLink, Heart, Trash2 } from 'lucide-react';
+import { ExternalLink, Heart, Trash2 } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -10,8 +10,6 @@ import type { ReplyItem } from '../types';
 
 type Props = {
     postExcerpt: string | null;
-    postUrl: string | null;
-    platform: ReplyItem['platform'];
     thread: ReplyItem[];
     loading: boolean;
     onToggleLike: (reply: ReplyItem) => void;
@@ -23,18 +21,14 @@ const actionButton =
 
 export function ReplyThread({
     postExcerpt,
-    postUrl,
-    platform,
     thread,
     loading,
     onToggleLike,
     onDelete,
 }: Props) {
-    const postPlatformLabel = platformLabel(platform);
-
     if (loading) {
         return (
-            <div className="flex-1 space-y-4 overflow-y-auto p-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4">
                 <Skeleton className="h-16 w-full rounded-xl" />
                 <Skeleton className="ml-10 h-20 w-2/3 rounded-2xl" />
                 <Skeleton className="h-20 w-2/3 rounded-2xl" />
@@ -43,26 +37,13 @@ export function ReplyThread({
     }
 
     return (
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4">
             {postExcerpt ? (
                 <div className="rounded-xl border bg-muted/40 p-3">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                            Your post
-                        </span>
-                        {postUrl ? (
-                            <a
-                                href={postUrl}
-                                target="_blank"
-                                rel="noreferrer noopener"
-                                className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-                            >
-                                Open post on {postPlatformLabel}
-                                <ArrowUpRight className="size-3" />
-                            </a>
-                        ) : null}
+                    <div className="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                        Your post
                     </div>
-                    <p className="line-clamp-3 text-sm text-foreground/80">
+                    <p className="line-clamp-3 text-sm break-words text-foreground/80">
                         {postExcerpt}
                     </p>
                 </div>
@@ -83,10 +64,10 @@ export function ReplyThread({
                 return reply.is_ours ? (
                     <div
                         key={reply.id}
-                        className="group flex flex-col items-end gap-1"
+                        className="group flex min-w-0 flex-col items-end gap-1"
                     >
-                        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2.5 text-primary-foreground">
-                            <p className="text-sm whitespace-pre-wrap">
+                        <div className="max-w-[min(85%,28rem)] min-w-0 rounded-2xl rounded-br-sm bg-primary px-3.5 py-2.5 text-primary-foreground">
+                            <p className="text-sm break-words whitespace-pre-wrap">
                                 {reply.text}
                             </p>
                             <div className="mt-1 text-right text-[11px] text-primary-foreground/70">
@@ -138,7 +119,7 @@ export function ReplyThread({
                         ) : null}
                     </div>
                 ) : (
-                    <div key={reply.id} className="group flex gap-2.5">
+                    <div key={reply.id} className="group flex min-w-0 gap-2.5">
                         <Avatar className="mt-0.5 size-7 shrink-0">
                             {reply.author_avatar_url ? (
                                 <AvatarImage
@@ -150,29 +131,29 @@ export function ReplyThread({
                                 {initials(reply)}
                             </AvatarFallback>
                         </Avatar>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                             <div
                                 className={cn(
-                                    'max-w-[85%] rounded-2xl rounded-bl-sm border bg-card px-3.5 py-2.5',
+                                    'max-w-[min(85%,28rem)] min-w-0 rounded-2xl rounded-bl-sm border bg-card px-3.5 py-2.5',
                                     !reply.is_read && 'border-primary/40',
                                 )}
                             >
-                                <div className="mb-0.5 flex items-baseline gap-1.5">
-                                    <span className="text-xs font-semibold">
+                                <div className="mb-0.5 flex min-w-0 items-baseline gap-1.5">
+                                    <span className="min-w-0 truncate text-xs font-semibold">
                                         {reply.author_name ??
                                             atHandle(reply.author_handle)}
                                     </span>
                                     {reply.author_name ? (
-                                        <span className="text-[11px] text-muted-foreground">
+                                        <span className="min-w-0 truncate text-[11px] text-muted-foreground">
                                             {atHandle(reply.author_handle)}
                                         </span>
                                     ) : null}
-                                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                                    <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
                                         ·{' '}
                                         {relativeTime(reply.remote_created_at)}
                                     </span>
                                 </div>
-                                <p className="text-sm whitespace-pre-wrap">
+                                <p className="text-sm break-words whitespace-pre-wrap">
                                     {reply.text}
                                 </p>
                             </div>
@@ -187,12 +168,19 @@ export function ReplyThread({
                                 <button
                                     type="button"
                                     onClick={() => onToggleLike(reply)}
+                                    disabled={!reply.can_like}
+                                    title={
+                                        reply.can_like
+                                            ? undefined
+                                            : `${platformLabel(reply.platform)} does not support liking replies`
+                                    }
                                     aria-label={
                                         reply.is_liked ? 'Unlike' : 'Like'
                                     }
                                     aria-pressed={reply.is_liked}
                                     className={cn(
                                         actionButton,
+                                        'disabled:cursor-not-allowed disabled:opacity-40',
                                         reply.is_liked
                                             ? 'text-rose-500'
                                             : 'hover:text-foreground',

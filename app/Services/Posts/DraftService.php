@@ -15,12 +15,19 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Support\InstanceSettings;
+use App\Support\LinkedInOrg;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 
 class DraftService
 {
+    /**
+     * Handle-map key holding a mention's LinkedIn organization URN. Not a real
+     * platform — it augments the `linkedin` display handle to produce a tag.
+     */
+    private const string LINKEDIN_URN_KEY = 'linkedin_urn';
+
     public function __construct(private readonly PostSplitter $splitter) {}
 
     /**
@@ -137,8 +144,9 @@ class DraftService
      * @param  array<string, bool>  $autoSplitByAccount
      * @param  array<string, array{segments: list<string>, media_ids: list<string>}|null>  $overrideByAccount
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
+     * @param  array<string, string>  $formatByAccount
      */
-    public function syncTargets(Post $post, array $accountIds, array $segments, array $autoSplitByAccount, array $overrideByAccount, array $mentions = []): void
+    public function syncTargets(Post $post, array $accountIds, array $segments, array $autoSplitByAccount, array $overrideByAccount, array $mentions = [], array $formatByAccount = []): void
     {
         $accounts = ConnectedAccount::withoutGlobalScopes()
             ->whereIn('id', $accountIds)
@@ -167,6 +175,9 @@ class DraftService
                 ? $overrideByAccount[$accountId]
                 : $currentOverride;
 
+            $currentFormat = $current instanceof PostTarget ? $current->format->value : null;
+            $format = $formatByAccount[$accountId] ?? $currentFormat ?? 'feed';
+
             $effectiveSegments = $override['segments'] ?? $segments;
             $resolvedSegments = array_map(
                 fn (string $segment): string => $this->resolveMentionTokens($segment, $mentions, $account->platform->value),
@@ -186,6 +197,7 @@ class DraftService
                     'sections' => $sections,
                     'content_override' => $override,
                     'auto_split' => $autoSplit,
+                    'format' => $format,
                 ],
             );
         }
@@ -218,12 +230,16 @@ class DraftService
             // otherwise syncTargets preserves the survivor's existing value.
             $autoSplitByAccount = [];
             $overrideByAccount = [];
+            $formatByAccount = [];
             foreach ($accountIds as $accountId) {
                 if ($data->hasAutoSplitFor($accountId)) {
                     $autoSplitByAccount[$accountId] = $data->autoSplitFor($accountId);
                 }
                 if ($data->hasOverrideFor($accountId)) {
                     $overrideByAccount[$accountId] = $data->overrideFor($accountId);
+                }
+                if ($data->hasFormatFor($accountId)) {
+                    $formatByAccount[$accountId] = $data->formatFor($accountId);
                 }
             }
 
@@ -234,7 +250,7 @@ class DraftService
                 'account_set_id' => $this->scopedAccountSetId($post->workspace_id, $destination),
             ])->save();
 
-            $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? []);
+            $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount);
             $this->attachMedia($post, $data->mediaIds);
 
             $post->touch();
@@ -259,13 +275,41 @@ class DraftService
 
             $handles = [];
             foreach (($mention['handles'] ?? []) as $platform => $handle) {
+                $platform = (string) $platform;
                 $handle = trim((string) $handle);
-                if ($handle !== '') {
-                    $platform = (string) $platform;
-                    $handles[$platform] = $platform === Platform::LinkedIn->value
-                        ? ltrim($handle, '@')
-                        : $handle;
+                if ($handle === '') {
+                    continue;
                 }
+
+                if ($platform === self::LINKEDIN_URN_KEY) {
+                    $urn = LinkedInOrg::normalizeUrn($handle);
+                    if ($urn !== null) {
+                        $handles[$platform] = $urn;
+                    }
+
+                    continue;
+                }
+
+                if ($platform === Platform::LinkedIn->value) {
+                    // A URN/company URL typed into the display field is an org
+                    // reference, not a name — route it to the urn key instead.
+                    if (LinkedInOrg::looksLikeReference($handle)) {
+                        $urn = LinkedInOrg::normalizeUrn($handle);
+                        if ($urn !== null) {
+                            $handles[self::LINKEDIN_URN_KEY] = $urn;
+                        }
+
+                        continue;
+                    }
+
+                    // '@'-only handles collapse to empty; drop so the label is used instead.
+                    $handle = ltrim($handle, '@');
+                    if ($handle === '') {
+                        continue;
+                    }
+                }
+
+                $handles[$platform] = $handle;
             }
 
             $normalized[] = [
@@ -310,9 +354,28 @@ class DraftService
      */
     private function mentionTextForPlatform(array $mention, string $platform): string
     {
-        $handle = $mention['handles'][$platform] ?? $mention['label'];
+        $handle = trim((string) ($mention['handles'][$platform] ?? ''));
+        if ($handle === '') {
+            $handle = (string) $mention['label'];
+        }
 
-        return $platform === Platform::LinkedIn->value ? ltrim($handle, '@') : $handle;
+        if ($platform !== Platform::LinkedIn->value) {
+            return $handle;
+        }
+
+        // LinkedIn tags are plain text unless a real org URN is stored, in which
+        // case emit the inline `@[Name](urn:li:organization:ID)` annotation.
+        $display = ltrim($handle, '@');
+        if ($display === '') {
+            $display = (string) $mention['label'];
+        }
+
+        $urn = trim((string) ($mention['handles'][self::LINKEDIN_URN_KEY] ?? ''));
+        if ($urn !== '' && LinkedInOrg::isOrgUrn($urn)) {
+            return '@['.$display.']('.$urn.')';
+        }
+
+        return $display;
     }
 
     /**

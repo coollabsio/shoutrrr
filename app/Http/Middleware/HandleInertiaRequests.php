@@ -70,9 +70,9 @@ class HandleInertiaRequests extends Middleware
             ],
             'notifications' => $this->notificationsData($request->user()),
             'features' => [
-                'analytics' => (bool) config('metrics.enabled'),
+                'analytics' => app(InstanceSettings::class)->metricsEnabled(),
                 'billing' => (bool) config('subscriptions.enabled'),
-                'engagement' => (bool) config('engagement.enabled'),
+                'engagement' => app(InstanceSettings::class)->engagementEnabled(),
             ],
             'instance' => [
                 'isOwner' => $request->user()?->isInstanceOwner() ?? false,
@@ -136,7 +136,7 @@ class HandleInertiaRequests extends Middleware
             'accounts' => $accounts,
             'sets' => $sets,
             'limits' => Platform::allLimits(),
-            'unreadReplies' => config('engagement.enabled') && app(InstanceSettings::class)->engagementPollingEnabled()
+            'unreadReplies' => $settings->engagementEnabled() && $settings->engagementPollingEnabled()
                 ? PostTargetReply::query()
                     ->where('workspace_id', $workspaceId)
                     ->where('is_ours', false)

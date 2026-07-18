@@ -152,7 +152,7 @@ jobs:
             --metadata-file /tmp/manifest-metadata.json \
             "${sources[@]}"
 
-          echo "digest=$(jq -er '.\"containerimage.descriptor\".digest' /tmp/manifest-metadata.json)" >> "$GITHUB_OUTPUT"
+          echo "digest=$(jq -er '.["containerimage.descriptor"].digest' /tmp/manifest-metadata.json)" >> "$GITHUB_OUTPUT"
         env:
           DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
 

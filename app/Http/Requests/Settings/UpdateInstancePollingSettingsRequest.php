@@ -25,7 +25,10 @@ class UpdateInstancePollingSettingsRequest extends FormRequest
      */
     public function rules(): array
     {
-        $rules = [];
+        $rules = [
+            'metrics_enabled' => ['required', 'boolean'],
+            'engagement_enabled' => ['required', 'boolean'],
+        ];
 
         foreach (['engagement', 'post_metrics', 'account_metrics'] as $section) {
             $rules[$section] = ['required', 'array'];
@@ -48,11 +51,13 @@ class UpdateInstancePollingSettingsRequest extends FormRequest
      *     engagement_poll_interval_minutes: array<string, int>,
      *     post_metrics_poll_interval_minutes: array<string, int>,
      *     account_metrics_poll_interval_minutes: array<string, int>,
+     *     metrics_enabled: bool,
+     *     engagement_enabled: bool,
      * }
      */
     public function instancePollingSettings(): array
     {
-        /** @var array{engagement: array<string, mixed>, post_metrics: array<string, mixed>, account_metrics: array<string, mixed>} $validated */
+        /** @var array{engagement: array<string, mixed>, post_metrics: array<string, mixed>, account_metrics: array<string, mixed>, metrics_enabled: mixed, engagement_enabled: mixed} $validated */
         $validated = $this->validated();
 
         return [
@@ -62,6 +67,8 @@ class UpdateInstancePollingSettingsRequest extends FormRequest
             'engagement_poll_interval_minutes' => $this->minutes($validated['engagement']),
             'post_metrics_poll_interval_minutes' => $this->minutes($validated['post_metrics']),
             'account_metrics_poll_interval_minutes' => $this->minutes($validated['account_metrics']),
+            'metrics_enabled' => (bool) $validated['metrics_enabled'],
+            'engagement_enabled' => (bool) $validated['engagement_enabled'],
         ];
     }
 

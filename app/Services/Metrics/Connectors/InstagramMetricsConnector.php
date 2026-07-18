@@ -39,6 +39,8 @@ class InstagramMetricsConnector implements MetricsConnector
 
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->get($this->baseUrl().'/'.$mediaId.'/insights', [
                     'metric' => 'likes,comments,saved,shares,reach,views',
@@ -91,6 +93,8 @@ class InstagramMetricsConnector implements MetricsConnector
     {
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->get($this->baseUrl().'/'.$account->remote_account_id, [
                     'fields' => 'followers_count,media_count',

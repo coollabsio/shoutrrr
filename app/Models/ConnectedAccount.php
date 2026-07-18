@@ -39,6 +39,7 @@ use Override;
  * @property string|null $refresh_failure_reason
  * @property CarbonImmutable|null $metrics_captured_at
  * @property MetricsStatus|null $metrics_status
+ * @property CarbonImmutable|null $engagement_rate_limited_until
  */
 #[Fillable([
     'workspace_id',
@@ -58,6 +59,7 @@ use Override;
     'refresh_failure_reason',
     'metrics_captured_at',
     'metrics_status',
+    'engagement_rate_limited_until',
 ])]
 class ConnectedAccount extends Model
 {
@@ -80,6 +82,7 @@ class ConnectedAccount extends Model
             'refresh_failed_at' => 'immutable_datetime',
             'metrics_captured_at' => 'immutable_datetime',
             'metrics_status' => MetricsStatus::class,
+            'engagement_rate_limited_until' => 'immutable_datetime',
         ];
     }
 
@@ -97,6 +100,22 @@ class ConnectedAccount extends Model
     public function isDisabled(): bool
     {
         return $this->disabled_at !== null;
+    }
+
+    /**
+     * Whether this account's credentials can read replies for the engagement
+     * inbox. Only LinkedIn is capability-gated: reading member comments needs the
+     * restricted `r_member_social_feed` scope, recorded at connect. Accounts
+     * connected before that grant (null capability) — or whose grant lacked it —
+     * are skipped so we don't hammer LinkedIn with calls that 403.
+     */
+    public function canFetchEngagement(): bool
+    {
+        if ($this->platform !== Platform::LinkedIn) {
+            return true;
+        }
+
+        return (bool) ($this->capabilities['linkedin_engagement'] ?? false);
     }
 
     /**

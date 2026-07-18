@@ -135,6 +135,67 @@ function ReconnectBlueskyDialog({ account }: { account: Account }) {
     );
 }
 
+function ReconnectDiscordDialog({ account }: { account: Account }) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger
+                render={
+                    <Button variant="ghost" size="sm" className="shrink-0" />
+                }
+            >
+                <RefreshCw className="size-4" />
+                Reconnect
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Reconnect {account.handle}</DialogTitle>
+                    <DialogDescription>
+                        Paste a fresh webhook URL for this Discord channel. In
+                        Discord: Channel Settings → Integrations → Webhooks →
+                        New Webhook → Copy Webhook URL.
+                    </DialogDescription>
+                </DialogHeader>
+                <Form
+                    {...ConnectedAccountController.reconnect.form(account.id)}
+                    options={{ preserveScroll: true }}
+                    onSuccess={() => setOpen(false)}
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <div className="grid gap-2 py-2">
+                                <Label htmlFor={`webhook-${account.id}`}>
+                                    Webhook URL
+                                </Label>
+                                <Input
+                                    id={`webhook-${account.id}`}
+                                    name="webhook_url"
+                                    type="url"
+                                    placeholder="https://discord.com/api/webhooks/..."
+                                    autoComplete="off"
+                                    aria-invalid={
+                                        errors.webhook_url ? true : undefined
+                                    }
+                                    required
+                                />
+                                <InputError message={errors.webhook_url} />
+                            </div>
+                            <DialogFooter>
+                                <Button type="submit" disabled={processing}>
+                                    {processing
+                                        ? 'Reconnecting...'
+                                        : 'Reconnect'}
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export function AccountCard({
     account,
     canManage,
@@ -290,6 +351,8 @@ export function AccountCard({
                     {!frozen &&
                         (account.auth_method === 'app_password' ? (
                             <ReconnectBlueskyDialog account={account} />
+                        ) : account.auth_method === 'webhook' ? (
+                            <ReconnectDiscordDialog account={account} />
                         ) : (
                             <Button
                                 variant={needsAttention ? 'default' : 'outline'}

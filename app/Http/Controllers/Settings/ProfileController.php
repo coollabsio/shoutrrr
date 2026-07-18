@@ -9,12 +9,12 @@ use App\Http\Requests\Settings\ProfileUpdateRequest;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Support\FileStorage;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -45,7 +45,8 @@ class ProfileController extends Controller
 
         if ($request->hasFile('photo')) {
             $oldAvatarPath = $user->avatar_path;
-            $path = $request->file('photo')->store('profile-photos', 'public');
+            $disk = FileStorage::publicImageDiskName();
+            $path = $request->file('photo')->store('profile-photos', $disk);
 
             if ($path === false) {
                 return back()->withErrors(['photo' => 'The profile photo could not be saved.']);
@@ -54,7 +55,7 @@ class ProfileController extends Controller
             $user->avatar_path = $path;
 
             if ($oldAvatarPath) {
-                Storage::disk('public')->delete($oldAvatarPath);
+                FileStorage::disk($disk)->delete($oldAvatarPath);
             }
         }
 

@@ -11,6 +11,7 @@ use App\Models\PostTarget;
 use App\Models\PostTargetMetric;
 use App\Services\Metrics\MetricsConnectorRegistry;
 use App\Services\Publishing\TokenManager;
+use App\Support\InstanceSettings;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -63,9 +64,9 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
         return [10, 30, 60];
     }
 
-    public function handle(MetricsConnectorRegistry $registry, TokenManager $tokens): void
+    public function handle(MetricsConnectorRegistry $registry, TokenManager $tokens, InstanceSettings $settings): void
     {
-        if (! config('metrics.enabled')) {
+        if (! $settings->metricsEnabled()) {
             return;
         }
 
@@ -77,7 +78,7 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
 
         $account = $target->account()->withoutGlobalScopes()->first();
 
-        if ($account === null) {
+        if ($account === null || $account->isDisabled()) {
             return;
         }
 
@@ -96,6 +97,12 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
         if ($result->isOk()) {
             $now = Date::now();
 
+            $unchanged = $target->metrics_captured_at !== null
+                && $target->likes === $result->likes
+                && $target->comments === $result->comments
+                && $target->reposts === $result->reposts
+                && $target->impressions === $result->impressions;
+
             PostTargetMetric::updateOrCreate(
                 ['post_target_id' => $target->id, 'captured_at' => $now],
                 [
@@ -113,6 +120,7 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
                 'impressions' => $result->impressions,
                 'metrics_status' => $result->status->value,
                 'metrics_captured_at' => $now,
+                'metrics_unchanged_streak' => $unchanged ? $target->metrics_unchanged_streak + 1 : 0,
             ])->save();
 
             return;

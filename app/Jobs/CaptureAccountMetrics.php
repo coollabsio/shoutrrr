@@ -11,6 +11,7 @@ use App\Models\AccountMetric;
 use App\Models\ConnectedAccount;
 use App\Services\Metrics\MetricsConnectorRegistry;
 use App\Services\Publishing\TokenManager;
+use App\Support\InstanceSettings;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -63,15 +64,21 @@ class CaptureAccountMetrics implements ShouldBeUnique, ShouldQueue
         return [10, 30, 60];
     }
 
-    public function handle(MetricsConnectorRegistry $registry, TokenManager $tokens): void
+    public function handle(MetricsConnectorRegistry $registry, TokenManager $tokens, InstanceSettings $settings): void
     {
-        if (! config('metrics.enabled')) {
+        if (! $settings->metricsEnabled()) {
             return;
         }
 
         $account = $this->account->fresh();
 
-        if ($account === null) {
+        if ($account === null || $account->isDisabled()) {
+            return;
+        }
+
+        if (! $account->platform->supportsAccountMetrics()) {
+            $this->record($account, MetricsStatus::Unsupported);
+
             return;
         }
 

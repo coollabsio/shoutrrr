@@ -28,4 +28,10 @@ describe('published post view', () => {
         expect(page).toContain('PublishedPostView');
         expect(page).toContain("t.status === 'published'");
     });
+
+    it('offers a one-shot manual refresh for posts that have aged out of automatic polling', () => {
+        expect(view).toContain('PostMetricsRefreshController');
+        expect(view).toContain('useHttp');
+        expect(view).toContain("only: ['stats']");
+    });
 });

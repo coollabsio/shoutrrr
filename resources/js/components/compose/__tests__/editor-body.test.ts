@@ -11,6 +11,7 @@ import {
 import {
     hasPasteableMedia,
     isPasteableMediaFile,
+    isSubmitShortcut,
     shouldFocusEditorOnMount,
 } from '../editor-body';
 
@@ -62,6 +63,29 @@ describe('hasPasteableMedia', () => {
         expect(hasPasteableMedia(null)).toBe(false);
         expect(hasPasteableMedia(undefined)).toBe(false);
         expect(hasPasteableMedia(fileList(file('text/html')))).toBe(false);
+    });
+});
+
+describe('isSubmitShortcut', () => {
+    it('fires on Cmd+Enter and Ctrl+Enter', () => {
+        expect(
+            isSubmitShortcut({ key: 'Enter', metaKey: true, ctrlKey: false }),
+        ).toBe(true);
+        expect(
+            isSubmitShortcut({ key: 'Enter', metaKey: false, ctrlKey: true }),
+        ).toBe(true);
+    });
+
+    it('leaves plain Enter alone, so it newlines and the emoji typeahead can claim it', () => {
+        expect(
+            isSubmitShortcut({ key: 'Enter', metaKey: false, ctrlKey: false }),
+        ).toBe(false);
+    });
+
+    it('ignores other modified keys', () => {
+        expect(
+            isSubmitShortcut({ key: 'a', metaKey: true, ctrlKey: false }),
+        ).toBe(false);
     });
 });
 

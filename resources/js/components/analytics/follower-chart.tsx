@@ -7,6 +7,11 @@ import {
     YAxis,
 } from 'recharts';
 
+import {
+    accountChartColor,
+    buildFollowerChartData,
+    formatFollowerTooltipDate,
+} from '@/components/analytics/follower-chart-utils';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import {
     ChartContainer,
@@ -15,76 +20,47 @@ import {
     type ChartConfig,
 } from '@/components/ui/chart';
 import { dayjs } from '@/lib/datetime/dayjs';
+import { cn } from '@/lib/utils';
 import type { AnalyticsPageProps } from '@/types/metrics';
 
-const ACCOUNT_COLORS = [
-    'var(--chart-1)',
-    'var(--chart-2)',
-    'var(--chart-3)',
-    'var(--chart-4)',
-    'var(--chart-5)',
-];
+export {
+    accountChartColor,
+    buildFollowerChartData,
+    formatFollowerTooltipDate,
+    nextHiddenAccountIds,
+    type FollowerChartRow,
+} from '@/components/analytics/follower-chart-utils';
 
 type FollowerChartProps = {
     accounts: AnalyticsPageProps['accounts'];
     posts: AnalyticsPageProps['posts'];
+    /** Account ids currently hidden from the graph. */
+    hiddenAccountIds: ReadonlySet<string>;
+    onToggleAccount: (accountId: string) => void;
 };
-
-type TooltipPayloadWithDate = readonly {
-    payload?: {
-        date?: Date | number | string | null;
-    };
-}[];
-
-export function formatFollowerTooltipDate(
-    _label: unknown,
-    payload?: TooltipPayloadWithDate,
-): string {
-    const date = payload?.[0]?.payload?.date;
-
-    if (date === undefined || date === null || date === '') {
-        return '';
-    }
-
-    const formattedDate = dayjs(date);
-
-    return formattedDate.isValid() ? formattedDate.format('MMM D, YYYY') : '';
-}
 
 /**
  * The follower-growth line chart. Lives in its own module so recharts (a heavy
  * dependency) is code-split into a lazily-loaded chunk and only fetched when
  * there is series data to plot.
  */
-export default function FollowerChart({ accounts, posts }: FollowerChartProps) {
-    // Build merged timeline: collect all unique timestamps across all accounts,
-    // then create one row per timestamp with follower counts keyed by account id.
-    // Use epoch-ms as the x-axis key so numeric time scale and ReferenceLine markers align.
-    const allTimestamps = [
-        ...new Set(accounts.flatMap((a) => a.series.map((s) => s.at))),
-    ].sort();
-
-    type ChartRow = Record<string, number | undefined> & {
-        date: number;
-    };
-
-    const chartData: ChartRow[] = allTimestamps.map((at) => {
-        const row: ChartRow = { date: new Date(at).getTime() };
-        for (const account of accounts) {
-            const point = account.series.find((s) => s.at === at);
-            if (point) {
-                row[account.id] = point.followers ?? undefined;
-            }
-        }
-        return row;
-    });
+export default function FollowerChart({
+    accounts,
+    posts,
+    hiddenAccountIds,
+    onToggleAccount,
+}: FollowerChartProps) {
+    const chartData = buildFollowerChartData(accounts);
+    const visibleAccounts = accounts.filter(
+        (account) => !hiddenAccountIds.has(account.id),
+    );
 
     const chartConfig: ChartConfig = Object.fromEntries(
         accounts.map((a, i) => [
             a.id,
             {
                 label: a.display_name ?? a.handle,
-                color: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
+                color: accountChartColor(i),
             },
         ]),
     );
@@ -128,10 +104,11 @@ export default function FollowerChart({ accounts, posts }: FollowerChartProps) {
                         width={40}
                     />
                     <ChartTooltip
+                        shared
                         content={
                             <ChartTooltipContent
                                 labelFormatter={formatFollowerTooltipDate}
-                                indicator="line"
+                                indicator="dot"
                             />
                         }
                     />
@@ -167,47 +144,68 @@ export default function FollowerChart({ accounts, posts }: FollowerChartProps) {
                         />
                     ))}
 
-                    {accounts.map((account, i) => (
-                        <Line
-                            key={account.id}
-                            dataKey={account.id}
-                            type="monotone"
-                            stroke={ACCOUNT_COLORS[i % ACCOUNT_COLORS.length]}
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 4, strokeWidth: 0 }}
-                            connectNulls
-                        />
-                    ))}
+                    {visibleAccounts.map((account) => {
+                        const colorIndex = accounts.findIndex(
+                            (a) => a.id === account.id,
+                        );
+
+                        return (
+                            <Line
+                                key={account.id}
+                                dataKey={account.id}
+                                type="monotone"
+                                stroke={accountChartColor(colorIndex)}
+                                strokeWidth={2}
+                                dot={false}
+                                activeDot={{ r: 4, strokeWidth: 0 }}
+                                connectNulls
+                            />
+                        );
+                    })}
                 </LineChart>
             </ChartContainer>
 
-            {/* Legend */}
+            {/* Legend — click to show/hide series */}
             {accounts.length > 1 && (
-                <div className="mt-3 flex flex-wrap items-center gap-4">
-                    {accounts.map((account, i) => (
-                        <div
-                            key={account.id}
-                            className="flex items-center gap-1.5"
-                        >
-                            <span
-                                className="block h-2 w-4 rounded-full"
-                                style={{
-                                    backgroundColor:
-                                        ACCOUNT_COLORS[
-                                            i % ACCOUNT_COLORS.length
-                                        ],
-                                }}
-                            />
-                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                <PlatformGlyph
-                                    platform={account.platform}
-                                    size={10}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {accounts.map((account, i) => {
+                        const hidden = hiddenAccountIds.has(account.id);
+                        const label = account.display_name ?? account.handle;
+
+                        return (
+                            <button
+                                key={account.id}
+                                type="button"
+                                onClick={() => onToggleAccount(account.id)}
+                                aria-pressed={!hidden}
+                                aria-label={
+                                    hidden
+                                        ? `Show ${label} on graph`
+                                        : `Hide ${label} from graph`
+                                }
+                                className={cn(
+                                    'inline-flex items-center gap-1.5 rounded-full border px-2 py-1 transition-opacity',
+                                    hidden
+                                        ? 'border-transparent opacity-40 hover:opacity-70'
+                                        : 'border-border/60 bg-muted/40 opacity-100 hover:bg-muted/70',
+                                )}
+                            >
+                                <span
+                                    className="block h-2 w-4 rounded-full"
+                                    style={{
+                                        backgroundColor: accountChartColor(i),
+                                    }}
                                 />
-                                {account.display_name ?? account.handle}
-                            </span>
-                        </div>
-                    ))}
+                                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                    <PlatformGlyph
+                                        platform={account.platform}
+                                        size={10}
+                                    />
+                                    {label}
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
             )}
         </div>

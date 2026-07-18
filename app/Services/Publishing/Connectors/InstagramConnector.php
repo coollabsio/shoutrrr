@@ -9,9 +9,11 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\PostFormat;
 use App\Enums\UsageCategory;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\ImageConversionFailed;
 use App\Services\Media\PublicMediaUrl;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
@@ -75,10 +77,15 @@ class InstagramConnector implements PublishConnector
             static fn (string $segment): bool => $segment !== '',
         )));
 
+        $format = $context->target->format;
+        if (! $format->allowsCaption()) {
+            $caption = '';
+        }
+
         $state = new MediaUploadState($context->target->media_upload_state);
 
         try {
-            $containerId = $this->resolveContainerId($context, $state, $igUserId, $caption, $token);
+            $containerId = $this->resolveContainerId($context, $state, $igUserId, $caption, $token, $format);
 
             $notReady = $this->pollContainer($context, $containerId, $token);
             if ($notReady !== null) {
@@ -99,6 +106,12 @@ class InstagramConnector implements PublishConnector
             $mediaId = (string) $publish->json('id');
         } catch (InstagramRequestFailed $e) {
             return $this->mapFailure($e->response);
+        } catch (InstagramReelNeedsVideo) {
+            return PublishResult::failure(ErrorKind::Validation, 'Instagram Reels require a video.');
+        } catch (ImageConversionFailed $e) {
+            // The image can't be re-encoded to the JPEG Instagram requires; retrying
+            // won't change that, so fail with the reason rather than looping.
+            return PublishResult::failure(ErrorKind::Unsupported, $e->getMessage());
         } catch (ConnectionException $e) {
             return PublishResult::failure(ErrorKind::Network, $e->getMessage());
         }
@@ -114,7 +127,7 @@ class InstagramConnector implements PublishConnector
      * Create (or resume) the container that will be handed to media_publish: a single
      * image/Reels container, or a CAROUSEL parent referencing per-item child containers.
      */
-    private function resolveContainerId(PublishContext $context, MediaUploadState $state, string $igUserId, string $caption, string $token): string
+    private function resolveContainerId(PublishContext $context, MediaUploadState $state, string $igUserId, string $caption, string $token, PostFormat $format): string
     {
         $existing = $state->remoteRef(self::CONTAINER_KEY);
 
@@ -124,9 +137,12 @@ class InstagramConnector implements PublishConnector
 
         $media = array_slice($context->media, 0, Platform::Instagram->maxMedia());
 
-        $containerId = count($media) === 1
-            ? $this->createSingleContainer($context, $media[0], $igUserId, $caption, $token)
-            : $this->createCarouselContainer($context, $state, $media, $igUserId, $caption, $token);
+        $containerId = match (true) {
+            $format === PostFormat::Story => $this->createStoryContainer($context, $media[0], $igUserId, $token),
+            $format === PostFormat::Reels => $this->createReelContainer($context, $this->firstVideo($media), $igUserId, $caption, $token),
+            count($media) === 1 => $this->createSingleContainer($context, $media[0], $igUserId, $caption, $token),
+            default => $this->createCarouselContainer($context, $state, $media, $igUserId, $caption, $token),
+        };
 
         $state->markUploaded(self::CONTAINER_KEY, $containerId);
         $this->persistState($context, $state);
@@ -143,9 +159,9 @@ class InstagramConnector implements PublishConnector
 
         if ($media->isVideo()) {
             $body['media_type'] = 'REELS';
-            $body['video_url'] = $this->publicMediaUrl->for($media);
+            $body['video_url'] = $this->publicMediaUrl->for($media, Platform::Instagram);
         } else {
-            $body['image_url'] = $this->publicMediaUrl->for($media);
+            $body['image_url'] = $this->publicMediaUrl->for($media, Platform::Instagram);
         }
 
         $response = $this->http->asForm()->post($this->baseUrl().'/'.$igUserId.'/media', $body);
@@ -157,6 +173,57 @@ class InstagramConnector implements PublishConnector
         }
 
         return (string) $response->json('id');
+    }
+
+    private function createStoryContainer(PublishContext $context, PostMedia $media, string $igUserId, string $token): string
+    {
+        $body = [
+            'media_type' => 'STORIES',
+            'access_token' => $token,
+        ];
+        $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media, Platform::Instagram);
+
+        $response = $this->http->asForm()->post($this->baseUrl().'/'.$igUserId.'/media', $body);
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $context->account, $response);
+
+        if ($response->failed()) {
+            throw new InstagramRequestFailed($response);
+        }
+
+        return (string) $response->json('id');
+    }
+
+    private function createReelContainer(PublishContext $context, ?PostMedia $video, string $igUserId, string $caption, string $token): string
+    {
+        if ($video === null) {
+            throw new InstagramReelNeedsVideo;
+        }
+
+        $response = $this->http->asForm()->post($this->baseUrl().'/'.$igUserId.'/media', [
+            'media_type' => 'REELS',
+            'video_url' => $this->publicMediaUrl->for($video, Platform::Instagram),
+            'caption' => $caption,
+            'access_token' => $token,
+        ]);
+        $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $context->account, $response);
+
+        if ($response->failed()) {
+            throw new InstagramRequestFailed($response);
+        }
+
+        return (string) $response->json('id');
+    }
+
+    /** @param  list<PostMedia>  $media */
+    private function firstVideo(array $media): ?PostMedia
+    {
+        foreach ($media as $item) {
+            if ($item->isVideo()) {
+                return $item;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -201,9 +268,10 @@ class InstagramConnector implements PublishConnector
     {
         $body = [
             'is_carousel_item' => 'true',
+            'media_type' => $media->isVideo() ? 'VIDEO' : 'IMAGE',
             'access_token' => $token,
         ];
-        $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media);
+        $body[$media->isVideo() ? 'video_url' : 'image_url'] = $this->publicMediaUrl->for($media, Platform::Instagram);
 
         $response = $this->http->asForm()->post($this->baseUrl().'/'.$igUserId.'/media', $body);
 
@@ -298,3 +366,11 @@ final class InstagramRequestFailed extends RuntimeException
         parent::__construct('Instagram request failed.');
     }
 }
+
+/**
+ * Internal signal so a Reels container request without a video short-circuits to a
+ * Validation failure. Not part of the public connector surface.
+ *
+ * @internal
+ */
+final class InstagramReelNeedsVideo extends RuntimeException {}

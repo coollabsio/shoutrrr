@@ -68,12 +68,38 @@ test('thread replies include the published post remote id for platform links', f
         ->assertJsonPath('thread.0.account_handle', '@heyandras-testing.bsky.social');
 });
 
-test('archive redirects for Inertia form submissions', function (): void {
+test('thread replies expose whether the platform can like them', function (): void {
+    // Drives the heart's disabled state. Only Threads has no like write.
+    $likeable = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+    ]);
+
+    $this->getJson(route('engagement.thread', $likeable))
+        ->assertOk()
+        ->assertJsonPath('thread.0.can_like', true);
+
+    $threadsTarget = PostTarget::factory()
+        ->for(Post::factory()->create(['workspace_id' => $this->workspace->id]))
+        ->create(['platform' => Platform::Threads, 'remote_id' => 'th-1']);
+    $notLikeable = PostTargetReply::factory()->for($threadsTarget, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::Threads,
+    ]);
+
+    $this->getJson(route('engagement.thread', $notLikeable))
+        ->assertOk()
+        ->assertJsonPath('thread.0.can_like', false);
+});
+
+test('archive returns 204 even without an Accept: application/json header', function (): void {
+    // The endpoint is JSON-only: it used to back() for non-JSON requests, which
+    // made the client follow a redirect into a full page visit. No dual mode now.
     $reply = PostTargetReply::factory()->for($this->target, 'target')->create([
         'workspace_id' => $this->workspace->id,
     ]);
 
-    $this->post(route('engagement.archive', $reply))->assertRedirect();
+    $this->post(route('engagement.archive', $reply))->assertNoContent();
 
     expect($reply->fresh()->status)->toBe(ReplyStatus::Archived);
 });

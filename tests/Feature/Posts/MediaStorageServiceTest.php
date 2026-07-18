@@ -7,8 +7,11 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Storage;
 
+beforeEach(fn () => config(['filesystems.default' => 'public']));
+
 test('it stores an uploaded image as workspace-scoped orphan media', function () {
-    Storage::fake('public');
+    config(['filesystems.default' => 's3']);
+    Storage::fake('s3');
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
     Context::add('workspace_id', $workspace->id);
@@ -19,14 +22,16 @@ test('it stores an uploaded image as workspace-scoped orphan media', function ()
 
     expect($media->post_id)->toBeNull()
         ->and($media->workspace_id)->toBe($workspace->id)
+        ->and($media->disk)->toBe('s3')
         ->and($media->mime)->toBe('image/jpeg')
         ->and($media->width)->toBe(1200);
 
-    Storage::disk('public')->assertExists($media->path);
+    Storage::disk('s3')->assertExists($media->path);
 });
 
 test('storeBeautified persists composed + source files and settings', function () {
-    Storage::fake('public');
+    config(['filesystems.default' => 's3']);
+    Storage::fake('s3');
     $workspace = Workspace::factory()->create();
 
     $media = app(MediaStorageService::class)->storeBeautified(
@@ -36,10 +41,11 @@ test('storeBeautified persists composed + source files and settings', function (
         ['version' => 1, 'padding' => 64],
     );
 
-    Storage::disk('public')->assertExists($media->path);
-    Storage::disk('public')->assertExists($media->source_path);
+    Storage::disk('s3')->assertExists($media->path);
+    Storage::disk('s3')->assertExists($media->source_path);
     expect($media->edit_settings)->toBe(['version' => 1, 'padding' => 64])
-        ->and($media->source_disk)->toBe('public')
+        ->and($media->disk)->toBe('s3')
+        ->and($media->source_disk)->toBe('s3')
         ->and($media->workspace_id)->toBe($workspace->id)
         // The returned instance must carry kind (not rely on the DB default), or
         // toView() serializes null and the client can't tell it's an image.
