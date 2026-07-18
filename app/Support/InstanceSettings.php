@@ -177,6 +177,41 @@ class InstanceSettings
         ];
     }
 
+    /**
+     * @return array<string, int|string> workspace id => cents or the string "unlimited"
+     */
+    public function xWorkspaceBudgets(): array
+    {
+        /** @var array<string, int|string> $map */
+        $map = (array) ($this->settings()['x_workspace_budgets'] ?? []);
+
+        return $map;
+    }
+
+    public function xWorkspaceBudget(string $workspaceId): int|string|null
+    {
+        $value = $this->xWorkspaceBudgets()[$workspaceId] ?? null;
+
+        if ($value === 'unlimited') {
+            return 'unlimited';
+        }
+
+        return $value === null ? null : (int) $value;
+    }
+
+    public function setXWorkspaceBudget(string $workspaceId, int|string|null $value): void
+    {
+        $map = $this->xWorkspaceBudgets();
+
+        if ($value === null) {
+            unset($map[$workspaceId]);
+        } else {
+            $map[$workspaceId] = $value === 'unlimited' ? 'unlimited' : (int) $value;
+        }
+
+        $this->update(['x_workspace_budgets' => $map]);
+    }
+
     public function engagementPollIntervalMinutes(Platform $platform): int
     {
         return $this->platformMinutes('engagement_poll_interval_minutes', 'engagement')[$platform->value];
