@@ -39,6 +39,7 @@ class UpdatePostRequest extends FormRequest
             'targets' => ['array'],
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
+            'targets.*.format' => ['nullable', Rule::in(['feed', 'reels', 'story'])],
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.segments' => ['array'],

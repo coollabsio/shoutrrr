@@ -144,8 +144,9 @@ class DraftService
      * @param  array<string, bool>  $autoSplitByAccount
      * @param  array<string, array{segments: list<string>, media_ids: list<string>}|null>  $overrideByAccount
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
+     * @param  array<string, string>  $formatByAccount
      */
-    public function syncTargets(Post $post, array $accountIds, array $segments, array $autoSplitByAccount, array $overrideByAccount, array $mentions = []): void
+    public function syncTargets(Post $post, array $accountIds, array $segments, array $autoSplitByAccount, array $overrideByAccount, array $mentions = [], array $formatByAccount = []): void
     {
         $accounts = ConnectedAccount::withoutGlobalScopes()
             ->whereIn('id', $accountIds)
@@ -174,6 +175,9 @@ class DraftService
                 ? $overrideByAccount[$accountId]
                 : $currentOverride;
 
+            $currentFormat = $current instanceof PostTarget ? $current->format->value : null;
+            $format = $formatByAccount[$accountId] ?? $currentFormat ?? 'feed';
+
             $effectiveSegments = $override['segments'] ?? $segments;
             $resolvedSegments = array_map(
                 fn (string $segment): string => $this->resolveMentionTokens($segment, $mentions, $account->platform->value),
@@ -193,6 +197,7 @@ class DraftService
                     'sections' => $sections,
                     'content_override' => $override,
                     'auto_split' => $autoSplit,
+                    'format' => $format,
                 ],
             );
         }
@@ -225,12 +230,16 @@ class DraftService
             // otherwise syncTargets preserves the survivor's existing value.
             $autoSplitByAccount = [];
             $overrideByAccount = [];
+            $formatByAccount = [];
             foreach ($accountIds as $accountId) {
                 if ($data->hasAutoSplitFor($accountId)) {
                     $autoSplitByAccount[$accountId] = $data->autoSplitFor($accountId);
                 }
                 if ($data->hasOverrideFor($accountId)) {
                     $overrideByAccount[$accountId] = $data->overrideFor($accountId);
+                }
+                if ($data->hasFormatFor($accountId)) {
+                    $formatByAccount[$accountId] = $data->formatFor($accountId);
                 }
             }
 
@@ -241,7 +250,7 @@ class DraftService
                 'account_set_id' => $this->scopedAccountSetId($post->workspace_id, $destination),
             ])->save();
 
-            $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? []);
+            $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount);
             $this->attachMedia($post, $data->mediaIds);
 
             $post->touch();

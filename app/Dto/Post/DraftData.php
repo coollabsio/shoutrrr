@@ -16,7 +16,7 @@ final class DraftData
      * @param  list<string>  $destinationIds
      * @param  list<string>  $mediaIds
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
-     * @param  array<string, array{auto_split?: bool, content_override?: array{segments: list<string>, media_ids: list<string>}|null}>  $targetsByAccount
+     * @param  array<string, array{auto_split?: bool, format?: string, content_override?: array{segments: list<string>, media_ids: list<string>}|null}>  $targetsByAccount
      */
     public function __construct(
         /** @var list<string> */
@@ -45,6 +45,9 @@ final class DraftData
             }
             if (array_key_exists('content_override', $target)) {
                 $entry['content_override'] = self::readOverride($target['content_override']);
+            }
+            if (array_key_exists('format', $target) && $target['format'] !== null) {
+                $entry['format'] = (string) $target['format'];
             }
             $targetsByAccount[$target['connected_account_id']] = $entry;
         }
@@ -82,6 +85,16 @@ final class DraftData
     public function overrideFor(string $accountId): ?array
     {
         return $this->targetsByAccount[$accountId]['content_override'] ?? null;
+    }
+
+    public function hasFormatFor(string $accountId): bool
+    {
+        return array_key_exists('format', $this->targetsByAccount[$accountId] ?? []);
+    }
+
+    public function formatFor(string $accountId): string
+    {
+        return $this->targetsByAccount[$accountId]['format'] ?? 'feed';
     }
 
     /**
