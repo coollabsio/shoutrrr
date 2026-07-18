@@ -136,6 +136,62 @@ it('includes the app environment in the embed', function () {
     });
 });
 
+it('forwards an attached diagnostics file to discord', function () {
+    config(['feedback.enabled' => true, 'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok']);
+    Http::fake(['https://discord.com/*' => Http::response('', 204)]);
+
+    $diagnostics = UploadedFile::fake()->createWithContent(
+        'diagnostics.json',
+        '{"logs":[{"level":"error","message":"boom"}]}',
+    );
+
+    $this->actingAs(actingWorkspaceUser())
+        ->post(route('feedback.store'), [
+            'type' => 'bug',
+            'message' => 'It broke',
+            'url' => 'https://app.test/dashboard',
+            'browser' => 'Mozilla/5.0',
+            'diagnostics' => $diagnostics,
+        ])
+        ->assertOk();
+
+    Http::assertSent(fn ($request) => str_contains($request->body(), 'diagnostics.json')
+        && str_contains($request->body(), 'boom'));
+});
+
+it('redacts the operator origin from diagnostics on self-hosted instances', function () {
+    config([
+        'feedback.enabled' => true,
+        'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok',
+        'instance.self_hosted' => true,
+    ]);
+    Http::fake(['https://discord.com/*' => Http::response('', 204)]);
+
+    $diagnostics = UploadedFile::fake()->createWithContent(
+        'diagnostics.json',
+        '{"network":[{"url":"https://acme.example.com/api/posts"},{"url":"https://api.twitter.com/2/tweets"}]}',
+    );
+
+    $this->actingAs(actingWorkspaceUser())
+        ->post(route('feedback.store'), [
+            'type' => 'bug',
+            'message' => 'It broke',
+            'url' => 'https://acme.example.com/dashboard',
+            'browser' => 'Mozilla/5.0',
+            'diagnostics' => $diagnostics,
+        ])
+        ->assertOk();
+
+    Http::assertSent(function ($request) {
+        $body = $request->body();
+
+        // Operator origin stripped (path kept), third-party host untouched.
+        return ! str_contains($body, 'acme.example.com')
+            && str_contains($body, '/api/posts')
+            && str_contains($body, 'api.twitter.com');
+    });
+});
+
 it('attaches an uploaded screenshot as multipart', function () {
     config(['feedback.enabled' => true, 'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok']);
     Http::fake(['https://discord.com/*' => Http::response('', 204)]);

@@ -25,16 +25,18 @@ class FeedbackController extends Controller
             'url' => ['nullable', 'string', 'max:2048'],
             'browser' => ['nullable', 'string', 'max:512'],
             'screenshot' => ['nullable', 'image', 'max:5120'], // KB → 5 MB
+            'diagnostics' => ['nullable', 'file', 'max:5120'], // KB → 5 MB
         ]);
 
         /** @var User $user */
         $user = $request->user();
         $workspace = $user->currentWorkspace;
+        $rawUrl = $validated['url'] ?? 'unknown';
 
         $this->feedback->send(new FeedbackReport(
             type: FeedbackType::from($validated['type']),
             message: $validated['message'],
-            url: $this->presentableUrl($validated['url'] ?? 'unknown'),
+            url: $this->presentableUrl($rawUrl),
             browser: $validated['browser'] ?? 'unknown',
             environment: app()->environment(),
             userName: $user->name,
@@ -47,6 +49,7 @@ class FeedbackController extends Controller
             workspaceId: $workspace?->id ?? 'unknown', // @phpstan-ignore nullsafe.neverNull
             subscriptionStatus: $this->subscriptionStatus($workspace),
             screenshotBytes: $this->screenshotBytes($request),
+            diagnosticsJson: $this->diagnosticsJson($request, $rawUrl),
         ));
 
         return response()->json(['ok' => true]);
@@ -103,5 +106,52 @@ class FeedbackController extends Controller
         $contents = $request->file('screenshot')->get();
 
         return $contents === false ? null : $contents;
+    }
+
+    /**
+     * Read the attached diagnostics JSON. On self-hosted instances the captured
+     * network/navigation URLs are same-origin, so strip the operator's origin
+     * (derived from the raw page URL, before it too is redacted) throughout the
+     * payload — hiding the private host while keeping paths and any third-party
+     * hosts intact.
+     */
+    private function diagnosticsJson(Request $request, string $rawUrl): ?string
+    {
+        if (! $request->hasFile('diagnostics')) {
+            return null;
+        }
+
+        $contents = $request->file('diagnostics')->get();
+
+        if ($contents === false) {
+            return null;
+        }
+
+        if (config('instance.self_hosted')) {
+            $origin = $this->originOf($rawUrl);
+
+            if ($origin !== null) {
+                $contents = str_replace($origin, '', $contents);
+            }
+        }
+
+        return $contents;
+    }
+
+    private function originOf(string $url): ?string
+    {
+        $parts = parse_url($url);
+
+        if ($parts === false || ! isset($parts['scheme'], $parts['host'])) {
+            return null;
+        }
+
+        $origin = "{$parts['scheme']}://{$parts['host']}";
+
+        if (isset($parts['port'])) {
+            $origin .= ":{$parts['port']}";
+        }
+
+        return $origin;
     }
 }

@@ -22,16 +22,30 @@ class FeedbackService
 
         $embed = $this->buildEmbed($report);
 
-        if ($report->screenshotBytes === null) {
+        /** @var list<array{name: string, bytes: string}> $attachments */
+        $attachments = [];
+
+        if ($report->screenshotBytes !== null) {
+            $embed['image'] = ['url' => 'attachment://screenshot.png'];
+            $attachments[] = ['name' => 'screenshot.png', 'bytes' => $report->screenshotBytes];
+        }
+
+        if ($report->diagnosticsJson !== null) {
+            $attachments[] = ['name' => 'diagnostics.json', 'bytes' => $report->diagnosticsJson];
+        }
+
+        if ($attachments === []) {
             $response = $this->http()->post($webhookUrl, ['embeds' => [$embed]]);
         } else {
-            $embed['image'] = ['url' => 'attachment://screenshot.png'];
+            $request = $this->http();
 
-            $response = $this->http()
-                ->attach('files[0]', $report->screenshotBytes, 'screenshot.png')
-                ->post($webhookUrl, [
-                    'payload_json' => json_encode(['embeds' => [$embed]], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
-                ]);
+            foreach ($attachments as $index => $attachment) {
+                $request = $request->attach("files[{$index}]", $attachment['bytes'], $attachment['name']);
+            }
+
+            $response = $request->post($webhookUrl, [
+                'payload_json' => json_encode(['embeds' => [$embed]], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+            ]);
         }
 
         if ($response->failed()) {

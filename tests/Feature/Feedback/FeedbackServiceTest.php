@@ -21,6 +21,7 @@ function makeReport(array $overrides = []): FeedbackReport
         workspaceId: $overrides['workspaceId'] ?? 'ws-123',
         subscriptionStatus: $overrides['subscriptionStatus'] ?? 'subscribed',
         screenshotBytes: $overrides['screenshotBytes'] ?? null,
+        diagnosticsJson: $overrides['diagnosticsJson'] ?? null,
     );
 }
 
@@ -67,6 +68,38 @@ it('posts a multipart attachment when a screenshot is present', function () {
         return str_contains($body, 'name="files[0]"')
             && str_contains($body, 'name="payload_json"')
             && str_contains($body, 'attachment://screenshot.png');
+    });
+});
+
+it('attaches diagnostics json as a file when present', function () {
+    Http::fake([FEEDBACK_HOOK => Http::response('', 204)]);
+
+    app(FeedbackService::class)->send(makeReport(['diagnosticsJson' => '{"logs":[]}']));
+
+    Http::assertSent(function ($request) {
+        $body = $request->body();
+
+        return str_contains($body, 'name="files[0]"')
+            && str_contains($body, 'diagnostics.json')
+            && str_contains($body, 'name="payload_json"');
+    });
+});
+
+it('attaches both the screenshot and diagnostics as separate files', function () {
+    Http::fake([FEEDBACK_HOOK => Http::response('', 204)]);
+
+    app(FeedbackService::class)->send(makeReport([
+        'screenshotBytes' => 'PNGBYTES',
+        'diagnosticsJson' => '{"logs":[]}',
+    ]));
+
+    Http::assertSent(function ($request) {
+        $body = $request->body();
+
+        return str_contains($body, 'name="files[0]"')
+            && str_contains($body, 'screenshot.png')
+            && str_contains($body, 'name="files[1]"')
+            && str_contains($body, 'diagnostics.json');
     });
 });
 

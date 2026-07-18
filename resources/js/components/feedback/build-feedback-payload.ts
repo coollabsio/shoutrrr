@@ -6,6 +6,7 @@ type FeedbackInput = {
     url: string;
     browser: string;
     screenshot: Blob | null;
+    diagnostics: string | null;
 };
 
 export type FeedbackPayload = {
@@ -14,6 +15,7 @@ export type FeedbackPayload = {
     url: string;
     browser: string;
     screenshot?: File;
+    diagnostics?: File;
 };
 
 /**
@@ -41,6 +43,16 @@ export function buildFeedbackPayload(input: FeedbackInput): FeedbackPayload {
         payload.screenshot = new File([input.screenshot], 'screenshot.png', {
             type: 'image/png',
         });
+    }
+
+    if (input.diagnostics) {
+        payload.diagnostics = new File(
+            [input.diagnostics],
+            'diagnostics.json',
+            {
+                type: 'application/json',
+            },
+        );
     }
 
     return payload;

@@ -17,6 +17,10 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+    type DiagnosticsSnapshot,
+    snapshotDiagnostics,
+} from '@/lib/diagnostics-collector';
 
 import {
     buildFeedbackPayload,
@@ -43,6 +47,10 @@ export default function FeedbackWidget() {
     const [screenshot, setScreenshot] = useState<Blob | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [includeShot, setIncludeShot] = useState(true);
+    const [diagnostics, setDiagnostics] = useState<DiagnosticsSnapshot | null>(
+        null,
+    );
+    const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
     const [capturing, setCapturing] = useState(false);
     const [sending, setSending] = useState(false);
 
@@ -89,6 +97,9 @@ export default function FeedbackWidget() {
     function onOpenChange(next: boolean) {
         setOpen(next);
         if (next) {
+            // Snapshot the breadcrumbs leading up to this moment, alongside the
+            // screenshot, so both reflect the page the user was just on.
+            setDiagnostics(snapshotDiagnostics());
             void capture();
         }
     }
@@ -101,6 +112,8 @@ export default function FeedbackWidget() {
         // outgoing object URL; this just clears the preview itself.
         setPreviewUrl(null);
         setIncludeShot(true);
+        setDiagnostics(null);
+        setIncludeDiagnostics(true);
     }
 
     function submit() {
@@ -112,6 +125,10 @@ export default function FeedbackWidget() {
                 url: window.location.href,
                 browser: navigator.userAgent,
                 screenshot: includeShot ? screenshot : null,
+                diagnostics:
+                    includeDiagnostics && diagnostics
+                        ? JSON.stringify(diagnostics)
+                        : null,
             }),
         );
         http.post(FeedbackController.url(), {
@@ -124,6 +141,10 @@ export default function FeedbackWidget() {
                 if (errors?.screenshot) {
                     toast.error(
                         'Screenshot is too large to send. Turn it off and try again.',
+                    );
+                } else if (errors?.diagnostics) {
+                    toast.error(
+                        'Diagnostics are too large to send. Turn them off and try again.',
                     );
                 } else {
                     const first = errors ? Object.values(errors)[0] : undefined;
@@ -235,6 +256,22 @@ export default function FeedbackWidget() {
                         No screenshot captured.
                     </p>
                 )}
+
+                {diagnostics ? (
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span>
+                            Attach logs ({diagnostics.logs.length} console ·{' '}
+                            {diagnostics.network.length} requests)
+                        </span>
+                        <Switch
+                            checked={includeDiagnostics}
+                            onCheckedChange={(checked) =>
+                                setIncludeDiagnostics(checked)
+                            }
+                            aria-label="Attach console and network logs to report"
+                        />
+                    </div>
+                ) : null}
 
                 <Button onClick={submit} disabled={!canSend} className="w-full">
                     {sending ? 'Sending…' : 'Send feedback'}

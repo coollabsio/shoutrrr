@@ -20,5 +20,6 @@ class FeedbackReport
         public string $workspaceId,
         public string $subscriptionStatus,
         public ?string $screenshotBytes = null,
+        public ?string $diagnosticsJson = null,
     ) {}
 }
