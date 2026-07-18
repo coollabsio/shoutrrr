@@ -652,7 +652,7 @@ function MentionModeToggle({
 }: MentionModeToggleProps) {
     return (
         <div
-            role="radiogroup"
+            role="group"
             aria-label={ariaLabel}
             className="inline-flex items-center rounded-md bg-muted p-0.5"
         >
@@ -663,8 +663,7 @@ function MentionModeToggle({
                     <button
                         key={option.value}
                         type="button"
-                        role="radio"
-                        aria-checked={active}
+                        aria-pressed={active}
                         onClick={() => onChange(option.value)}
                         className={cn(
                             'rounded-[5px] px-2 py-1 text-[11px] leading-none font-medium transition-colors',

@@ -75,12 +75,18 @@ export function updateMentionHandle(
     useMention = true,
 ): MentionPlaceholder {
     const handles = { ...mention.handles };
-    const trimmed = handle.trim();
     // Keep an emptied field as '' rather than deleting the key, so the editor
     // input stays blank instead of snapping back to the mention-name fallback
     // (`handles[platform] ?? label`). Saving is gated separately.
+    //
+    // Pass the raw `handle` (not a trimmed copy) into `mentionTextInput`: this is
+    // a controlled input, so trimming on every keystroke would eat the trailing
+    // space between words, stranding a plain-text name like "Acme Corp" at
+    // "AcmeCorp". A whitespace-only value still counts as empty.
     handles[platform] =
-        trimmed === '' ? '' : mentionTextInput(platform, trimmed, useMention);
+        handle.trim() === ''
+            ? ''
+            : mentionTextInput(platform, handle, useMention);
 
     return { ...mention, handles };
 }

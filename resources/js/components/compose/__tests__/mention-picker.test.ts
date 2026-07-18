@@ -106,8 +106,8 @@ describe('linkedin mention field', () => {
         // Both options are rendered side by side (not one action-labeled
         // button) so the active mode is always visible.
         expect(source).toContain('MentionModeToggle');
-        expect(source).toContain('role="radiogroup"');
-        expect(source).toContain('aria-checked={active}');
+        expect(source).toContain('role="group"');
+        expect(source).toContain('aria-pressed={active}');
     });
 
     it('confirms a linked company instead of showing dev jargon', () => {

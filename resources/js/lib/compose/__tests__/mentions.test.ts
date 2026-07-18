@@ -120,6 +120,27 @@ describe('mention helpers', () => {
         expect(cleared.handles.linkedin ?? cleared.label).toBe('');
     });
 
+    it('preserves inter-word whitespace while a plain-text name is typed', () => {
+        const mention: MentionPlaceholder = {
+            id: 'acme',
+            label: '@acme',
+            handles: { linkedin: 'Acme' },
+        };
+
+        // Controlled input: trimming here would eat the trailing space between
+        // words and strand "Acme Corp" at "AcmeCorp".
+        const typed = updateMentionHandle(mention, 'linkedin', 'Acme ', false);
+        expect(typed.handles.linkedin).toBe('Acme ');
+
+        const finished = updateMentionHandle(
+            typed,
+            'linkedin',
+            'Acme Corp',
+            false,
+        );
+        expect(finished.handles.linkedin).toBe('Acme Corp');
+    });
+
     it('flags an empty active handle so saving can be blocked', () => {
         const filled: MentionPlaceholder = {
             id: 'guest',
