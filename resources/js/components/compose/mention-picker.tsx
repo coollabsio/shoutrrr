@@ -14,13 +14,14 @@ import {
 import {
     InputGroup,
     InputGroupAddon,
-    InputGroupButton,
     InputGroupInput,
 } from '@/components/ui/input-group';
 import {
     extractLinkedInOrgRef,
+    hasEmptyActiveHandle,
     mentionInputValue,
     normalizeMentionName,
+    platformSupportsMention,
     savedMentionToPlaceholder,
     setPlatformMentionMode,
     updateMentionHandle,
@@ -331,6 +332,9 @@ function MentionHandleEditor({
     onSave,
     saveMentionProcessing = false,
 }: MentionHandleEditorProps) {
+    const nameEmpty = mentionInputValue(activeMention.label).trim() === '';
+    const emptyHandle = hasEmptyActiveHandle(activeMention, activePlatforms);
+
     return (
         <>
             <div>
@@ -381,18 +385,48 @@ function MentionHandleEditor({
                         activeMention.handles[platform] ?? activeMention.label;
 
                     return (
-                        <label
+                        <div
                             key={platform}
                             className="flex flex-col gap-1.5 text-xs"
                         >
-                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                                <PlatformGlyph
-                                    platform={platform}
-                                    size={14}
-                                    className="text-foreground"
-                                />
-                                <span className="capitalize">{platform}</span>
-                            </span>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                    <PlatformGlyph
+                                        platform={platform}
+                                        size={14}
+                                        className="text-foreground"
+                                    />
+                                    <span className="capitalize">
+                                        {platform}
+                                    </span>
+                                </span>
+                                {platformSupportsMention(platform) && (
+                                    <MentionModeToggle
+                                        ariaLabel={`How to show ${activeMention.label} on ${platform}`}
+                                        value={useMention ? 'mention' : 'text'}
+                                        options={[
+                                            {
+                                                value: 'mention',
+                                                label: 'Mention',
+                                            },
+                                            {
+                                                value: 'text',
+                                                label: 'Plain text',
+                                            },
+                                        ]}
+                                        onChange={(next) =>
+                                            onUpdateMention(
+                                                activeMention,
+                                                setPlatformMentionMode(
+                                                    activeMention,
+                                                    platform,
+                                                    next === 'mention',
+                                                ),
+                                            )
+                                        }
+                                    />
+                                )}
+                            </div>
                             <InputGroup className="min-h-9 w-full min-w-0 rounded-lg border-border bg-background">
                                 {useMention && (
                                     <InputGroupAddon className="pr-0 text-foreground">
@@ -419,44 +453,35 @@ function MentionHandleEditor({
                                         )
                                     }
                                 />
-                                <InputGroupAddon align="inline-end">
-                                    <InputGroupButton
-                                        onClick={() =>
-                                            onUpdateMention(
-                                                activeMention,
-                                                setPlatformMentionMode(
-                                                    activeMention,
-                                                    platform,
-                                                    !useMention,
-                                                ),
-                                            )
-                                        }
-                                    >
-                                        {useMention
-                                            ? 'Plain text'
-                                            : '@ mention'}
-                                    </InputGroupButton>
-                                </InputGroupAddon>
                             </InputGroup>
-                        </label>
+                        </div>
                     );
                 })}
             </div>
             {onSave && (
-                <button
-                    type="button"
-                    disabled={
-                        saveMentionProcessing ||
-                        mentionInputValue(activeMention.label).trim() === ''
-                    }
-                    onClick={onSave}
-                    className={cn(
-                        'rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90',
-                        'disabled:cursor-not-allowed disabled:opacity-60',
+                <div className="flex flex-col gap-1.5">
+                    {emptyHandle && !nameEmpty && !saveMentionProcessing && (
+                        <p className="text-[11px] text-muted-foreground">
+                            Fill in every platform to save this mention — the
+                            empty one still works in this post.
+                        </p>
                     )}
-                >
-                    {saveMentionProcessing ? 'Saving…' : 'Save to workspace'}
-                </button>
+                    <button
+                        type="button"
+                        disabled={
+                            saveMentionProcessing || nameEmpty || emptyHandle
+                        }
+                        onClick={onSave}
+                        className={cn(
+                            'rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90',
+                            'disabled:cursor-not-allowed disabled:opacity-60',
+                        )}
+                    >
+                        {saveMentionProcessing
+                            ? 'Saving…'
+                            : 'Save to workspace'}
+                    </button>
+                </div>
             )}
         </>
     );
@@ -509,8 +534,8 @@ function LinkedInMentionField({
         onUpdateMention(activeMention, next);
     }
 
-    function toggleMode() {
-        if (tagMode) {
+    function setTagMode(next: boolean) {
+        if (!next) {
             setTagIntent(false);
             setVanityHint(null);
             onUpdateMention(
@@ -533,15 +558,26 @@ function LinkedInMentionField({
     }
 
     return (
-        <label className="flex flex-col gap-1.5 text-xs">
-            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                <PlatformGlyph
-                    platform="linkedin"
-                    size={14}
-                    className="text-foreground"
+        <div className="flex flex-col gap-1.5 text-xs">
+            <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                    <PlatformGlyph
+                        platform="linkedin"
+                        size={14}
+                        className="text-foreground"
+                    />
+                    <span className="capitalize">linkedin</span>
+                </span>
+                <MentionModeToggle
+                    ariaLabel={`How to show ${activeMention.label} on LinkedIn`}
+                    value={tagMode ? 'tag' : 'text'}
+                    options={[
+                        { value: 'text', label: 'Plain text' },
+                        { value: 'tag', label: 'Tag company' },
+                    ]}
+                    onChange={(next) => setTagMode(next === 'tag')}
                 />
-                <span className="capitalize">linkedin</span>
-            </span>
+            </div>
             <InputGroup className="min-h-9 w-full min-w-0 rounded-lg border-border bg-background">
                 <InputGroupInput
                     value={displayValue}
@@ -553,11 +589,6 @@ function LinkedInMentionField({
                     } for ${activeMention.label}`}
                     onChange={(event) => handleChange(event.target.value)}
                 />
-                <InputGroupAddon align="inline-end">
-                    <InputGroupButton onClick={toggleMode}>
-                        {tagMode ? 'Plain text' : 'Tag company'}
-                    </InputGroupButton>
-                </InputGroupAddon>
             </InputGroup>
             {tagMode &&
                 (urn ? (
@@ -596,6 +627,56 @@ function LinkedInMentionField({
                     won&rsquo;t link it.
                 </span>
             )}
-        </label>
+        </div>
+    );
+}
+
+type MentionModeToggleProps = {
+    /** The currently selected option value. */
+    value: string;
+    options: { value: string; label: string }[];
+    onChange: (value: string) => void;
+    ariaLabel: string;
+};
+
+/**
+ * Compact segmented control that shows both mode options side by side with the
+ * active one highlighted — so it is always clear which mode is on, unlike a
+ * single button whose label names the mode it would switch to.
+ */
+function MentionModeToggle({
+    value,
+    options,
+    onChange,
+    ariaLabel,
+}: MentionModeToggleProps) {
+    return (
+        <div
+            role="radiogroup"
+            aria-label={ariaLabel}
+            className="inline-flex items-center rounded-md bg-muted p-0.5"
+        >
+            {options.map((option) => {
+                const active = option.value === value;
+
+                return (
+                    <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => onChange(option.value)}
+                        className={cn(
+                            'rounded-[5px] px-2 py-1 text-[11px] leading-none font-medium transition-colors',
+                            active
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        {option.label}
+                    </button>
+                );
+            })}
+        </div>
     );
 }

@@ -76,13 +76,35 @@ export function updateMentionHandle(
 ): MentionPlaceholder {
     const handles = { ...mention.handles };
     const trimmed = handle.trim();
-    if (trimmed === '') {
-        delete handles[platform];
-    } else {
-        handles[platform] = mentionTextInput(platform, trimmed, useMention);
-    }
+    // Keep an emptied field as '' rather than deleting the key, so the editor
+    // input stays blank instead of snapping back to the mention-name fallback
+    // (`handles[platform] ?? label`). Saving is gated separately.
+    handles[platform] =
+        trimmed === '' ? '' : mentionTextInput(platform, trimmed, useMention);
 
     return { ...mention, handles };
+}
+
+/** Whether a platform supports a real `@` mention (vs. plain display text only). */
+export function platformSupportsMention(platform: PlatformName): boolean {
+    return MENTION_PLATFORMS.has(platform);
+}
+
+/**
+ * True when any active platform's display/handle field has been cleared. Used to
+ * block saving a half-filled mention to the workspace while still letting the
+ * empty field be used in the current post.
+ */
+export function hasEmptyActiveHandle(
+    mention: MentionPlaceholder,
+    platforms: PlatformName[],
+): boolean {
+    return platforms.some(
+        (platform) =>
+            mentionInputValue(
+                mention.handles[platform] ?? mention.label,
+            ).trim() === '',
+    );
 }
 
 /**

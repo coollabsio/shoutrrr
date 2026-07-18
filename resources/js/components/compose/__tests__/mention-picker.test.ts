@@ -102,6 +102,14 @@ describe('linkedin mention field', () => {
         expect(source).toContain('Plain text');
     });
 
+    it('uses a segmented control that shows both modes at once', () => {
+        // Both options are rendered side by side (not one action-labeled
+        // button) so the active mode is always visible.
+        expect(source).toContain('MentionModeToggle');
+        expect(source).toContain('role="radiogroup"');
+        expect(source).toContain('aria-checked={active}');
+    });
+
     it('confirms a linked company instead of showing dev jargon', () => {
         expect(source).toContain('Company linked');
         expect(source).not.toContain('php artisan');

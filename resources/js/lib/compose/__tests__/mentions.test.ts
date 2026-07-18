@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
     createMention,
     extractLinkedInOrgRef,
+    hasEmptyActiveHandle,
     mentionInputValue,
     mentionToken,
     normalizeLinkedInUrn,
+    platformSupportsMention,
     replaceMentionLabel,
     replaceMentionTokens,
     savedMentionToPlaceholder,
@@ -101,6 +103,48 @@ describe('mention helpers', () => {
         expect(updateMentionHandle(mention, 'x', 'guest_x').handles.x).toBe(
             '@guest_x',
         );
+    });
+
+    it('keeps an emptied handle blank instead of snapping back to the label', () => {
+        const mention: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { x: '@guest', linkedin: 'Guest' },
+        };
+
+        // Clearing the field stores '' (not a delete), so the input stays blank
+        // rather than falling back to `handles[platform] ?? label`.
+        const cleared = updateMentionHandle(mention, 'linkedin', '', false);
+
+        expect(cleared.handles.linkedin).toBe('');
+        expect(cleared.handles.linkedin ?? cleared.label).toBe('');
+    });
+
+    it('flags an empty active handle so saving can be blocked', () => {
+        const filled: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { x: '@guest', linkedin: 'Guest' },
+        };
+        expect(hasEmptyActiveHandle(filled, ['x', 'linkedin'])).toBe(false);
+
+        const cleared = updateMentionHandle(filled, 'linkedin', '', false);
+        expect(hasEmptyActiveHandle(cleared, ['x', 'linkedin'])).toBe(true);
+
+        // An untouched platform falls back to the label, so it is not "empty".
+        const untouched: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: {},
+        };
+        expect(hasEmptyActiveHandle(untouched, ['x'])).toBe(false);
+    });
+
+    it('knows which platforms support an @ mention', () => {
+        expect(platformSupportsMention('x')).toBe(true);
+        expect(platformSupportsMention('bluesky')).toBe(true);
+        expect(platformSupportsMention('linkedin')).toBe(false);
+        expect(platformSupportsMention('facebook')).toBe(false);
     });
 
     it('can store plain display text for a platform instead of an @ mention', () => {
