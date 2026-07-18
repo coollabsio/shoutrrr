@@ -142,8 +142,14 @@ function installConsole(): void {
     for (const level of levels) {
         const original = console[level].bind(console);
         console[level] = (...args: unknown[]) => {
-            recordLog(level, args);
+            // Forward to the real console first, then record — recording must
+            // never suppress or break the user's own console call.
             original(...args);
+            try {
+                recordLog(level, args);
+            } catch {
+                // Diagnostics are best-effort; never let them throw app-wide.
+            }
         };
     }
 }
@@ -223,7 +229,7 @@ function installXhr(): void {
                 method: this.__method ?? 'GET',
                 url: this.__url ?? '',
                 status: this.status === 0 ? null : this.status,
-                ok: this.status >= 200 && this.status < 400,
+                ok: this.status >= 200 && this.status < 300,
                 durationMs: Date.now() - (this.__startedAt ?? Date.now()),
                 error: this.status === 0 ? 'network error' : undefined,
             });

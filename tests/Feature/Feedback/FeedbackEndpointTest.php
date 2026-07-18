@@ -167,9 +167,10 @@ it('redacts the operator origin from diagnostics on self-hosted instances', func
     ]);
     Http::fake(['https://discord.com/*' => Http::response('', 204)]);
 
+    // Includes an http:// occurrence to prove redaction is scheme-agnostic.
     $diagnostics = UploadedFile::fake()->createWithContent(
         'diagnostics.json',
-        '{"network":[{"url":"https://acme.example.com/api/posts"},{"url":"https://api.twitter.com/2/tweets"}]}',
+        '{"network":[{"url":"https://acme.example.com/api/posts"},{"url":"http://acme.example.com/asset.js"},{"url":"https://api.twitter.com/2/tweets"}]}',
     );
 
     $this->actingAs(actingWorkspaceUser())
@@ -185,11 +186,38 @@ it('redacts the operator origin from diagnostics on self-hosted instances', func
     Http::assertSent(function ($request) {
         $body = $request->body();
 
-        // Operator origin stripped (path kept), third-party host untouched.
+        // Operator host stripped everywhere (path kept), third-party untouched.
         return ! str_contains($body, 'acme.example.com')
             && str_contains($body, '/api/posts')
+            && str_contains($body, '/asset.js')
             && str_contains($body, 'api.twitter.com');
     });
+});
+
+it('keeps diagnostics urls intact on cloud instances', function () {
+    config([
+        'feedback.enabled' => true,
+        'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok',
+        'instance.self_hosted' => false,
+    ]);
+    Http::fake(['https://discord.com/*' => Http::response('', 204)]);
+
+    $diagnostics = UploadedFile::fake()->createWithContent(
+        'diagnostics.json',
+        '{"network":[{"url":"https://app.shoutrrr.com/api/posts"}]}',
+    );
+
+    $this->actingAs(actingWorkspaceUser())
+        ->post(route('feedback.store'), [
+            'type' => 'bug',
+            'message' => 'It broke',
+            'url' => 'https://app.shoutrrr.com/dashboard',
+            'browser' => 'Mozilla/5.0',
+            'diagnostics' => $diagnostics,
+        ])
+        ->assertOk();
+
+    Http::assertSent(fn ($request) => str_contains($request->body(), 'app.shoutrrr.com'));
 });
 
 it('attaches an uploaded screenshot as multipart', function () {

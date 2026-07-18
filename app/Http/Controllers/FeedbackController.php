@@ -110,10 +110,11 @@ class FeedbackController extends Controller
 
     /**
      * Read the attached diagnostics JSON. On self-hosted instances the captured
-     * network/navigation URLs are same-origin, so strip the operator's origin
-     * (derived from the raw page URL, before it too is redacted) throughout the
-     * payload — hiding the private host while keeping paths and any third-party
-     * hosts intact.
+     * network/navigation URLs are same-origin, so replace every occurrence of
+     * the operator's host throughout the payload — hiding the private host
+     * (regardless of scheme or port) while keeping paths and any third-party
+     * hosts intact. The host is taken from the page URL, falling back to the
+     * request host so redaction never silently fails open.
      */
     private function diagnosticsJson(Request $request, string $rawUrl): ?string
     {
@@ -128,30 +129,20 @@ class FeedbackController extends Controller
         }
 
         if (config('instance.self_hosted')) {
-            $origin = $this->originOf($rawUrl);
+            $host = $this->hostOf($rawUrl) ?? $request->getHost();
 
-            if ($origin !== null) {
-                $contents = str_replace($origin, '', $contents);
+            if ($host !== '') {
+                $contents = str_replace($host, '[host]', $contents);
             }
         }
 
         return $contents;
     }
 
-    private function originOf(string $url): ?string
+    private function hostOf(string $url): ?string
     {
-        $parts = parse_url($url);
+        $host = parse_url($url, PHP_URL_HOST);
 
-        if ($parts === false || ! isset($parts['scheme'], $parts['host'])) {
-            return null;
-        }
-
-        $origin = "{$parts['scheme']}://{$parts['host']}";
-
-        if (isset($parts['port'])) {
-            $origin .= ":{$parts['port']}";
-        }
-
-        return $origin;
+        return is_string($host) && $host !== '' ? $host : null;
     }
 }
