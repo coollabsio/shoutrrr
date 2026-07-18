@@ -21,6 +21,8 @@ use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Publishing\PostStatusRollup;
 use App\Services\Publishing\PublishConnectorRegistry;
 use App\Services\Publishing\TokenManager;
+use App\Services\Usage\UsageRecorder;
+use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
 use Illuminate\Support\Facades\Date;
 use Laravel\Cashier\Subscription;
@@ -135,12 +137,15 @@ test('x publishing stops when cumulative x cost reaches the monthly budget', fun
     Date::setTestNow('2026-06-15 12:00:00');
     $workspace = subscribedWorkspace();
 
+    // Cost is recomputed from the pricing map, not the stored column, so the
+    // draining operation must be one the current map actually prices (X reads
+    // via REPLIES_FETCH cost $0.005/unit: 998 * 5_000 = 4_990_000 microusd).
     UsageEvent::factory()->create([
         'workspace_id' => $workspace->id,
         'category' => UsageCategory::ExternalApi->value,
         'platform' => Platform::X->value,
-        'operation' => UsageOperation::MEDIA_UPLOAD,
-        'quota_weight' => 1,
+        'operation' => UsageOperation::REPLIES_FETCH,
+        'quota_weight' => 998,
         'cost_weight_microusd' => 4_990_000,
         'succeeded' => true,
         'occurred_at' => Date::now(),
@@ -174,12 +179,15 @@ test('x publishing reserves enough budget for url bearing tweets', function () {
     Date::setTestNow('2026-06-15 12:00:00');
     $workspace = subscribedWorkspace();
 
+    // Cost is recomputed from the pricing map, not the stored column, so the
+    // draining operation must be one the current map actually prices (X reads
+    // via REPLIES_FETCH cost $0.005/unit: 970 * 5_000 = 4_850_000 microusd).
     UsageEvent::factory()->create([
         'workspace_id' => $workspace->id,
         'category' => UsageCategory::ExternalApi->value,
         'platform' => Platform::X->value,
-        'operation' => UsageOperation::MEDIA_UPLOAD,
-        'quota_weight' => 1,
+        'operation' => UsageOperation::REPLIES_FETCH,
+        'quota_weight' => 970,
         'cost_weight_microusd' => 4_850_000,
         'succeeded' => true,
         'occurred_at' => Date::now(),
@@ -308,12 +316,15 @@ test('x publishing reports a budget failure when the quota still has room', func
 
     // Non-publish X calls drain the shared monthly API budget without using any
     // of the 333 post quota, so the failure must name the budget, not the quota.
+    // Cost is recomputed from the pricing map, not the stored column, so the
+    // draining operation must be one the current map actually prices (X reads
+    // via REPLIES_FETCH cost $0.005/unit: 998 * 5_000 = 4_990_000 microusd).
     UsageEvent::factory()->create([
         'workspace_id' => $workspace->id,
         'category' => UsageCategory::ExternalApi->value,
         'platform' => Platform::X->value,
-        'operation' => UsageOperation::MEDIA_UPLOAD,
-        'quota_weight' => 1,
+        'operation' => UsageOperation::REPLIES_FETCH,
+        'quota_weight' => 998,
         'cost_weight_microusd' => 4_990_000,
         'succeeded' => true,
         'occurred_at' => Date::now(),
@@ -443,4 +454,23 @@ test('non positive x publish pricing means unlimited x publishing', function () 
     expect($gate->monthlyXPostLimit())->toBeNull()
         ->and($gate->remainingXPosts($workspace))->toBe(PHP_INT_MAX)
         ->and($gate->canPublishX($workspace))->toBeTrue();
+});
+
+it('recomputes X cost from the current pricing map, ignoring stale stored cost', function (): void {
+    config()->set('subscriptions.enabled', true);
+    app(InstanceSettings::class)->update(['usage_tracking_enabled' => true]);
+    $workspace = Workspace::factory()->create(['is_initial' => false]);
+
+    app(UsageRecorder::class)->record(
+        category: UsageCategory::ExternalApi,
+        operation: UsageOperation::MEDIA_UPLOAD,
+        workspaceId: $workspace->id,
+        platform: Platform::X,
+        quotaWeight: 3,
+        succeeded: true,
+    );
+
+    // Even if a stale row carried a nonzero stored cost, the gate recomputes 0
+    // for the now-unmapped MEDIA_UPLOAD operation.
+    expect(app(WorkspaceSubscriptionGate::class)->currentXCostMicrousd($workspace))->toBe(0);
 });

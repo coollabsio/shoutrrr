@@ -102,19 +102,25 @@ class WorkspaceSubscriptionGate
     }
 
     /**
-     * Total X API spend in the current billing period across every metered
-     * operation (publishes, media uploads, reply sends, metrics fetches), not
-     * only publishes: every X call bills against the same monthly budget.
+     * Total X API spend in the current billing period, recomputed from the current
+     * pricing map (not stored cost columns) so pricing corrections apply to already
+     * recorded usage. Sums every metered X operation — the whole budget is shared.
      */
     public function currentXCostMicrousd(Workspace $workspace): int
     {
         $periodStart = $this->billingPeriodStart($workspace);
 
-        if ($periodStart !== null) {
-            return $this->usageMeter->costSinceMicrousd($workspace->id, $periodStart, Platform::X);
+        $quotaByOperation = $periodStart !== null
+            ? $this->usageMeter->quotaByOperationSince($workspace->id, $periodStart, Platform::X)
+            : $this->usageMeter->currentPeriodQuotaByOperation($workspace->id, Platform::X);
+
+        $cost = 0;
+
+        foreach ($quotaByOperation as $operation => $quota) {
+            $cost += $this->pricing->costWeightMicrousd(Platform::X->value, (string) $operation, $quota);
         }
 
-        return $this->usageMeter->currentPeriodCostMicrousd($workspace->id, Platform::X);
+        return $cost;
     }
 
     /**
