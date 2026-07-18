@@ -88,6 +88,18 @@ test('a photo story uploads the photo unpublished then creates the story with no
     });
 });
 
+test('a photo story finish response with success false maps to a server error', function () {
+    Http::fake([
+        'https://graph.facebook.com/*/photos*' => Http::response(['id' => 'photo-1']),
+        'https://graph.facebook.com/*/photo_stories' => Http::response(['success' => false]),
+    ]);
+
+    $result = app(FacebookConnector::class)->publish(fbStoryContext(fbStoryImage()));
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::ServerError);
+});
+
 test('a video story drives the video_stories start, upload, and finish phases', function () {
     Http::fake([
         'https://graph.facebook.com/*/video_stories' => Http::sequence()

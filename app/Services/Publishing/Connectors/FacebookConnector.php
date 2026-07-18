@@ -411,11 +411,19 @@ class FacebookConnector implements PublishConnector
                 throw new FacebookRequestFailed($story);
             }
 
-            $id = (string) ($story->json('post_id') ?? $story->json('id') ?? $photoId);
+            if ($story->json('success') !== true) {
+                return PublishResult::failure(ErrorKind::ServerError, 'Facebook did not confirm the story was created.');
+            }
+
+            $id = (string) ($story->json('post_id') ?? $story->json('id'));
         } catch (FacebookRequestFailed $e) {
             return $this->mapFailure($e->response);
         } catch (ConnectionException $e) {
             return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+        }
+
+        if ($id === '') {
+            return PublishResult::failure(ErrorKind::ServerError, 'Facebook did not return a story id');
         }
 
         return PublishResult::success([$id]);
