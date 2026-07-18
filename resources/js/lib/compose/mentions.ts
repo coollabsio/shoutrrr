@@ -18,7 +18,15 @@ const PLATFORMS: PlatformName[] = [
     'instagram',
     'threads',
 ];
-const MENTION_PLATFORMS = new Set<PlatformName>(['x', 'bluesky']);
+// Platforms whose posts auto-link a bare `@handle`, so a real @mention is worth
+// offering alongside plain text. Facebook is intentionally excluded: its post
+// API does not auto-link `@text`, so a "mention" there would publish literally.
+const MENTION_PLATFORMS = new Set<PlatformName>([
+    'x',
+    'bluesky',
+    'instagram',
+    'threads',
+]);
 const HANDLE_PATTERN = /(^|\s)@([a-zA-Z0-9_.-]{0,50})(?=\s|$|[.,!?;:])/g;
 
 export function createMention(label: string): MentionPlaceholder {

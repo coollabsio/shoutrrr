@@ -194,11 +194,11 @@ export default function MentionPicker({
 
     if (mode === 'edit') {
         return (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
                 <button
                     type="button"
                     onClick={() => setMode('search')}
-                    className="inline-flex items-center gap-1.5 self-start rounded-md px-1 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="-mb-0.5 inline-flex items-center gap-1.5 self-start rounded-md px-1 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                     <ArrowLeft className="size-3.5" aria-hidden />
                     Back to search
@@ -337,17 +337,20 @@ function MentionHandleEditor({
 
     return (
         <>
-            <div>
-                <div className="text-xs font-medium text-muted-foreground">
-                    Mention name
-                </div>
-                <InputGroup className="mt-1.5 h-9 rounded-lg border-border bg-background">
-                    <InputGroupAddon>@</InputGroupAddon>
+            <div className="flex items-center gap-2">
+                <span
+                    aria-hidden
+                    className="flex w-[15px] shrink-0 justify-center text-sm font-medium text-muted-foreground"
+                >
+                    @
+                </span>
+                <InputGroup className="h-8 min-w-0 flex-1 rounded-lg">
                     <InputGroupInput
                         ref={mentionNameInputRef}
                         value={mentionInputValue(activeMention.label)}
-                        placeholder="name"
+                        placeholder="Mention name"
                         aria-label="Mention name shown in the post"
+                        className="text-xs font-medium"
                         onChange={(event) =>
                             onUpdateMention(
                                 activeMention,
@@ -360,103 +363,28 @@ function MentionHandleEditor({
                     />
                 </InputGroup>
             </div>
-            <div className="text-xs font-medium text-muted-foreground">
-                Platform handles
-            </div>
-            <div className="flex flex-col gap-2">
-                {activePlatforms.map((platform) => {
-                    if (platform === 'linkedin') {
-                        // Keyed on the mention id so the local tag-mode/vanity
-                        // state resets when a different mention is edited.
-                        return (
-                            <LinkedInMentionField
-                                key={`linkedin-${activeMention.id}`}
-                                activeMention={activeMention}
-                                onUpdateMention={onUpdateMention}
-                            />
-                        );
-                    }
-
-                    const useMention = usesPlatformMention(
-                        activeMention,
-                        platform,
-                    );
-                    const handleValue =
-                        activeMention.handles[platform] ?? activeMention.label;
-
-                    return (
-                        <div
-                            key={platform}
-                            className="flex flex-col gap-1.5 text-xs"
-                        >
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                                    <PlatformGlyph
-                                        platform={platform}
-                                        size={14}
-                                        className="text-foreground"
-                                    />
-                                    <span className="capitalize">
-                                        {platform}
-                                    </span>
-                                </span>
-                                {platformSupportsMention(platform) && (
-                                    <MentionModeToggle
-                                        ariaLabel={`How to show ${activeMention.label} on ${platform}`}
-                                        value={useMention ? 'mention' : 'text'}
-                                        options={[
-                                            {
-                                                value: 'mention',
-                                                label: 'Mention',
-                                            },
-                                            {
-                                                value: 'text',
-                                                label: 'Plain text',
-                                            },
-                                        ]}
-                                        onChange={(next) =>
-                                            onUpdateMention(
-                                                activeMention,
-                                                setPlatformMentionMode(
-                                                    activeMention,
-                                                    platform,
-                                                    next === 'mention',
-                                                ),
-                                            )
-                                        }
-                                    />
-                                )}
-                            </div>
-                            <InputGroup className="min-h-9 w-full min-w-0 rounded-lg border-border bg-background">
-                                {useMention && (
-                                    <InputGroupAddon className="pr-0 text-foreground">
-                                        @
-                                    </InputGroupAddon>
-                                )}
-                                <InputGroupInput
-                                    value={mentionInputValue(handleValue)}
-                                    placeholder={
-                                        useMention ? 'handle' : 'display name'
-                                    }
-                                    aria-label={`${platform} ${
-                                        useMention ? 'handle' : 'display text'
-                                    } for ${activeMention.label}`}
-                                    onChange={(event) =>
-                                        onUpdateMention(
-                                            activeMention,
-                                            updateMentionHandle(
-                                                activeMention,
-                                                platform,
-                                                event.target.value,
-                                                useMention,
-                                            ),
-                                        )
-                                    }
-                                />
-                            </InputGroup>
-                        </div>
-                    );
-                })}
+            <div className="h-px bg-border" />
+            <div className="flex flex-col gap-1.5">
+                {/*
+                 * Keyed on the mention id so each field's local mode state resets
+                 * when a different mention is edited.
+                 */}
+                {activePlatforms.map((platform) =>
+                    platform === 'linkedin' ? (
+                        <LinkedInMentionField
+                            key={`linkedin-${activeMention.id}`}
+                            activeMention={activeMention}
+                            onUpdateMention={onUpdateMention}
+                        />
+                    ) : (
+                        <PlatformMentionField
+                            key={`${platform}-${activeMention.id}`}
+                            activeMention={activeMention}
+                            platform={platform}
+                            onUpdateMention={onUpdateMention}
+                        />
+                    ),
+                )}
             </div>
             {onSave && (
                 <div className="flex flex-col gap-1.5">
@@ -473,7 +401,7 @@ function MentionHandleEditor({
                         }
                         onClick={onSave}
                         className={cn(
-                            'rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90',
+                            'rounded-lg bg-primary py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90',
                             'disabled:cursor-not-allowed disabled:opacity-60',
                         )}
                     >
@@ -484,6 +412,95 @@ function MentionHandleEditor({
                 </div>
             )}
         </>
+    );
+}
+
+type PlatformMentionFieldProps = {
+    activeMention: MentionPlaceholder;
+    platform: PlatformName;
+    onUpdateMention: (
+        previous: MentionPlaceholder,
+        next: MentionPlaceholder,
+    ) => void;
+};
+
+/**
+ * One non-LinkedIn platform row. The mention/plain-text mode is held in local
+ * state rather than re-derived from whether the stored handle currently starts
+ * with '@'. That keeps the toggle, the '@' prefix, and the placeholder in
+ * agreement — and, crucially, clearing the field no longer silently flips the
+ * mode. Platforms that can't carry an `@` mention (only Facebook, today) show a
+ * static "Plain text" label instead of a toggle, so every row states its mode.
+ * The parent keys this on the mention id so the mode resets per mention.
+ */
+function PlatformMentionField({
+    activeMention,
+    platform,
+    onUpdateMention,
+}: PlatformMentionFieldProps) {
+    const supportsMention = platformSupportsMention(platform);
+    const [useMention, setUseMention] = useState(() =>
+        usesPlatformMention(activeMention, platform),
+    );
+    const handleValue = activeMention.handles[platform] ?? activeMention.label;
+
+    function setMode(next: boolean) {
+        setUseMention(next);
+        onUpdateMention(
+            activeMention,
+            setPlatformMentionMode(activeMention, platform, next),
+        );
+    }
+
+    return (
+        <div className="flex items-center gap-2">
+            <PlatformGlyph
+                platform={platform}
+                size={15}
+                className="shrink-0 text-muted-foreground"
+            />
+            <InputGroup className="h-8 min-w-0 flex-1 rounded-lg">
+                {supportsMention && useMention && (
+                    <InputGroupAddon className="pr-0 text-muted-foreground">
+                        @
+                    </InputGroupAddon>
+                )}
+                <InputGroupInput
+                    value={mentionInputValue(handleValue)}
+                    placeholder={useMention ? 'handle' : 'display name'}
+                    aria-label={`${platform} ${
+                        useMention ? 'handle' : 'display text'
+                    } for ${activeMention.label}`}
+                    className="text-xs"
+                    onChange={(event) =>
+                        onUpdateMention(
+                            activeMention,
+                            updateMentionHandle(
+                                activeMention,
+                                platform,
+                                event.target.value,
+                                supportsMention && useMention,
+                            ),
+                        )
+                    }
+                />
+            </InputGroup>
+            {supportsMention ? (
+                <MentionModeToggle
+                    ariaLabel={`How to show ${activeMention.label} on ${platform}`}
+                    value={useMention ? 'mention' : 'text'}
+                    options={[
+                        { value: 'mention', label: 'Mention' },
+                        { value: 'text', label: 'Plain text' },
+                    ]}
+                    onChange={(next) => setMode(next === 'mention')}
+                />
+            ) : (
+                <span className="shrink-0 px-1 text-[10px] font-medium text-muted-foreground/70">
+                    Plain text
+                </span>
+            )}
+        </div>
     );
 }
 
@@ -558,16 +575,26 @@ function LinkedInMentionField({
     }
 
     return (
-        <div className="flex flex-col gap-1.5 text-xs">
-            <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                    <PlatformGlyph
-                        platform="linkedin"
-                        size={14}
-                        className="text-foreground"
+        <div className="flex flex-col gap-1 text-xs">
+            <div className="flex items-center gap-2">
+                <PlatformGlyph
+                    platform="linkedin"
+                    size={15}
+                    className="shrink-0 text-muted-foreground"
+                />
+                <InputGroup className="h-8 min-w-0 flex-1 rounded-lg">
+                    <InputGroupInput
+                        value={displayValue}
+                        placeholder={
+                            tagMode ? 'Company name' : 'Name shown on LinkedIn'
+                        }
+                        aria-label={`linkedin ${
+                            tagMode ? 'company name' : 'display text'
+                        } for ${activeMention.label}`}
+                        className="text-xs"
+                        onChange={(event) => handleChange(event.target.value)}
                     />
-                    <span className="capitalize">linkedin</span>
-                </span>
+                </InputGroup>
                 <MentionModeToggle
                     ariaLabel={`How to show ${activeMention.label} on LinkedIn`}
                     value={tagMode ? 'tag' : 'text'}
@@ -578,54 +605,48 @@ function LinkedInMentionField({
                     onChange={(next) => setTagMode(next === 'tag')}
                 />
             </div>
-            <InputGroup className="min-h-9 w-full min-w-0 rounded-lg border-border bg-background">
-                <InputGroupInput
-                    value={displayValue}
-                    placeholder={
-                        tagMode ? 'Company name' : 'Name shown on LinkedIn'
-                    }
-                    aria-label={`linkedin ${
-                        tagMode ? 'company name' : 'display text'
-                    } for ${activeMention.label}`}
-                    onChange={(event) => handleChange(event.target.value)}
-                />
-            </InputGroup>
-            {tagMode &&
-                (urn ? (
-                    <span className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-2 py-1.5">
-                        <Building2 className="size-3.5 shrink-0 text-primary" />
-                        <span className="text-foreground">Company linked</span>
-                        <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-                            {urn}
-                        </code>
-                        <button
-                            type="button"
-                            onClick={removeUrn}
-                            aria-label="Remove company tag"
-                            className="inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted-foreground/15 hover:text-foreground"
-                        >
-                            <X className="size-3" />
-                        </button>
-                    </span>
-                ) : vanityHint ? (
-                    <span className="flex items-start gap-1.5 text-muted-foreground">
-                        <Info className="mt-px size-3.5 shrink-0" />
-                        <span>
-                            That link doesn&rsquo;t include the company ID.
-                            Paste the URL with its number, or the
-                            company&rsquo;s URN.
+            {tagMode && (
+                <div className="flex flex-col gap-1 pl-6">
+                    {urn ? (
+                        <span className="flex items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1">
+                            <Building2 className="size-3.5 shrink-0 text-primary" />
+                            <span className="text-foreground">
+                                Company linked
+                            </span>
+                            <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+                                {urn}
+                            </code>
+                            <button
+                                type="button"
+                                onClick={removeUrn}
+                                aria-label="Remove company tag"
+                                className="inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted-foreground/15 hover:text-foreground"
+                            >
+                                <X className="size-3" />
+                            </button>
                         </span>
-                    </span>
-                ) : (
-                    <span className="text-muted-foreground">
-                        Paste the company&rsquo;s LinkedIn page URL to tag them.
-                    </span>
-                ))}
-            {tagMode && urn && (
-                <span className="text-[11px] text-muted-foreground/80">
-                    Match the company&rsquo;s exact name above, or LinkedIn
-                    won&rsquo;t link it.
-                </span>
+                    ) : vanityHint ? (
+                        <span className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                            <Info className="mt-px size-3.5 shrink-0" />
+                            <span>
+                                That link doesn&rsquo;t include the company ID.
+                                Paste the URL with its number, or the
+                                company&rsquo;s URN.
+                            </span>
+                        </span>
+                    ) : (
+                        <span className="text-[11px] text-muted-foreground">
+                            Paste the company&rsquo;s LinkedIn page URL to tag
+                            them.
+                        </span>
+                    )}
+                    {urn && (
+                        <span className="text-[11px] text-muted-foreground/80">
+                            Match the company&rsquo;s exact name above, or
+                            LinkedIn won&rsquo;t link it.
+                        </span>
+                    )}
+                </div>
             )}
         </div>
     );
@@ -654,7 +675,7 @@ function MentionModeToggle({
         <div
             role="group"
             aria-label={ariaLabel}
-            className="inline-flex items-center rounded-md bg-muted p-0.5"
+            className="inline-flex shrink-0 items-center rounded-md bg-muted p-0.5"
         >
             {options.map((option) => {
                 const active = option.value === value;
@@ -666,7 +687,7 @@ function MentionModeToggle({
                         aria-pressed={active}
                         onClick={() => onChange(option.value)}
                         className={cn(
-                            'rounded-[5px] px-2 py-1 text-[11px] leading-none font-medium transition-colors',
+                            'rounded-[5px] px-1.5 py-1 text-[11px] leading-none font-medium whitespace-nowrap transition-colors',
                             active
                                 ? 'bg-background text-foreground shadow-sm'
                                 : 'text-muted-foreground hover:text-foreground',

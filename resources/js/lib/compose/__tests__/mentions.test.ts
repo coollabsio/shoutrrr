@@ -68,8 +68,8 @@ describe('mention helpers', () => {
             bluesky: '@Guest',
             linkedin: 'Guest',
             facebook: 'Guest',
-            instagram: 'Guest',
-            threads: 'Guest',
+            instagram: '@Guest',
+            threads: '@Guest',
         });
         expect(mentionToken(mention.id)).toBe(`{{mention:${mention.id}}}`);
     });
@@ -162,8 +162,12 @@ describe('mention helpers', () => {
     });
 
     it('knows which platforms support an @ mention', () => {
+        // Platforms that auto-link a bare @handle offer a mention toggle.
         expect(platformSupportsMention('x')).toBe(true);
         expect(platformSupportsMention('bluesky')).toBe(true);
+        expect(platformSupportsMention('instagram')).toBe(true);
+        expect(platformSupportsMention('threads')).toBe(true);
+        // LinkedIn has its own company-tag flow; Facebook's API won't auto-link.
         expect(platformSupportsMention('linkedin')).toBe(false);
         expect(platformSupportsMention('facebook')).toBe(false);
     });
@@ -297,8 +301,8 @@ describe('syncMentionsFromText', () => {
                     bluesky: '@guest',
                     linkedin: 'guest',
                     facebook: 'guest',
-                    instagram: 'guest',
-                    threads: 'guest',
+                    instagram: '@guest',
+                    threads: '@guest',
                 },
             },
         ]);
@@ -316,8 +320,8 @@ describe('syncMentionsFromText', () => {
                     bluesky: '@',
                     linkedin: '',
                     facebook: '',
-                    instagram: '',
-                    threads: '',
+                    instagram: '@',
+                    threads: '@',
                 },
             },
         ]);
@@ -336,8 +340,8 @@ describe('syncMentionsFromText', () => {
                     bluesky: '@guest',
                     linkedin: 'guest',
                     facebook: 'guest',
-                    instagram: 'guest',
-                    threads: 'guest',
+                    instagram: '@guest',
+                    threads: '@guest',
                 },
             },
         ]);

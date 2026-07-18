@@ -521,7 +521,7 @@ function EditorBodyInner(
                         align="start"
                         side="bottom"
                         sideOffset={8}
-                        className="w-80 gap-0 rounded-2xl p-2"
+                        className="w-96 gap-0 rounded-2xl p-3"
                         initialFocus={false}
                     >
                         <MentionPicker
