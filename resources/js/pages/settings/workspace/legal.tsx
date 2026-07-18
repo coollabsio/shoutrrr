@@ -218,7 +218,18 @@ export default function LegalPages({ legal }: Props) {
 
     function submit(event: FormEvent) {
         event.preventDefault();
-        form.put(LegalPagesController.update().url, { preserveScroll: true });
+        form.put(LegalPagesController.update().url, {
+            preserveScroll: true,
+            // Mirror the success toast on failure: surface the first validation
+            // message (e.g. a slug already in use) so the error is not missed.
+            onError: (errors) => {
+                const [firstError] = Object.values(errors);
+                toast.error(
+                    firstError ??
+                        'Couldn’t save your legal pages. Please try again.',
+                );
+            },
+        });
     }
 
     // Live URLs reflect the last saved state (the `legal` prop), so a link is
