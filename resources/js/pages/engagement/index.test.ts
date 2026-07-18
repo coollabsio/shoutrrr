@@ -13,7 +13,14 @@ it('reserves space for the mobile sheet close button beside reply actions', () =
 it('shows disabled engagement platforms to end users', () => {
     expect(source).toContain('EngagementDisabledBanner');
     expect(source).toContain('Reply polling is temporarily disabled for');
-    expect(source).toContain('disabledPlatformLabels');
+    expect(source).toContain('bannerDisabledPlatforms');
+});
+
+it('keeps LinkedIn out of the banner when the community scope is off', () => {
+    // LinkedIn engagement is off by default (restricted Community Management
+    // scope) — that expected-off state must not surface as a temporary pause.
+    expect(source).toContain('linkedinCommunityManagementEnabled');
+    expect(source).toContain("label !== platformLabel('linkedin')");
 });
 
 it('runs reply actions as JSON requests, not Inertia visits', () => {

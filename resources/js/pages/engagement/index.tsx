@@ -79,6 +79,7 @@ type PageProps = {
     filters: EngagementFilters;
     facets: { accounts: AccountFacet[]; posts: PostFacet[] };
     engagementEnabled: Record<PlatformName, boolean>;
+    linkedinCommunityManagementEnabled: boolean;
     savedMentions: WorkspaceMention[];
 };
 
@@ -558,6 +559,7 @@ export default function EngagementIndex({
     filters,
     facets,
     engagementEnabled,
+    linkedinCommunityManagementEnabled,
     savedMentions,
 }: PageProps) {
     const isMobile = useIsMobile();
@@ -602,6 +604,14 @@ export default function EngagementIndex({
     const disabledPlatforms = disabledPlatformLabels(engagementEnabled);
     const allEngagementDisabled =
         disabledPlatforms.length === platformKeys(engagementEnabled).length;
+    // LinkedIn reply polling stays off until the operator enables the restricted
+    // Community Management scope in instance settings. That's the expected default,
+    // not a temporary pause, so keep it out of the banner unless the scope is on.
+    const bannerDisabledPlatforms = linkedinCommunityManagementEnabled
+        ? disabledPlatforms
+        : disabledPlatforms.filter(
+              (label) => label !== platformLabel('linkedin'),
+          );
     const filtered =
         filters.unread ||
         filters.archived ||
@@ -758,7 +768,7 @@ export default function EngagementIndex({
                 {/* Left: triage column */}
                 <div className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r">
                     <EngagementDisabledBanner
-                        disabledPlatforms={disabledPlatforms}
+                        disabledPlatforms={bannerDisabledPlatforms}
                     />
                     <div className="shrink-0">
                         <ReplyFilters

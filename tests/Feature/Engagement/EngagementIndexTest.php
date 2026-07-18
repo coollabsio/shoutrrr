@@ -85,6 +85,26 @@ test('the inbox exposes which engagement platforms are disabled', function (): v
             ->where('engagementEnabled.linkedin', true));
 });
 
+test('the inbox exposes whether the LinkedIn community management scope is enabled', function (): void {
+    $this->actingAs($this->user)
+        ->get(route('engagement.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('engagement/index')
+            ->where('linkedinCommunityManagementEnabled', false));
+
+    app(InstanceSettings::class)->update([
+        'linkedin_community_management_enabled' => true,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('engagement.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('engagement/index')
+            ->where('linkedinCommunityManagementEnabled', true));
+});
+
 test('the posts facet lists posts that drew replies with a count', function (): void {
     $post = Post::factory()->create(['workspace_id' => $this->workspace->id, 'base_text' => 'Launch day thread']);
     $target = PostTarget::factory()->for($post)->create(['platform' => Platform::Bluesky]);

@@ -104,6 +104,11 @@ class EngagementController extends Controller
                 'bluesky' => $settings->engagementPollingEnabled(Platform::Bluesky),
                 'linkedin' => $settings->engagementPollingEnabled(Platform::LinkedIn),
             ],
+            // LinkedIn engagement is off by default until the operator declares
+            // their app is approved for the restricted Community Management scope.
+            // The UI uses this to keep LinkedIn out of the "temporarily disabled"
+            // banner in that expected-off state.
+            'linkedinCommunityManagementEnabled' => $settings->linkedinCommunityManagementEnabled(),
             // The reply box reuses the composer's @-mention picker, so it needs
             // the same saved-mention library the composer receives.
             'savedMentions' => WorkspaceMention::withoutGlobalScopes()
