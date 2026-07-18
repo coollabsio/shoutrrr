@@ -75,14 +75,33 @@ export default function FeedbackWidget() {
     async function capture() {
         setCapturing(true);
         try {
+            // html-to-image clones the whole page and reads computed styles for
+            // every node — hundreds of ms of *synchronous* main-thread work. Let
+            // the popover open and paint first (two frames) so that work never
+            // janks the open animation; the "Capturing…" skeleton covers the gap.
+            await new Promise((resolve) => {
+                requestAnimationFrame(() =>
+                    requestAnimationFrame(() => resolve(undefined)),
+                );
+            });
+
             const blob = await toBlob(document.body, {
                 filter: (node) =>
                     !(
                         node instanceof HTMLElement &&
-                        node.dataset.feedbackIgnore !== undefined
+                        // Skip the widget itself and any kept-warm popover (e.g.
+                        // the force-mounted emoji picker's virtualized grid),
+                        // which would otherwise bloat the clone enormously.
+                        (node.dataset.feedbackIgnore !== undefined ||
+                            node.dataset.keepWarm !== undefined)
                     ),
-                cacheBust: true,
+                // Cap the raster at 1x — a full-page screenshot at a 2x DPR is 4x
+                // the pixels to encode and decode for a thumbnail nobody zooms.
+                pixelRatio: 1,
                 skipFonts: true,
+                // Deliberately NOT cacheBust: it appends a unique query to every
+                // image URL, forcing a full re-download of the page's images on
+                // each open. Cached images are fine for a screenshot.
             });
             setScreenshot(blob);
             setPreviewUrl(blob ? URL.createObjectURL(blob) : null);
