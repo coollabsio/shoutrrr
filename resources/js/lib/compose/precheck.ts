@@ -7,6 +7,7 @@ import type {
     MentionPlaceholder,
     PlatformLimits,
     PlatformName,
+    PostFormat,
 } from '@/types/compose';
 
 export type BlockReason =
@@ -18,7 +19,9 @@ export type BlockReason =
     | 'mixed_video_and_images'
     | 'video_too_long'
     | 'video_too_large'
-    | 'gif_not_mixable';
+    | 'gif_not_mixable'
+    | 'reels_requires_video'
+    | 'story_requires_media';
 
 export type AccountBlock = {
     accountId: string;
@@ -33,6 +36,8 @@ type PrecheckAccountInput = {
     autoSplit: boolean;
     mentions: MentionPlaceholder[];
     mediaCount: number;
+    hasVideo: boolean;
+    format: PostFormat;
     limits: PlatformLimits;
 };
 
@@ -60,6 +65,8 @@ export function precheckAccount({
     autoSplit,
     mentions,
     mediaCount,
+    hasVideo,
+    format,
     limits,
 }: PrecheckAccountInput): BlockReason[] {
     const reasons: BlockReason[] = [];
@@ -105,6 +112,13 @@ export function precheckAccount({
         reasons.push('media_required');
     }
 
+    if (format === 'reels' && !hasVideo) {
+        reasons.push('reels_requires_video');
+    }
+    if (format === 'story' && mediaCount === 0) {
+        reasons.push('story_requires_media');
+    }
+
     return reasons;
 }
 
@@ -116,6 +130,7 @@ type PrecheckDestinationsInput = {
     overrideByAccount: Record<string, string[] | undefined>;
     media: MediaView[];
     limits: PlatformLimits[];
+    formatByAccount: Record<string, PostFormat>;
 };
 
 /**
@@ -135,9 +150,11 @@ export function precheckDestinations({
     overrideByAccount,
     media,
     limits,
+    formatByAccount,
 }: PrecheckDestinationsInput): AccountBlock[] {
     const blocks: AccountBlock[] = [];
     const mediaCount = media.length;
+    const hasVideo = media.some((item) => item.kind === 'video');
 
     for (const account of accounts) {
         const platformLimits = limits.find(
@@ -153,6 +170,8 @@ export function precheckDestinations({
             autoSplit: autoSplitByAccount[account.id] ?? true,
             mentions,
             mediaCount,
+            hasVideo,
+            format: formatByAccount[account.id] ?? 'feed',
             limits: platformLimits,
         });
         if (reasons.length > 0) {
@@ -201,5 +220,9 @@ export function describeReason(
             return `the video is larger than ${label}'s ${Math.floor(limits.maxVideoBytes / (1024 * 1024))} MB limit`;
         case 'gif_not_mixable':
             return `${label} allows only one GIF and won't mix it with other media`;
+        case 'reels_requires_video':
+            return `${label} Reels need a video`;
+        case 'story_requires_media':
+            return `${label} Stories need an image or video`;
     }
 }

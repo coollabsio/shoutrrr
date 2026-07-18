@@ -50,6 +50,8 @@ describe('precheckAccount', () => {
             autoSplit: false,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({
                 platform: 'bluesky',
                 maxLength: 300,
@@ -66,6 +68,8 @@ describe('precheckAccount', () => {
             autoSplit: true,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({ platform: 'bluesky', maxLength: 300 }),
         });
         expect(reasons).not.toContain('section_too_long');
@@ -78,6 +82,8 @@ describe('precheckAccount', () => {
             autoSplit: true,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({
                 platform: 'linkedin',
                 maxLength: 3000,
@@ -94,6 +100,8 @@ describe('precheckAccount', () => {
             autoSplit: true,
             mentions: [],
             mediaCount: 5,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({ platform: 'x', maxMedia: 4 }),
         });
         expect(reasons).toContain('too_many_media');
@@ -106,6 +114,8 @@ describe('precheckAccount', () => {
             autoSplit: false,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({ platform: 'x', maxLength: 280 }),
         });
         expect(reasons).toEqual([]);
@@ -137,6 +147,7 @@ describe('precheckDestinations', () => {
             mentions: [],
             autoSplitByAccount: { a: false, b: true },
             overrideByAccount: {},
+            formatByAccount: {},
             media: NO_MEDIA,
             limits: [
                 limitsFor({ platform: 'bluesky', maxLength: 300 }),
@@ -164,6 +175,7 @@ describe('precheckDestinations', () => {
             mentions: [],
             autoSplitByAccount: { x1: true },
             overrideByAccount: {},
+            formatByAccount: {},
             media,
             limits: [limitsFor({ platform: 'x', maxMedia: 4 })],
         });
@@ -180,6 +192,8 @@ describe('precheckAccount empty content', () => {
             autoSplit: true,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({ platform: 'x', maxLength: 280 }),
         });
         expect(reasons).toEqual(['empty']);
@@ -192,6 +206,8 @@ describe('precheckAccount empty content', () => {
             autoSplit: true,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({ platform: 'x', maxLength: 280 }),
         });
         expect(reasons).toEqual(['empty']);
@@ -204,6 +220,8 @@ describe('precheckAccount empty content', () => {
             autoSplit: true,
             mentions: [],
             mediaCount: 1,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({ platform: 'x', maxLength: 280 }),
         });
         expect(reasons).toEqual([]);
@@ -216,6 +234,8 @@ describe('precheckAccount empty content', () => {
             autoSplit: false,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({ platform: 'linkedin', threadMax: 1 }),
         });
         expect(reasons).toEqual([]);
@@ -230,6 +250,8 @@ describe('precheckAccount media-first platforms', () => {
             autoSplit: false,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({
                 platform: 'instagram',
                 requiresMedia: true,
@@ -246,6 +268,8 @@ describe('precheckAccount media-first platforms', () => {
             autoSplit: false,
             mentions: [],
             mediaCount: 1,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({
                 platform: 'instagram',
                 requiresMedia: true,
@@ -262,6 +286,8 @@ describe('precheckAccount media-first platforms', () => {
             autoSplit: false,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({
                 platform: 'instagram',
                 requiresMedia: true,
@@ -278,9 +304,55 @@ describe('precheckAccount media-first platforms', () => {
             autoSplit: false,
             mentions: [],
             mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
             limits: limitsFor({ platform: 'x', maxLength: 280 }),
         });
         expect(reasons).toEqual([]);
+    });
+});
+
+describe('format-aware precheck blocks', () => {
+    it('blocks reels with no video', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'instagram' }),
+            segments: ['hi'],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 1,
+            hasVideo: false,
+            format: 'reels',
+            limits: limitsFor({ platform: 'instagram', requiresMedia: true }),
+        });
+        expect(reasons).toContain('reels_requires_video');
+    });
+
+    it('does not block reels when a video is attached', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'instagram' }),
+            segments: ['hi'],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 1,
+            hasVideo: true,
+            format: 'reels',
+            limits: limitsFor({ platform: 'instagram', requiresMedia: true }),
+        });
+        expect(reasons).not.toContain('reels_requires_video');
+    });
+
+    it('blocks a story with no media', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'instagram' }),
+            segments: ['hi'],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 0,
+            hasVideo: false,
+            format: 'story',
+            limits: limitsFor({ platform: 'instagram', requiresMedia: true }),
+        });
+        expect(reasons).toContain('story_requires_media');
     });
 });
 
