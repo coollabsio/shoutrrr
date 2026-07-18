@@ -117,7 +117,7 @@ test('x publishing quota is five dollars worth of worst case monthly requests', 
     $workspace = subscribedWorkspace();
     $gate = app(WorkspaceSubscriptionGate::class);
 
-    expect($gate->monthlyXPostLimit())->toBe(25)
+    expect($gate->monthlyXPostLimit($workspace))->toBe(25)
         ->and($gate->remainingXPosts($workspace))->toBe(25);
 
     recordXPosts($workspace, 24);
@@ -451,9 +451,35 @@ test('non positive x publish pricing means unlimited x publishing', function () 
     $workspace = subscribedWorkspace();
     $gate = app(WorkspaceSubscriptionGate::class);
 
-    expect($gate->monthlyXPostLimit())->toBeNull()
+    expect($gate->monthlyXPostLimit($workspace))->toBeNull()
         ->and($gate->remainingXPosts($workspace))->toBe(PHP_INT_MAX)
         ->and($gate->canPublishX($workspace))->toBeTrue();
+});
+
+it('treats an unlimited override like the initial workspace', function (): void {
+    config()->set('subscriptions.enabled', true);
+    $workspace = Workspace::factory()->create(['is_initial' => false]);
+    app(InstanceSettings::class)->setXWorkspaceBudget($workspace->id, 'unlimited');
+
+    $gate = app(WorkspaceSubscriptionGate::class);
+
+    expect($gate->monthlyXBudgetMicrousd($workspace))->toBeNull()
+        ->and($gate->monthlyXPostLimit($workspace))->toBeNull()
+        ->and($gate->remainingXPosts($workspace))->toBe(PHP_INT_MAX)
+        ->and($gate->remainingXBudgetMicrousd($workspace))->toBe(PHP_INT_MAX)
+        ->and($gate->canPublishX($workspace))->toBeTrue();
+});
+
+it('applies a finite per-workspace override to the budget and post limit', function (): void {
+    config()->set('subscriptions.enabled', true);
+    config()->set('subscriptions.monthly_x_budget_cents', 500);
+    $workspace = Workspace::factory()->create(['is_initial' => false]);
+    app(InstanceSettings::class)->setXWorkspaceBudget($workspace->id, 2000); // $20
+
+    $gate = app(WorkspaceSubscriptionGate::class);
+
+    expect($gate->monthlyXBudgetMicrousd($workspace))->toBe(20_000_000)
+        ->and($gate->monthlyXPostLimit($workspace))->toBe(100); // floor(20 / 0.20)
 });
 
 it('recomputes X cost from the current pricing map, ignoring stale stored cost', function (): void {

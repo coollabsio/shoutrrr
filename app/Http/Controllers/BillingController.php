@@ -33,7 +33,7 @@ class BillingController extends Controller
         return Inertia::render('settings/workspace/subscription', [
             'subscribed' => $subscribed,
             'monthlyPrice' => (int) config('subscriptions.monthly_price_cents'),
-            'monthlyXBudgetMicrousd' => $subscriptionGate->monthlyXBudgetMicrousd(),
+            'monthlyXBudgetMicrousd' => $subscriptionGate->monthlyXBudgetMicrousd($workspace),
             'monthlyXBudgetUsedMicrousd' => $subscriptionGate->currentXCostMicrousd($workspace),
             'monthlyXBudgetRemainingMicrousd' => $remainingBudget === PHP_INT_MAX ? null : $remainingBudget,
             'canManageSubscription' => $subscribed,

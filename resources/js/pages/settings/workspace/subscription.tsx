@@ -33,7 +33,7 @@ function csrfToken(): string {
 type Props = {
     subscribed: boolean;
     monthlyPrice: number;
-    monthlyXBudgetMicrousd: number;
+    monthlyXBudgetMicrousd: number | null;
     monthlyXBudgetUsedMicrousd: number;
     monthlyXBudgetRemainingMicrousd: number | null;
     canManageSubscription: boolean;
@@ -44,12 +44,26 @@ function formatMicrousd(value: number): string {
     return usd.format(value / 1_000_000);
 }
 
+// Guards against a raw PHP_INT_MAX (or anything past safe-integer precision)
+// leaking through as "unlimited" instead of the expected `null`.
+const UNLIMITED_THRESHOLD = Number.MAX_SAFE_INTEGER;
+
+function isUnlimitedValue(value: number | null): boolean {
+    return value === null || value >= UNLIMITED_THRESHOLD;
+}
+
+function formatXBudget(value: number | null): string {
+    return isUnlimitedValue(value)
+        ? 'Unlimited'
+        : formatMicrousd(value as number);
+}
+
 export function remainingXBudgetLabel(
     monthlyXBudgetRemainingMicrousd: number | null,
 ): string {
-    return monthlyXBudgetRemainingMicrousd === null
+    return isUnlimitedValue(monthlyXBudgetRemainingMicrousd)
         ? 'Unlimited remaining'
-        : `${formatMicrousd(monthlyXBudgetRemainingMicrousd)} remaining`;
+        : `${formatXBudget(monthlyXBudgetRemainingMicrousd)} remaining`;
 }
 
 export default function Subscription({
@@ -62,10 +76,13 @@ export default function Subscription({
     canAccessPortal,
 }: Props) {
     const monthlyUsagePercent =
-        monthlyXBudgetMicrousd > 0
+        !isUnlimitedValue(monthlyXBudgetMicrousd) &&
+        (monthlyXBudgetMicrousd as number) > 0
             ? Math.min(
                   100,
-                  (monthlyXBudgetUsedMicrousd / monthlyXBudgetMicrousd) * 100,
+                  (monthlyXBudgetUsedMicrousd /
+                      (monthlyXBudgetMicrousd as number)) *
+                      100,
               )
             : 0;
     const remainingLabel = remainingXBudgetLabel(
@@ -103,7 +120,7 @@ export default function Subscription({
                             <p className="text-sm text-muted-foreground">
                                 Includes unlimited seats, unlimited publishes to
                                 every other platform, and a{' '}
-                                {formatMicrousd(monthlyXBudgetMicrousd)}
+                                {formatXBudget(monthlyXBudgetMicrousd)}
                                 /month X/Twitter usage budget.
                             </p>
                         </div>
@@ -134,7 +151,7 @@ export default function Subscription({
                                     <span className="text-muted-foreground">
                                         {' '}
                                         /{' '}
-                                        {formatMicrousd(monthlyXBudgetMicrousd)}
+                                        {formatXBudget(monthlyXBudgetMicrousd)}
                                     </span>
                                 </div>
                             </div>
