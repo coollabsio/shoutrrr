@@ -13,6 +13,10 @@ import {
 } from '@/components/ui/tooltip';
 import { celebrate } from '@/lib/compose/celebrate';
 import type { ScheduleTray } from '@/lib/compose/composer-state';
+import {
+    type AccountNotice,
+    describeFormatNotice,
+} from '@/lib/compose/format-notices';
 import { type AccountBlock, describeReason } from '@/lib/compose/precheck';
 import {
     OPTIMISTIC_PUBLISH,
@@ -51,6 +55,8 @@ type Props = {
     onServerPost: (post: PostView) => void;
     /** Accounts whose content will be rejected by the platform (live). */
     blockedAccounts: AccountBlock[];
+    /** Non-blocking, format-specific warnings (e.g. Stories drop the caption). */
+    notices: AccountNotice[];
     /** Per-platform limits, for rendering block reasons. */
     limits: PlatformLimits[];
 };
@@ -166,6 +172,7 @@ export function SubmitBar({
     onOptimisticSubmit,
     onServerPost,
     blockedAccounts,
+    notices,
     limits,
 }: Props) {
     // useHttp verbs take NO inline data — the body is injected via transform()
@@ -411,6 +418,21 @@ export function SubmitBar({
                                         block.platform,
                                         limitsFor(limits, block.platform),
                                     ),
+                                )
+                                .join('; ')}
+                        </li>
+                    ))}
+                </ul>
+            )}
+            {notices.length > 0 && (
+                <ul className="space-y-0.5 text-[12px] text-amber-600 dark:text-amber-500">
+                    {notices.map((notice) => (
+                        <li key={notice.accountId}>
+                            <span className="font-medium">{notice.handle}</span>
+                            {' — '}
+                            {notice.notices
+                                .map((item) =>
+                                    describeFormatNotice(item, notice.platform),
                                 )
                                 .join('; ')}
                         </li>
