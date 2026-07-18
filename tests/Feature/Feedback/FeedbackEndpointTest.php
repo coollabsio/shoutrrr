@@ -121,3 +121,20 @@ it('throttles after five requests', function () {
         'type' => 'bug', 'message' => 'n6', 'url' => 'https://app.test', 'browser' => 'UA',
     ])->assertStatus(429);
 });
+
+it('sends with unknown workspace when the user has no current workspace', function () {
+    config(['feedback.enabled' => true, 'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok']);
+    Http::fake(['https://discord.com/*' => Http::response('', 204)]);
+
+    $user = User::factory()->create();
+    $user->forceFill(['current_workspace_id' => null])->save();
+
+    $this->actingAs($user)
+        ->postJson(route('feedback.store'), [
+            'type' => 'bug', 'message' => 'broke', 'url' => 'https://app.test', 'browser' => 'UA',
+        ])
+        ->assertOk();
+
+    Http::assertSent(fn ($request) => collect($request['embeds'][0]['fields'])
+        ->contains(fn ($f) => str_contains($f['value'], 'unknown')));
+});

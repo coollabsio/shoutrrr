@@ -38,8 +38,12 @@ class FeedbackController extends Controller
             browser: $validated['browser'] ?? 'unknown',
             userName: $user->name,
             userEmail: $user->email,
-            workspaceName: $workspace->name,
-            workspaceId: $workspace->id,
+            // Larastan infers currentWorkspace as never-null from the BelongsTo
+            // generic, but current_workspace_id is nullable in practice (e.g.
+            // after the user's workspace is deleted), so the nullsafe fallback
+            // here is real and must stay.
+            workspaceName: $workspace?->name ?? 'unknown', // @phpstan-ignore nullsafe.neverNull
+            workspaceId: $workspace?->id ?? 'unknown', // @phpstan-ignore nullsafe.neverNull
             subscriptionStatus: $this->subscriptionStatus($workspace),
             screenshotBytes: $this->screenshotBytes($request),
         ));
