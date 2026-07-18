@@ -79,7 +79,13 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
             return ReplyFetchResult::failed($e->getMessage());
         }
 
-        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response);
+        $this->meterRead(
+            UsageCategory::ExternalApi,
+            UsageOperation::REPLIES_FETCH,
+            $account,
+            $response,
+            array_map(static fn (array $tweet): string => (string) ($tweet['id'] ?? ''), (array) $response->json('data', [])),
+        );
 
         if ($response->failed()) {
             return $this->mapFetchFailure($response);
@@ -207,7 +213,13 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
                 return [[], ReplyFetchResult::failed($e->getMessage())];
             }
 
-            $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLIES_FETCH, $account, $response);
+            $this->meterRead(
+                UsageCategory::ExternalApi,
+                UsageOperation::REPLIES_FETCH,
+                $account,
+                $response,
+                array_map(static fn (array $tweet): string => (string) ($tweet['id'] ?? ''), (array) $response->json('data', [])),
+            );
 
             if ($response->failed()) {
                 return [[], $this->mapFetchFailure($response)];
