@@ -1,7 +1,7 @@
 import { useHttp, usePage } from '@inertiajs/react';
 import { toBlob } from 'html-to-image';
 import { MessageSquarePlus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import FeedbackController from '@/actions/App/Http/Controllers/FeedbackController';
@@ -19,9 +19,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 import {
-    buildFeedbackFormData,
+    buildFeedbackPayload,
     type FeedbackType,
-} from './build-feedback-form-data';
+} from './build-feedback-payload';
 
 const TYPES: { value: FeedbackType; label: string }[] = [
     { value: 'bug', label: '🐞 Bug' },
@@ -47,6 +47,18 @@ export default function FeedbackWidget() {
     const [sending, setSending] = useState(false);
 
     const http = useHttp<Record<string, never>, { ok: boolean }>({});
+
+    // Object URLs are scoped to whatever `previewUrl` currently points at; this
+    // revokes the previous one whenever it's replaced (reopen, reset) and
+    // whatever is left when the widget unmounts, without relying on a stale
+    // closure over `previewUrl` inside an event handler.
+    useEffect(() => {
+        return () => {
+            if (previewUrl) {
+                URL.revokeObjectURL(previewUrl);
+            }
+        };
+    }, [previewUrl]);
 
     if (!enabled) {
         return null;
@@ -85,24 +97,23 @@ export default function FeedbackWidget() {
         setMessage('');
         setType('bug');
         setScreenshot(null);
-        if (previewUrl) {
-            URL.revokeObjectURL(previewUrl);
-        }
+        // The revoke-on-change effect (keyed on previewUrl) cleans up the
+        // outgoing object URL; this just clears the preview itself.
         setPreviewUrl(null);
         setIncludeShot(true);
     }
 
     function submit() {
-        const data = buildFeedbackFormData({
-            type,
-            message: message.trim(),
-            url: window.location.href,
-            browser: navigator.userAgent,
-            screenshot: includeShot ? screenshot : null,
-        });
-
         setSending(true);
-        http.transform(() => data);
+        http.transform(() =>
+            buildFeedbackPayload({
+                type,
+                message: message.trim(),
+                url: window.location.href,
+                browser: navigator.userAgent,
+                screenshot: includeShot ? screenshot : null,
+            }),
+        );
         void http.post(FeedbackController.url(), {
             onSuccess: () => {
                 toast.success("Thanks — we've got it.");
