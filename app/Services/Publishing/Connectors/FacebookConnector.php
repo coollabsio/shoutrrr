@@ -9,6 +9,7 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\PostFormat;
 use App\Enums\UsageCategory;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
@@ -17,6 +18,7 @@ use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -61,6 +63,16 @@ class FacebookConnector implements PublishConnector
         )));
 
         $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
+
+        $format = $context->target->format;
+
+        if ($format === PostFormat::Reels) {
+            if ($videoMedia === []) {
+                return PublishResult::failure(ErrorKind::Validation, 'Facebook Reels require a video.');
+            }
+
+            return $this->publishReel($context, $videoMedia[0], $pageId, $text, $token);
+        }
 
         if ($videoMedia !== []) {
             return $this->publishVideo($context, $videoMedia[0], $pageId, $text, $token);
@@ -264,6 +276,84 @@ class FacebookConnector implements PublishConnector
 
             if ($finish->json('success') !== true) {
                 return PublishResult::failure(ErrorKind::ServerError, 'Facebook did not confirm the video upload finished.');
+            }
+        } catch (FacebookRequestFailed $e) {
+            return $this->mapFailure($e->response);
+        } catch (ConnectionException $e) {
+            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+        }
+
+        return PublishResult::success([$videoId]);
+    }
+
+    /**
+     * Publish a Reel via the resumable /{page-id}/video_reels flow: start (returns
+     * an rupload URL + video id) → stream the file to that URL → finish PUBLISHED
+     * with the description. The video id is persisted after start so a retry
+     * resumes rather than restarts.
+     */
+    private function publishReel(PublishContext $context, PostMedia $media, string $pageId, string $text, string $token): PublishResult
+    {
+        $state = new MediaUploadState($context->target->media_upload_state);
+        $videoId = $state->remoteRef($media->id);
+        $blob = $state->blob($media->id);
+        $uploadUrl = is_string($blob['upload_url'] ?? null) ? $blob['upload_url'] : null;
+
+        $disk = Storage::disk($media->disk);
+        $totalSize = (int) $disk->size($media->path);
+        $reelsUrl = $this->baseUrl().'/'.$pageId.'/video_reels';
+
+        try {
+            if ($videoId === null || $uploadUrl === null) {
+                $start = $this->http->asForm()->post($reelsUrl, [
+                    'upload_phase' => 'start',
+                    'access_token' => $token,
+                ]);
+                $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $context->account, $start);
+
+                if ($start->failed()) {
+                    throw new FacebookRequestFailed($start);
+                }
+
+                $videoId = (string) $start->json('video_id');
+                $uploadUrl = (string) $start->json('upload_url');
+                $state->markUploaded($media->id, $videoId);
+                $state->setBlob($media->id, ['upload_url' => $uploadUrl]);
+                $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
+            }
+
+            $stream = $disk->readStream($media->path);
+            try {
+                $upload = $this->http
+                    ->withHeaders([
+                        'Authorization' => 'OAuth '.$token,
+                        'offset' => '0',
+                        'file_size' => (string) $totalSize,
+                    ])
+                    ->withBody(Utils::streamFor($stream), 'application/octet-stream')
+                    ->post($uploadUrl);
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $context->account, $upload);
+
+            if ($upload->failed()) {
+                throw new FacebookRequestFailed($upload);
+            }
+
+            $finish = $this->http->asForm()->post($reelsUrl, [
+                'upload_phase' => 'finish',
+                'video_id' => $videoId,
+                'video_state' => 'PUBLISHED',
+                'description' => $text,
+                'access_token' => $token,
+            ]);
+            $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $finish);
+
+            if ($finish->failed()) {
+                throw new FacebookRequestFailed($finish);
             }
         } catch (FacebookRequestFailed $e) {
             return $this->mapFailure($e->response);
