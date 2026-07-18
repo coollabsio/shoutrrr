@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Post;
 
+use App\Enums\PostFormat;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -39,7 +40,7 @@ class UpdatePostRequest extends FormRequest
             'targets' => ['array'],
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
-            'targets.*.format' => ['nullable', Rule::in(['feed', 'reels', 'story'])],
+            'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.segments' => ['array'],

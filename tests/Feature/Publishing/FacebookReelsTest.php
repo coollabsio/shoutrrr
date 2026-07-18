@@ -91,6 +91,22 @@ test('a reel finish response with success false maps to a server error', functio
         ->and($result->errorKind)->toBe(ErrorKind::ServerError);
 });
 
+test('a reel start response missing the video id or upload url fails without persisting state', function () {
+    Http::fake([
+        'https://graph.facebook.com/*/video_reels' => Http::response(['success' => true]),
+    ]);
+
+    $context = fbReelsContext(fbReelsVideo());
+    $result = app(FacebookConnector::class)->publish($context);
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::ServerError);
+
+    // No upload attempted, and no bogus resumable state left for a retry to trip on.
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'rupload.facebook.com'));
+    expect($context->target->fresh()->media_upload_state)->toBeNull();
+});
+
 test('a reel without a video fails validation before any http call', function () {
     Http::fake();
 

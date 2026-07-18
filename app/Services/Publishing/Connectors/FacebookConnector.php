@@ -325,6 +325,9 @@ class FacebookConnector implements PublishConnector
 
                 $videoId = (string) $start->json('video_id');
                 $uploadUrl = (string) $start->json('upload_url');
+                if ($videoId === '' || $uploadUrl === '') {
+                    return PublishResult::failure(ErrorKind::ServerError, 'Facebook did not return a video upload session.');
+                }
                 $state->markUploaded($media->id, $videoId);
                 $state->setBlob($media->id, ['upload_url' => $uploadUrl]);
                 $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
@@ -462,6 +465,9 @@ class FacebookConnector implements PublishConnector
 
                 $videoId = (string) $start->json('video_id');
                 $uploadUrl = (string) $start->json('upload_url');
+                if ($videoId === '' || $uploadUrl === '') {
+                    return PublishResult::failure(ErrorKind::ServerError, 'Facebook did not return a video upload session.');
+                }
                 $state->markUploaded($media->id, $videoId);
                 $state->setBlob($media->id, ['upload_url' => $uploadUrl]);
                 $context->target->forceFill(['media_upload_state' => $state->toArray()])->save();
