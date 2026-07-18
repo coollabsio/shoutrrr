@@ -49,4 +49,38 @@ return [
             ))),
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public legal pages
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for the workspace-owned Terms & Privacy pages served
+    | publicly at `/{slug}/terms` and `/{slug}/privacy`.
+    |
+    */
+    'legal' => [
+        // Maximum length (characters) accepted for a single legal document's
+        // Markdown source. Generous enough for real policies while bounding the
+        // stored payload.
+        'max_body_length' => (int) env('LEGAL_PAGE_MAX_BODY_LENGTH', 50000),
+
+        // Slugs a workspace may not claim, because they would collide with — or
+        // impersonate — first-party, top-level application routes. The public
+        // route already constrains its second segment to `terms|privacy`, so no
+        // real route can be shadowed; this list is defence-in-depth against
+        // confusing or phishing-friendly public URLs.
+        'reserved_slugs' => [
+            'about', 'account', 'accounts', 'admin', 'ai', 'analytics', 'api',
+            'app', 'assets', 'auth', 'billing', 'build', 'command-search',
+            'compose', 'connections', 'contact', 'dashboard', 'email',
+            'engagement', 'favicon', 'forgot-password', 'health', 'help', 'home',
+            'invitation', 'legal', 'login', 'logout', 'mcp', 'notifications',
+            'oauth', 'onboarding', 'password', 'post', 'posts', 'privacy',
+            'queue', 'register', 'reset-password', 'robots', 'settings', 'share',
+            'sitemap', 'status', 'storage', 'support', 'terms', 'two-factor',
+            'up', 'user', 'verify-email', 'workspace', 'workspace-invitations',
+            'workspace-mentions', 'workspaces', 'www',
+        ],
+    ],
 ];

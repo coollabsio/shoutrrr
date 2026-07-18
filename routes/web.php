@@ -3,6 +3,7 @@
 use App\Http\Controllers\CommandSearchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PublicLegalPageController;
 use App\Http\Controllers\PublicShareController;
 use App\Http\Controllers\WorkspaceMentionController;
 use App\Http\Middleware\NoIndex;
@@ -39,3 +40,13 @@ require __DIR__.'/settings.php';
 require __DIR__.'/accounts.php';
 require __DIR__.'/posts.php';
 require __DIR__.'/engagement.php';
+
+// Public, unauthenticated Terms & Privacy pages served from a workspace's
+// owner-chosen slug. Registered LAST and constrained to the two known document
+// types so it can never shadow a first-party route; `NoIndex` keeps the pages
+// out of search engines and the throttle guards against abuse.
+Route::get('{slug}/{document}', [PublicLegalPageController::class, 'show'])
+    ->middleware([NoIndex::class, 'throttle:30,1'])
+    ->where('slug', '[a-z0-9][a-z0-9-]{1,62}')
+    ->where('document', 'terms|privacy')
+    ->name('legal.show');

@@ -4,6 +4,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\Settings\ApiKeysController;
 use App\Http\Controllers\Settings\ConnectionsController;
 use App\Http\Controllers\Settings\InstanceSettingsController;
+use App\Http\Controllers\Settings\LegalPagesController;
 use App\Http\Controllers\Settings\NotificationPreferencesController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -29,6 +30,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/workspace/api-keys', [ApiKeysController::class, 'index'])->name('settings.workspace.api-keys');
     Route::post('settings/workspace/api-keys', [ApiKeysController::class, 'store'])->name('settings.workspace.api-keys.store');
     Route::delete('settings/workspace/api-keys/{apiKey}', [ApiKeysController::class, 'destroy'])->name('settings.workspace.api-keys.destroy');
+
+    Route::get('settings/workspace/legal', [LegalPagesController::class, 'edit'])->name('settings.workspace.legal');
+    Route::put('settings/workspace/legal', [LegalPagesController::class, 'update'])->name('settings.workspace.legal.update');
 
     Route::get('settings/connections', [ConnectionsController::class, 'edit'])->name('connections.edit');
     Route::delete('settings/connections/{socialAccount}', [ConnectionsController::class, 'destroy'])->name('connections.destroy');
