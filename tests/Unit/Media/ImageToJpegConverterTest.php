@@ -18,7 +18,7 @@ function transparentPng(int $width = 4, int $height = 4): string
 
 function mimeOf(string $bytes): string
 {
-    return (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
+    return (new finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
 }
 
 it('re-encodes a png to a real jpeg stored alongside the original', function () {
@@ -44,6 +44,32 @@ it('re-encodes a png to a real jpeg stored alongside the original', function () 
 
     // The original is left untouched for the other destinations sharing this file.
     Storage::disk('public')->assertExists('media/ws/pic.png');
+});
+
+it('flattens transparency onto a white background', function () {
+    // JPEG has no alpha. Meta reads the bytes, and transparent PNGs must not pick up a
+    // black backdrop, so pin the flatten colour to white. This guards against a driver
+    // swap (Imagick flattens to black) or an Intervention default change silently
+    // regressing the visual output — the old browser-side converter that guaranteed this
+    // was removed, leaving this server path as the sole guarantee.
+    Storage::fake('public');
+    Storage::disk('public')->put('media/ws/pic.png', transparentPng());
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/ws/pic.png',
+        'mime' => 'image/png',
+    ]);
+
+    $converted = app(ImageToJpegConverter::class)->convert($media);
+
+    $image = imagecreatefromstring((string) Storage::disk('public')->get($converted->path));
+    $corner = imagecolorat($image, 0, 0);
+
+    // Allow a small margin for JPEG's lossy compression on a flat white field.
+    expect(($corner >> 16) & 0xFF)->toBeGreaterThanOrEqual(250)
+        ->and(($corner >> 8) & 0xFF)->toBeGreaterThanOrEqual(250)
+        ->and($corner & 0xFF)->toBeGreaterThanOrEqual(250);
 });
 
 it('reuses an already-derived jpeg instead of re-encoding on a retry', function () {
