@@ -249,6 +249,7 @@ export function useAutosave({
         state.destination,
         state.overrideByAccount,
         state.autoSplitByAccount,
+        state.formatByAccount,
         state.media,
     ]);
 

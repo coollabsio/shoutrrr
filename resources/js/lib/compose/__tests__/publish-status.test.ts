@@ -24,6 +24,7 @@ function target(id: string, status: TargetStatus): TargetView {
         sections: ['x'],
         content_override: null,
         auto_split: true,
+        format: 'feed',
         issues: [],
         status,
         error_kind: null,

@@ -56,6 +56,7 @@ function target(id: string, status: TargetStatus): TargetView {
         sections: ['Hello'],
         content_override: null,
         auto_split: true,
+        format: 'feed',
         issues: [],
         status,
         error_kind: null,

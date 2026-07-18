@@ -11,6 +11,8 @@ export type PlatformName =
     | 'threads'
     | 'discord';
 
+export type PostFormat = 'feed' | 'reels' | 'story';
+
 /**
  * Per-platform display text / handles for a mention, plus the non-platform
  * `linkedin_urn` key which carries a raw LinkedIn company URL / numeric id /
@@ -127,6 +129,7 @@ export type TargetView = {
     sections: string[];
     content_override: { segments?: string[]; media_ids?: string[] } | null;
     auto_split: boolean;
+    format: PostFormat;
     issues: string[];
     status: TargetStatus;
     error_kind: string | null;
