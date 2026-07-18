@@ -18,7 +18,15 @@ const PLATFORMS: PlatformName[] = [
     'instagram',
     'threads',
 ];
-const MENTION_PLATFORMS = new Set<PlatformName>(['x', 'bluesky']);
+// Platforms whose posts auto-link a bare `@handle`, so a real @mention is worth
+// offering alongside plain text. Facebook is intentionally excluded: its post
+// API does not auto-link `@text`, so a "mention" there would publish literally.
+const MENTION_PLATFORMS = new Set<PlatformName>([
+    'x',
+    'bluesky',
+    'instagram',
+    'threads',
+]);
 const HANDLE_PATTERN = /(^|\s)@([a-zA-Z0-9_.-]{0,50})(?=\s|$|[.,!?;:])/g;
 
 export function createMention(label: string): MentionPlaceholder {
@@ -75,14 +83,42 @@ export function updateMentionHandle(
     useMention = true,
 ): MentionPlaceholder {
     const handles = { ...mention.handles };
-    const trimmed = handle.trim();
-    if (trimmed === '') {
-        delete handles[platform];
-    } else {
-        handles[platform] = mentionTextInput(platform, trimmed, useMention);
-    }
+    // Keep an emptied field as '' rather than deleting the key, so the editor
+    // input stays blank instead of snapping back to the mention-name fallback
+    // (`handles[platform] ?? label`). Saving is gated separately.
+    //
+    // Pass the raw `handle` (not a trimmed copy) into `mentionTextInput`: this is
+    // a controlled input, so trimming on every keystroke would eat the trailing
+    // space between words, stranding a plain-text name like "Acme Corp" at
+    // "AcmeCorp". A whitespace-only value still counts as empty.
+    handles[platform] =
+        handle.trim() === ''
+            ? ''
+            : mentionTextInput(platform, handle, useMention);
 
     return { ...mention, handles };
+}
+
+/** Whether a platform supports a real `@` mention (vs. plain display text only). */
+export function platformSupportsMention(platform: PlatformName): boolean {
+    return MENTION_PLATFORMS.has(platform);
+}
+
+/**
+ * True when any active platform's display/handle field has been cleared. Used to
+ * block saving a half-filled mention to the workspace while still letting the
+ * empty field be used in the current post.
+ */
+export function hasEmptyActiveHandle(
+    mention: MentionPlaceholder,
+    platforms: PlatformName[],
+): boolean {
+    return platforms.some(
+        (platform) =>
+            mentionInputValue(
+                mention.handles[platform] ?? mention.label,
+            ).trim() === '',
+    );
 }
 
 /**

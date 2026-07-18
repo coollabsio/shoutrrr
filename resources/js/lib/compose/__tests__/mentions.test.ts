@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
     createMention,
     extractLinkedInOrgRef,
+    hasEmptyActiveHandle,
     mentionInputValue,
     mentionToken,
     normalizeLinkedInUrn,
+    platformSupportsMention,
     replaceMentionLabel,
     replaceMentionTokens,
     savedMentionToPlaceholder,
@@ -66,8 +68,8 @@ describe('mention helpers', () => {
             bluesky: '@Guest',
             linkedin: 'Guest',
             facebook: 'Guest',
-            instagram: 'Guest',
-            threads: 'Guest',
+            instagram: '@Guest',
+            threads: '@Guest',
         });
         expect(mentionToken(mention.id)).toBe(`{{mention:${mention.id}}}`);
     });
@@ -101,6 +103,73 @@ describe('mention helpers', () => {
         expect(updateMentionHandle(mention, 'x', 'guest_x').handles.x).toBe(
             '@guest_x',
         );
+    });
+
+    it('keeps an emptied handle blank instead of snapping back to the label', () => {
+        const mention: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { x: '@guest', linkedin: 'Guest' },
+        };
+
+        // Clearing the field stores '' (not a delete), so the input stays blank
+        // rather than falling back to `handles[platform] ?? label`.
+        const cleared = updateMentionHandle(mention, 'linkedin', '', false);
+
+        expect(cleared.handles.linkedin).toBe('');
+        expect(cleared.handles.linkedin ?? cleared.label).toBe('');
+    });
+
+    it('preserves inter-word whitespace while a plain-text name is typed', () => {
+        const mention: MentionPlaceholder = {
+            id: 'acme',
+            label: '@acme',
+            handles: { linkedin: 'Acme' },
+        };
+
+        // Controlled input: trimming here would eat the trailing space between
+        // words and strand "Acme Corp" at "AcmeCorp".
+        const typed = updateMentionHandle(mention, 'linkedin', 'Acme ', false);
+        expect(typed.handles.linkedin).toBe('Acme ');
+
+        const finished = updateMentionHandle(
+            typed,
+            'linkedin',
+            'Acme Corp',
+            false,
+        );
+        expect(finished.handles.linkedin).toBe('Acme Corp');
+    });
+
+    it('flags an empty active handle so saving can be blocked', () => {
+        const filled: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { x: '@guest', linkedin: 'Guest' },
+        };
+        expect(hasEmptyActiveHandle(filled, ['x', 'linkedin'])).toBe(false);
+
+        const cleared = updateMentionHandle(filled, 'linkedin', '', false);
+        expect(hasEmptyActiveHandle(cleared, ['x', 'linkedin'])).toBe(true);
+
+        // An untouched platform falls back to the label, so it is not "empty".
+        const untouched: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: {},
+        };
+        expect(hasEmptyActiveHandle(untouched, ['x'])).toBe(false);
+    });
+
+    it('knows which platforms support an @ mention', () => {
+        // Platforms that auto-link a bare @handle offer a mention toggle.
+        expect(platformSupportsMention('x')).toBe(true);
+        expect(platformSupportsMention('bluesky')).toBe(true);
+        expect(platformSupportsMention('instagram')).toBe(true);
+        expect(platformSupportsMention('threads')).toBe(true);
+        // LinkedIn has its own company-tag flow; Facebook's API won't auto-link.
+        expect(platformSupportsMention('linkedin')).toBe(false);
+        expect(platformSupportsMention('facebook')).toBe(false);
     });
 
     it('can store plain display text for a platform instead of an @ mention', () => {
@@ -232,8 +301,8 @@ describe('syncMentionsFromText', () => {
                     bluesky: '@guest',
                     linkedin: 'guest',
                     facebook: 'guest',
-                    instagram: 'guest',
-                    threads: 'guest',
+                    instagram: '@guest',
+                    threads: '@guest',
                 },
             },
         ]);
@@ -251,8 +320,8 @@ describe('syncMentionsFromText', () => {
                     bluesky: '@',
                     linkedin: '',
                     facebook: '',
-                    instagram: '',
-                    threads: '',
+                    instagram: '@',
+                    threads: '@',
                 },
             },
         ]);
@@ -271,8 +340,8 @@ describe('syncMentionsFromText', () => {
                     bluesky: '@guest',
                     linkedin: 'guest',
                     facebook: 'guest',
-                    instagram: 'guest',
-                    threads: 'guest',
+                    instagram: '@guest',
+                    threads: '@guest',
                 },
             },
         ]);
