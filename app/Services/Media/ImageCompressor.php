@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Media;
 
-use Intervention\Image\Drivers\Gd\Driver as GdDriver;
-use Intervention\Image\Format;
-use Intervention\Image\ImageManager;
+use Illuminate\Support\Facades\Image;
 use Throwable;
 
 /**
@@ -55,33 +53,35 @@ class ImageCompressor
             return CompressionResult::untouched($bytes, $mime);
         }
 
-        // Read dimensions from the header only (no canvas allocation) and refuse to decode
-        // pathologically large images, guarding the worker against decompression bombs.
+        // Read dimensions from the header only (no canvas allocation): undecodable bytes and
+        // pathologically large canvases are refused before any decode, guarding the worker
+        // against decompression bombs.
         $info = @getimagesizefromstring($bytes);
-        if (is_array($info) && ($info[0] * $info[1]) > $this->maxPixels) {
-            return CompressionResult::untouched($bytes, $mime);
-        }
 
-        try {
-            $image = ImageManager::usingDriver(GdDriver::class)->decodeBinary($bytes);
-        } catch (Throwable) {
+        if (! is_array($info) || ($info[0] * $info[1]) > $this->maxPixels) {
             return CompressionResult::untouched($bytes, $mime);
         }
 
         // Prefer WebP where the platform accepts it: at a given byte budget it keeps
-        // noticeably more quality than JPEG (and preserves alpha). Otherwise use JPEG.
-        $useWebp = in_array('image/webp', $allowedMimes, true) && function_exists('imagewebp');
-        $format = $useWebp ? Format::WEBP : Format::JPEG;
-        $outMime = $useWebp ? 'image/webp' : 'image/jpeg';
+        // noticeably more quality than JPEG (and preserves alpha). The encode attempt
+        // (below) falls back to JPEG if the active image driver cannot produce WebP, so
+        // this is a preference, not a hard requirement on any one driver.
+        $preferWebp = in_array('image/webp', $allowedMimes, true);
+        $outMime = 'image/jpeg';
 
-        $longestEdge = max($image->width(), $image->height());
+        $longestEdge = max(1, $info[0], $info[1]);
 
         while (true) {
             // Walk quality down from the ceiling and take the first (highest) encoding that
             // fits, so we preserve as much quality as the byte budget allows before resorting
-            // to downscaling.
+            // to downscaling. The immutable pipeline re-encodes from the source bytes each
+            // pass; publishing runs in a queued job and the iteration count is bounded.
             for ($quality = self::QUALITY_CEIL; $quality >= self::QUALITY_FLOOR; $quality -= self::QUALITY_STEP) {
-                $encoded = (string) $image->encodeUsingFormat($format, quality: $quality);
+                $encoded = $this->encode($bytes, max(1, $longestEdge), $preferWebp, $quality, $outMime);
+
+                if ($encoded === null) {
+                    return CompressionResult::untouched($bytes, $mime);
+                }
 
                 if (strlen($encoded) <= $maxBytes) {
                     return CompressionResult::compressed($encoded, $outMime);
@@ -93,8 +93,40 @@ class ImageCompressor
             if ($longestEdge < self::DIMENSION_FLOOR) {
                 return CompressionResult::untouched($bytes, $mime);
             }
+        }
+    }
 
-            $image->scaleDown($longestEdge, $longestEdge);
+    /**
+     * Encode the source bytes at the given longest edge and quality, preferring WebP where
+     * the platform accepts it and falling back to JPEG when the active driver cannot encode
+     * WebP (so a GD build without WebP, or the Imagick driver, still degrades to a valid
+     * accepted format rather than shipping the uncompressed original).
+     *
+     * @param  int<1, max>  $edge  Longest-edge cap passed to scale() (never upsizes).
+     * @param  int<1, 100>  $quality  Encoder quality.
+     * @param  string  $outMime  Set by reference to the mime of the format actually encoded.
+     * @return string|null The encoded bytes, or null if neither format could be encoded.
+     */
+    private function encode(string $bytes, int $edge, bool $preferWebp, int $quality, ?string &$outMime = null): ?string
+    {
+        if ($preferWebp) {
+            try {
+                $encoded = (string) Image::fromBytes($bytes)->scale($edge, $edge)->toWebp()->quality($quality)->toBytes();
+                $outMime = 'image/webp';
+
+                return $encoded;
+            } catch (Throwable) {
+                // WebP unsupported on the active driver/build — fall through to JPEG.
+            }
+        }
+
+        try {
+            $encoded = (string) Image::fromBytes($bytes)->scale($edge, $edge)->toJpg()->quality($quality)->toBytes();
+            $outMime = 'image/jpeg';
+
+            return $encoded;
+        } catch (Throwable) {
+            return null;
         }
     }
 }
