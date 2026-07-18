@@ -358,10 +358,14 @@ class FacebookConnector implements PublishConnector
                 'description' => $text,
                 'access_token' => $token,
             ]);
-            $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $finish);
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $context->account, $finish);
 
             if ($finish->failed()) {
                 throw new FacebookRequestFailed($finish);
+            }
+
+            if ($finish->json('success') !== true) {
+                return PublishResult::failure(ErrorKind::ServerError, 'Facebook did not confirm the reel was published.');
             }
         } catch (FacebookRequestFailed $e) {
             return $this->mapFailure($e->response);
@@ -489,7 +493,7 @@ class FacebookConnector implements PublishConnector
                 'video_id' => $videoId,
                 'access_token' => $token,
             ]);
-            $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $finish);
+            $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_UPLOAD, $context->account, $finish);
 
             if ($finish->failed()) {
                 throw new FacebookRequestFailed($finish);
