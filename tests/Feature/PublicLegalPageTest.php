@@ -10,7 +10,7 @@ use App\Models\WorkspaceMembership;
 test('serves a published terms page with a non-indexable, non-identifying payload', function (): void {
     $page = LegalPage::factory()->create([
         'slug' => 'acme-legal',
-        'terms_body' => "# Terms\n\nBy using this service you agree to the following terms.",
+        'terms_body' => '<h2>Terms</h2><p>By using this service you agree to the following terms.</p>',
     ]);
 
     $this->get('/acme-legal/terms')
@@ -22,7 +22,8 @@ test('serves a published terms page with a non-indexable, non-identifying payloa
             ->has('page', fn ($prop) => $prop
                 ->where('type', 'terms')
                 ->where('title', 'Terms of Service')
-                ->where('content_html', fn ($html) => str_contains((string) $html, 'agree to the following terms'))
+                // The stored HTML is served as-is (already sanitized on write).
+                ->where('content_html', '<h2>Terms</h2><p>By using this service you agree to the following terms.</p>')
                 // The public "last updated" date is the document's publish timestamp.
                 ->where('updated_at', $page->terms_published_at->toIso8601String())
             )
@@ -32,7 +33,7 @@ test('serves a published terms page with a non-indexable, non-identifying payloa
 test('serves a published privacy page with its neutral title', function (): void {
     LegalPage::factory()->create([
         'slug' => 'acme-legal',
-        'privacy_body' => "# Privacy\n\nWe respect your privacy and only collect what we need.",
+        'privacy_body' => '<h2>Privacy</h2><p>We respect your privacy and only collect what we need.</p>',
     ]);
 
     $this->get('/acme-legal/privacy')
@@ -107,7 +108,7 @@ test('is visible across workspaces because the global scope is bypassed', functi
     LegalPage::factory()->create([
         'workspace_id' => $workspaceB->id,
         'slug' => 'workspace-b-legal',
-        'terms_body' => "# Terms\n\nCross workspace visible content.",
+        'terms_body' => '<p>Cross workspace visible content.</p>',
     ]);
 
     $workspaceA = Workspace::factory()->create();

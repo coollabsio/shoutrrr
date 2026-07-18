@@ -109,8 +109,8 @@ test('owner can create the legal page with a slug and both documents published',
         ->from(route('settings.workspace.legal'))
         ->put(route('settings.workspace.legal.update'), [
             'slug' => 'company-legal',
-            'terms_body' => "# Terms\n\nBy using this you agree.",
-            'privacy_body' => "# Privacy\n\nWe protect your data.",
+            'terms_body' => '<h2>Terms</h2><p>By using this you agree.</p>',
+            'privacy_body' => '<h2>Privacy</h2><p>We protect your data.</p>',
             'terms_published' => true,
             'privacy_published' => true,
         ])
@@ -130,19 +130,47 @@ test('owner can create the legal page with a slug and both documents published',
         ->and($page->privacy_published_at)->not->toBeNull();
 });
 
-test('publishing a document with a blank body fails validation on that field', function (): void {
+test('publishing a document with no visible content fails validation', function (string $body): void {
     [, $owner] = legalWorkspaceOwner();
 
     $this->actingAs($owner)
         ->putJson(route('settings.workspace.legal.update'), [
             'slug' => 'company-legal',
-            'terms_body' => '',
+            'terms_body' => $body,
             'terms_published' => true,
-            'privacy_body' => 'Privacy content',
+            'privacy_body' => '<p>Privacy content</p>',
             'privacy_published' => false,
         ])
         ->assertStatus(422)
         ->assertJsonValidationErrors('terms_body');
+})->with([
+    'empty string' => [''],
+    'empty editor markup' => ['<p></p>'],
+    'whitespace only' => ['<p>   </p>'],
+]);
+
+test('dangerous HTML is stripped before it is stored', function (): void {
+    [$workspace, $owner] = legalWorkspaceOwner();
+
+    $this->actingAs($owner)
+        ->put(route('settings.workspace.legal.update'), [
+            'slug' => 'company-legal',
+            'terms_body' => '<h2>Terms</h2><p onclick="steal()">ok</p><script>alert(1)</script><a href="javascript:alert(1)">x</a>',
+            'privacy_body' => '<p>Privacy</p>',
+            'terms_published' => true,
+            'privacy_published' => true,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $page = LegalPage::withoutGlobalScopes()->where('workspace_id', $workspace->id)->first();
+
+    expect($page->terms_body)
+        ->toContain('<h2>Terms</h2>')
+        ->toContain('ok')
+        ->not->toContain('<script')
+        ->not->toContain('onclick')
+        ->not->toContain('javascript:');
 });
 
 test('a body longer than the configured maximum is rejected', function (): void {
@@ -284,8 +312,8 @@ test('editing a published document advances its last-updated date', function ():
     $this->actingAs($owner)
         ->put(route('settings.workspace.legal.update'), [
             'slug' => 'company-legal',
-            'terms_body' => 'Materially rewritten terms.',  // changed
-            'privacy_body' => $page->privacy_body,          // unchanged
+            'terms_body' => '<p>Materially rewritten terms.</p>',  // changed
+            'privacy_body' => $page->privacy_body,                 // unchanged
             'terms_published' => true,
             'privacy_published' => true,
         ])

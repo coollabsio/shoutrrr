@@ -16,8 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Override;
 
 /**
- * A workspace's public legal presence: one owner-chosen slug plus the Markdown
- * source and publish state for each {@see LegalPageType} document.
+ * A workspace's public legal presence: one owner-chosen slug plus the sanitized
+ * HTML body and publish state for each {@see LegalPageType} document.
  *
  * Reads through the authenticated app are constrained to the current workspace
  * by {@see HasWorkspaceScope}. The public routes intentionally bypass that scope
@@ -55,7 +55,7 @@ class LegalPage extends Model
     }
 
     /**
-     * The Markdown source for the given document, if any.
+     * The sanitized HTML body for the given document, if any.
      */
     public function bodyFor(LegalPageType $type): ?string
     {

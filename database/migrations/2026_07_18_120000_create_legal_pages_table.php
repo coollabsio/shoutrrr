@@ -23,7 +23,8 @@ return new class extends Migration
             // pages never exposes the workspace's internal identifier.
             $table->string('slug')->unique();
 
-            // Markdown sources; a null publish timestamp marks the document as an
+            // Sanitized rich-text HTML bodies (see App\Services\Legal\LegalHtmlSanitizer,
+            // applied on write). A null publish timestamp marks the document as an
             // unpublished draft that the public routes must treat as absent.
             $table->longText('terms_body')->nullable();
             $table->timestamp('terms_published_at')->nullable();

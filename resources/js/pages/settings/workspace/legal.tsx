@@ -23,8 +23,8 @@ import {
     InputGroupText,
 } from '@/components/ui/input-group';
 import { Label } from '@/components/ui/label';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { useClipboard } from '@/hooks/use-clipboard';
 import type { LegalPageType, LegalSettings } from '@/types/legal';
 
@@ -90,7 +90,7 @@ function PublicUrlRow({ url }: { url: string }) {
 }
 
 /**
- * One document editor: publish toggle, Markdown source, validation error, and —
+ * One document editor: publish toggle, rich-text body, validation error, and —
  * once the saved state has it published under a slug — its live public URL.
  */
 function LegalDocumentCard({
@@ -122,8 +122,10 @@ function LegalDocumentCard({
             <CardHeader>
                 <CardTitle>{title}</CardTitle>
                 <CardDescription>
-                    Written in Markdown and rendered on your public{' '}
+                    Rendered on your public{' '}
                     <span className="font-mono text-xs">/{type}</span> page.
+                    Paste from Google Docs, Word, or a PDF — formatting is
+                    preserved.
                 </CardDescription>
                 <CardAction>
                     <Label htmlFor={switchId} className="gap-2">
@@ -140,21 +142,15 @@ function LegalDocumentCard({
                 </CardAction>
             </CardHeader>
             <CardContent className="space-y-2">
-                <Label htmlFor={bodyId} className="sr-only">
-                    {title} content
-                </Label>
-                <Textarea
+                <RichTextEditor
                     id={bodyId}
+                    ariaLabel={`${title} content`}
                     value={body}
-                    onChange={(event) => onBodyChange(event.target.value)}
+                    onChange={onBodyChange}
                     disabled={disabled}
                     aria-invalid={!!error}
-                    placeholder={`# ${title}\n\nDescribe your ${title.toLowerCase()} here. Markdown headings, lists, links, and emphasis are supported.`}
-                    className="min-h-56 font-mono text-xs leading-relaxed"
+                    placeholder={`Describe your ${title.toLowerCase()} here, or paste it in.`}
                 />
-                <p className="text-xs text-muted-foreground">
-                    Markdown is supported.
-                </p>
                 <InputError message={error} />
                 {publicUrl && <PublicUrlRow url={publicUrl} />}
             </CardContent>

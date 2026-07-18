@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\UpdateLegalPageRequest;
 use App\Models\LegalPage;
 use App\Models\User;
+use App\Services\Legal\LegalHtmlSanitizer;
 use Carbon\CarbonInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -49,7 +50,7 @@ class LegalPagesController extends Controller
         ]);
     }
 
-    public function update(UpdateLegalPageRequest $request): RedirectResponse
+    public function update(UpdateLegalPageRequest $request, LegalHtmlSanitizer $sanitizer): RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -61,8 +62,10 @@ class LegalPagesController extends Controller
         $existing = LegalPage::query()->where('workspace_id', $workspace->id)->first();
         $validated = $request->validated();
 
-        $termsBody = $this->normalizeBody($validated['terms_body'] ?? null);
-        $privacyBody = $this->normalizeBody($validated['privacy_body'] ?? null);
+        // Sanitize on write — the server is the security boundary, not the
+        // editor. sanitize() also collapses an empty document to null.
+        $termsBody = $sanitizer->sanitize($validated['terms_body'] ?? null);
+        $privacyBody = $sanitizer->sanitize($validated['privacy_body'] ?? null);
 
         $attributes = [
             'slug' => $validated['slug'],
@@ -116,13 +119,5 @@ class LegalPagesController extends Controller
         }
 
         return now();
-    }
-
-    /**
-     * Collapse an empty string to null so unpublished drafts store consistently.
-     */
-    private function normalizeBody(?string $body): ?string
-    {
-        return ($body === null || $body === '') ? null : $body;
     }
 }

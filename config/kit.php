@@ -61,9 +61,10 @@ return [
     */
     'legal' => [
         // Maximum length (characters) accepted for a single legal document's
-        // Markdown source. Generous enough for real policies while bounding the
-        // stored payload.
-        'max_body_length' => (int) env('LEGAL_PAGE_MAX_BODY_LENGTH', 50000),
+        // rich-text HTML body before sanitization. Generous enough for real
+        // policies (HTML markup inflates the raw length) while bounding both the
+        // request payload and the sanitizer's input.
+        'max_body_length' => (int) env('LEGAL_PAGE_MAX_BODY_LENGTH', 100000),
 
         // Slugs a workspace may not claim, because they would collide with — or
         // impersonate — first-party, top-level application routes. The public

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\LegalPageType;
-use App\Services\Legal\LegalPageRenderer;
 use App\Services\Legal\LegalPageService;
 use App\Support\PublicLegalPageView;
 use Inertia\Inertia;
@@ -27,7 +26,6 @@ class PublicLegalPageController extends Controller
         string $slug,
         string $document,
         LegalPageService $service,
-        LegalPageRenderer $renderer,
     ): Response {
         // The route already constrains {document} to `terms|privacy`; tryFrom is
         // defence in depth so an unexpected value can never reach the query.
@@ -41,7 +39,7 @@ class PublicLegalPageController extends Controller
         abort_if($page === null, 404);
 
         return Inertia::render('legal/show', [
-            'page' => PublicLegalPageView::make($page, $type, $renderer),
+            'page' => PublicLegalPageView::make($page, $type),
         ]);
     }
 }

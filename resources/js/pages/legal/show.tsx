@@ -136,9 +136,9 @@ export default function LegalShow({ page }: Props) {
                     </div>
 
                     {/*
-                     * `content_html` is rendered from Markdown and sanitized on
-                     * the server (see App\Support\PublicLegalPageView), so it is
-                     * safe to inject here.
+                     * `content_html` is sanitized on the server on write (see
+                     * App\Services\Legal\LegalHtmlSanitizer) and served under a
+                     * strict CSP, so it is safe to inject here.
                      */}
                     <article
                         className="legal-prose mt-8 animate-in duration-700 fill-mode-both fade-in"

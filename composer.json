@@ -26,7 +26,8 @@
         "laravel/socialite": "^5.27",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
-        "sentry/sentry-laravel": "^4.26"
+        "sentry/sentry-laravel": "^4.26",
+        "symfony/html-sanitizer": "^8.1"
     },
     "require-dev": {
         "driftingly/rector-laravel": "^2.5",

@@ -63,19 +63,35 @@ class UpdateLegalPageRequest extends FormRequest
     }
 
     /**
-     * A document can only be published once it actually has content.
+     * A document can only be published once it actually has content. Bodies are
+     * rich-text HTML, so an "empty" editor still submits markup (e.g. "<p></p>");
+     * check the visible text, not the raw string.
      */
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            if ($this->boolean('terms_published') && blank($this->input('terms_body'))) {
+            if ($this->boolean('terms_published') && $this->isBlankHtml($this->input('terms_body'))) {
                 $validator->errors()->add('terms_body', 'Add terms content before publishing this page.');
             }
 
-            if ($this->boolean('privacy_published') && blank($this->input('privacy_body'))) {
+            if ($this->boolean('privacy_published') && $this->isBlankHtml($this->input('privacy_body'))) {
                 $validator->errors()->add('privacy_body', 'Add privacy content before publishing this page.');
             }
         });
+    }
+
+    /**
+     * Whether an HTML body has no visible text (null, whitespace, or markup-only).
+     */
+    private function isBlankHtml(mixed $html): bool
+    {
+        if (! is_string($html)) {
+            return true;
+        }
+
+        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5);
+
+        return trim(str_replace("\u{00A0}", ' ', $text)) === '';
     }
 
     /**
