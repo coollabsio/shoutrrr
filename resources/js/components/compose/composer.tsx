@@ -1,5 +1,5 @@
 import { Link, useHttp } from '@inertiajs/react';
-import { Eye, Pin, Plug } from 'lucide-react';
+import { Eye, Pin, Plug, TriangleAlert } from 'lucide-react';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -19,7 +19,10 @@ import {
     shouldShowConnectAccountPrompt,
     type ComposerState,
 } from '@/lib/compose/composer-state';
-import { precheckNotices } from '@/lib/compose/format-notices';
+import {
+    describeFormatNotice,
+    precheckNotices,
+} from '@/lib/compose/format-notices';
 import {
     wouldMixVideoAndImages,
     wouldViolateBlueskyGif,
@@ -791,6 +794,9 @@ export default function Composer({
         formatByAccount: state.formatByAccount,
         media: state.media,
     });
+    const activeNotices = activeAccount
+        ? (notices.find((n) => n.accountId === activeAccount.id)?.notices ?? [])
+        : [];
 
     return (
         <div
@@ -955,6 +961,28 @@ export default function Composer({
                         </Link>
                     </div>
                 ) : null}
+
+                {activeAccount && activeNotices.length > 0 && (
+                    <div className="-mt-1 space-y-1 px-4 pb-3.5 sm:px-[26px]">
+                        {activeNotices.map((notice) => (
+                            <p
+                                key={notice}
+                                className="flex items-start gap-1.5 text-[12px] text-amber-700 dark:text-amber-500"
+                            >
+                                <TriangleAlert
+                                    className="mt-0.5 size-3.5 shrink-0"
+                                    aria-hidden="true"
+                                />
+                                <span>
+                                    {describeFormatNotice(
+                                        notice,
+                                        activeAccount.platform,
+                                    )}
+                                </span>
+                            </p>
+                        ))}
+                    </div>
+                )}
 
                 {/* Toolbar — editing controls when editable; just the attached
                 media when read-only (skipped entirely if there's none). */}
@@ -1163,7 +1191,6 @@ export default function Composer({
                             onOptimisticSubmit={publishStatus.applyOptimistic}
                             onServerPost={publishStatus.applyServerPost}
                             blockedAccounts={blockedAccounts}
-                            notices={notices}
                             limits={limits}
                         />
                     </div>
