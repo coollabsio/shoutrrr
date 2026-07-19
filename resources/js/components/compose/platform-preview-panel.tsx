@@ -17,6 +17,9 @@ import { LinkedText } from '@/lib/linked-text';
 import { cn } from '@/lib/utils';
 import type { PlatformName } from '@/types/compose';
 
+import { FacebookPreview } from './preview/facebook-preview';
+import { InstagramPreview } from './preview/instagram-preview';
+
 const PLATFORM_LABELS: Record<PlatformName, string> = {
     x: 'X',
     bluesky: 'Bluesky',
@@ -238,6 +241,10 @@ export function PlatformPreviewPanel({
                         </p>
                     </div>
                 </div>
+            ) : preview.platform === 'instagram' ? (
+                <InstagramPreview preview={preview} />
+            ) : preview.platform === 'facebook' ? (
+                <FacebookPreview preview={preview} />
             ) : (
                 <div className="p-4">
                     <div className="rounded-3xl border border-border bg-background px-4 pt-4 shadow-xs">
