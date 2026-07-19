@@ -14,8 +14,6 @@ use App\Models\PostTarget;
 use App\Support\InstanceSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -23,8 +21,6 @@ use Inertia\Response;
 
 class AnalyticsController extends Controller
 {
-    private const int ROLLUP_TTL_SECONDS = 600;
-
     public function index(Request $request, InstanceSettings $settings): Response
     {
         abort_unless($request->user()->can('viewAny', Post::class), 403);
@@ -32,7 +28,7 @@ class AnalyticsController extends Controller
         $days = max(7, min(365, (int) $request->integer('days', 90)));
 
         return Inertia::render('analytics/index', [
-            ...$this->cachedPayload($days),
+            ...$this->buildPayload($days),
             'rangeDays' => $days,
             'polling' => [
                 'post_metrics_enabled' => collect(Platform::cases())
@@ -47,29 +43,6 @@ class AnalyticsController extends Controller
                     ->all(),
             ],
         ]);
-    }
-
-    /**
-     * Cache the workspace's rollup for a short window. Analytics already lags to
-     * the metrics-poll cadence, so a bounded TTL is imperceptible while
-     * range-switching becomes cheap. Keyed by workspace so tenants never share a
-     * rollup; falls back to a live build if no workspace context is set.
-     *
-     * @return array{accounts: array<int, array<string, mixed>>, posts: array<int, array<string, mixed>>, comparison: array{top: array<int, array<string, mixed>>, bottom: array<int, array<string, mixed>>}}
-     */
-    private function cachedPayload(int $days): array
-    {
-        $workspaceId = Context::get('workspace_id');
-
-        if ($workspaceId === null) {
-            return $this->buildPayload($days);
-        }
-
-        return Cache::remember(
-            "analytics-rollup:{$workspaceId}:{$days}",
-            self::ROLLUP_TTL_SECONDS,
-            fn (): array => $this->buildPayload($days),
-        );
     }
 
     /**
