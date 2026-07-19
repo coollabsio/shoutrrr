@@ -93,7 +93,7 @@ type DrilldownErrorEvent = {
 };
 
 type Drilldown = {
-    workspace: { id: string; name: string };
+    workspace: { id: string; name: string; quota: WorkspaceQuota };
     counters: DrilldownCounter[];
     error_events: DrilldownErrorEvent[];
 } | null;
@@ -270,10 +270,6 @@ export default function InstanceUsage({
             },
         });
     }
-
-    const selectedRow =
-        workspace_usage.data.find((row) => row.id === filters.workspace) ??
-        null;
 
     return (
         <>
@@ -540,12 +536,10 @@ export default function InstanceUsage({
                     <div className="flex-1 space-y-8 px-6 pb-6">
                         {drilldown ? (
                             <>
-                                {selectedRow && (
-                                    <WorkspaceQuotaEditor
-                                        workspaceId={drilldown.workspace.id}
-                                        quota={selectedRow.quota}
-                                    />
-                                )}
+                                <WorkspaceQuotaEditor
+                                    workspaceId={drilldown.workspace.id}
+                                    quota={drilldown.workspace.quota}
+                                />
 
                                 <UsageTable
                                     title="Monthly counters"

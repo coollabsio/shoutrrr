@@ -43,3 +43,14 @@ it('returns drilldown data only when a workspace is selected', function (): void
         ->get(route('instance-settings.usage', ['workspace' => $workspace->id]))
         ->assertInertia(fn ($page) => $page->has('drilldown.counters')->has('drilldown.error_events'));
 });
+
+it('includes the workspace quota in the drilldown payload', function (): void {
+    $workspace = Workspace::factory()->create(['name' => 'Initech', 'is_initial' => false]);
+    app(InstanceSettings::class)->setXWorkspaceBudget($workspace->id, 'unlimited');
+
+    $this->actingAs($this->owner)
+        ->get(route('instance-settings.usage', ['workspace' => $workspace->id]))
+        ->assertInertia(fn ($page) => $page
+            ->where('drilldown.workspace.id', $workspace->id)
+            ->where('drilldown.workspace.quota.kind', 'unlimited'));
+});

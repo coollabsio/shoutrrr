@@ -161,8 +161,6 @@ class InstanceSettingsController extends Controller
             ->when($sort === 'name', fn ($q) => $q->orderBy('name'), fn ($q) => $q->orderByDesc('x_cost_sum')->orderBy('name'));
 
         $workspaces = $query->paginate(20)->withQueryString()->through(function (Workspace $workspace) use ($gate, $settings, $pricing, $previousPeriodStart, $defaultDollars): array {
-            $override = $settings->xWorkspaceBudget($workspace->id);
-            $unlimited = $workspace->is_initial || $override === 'unlimited';
             $currentCostUsd = round($gate->currentXCostMicrousd($workspace) / 1_000_000, 6);
             $budgetMicrousd = $gate->monthlyXBudgetMicrousd($workspace);
 
@@ -179,10 +177,7 @@ class InstanceSettingsController extends Controller
                 'x_estimated_cost_usd' => $currentCostUsd,
                 'x_previous_cost_usd' => $previousCostUsd,
                 'x_cost_delta_usd' => round($currentCostUsd - $previousCostUsd, 6),
-                'quota' => [
-                    'kind' => $unlimited ? 'unlimited' : (is_int($override) ? 'custom' : 'default'),
-                    'dollars' => $unlimited ? null : (is_int($override) ? $override / 100 : $defaultDollars),
-                ],
+                'quota' => $this->xQuotaFor($workspace, $settings, $defaultDollars),
                 'percent_used' => ($budgetMicrousd === null || $budgetMicrousd === 0)
                     ? null
                     : round(($currentCostUsd * 1_000_000) / $budgetMicrousd * 100, 1),
@@ -206,16 +201,16 @@ class InstanceSettingsController extends Controller
             'x_usage_available' => (string) config('services.x.bearer_token', '') !== '',
             ...($workspaceId === null
                 ? []
-                : ['drilldown' => fn () => $this->workspaceDrilldown($workspaceId, $pricing)]),
+                : ['drilldown' => fn () => $this->workspaceDrilldown($workspaceId, $pricing, $settings, $defaultDollars)]),
         ]);
     }
 
     /**
-     * @return array{workspace: array{id: string, name: string}, counters: list<array<string, mixed>>, error_events: list<array<string, mixed>>}|null
+     * @return array{workspace: array{id: string, name: string, quota: array{kind: string, dollars: float|null}}, counters: list<array<string, mixed>>, error_events: list<array<string, mixed>>}|null
      */
-    private function workspaceDrilldown(string $workspaceId, UsagePricing $pricing): ?array
+    private function workspaceDrilldown(string $workspaceId, UsagePricing $pricing, InstanceSettings $settings, float $defaultDollars): ?array
     {
-        $workspace = Workspace::query()->select(['id', 'name'])->find($workspaceId);
+        $workspace = Workspace::query()->select(['id', 'name', 'is_initial'])->find($workspaceId);
 
         if ($workspace === null) {
             return null;
@@ -252,9 +247,27 @@ class InstanceSettingsController extends Controller
             ])->all();
 
         return [
-            'workspace' => ['id' => $workspace->id, 'name' => $workspace->name],
+            'workspace' => [
+                'id' => $workspace->id,
+                'name' => $workspace->name,
+                'quota' => $this->xQuotaFor($workspace, $settings, $defaultDollars),
+            ],
             'counters' => $counters,
             'error_events' => $errorEvents,
+        ];
+    }
+
+    /**
+     * @return array{kind: string, dollars: float|null}
+     */
+    private function xQuotaFor(Workspace $workspace, InstanceSettings $settings, float $defaultDollars): array
+    {
+        $override = $settings->xWorkspaceBudget($workspace->id);
+        $unlimited = $workspace->is_initial || $override === 'unlimited';
+
+        return [
+            'kind' => $unlimited ? 'unlimited' : (is_int($override) ? 'custom' : 'default'),
+            'dollars' => $unlimited ? null : (is_int($override) ? $override / 100 : $defaultDollars),
         ];
     }
 
