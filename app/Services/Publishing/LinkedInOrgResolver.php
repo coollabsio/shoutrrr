@@ -9,6 +9,7 @@ use App\Models\ConnectedAccount;
 use App\Services\Publishing\Connectors\LinkedInConnector;
 use App\Support\LinkedInOrg;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -51,6 +52,21 @@ class LinkedInOrgResolver
 
         if ($vanityName === null) {
             return LinkedInOrgLookupResult::error("Could not derive an organization id or vanity name from \"{$reference}\".");
+        }
+
+        $cacheKey = "linkedin-org:{$account->id}:{$vanityName}";
+
+        // Cache the primitive fields, not the DTO — objects do not round-trip
+        // reliably through every cache store (the database store deserializes
+        // them as __PHP_Incomplete_Class), whereas arrays always do.
+        $cached = Cache::get($cacheKey);
+
+        if (is_array($cached) && isset($cached['urn'])) {
+            return LinkedInOrgLookupResult::success(
+                (string) $cached['urn'],
+                $cached['name'] !== null ? (string) $cached['name'] : null,
+                (int) $cached['status'],
+            );
         }
 
         try {
@@ -106,7 +122,18 @@ class LinkedInOrgResolver
 
         $name = isset($first['localizedName']) ? (string) $first['localizedName'] : null;
 
-        return LinkedInOrgLookupResult::success('urn:li:organization:'.$first['id'], $name, $status);
+        $result = LinkedInOrgLookupResult::success('urn:li:organization:'.$first['id'], $name, $status);
+
+        // Org identity (URN + localized name) is immutable, so a long TTL is safe
+        // and this saves scarce partner-gated lookup quota. Only successes are
+        // cached — gated/404/error returns above stay uncached so they self-heal.
+        Cache::put($cacheKey, [
+            'urn' => $result->urn,
+            'name' => $result->name,
+            'status' => $result->status,
+        ], now()->addDays(30));
+
+        return $result;
     }
 
     private function apiVersion(): string
