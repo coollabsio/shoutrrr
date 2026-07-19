@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import InstanceSettingsController from '@/actions/App/Http/Controllers/Settings/InstanceSettingsController';
 import Heading from '@/components/common/heading';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,8 +93,19 @@ type DrilldownErrorEvent = {
     occurred_at: string;
 };
 
+type DrilldownOwner = {
+    name: string;
+    email: string;
+    avatar: string;
+};
+
 type Drilldown = {
-    workspace: { id: string; name: string; quota: WorkspaceQuota };
+    workspace: {
+        id: string;
+        name: string;
+        quota: WorkspaceQuota;
+        owner: DrilldownOwner | null;
+    };
     counters: DrilldownCounter[];
     error_events: DrilldownErrorEvent[];
 } | null;
@@ -536,6 +548,10 @@ export default function InstanceUsage({
                     <div className="flex-1 space-y-8 px-6 pb-6">
                         {drilldown ? (
                             <>
+                                <WorkspaceOwner
+                                    owner={drilldown.workspace.owner}
+                                />
+
                                 <WorkspaceQuotaEditor
                                     workspaceId={drilldown.workspace.id}
                                     quota={drilldown.workspace.quota}
@@ -798,6 +814,32 @@ function UsageStat({ label, value }: { label: string; value: string }) {
         <div className="rounded-md border bg-muted/30 p-3">
             <div className="text-xs text-muted-foreground">{label}</div>
             <div className="mt-1 text-lg font-semibold">{value}</div>
+        </div>
+    );
+}
+
+function WorkspaceOwner({ owner }: { owner: DrilldownOwner | null }) {
+    return (
+        <div className="space-y-2">
+            <h3 className="text-sm font-medium">Owner</h3>
+            {owner ? (
+                <div className="flex items-center gap-3 rounded-md border p-3">
+                    <Avatar className="size-9">
+                        <AvatarImage src={owner.avatar} alt={owner.name} />
+                        <AvatarFallback>{owner.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                        <p className="truncate font-medium">{owner.name}</p>
+                        <p className="truncate text-sm text-muted-foreground">
+                            {owner.email}
+                        </p>
+                    </div>
+                </div>
+            ) : (
+                <p className="rounded-md border p-3 text-sm text-muted-foreground">
+                    This workspace has no owner assigned.
+                </p>
+            )}
         </div>
     );
 }

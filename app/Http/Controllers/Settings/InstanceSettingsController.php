@@ -221,7 +221,10 @@ class InstanceSettingsController extends Controller
      */
     private function workspaceDrilldown(string $workspaceId, UsagePricing $pricing, InstanceSettings $settings, float $defaultDollars): ?array
     {
-        $workspace = Workspace::query()->select(['id', 'name', 'is_initial'])->find($workspaceId);
+        $workspace = Workspace::query()
+            ->select(['id', 'name', 'is_initial', 'owner_id'])
+            ->with('owner:id,name,email,avatar_path')
+            ->find($workspaceId);
 
         if ($workspace === null) {
             return null;
@@ -262,6 +265,11 @@ class InstanceSettingsController extends Controller
                 'id' => $workspace->id,
                 'name' => $workspace->name,
                 'quota' => $this->xQuotaFor($workspace, $settings, $defaultDollars),
+                'owner' => $workspace->owner === null ? null : [
+                    'name' => $workspace->owner->name,
+                    'email' => $workspace->owner->email,
+                    'avatar' => $workspace->owner->avatar,
+                ],
             ],
             'counters' => $counters,
             'error_events' => $errorEvents,

@@ -54,3 +54,15 @@ it('includes the workspace quota in the drilldown payload', function (): void {
             ->where('drilldown.workspace.id', $workspace->id)
             ->where('drilldown.workspace.quota.kind', 'unlimited'));
 });
+
+it('includes the workspace owner in the drilldown payload', function (): void {
+    $workspaceOwner = User::factory()->create(['name' => 'Ada Owner', 'email' => 'ada@example.test']);
+    $workspace = Workspace::factory()->for($workspaceOwner, 'owner')->create(['name' => 'Umbrella']);
+
+    $this->actingAs($this->owner)
+        ->get(route('instance-settings.usage', ['workspace' => $workspace->id]))
+        ->assertInertia(fn ($page) => $page
+            ->where('drilldown.workspace.owner.name', 'Ada Owner')
+            ->where('drilldown.workspace.owner.email', 'ada@example.test')
+            ->has('drilldown.workspace.owner.avatar'));
+});
