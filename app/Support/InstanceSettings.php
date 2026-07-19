@@ -228,7 +228,7 @@ class InstanceSettings
     }
 
     /**
-     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, linkedin_community_management_enabled?: bool, engagement_polling_enabled?: bool|array<string, bool>, post_metrics_polling_enabled?: bool|array<string, bool>, account_metrics_polling_enabled?: bool|array<string, bool>, engagement_poll_interval_minutes?: array<string, int>, post_metrics_poll_interval_minutes?: array<string, int>, account_metrics_poll_interval_minutes?: array<string, int>}  $values
+     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, linkedin_community_management_enabled?: bool, engagement_polling_enabled?: bool|array<string, bool>, post_metrics_polling_enabled?: bool|array<string, bool>, account_metrics_polling_enabled?: bool|array<string, bool>, engagement_poll_interval_minutes?: array<string, int>, post_metrics_poll_interval_minutes?: array<string, int>, account_metrics_poll_interval_minutes?: array<string, int>, x_workspace_budgets?: array<string, int|string>}  $values
      */
     public function update(array $values): void
     {

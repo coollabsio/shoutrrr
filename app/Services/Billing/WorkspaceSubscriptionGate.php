@@ -7,6 +7,7 @@ namespace App\Services\Billing;
 use App\Enums\Platform;
 use App\Models\Workspace;
 use App\Services\Usage\UsageMeter;
+use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
 use App\Support\UsagePricing;
 use Carbon\CarbonImmutable;
@@ -25,7 +26,7 @@ class WorkspaceSubscriptionGate
     public function __construct(
         private readonly UsageMeter $usageMeter,
         private readonly UsagePricing $pricing,
-        private readonly \App\Support\InstanceSettings $settings,
+        private readonly InstanceSettings $settings,
     ) {}
 
     public function isEnabled(): bool
@@ -133,7 +134,7 @@ class WorkspaceSubscriptionGate
      * A workspace with no X ceiling: the initial workspace, or one an instance
      * owner has explicitly marked unlimited.
      */
-    private function isXUnlimited(Workspace $workspace): bool
+    public function isXUnlimited(Workspace $workspace): bool
     {
         return $workspace->is_initial || $this->settings->xWorkspaceBudget($workspace->id) === 'unlimited';
     }

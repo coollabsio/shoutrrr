@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils';
 
 import { WorkspaceQuotaEditor } from './instance-usage/workspace-quota-editor';
 
-type WorkspaceQuota = {
+export type WorkspaceQuota = {
     kind: 'default' | 'custom' | 'unlimited';
     dollars: number | null;
 };
@@ -103,6 +103,7 @@ type Drilldown = {
     workspace: {
         id: string;
         name: string;
+        is_initial: boolean;
         quota: WorkspaceQuota;
         owner: DrilldownOwner | null;
     };
@@ -555,6 +556,7 @@ export default function InstanceUsage({
                                 <WorkspaceQuotaEditor
                                     workspaceId={drilldown.workspace.id}
                                     quota={drilldown.workspace.quota}
+                                    locked={drilldown.workspace.is_initial}
                                 />
 
                                 <UsageTable

@@ -177,7 +177,7 @@ class InstanceSettingsController extends Controller
                 'x_estimated_cost_usd' => $currentCostUsd,
                 'x_previous_cost_usd' => $previousCostUsd,
                 'x_cost_delta_usd' => round($currentCostUsd - $previousCostUsd, 6),
-                'quota' => $this->xQuotaFor($workspace, $settings, $defaultDollars),
+                'quota' => $this->xQuotaFor($workspace, $gate, $settings, $defaultDollars),
                 'percent_used' => ($budgetMicrousd === null || $budgetMicrousd === 0)
                     ? null
                     : round(($currentCostUsd * 1_000_000) / $budgetMicrousd * 100, 1),
@@ -212,14 +212,14 @@ class InstanceSettingsController extends Controller
             'x_usage_available' => (string) config('services.x.bearer_token', '') !== '',
             ...($workspaceId === null
                 ? []
-                : ['drilldown' => fn () => $this->workspaceDrilldown($workspaceId, $pricing, $settings, $defaultDollars)]),
+                : ['drilldown' => fn () => $this->workspaceDrilldown($workspaceId, $pricing, $gate, $settings, $defaultDollars)]),
         ]);
     }
 
     /**
      * @return array{workspace: array{id: string, name: string, quota: array{kind: string, dollars: float|null}}, counters: list<array<string, mixed>>, error_events: list<array<string, mixed>>}|null
      */
-    private function workspaceDrilldown(string $workspaceId, UsagePricing $pricing, InstanceSettings $settings, float $defaultDollars): ?array
+    private function workspaceDrilldown(string $workspaceId, UsagePricing $pricing, WorkspaceSubscriptionGate $gate, InstanceSettings $settings, float $defaultDollars): ?array
     {
         $workspace = Workspace::query()
             ->select(['id', 'name', 'is_initial', 'owner_id'])
@@ -264,7 +264,8 @@ class InstanceSettingsController extends Controller
             'workspace' => [
                 'id' => $workspace->id,
                 'name' => $workspace->name,
-                'quota' => $this->xQuotaFor($workspace, $settings, $defaultDollars),
+                'is_initial' => $workspace->is_initial,
+                'quota' => $this->xQuotaFor($workspace, $gate, $settings, $defaultDollars),
                 'owner' => $workspace->owner === null ? null : [
                     'name' => $workspace->owner->name,
                     'email' => $workspace->owner->email,
@@ -279,10 +280,12 @@ class InstanceSettingsController extends Controller
     /**
      * @return array{kind: string, dollars: float|null}
      */
-    private function xQuotaFor(Workspace $workspace, InstanceSettings $settings, float $defaultDollars): array
+    private function xQuotaFor(Workspace $workspace, WorkspaceSubscriptionGate $gate, InstanceSettings $settings, float $defaultDollars): array
     {
         $override = $settings->xWorkspaceBudget($workspace->id);
-        $unlimited = $workspace->is_initial || $override === 'unlimited';
+        // Reuse the gate's single definition of "no X ceiling" so the badge shown
+        // to owners can never disagree with what the gate actually enforces.
+        $unlimited = $gate->isXUnlimited($workspace);
 
         return [
             'kind' => $unlimited ? 'unlimited' : (is_int($override) ? 'custom' : 'default'),

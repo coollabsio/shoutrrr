@@ -55,6 +55,16 @@ it('includes the workspace quota in the drilldown payload', function (): void {
             ->where('drilldown.workspace.quota.kind', 'unlimited'));
 });
 
+it('flags the initial workspace in the drilldown so its quota editor locks', function (): void {
+    $workspace = Workspace::factory()->create(['name' => 'Prime', 'is_initial' => true]);
+
+    $this->actingAs($this->owner)
+        ->get(route('instance-settings.usage', ['workspace' => $workspace->id]))
+        ->assertInertia(fn ($page) => $page
+            ->where('drilldown.workspace.is_initial', true)
+            ->where('drilldown.workspace.quota.kind', 'unlimited'));
+});
+
 it('includes the workspace owner in the drilldown payload', function (): void {
     $workspaceOwner = User::factory()->create(['name' => 'Ada Owner', 'email' => 'ada@example.test']);
     $workspace = Workspace::factory()->for($workspaceOwner, 'owner')->create(['name' => 'Umbrella']);
