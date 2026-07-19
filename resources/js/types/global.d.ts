@@ -30,6 +30,7 @@ declare module '@inertiajs/core' {
                 analytics: boolean;
                 billing?: boolean;
                 engagement?: boolean;
+                feedback?: boolean;
             };
             instance: { isOwner: boolean };
             billing?: {

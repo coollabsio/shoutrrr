@@ -11,6 +11,7 @@ use App\Models\PostTargetReply;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
 use App\Support\CommunityStats;
+use App\Support\FeedbackConfig;
 use App\Support\InstanceSettings;
 use App\Support\Notifications\NotificationPresenter;
 use Illuminate\Http\Request;
@@ -73,6 +74,7 @@ class HandleInertiaRequests extends Middleware
                 'analytics' => app(InstanceSettings::class)->metricsEnabled(),
                 'billing' => (bool) config('subscriptions.enabled'),
                 'engagement' => app(InstanceSettings::class)->engagementEnabled(),
+                'feedback' => FeedbackConfig::enabled(),
             ],
             'instance' => [
                 'isOwner' => $request->user()?->isInstanceOwner() ?? false,
