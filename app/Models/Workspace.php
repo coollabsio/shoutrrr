@@ -214,4 +214,12 @@ class Workspace extends Model
     {
         return $this->hasMany(ConnectedAccount::class);
     }
+
+    /**
+     * @return HasMany<UsagePeriodCounter, $this>
+     */
+    public function usagePeriodCounters(): HasMany
+    {
+        return $this->hasMany(UsagePeriodCounter::class);
+    }
 }

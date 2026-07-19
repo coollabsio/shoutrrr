@@ -1,0 +1,45 @@
+<?php
+
+use App\Enums\InstanceRole;
+use App\Models\User;
+use App\Models\Workspace;
+use App\Support\InstanceSettings;
+
+beforeEach(function (): void {
+    $this->owner = User::factory()->create(['instance_role' => InstanceRole::Owner]);
+});
+
+it('paginates and searches the workspace usage table', function (): void {
+    Workspace::factory()->create(['name' => 'Acme']);
+    Workspace::factory()->create(['name' => 'Globex']);
+
+    $this->actingAs($this->owner)
+        ->get(route('instance-settings.usage', ['search' => 'Acme']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/instance-usage')
+            ->has('workspace_usage.data', 1)
+            ->where('workspace_usage.data.0.name', 'Acme')
+            ->has('instance.workspace_count'));
+});
+
+it('exposes the quota kind for each workspace', function (): void {
+    $custom = Workspace::factory()->create(['name' => 'Custom', 'is_initial' => false]);
+    app(InstanceSettings::class)->setXWorkspaceBudget($custom->id, 'unlimited');
+
+    $this->actingAs($this->owner)
+        ->get(route('instance-settings.usage', ['search' => 'Custom']))
+        ->assertInertia(fn ($page) => $page->where('workspace_usage.data.0.quota.kind', 'unlimited'));
+});
+
+it('returns drilldown data only when a workspace is selected', function (): void {
+    $workspace = Workspace::factory()->create(['name' => 'Zeta']);
+
+    $this->actingAs($this->owner)
+        ->get(route('instance-settings.usage'))
+        ->assertInertia(fn ($page) => $page->missing('drilldown'));
+
+    $this->actingAs($this->owner)
+        ->get(route('instance-settings.usage', ['workspace' => $workspace->id]))
+        ->assertInertia(fn ($page) => $page->has('drilldown.counters')->has('drilldown.error_events'));
+});
