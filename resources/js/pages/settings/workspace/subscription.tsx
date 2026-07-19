@@ -58,6 +58,15 @@ function formatXBudget(value: number | null): string {
         : formatMicrousd(value as number);
 }
 
+// Renders the natural-language clause describing the monthly X budget, e.g.
+// "an unlimited monthly X/Twitter usage budget" or "a $5.00/month X/Twitter
+// usage budget" — avoids the awkward "a Unlimited/month" construction.
+function xBudgetPhrase(value: number | null): string {
+    return isUnlimitedValue(value)
+        ? 'an unlimited monthly X/Twitter usage budget'
+        : `a ${formatMicrousd(value as number)}/month X/Twitter usage budget`;
+}
+
 export function remainingXBudgetLabel(
     monthlyXBudgetRemainingMicrousd: number | null,
 ): string {
@@ -119,9 +128,8 @@ export default function Subscription({
                             </div>
                             <p className="text-sm text-muted-foreground">
                                 Includes unlimited seats, unlimited publishes to
-                                every other platform, and a{' '}
-                                {formatXBudget(monthlyXBudgetMicrousd)}
-                                /month X/Twitter usage budget.
+                                every other platform, and{' '}
+                                {xBudgetPhrase(monthlyXBudgetMicrousd)}.
                             </p>
                         </div>
 

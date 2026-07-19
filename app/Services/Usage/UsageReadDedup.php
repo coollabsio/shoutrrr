@@ -14,6 +14,13 @@ use Illuminate\Support\Facades\Date;
  * cache flush resets the window (small transient over-count, never under). Dedup
  * is per (workspace, platform) so cost stays attributable per workspace, which
  * intentionally does not match X's app-level dedup (documented trade-off).
+ *
+ * The dedup key is (workspace, platform, day, id) and intentionally omits the
+ * operation, so the same id read under two different read operations on the
+ * same day is billed once — whichever runs first — matching X's app-level
+ * per-object dedup. Cost attribution then depends on ordering, which is
+ * acceptable since the overlap (e.g. own-post metrics vs. others' replies) is
+ * negligible.
  */
 class UsageReadDedup
 {

@@ -131,7 +131,7 @@ type XUsageResponse = {
 
 type Props = {
     filters: Filters;
-    instance: {
+    instance_summary: {
         workspace_count: number;
         x_estimated_cost_usd: number;
     };
@@ -185,7 +185,7 @@ export function canFetchXUsage(isConfigured: boolean, isProcessing: boolean) {
 
 export default function InstanceUsage({
     filters,
-    instance,
+    instance_summary,
     workspace_usage,
     pricing_source,
     pricing_currency,
@@ -298,12 +298,12 @@ export default function InstanceUsage({
                     <div className="grid gap-3 sm:grid-cols-2">
                         <UsageStat
                             label="Workspaces"
-                            value={instance.workspace_count.toLocaleString()}
+                            value={instance_summary.workspace_count.toLocaleString()}
                         />
                         <UsageStat
                             label="Est. X spend this period"
                             value={formatMoney(
-                                instance.x_estimated_cost_usd,
+                                instance_summary.x_estimated_cost_usd,
                                 pricing_currency,
                             )}
                         />

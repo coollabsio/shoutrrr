@@ -191,7 +191,18 @@ class InstanceSettingsController extends Controller
 
         return Inertia::render('settings/instance-usage', [
             'filters' => ['search' => $search === '' ? null : $search, 'sort' => $sort, 'workspace' => $workspaceId],
-            'instance' => [
+            // Renamed from 'instance' to avoid colliding with the shared top-level
+            // `instance` prop (HandleInertiaRequests::share -> instance.isOwner),
+            // which Inertia would otherwise merge over with this page's array.
+            //
+            // Note on time windows: this header total is calendar-month
+            // (UsagePeriodCounter, period_start = start of this month), while a
+            // subscribed workspace's per-row x_estimated_cost_usd below is
+            // billing-cycle-anchored (WorkspaceSubscriptionGate::currentXCostMicrousd).
+            // Under subscriptions.enabled the sum of rows may not equal this total;
+            // they reconcile exactly when subscriptions are disabled, since both are
+            // calendar-month in that case.
+            'instance_summary' => [
                 'workspace_count' => Workspace::query()->count(),
                 'x_estimated_cost_usd' => $this->estimateCountersCost($pricing, $instanceXRows),
             ],

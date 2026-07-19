@@ -149,8 +149,8 @@ test('instance owner can view usage details', function () {
             ->component('settings/instance-usage')
             ->where('filters.workspace', null)
             ->where('x_usage_available', true)
-            ->where('instance.workspace_count', 1)
-            ->where('instance.x_estimated_cost_usd', 0.03)
+            ->where('instance_summary.workspace_count', 1)
+            ->where('instance_summary.x_estimated_cost_usd', 0.03)
             ->has('workspace_usage.data', 1)
             ->where('workspace_usage.data.0.name', 'Usage Workspace')
             ->where('workspace_usage.data.0.x_estimated_cost_usd', 0.03)
@@ -205,6 +205,13 @@ test('instance usage does not override shared workspace shell props', function (
 
     expect($response->inertiaProps())->toHaveKey('workspace_usage')
         ->and($response->inertiaProps('workspaces'))->toHaveKeys(['enabled', 'current', 'all']);
+
+    // Guards the shared `instance.isOwner` prop (used by the sidebar and command
+    // palette to show instance settings) against being clobbered by the page's
+    // own usage-summary data, which is exposed separately as `instance_summary`.
+    $response->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('instance.isOwner', true)
+        ->has('instance_summary.workspace_count'));
 });
 
 test('instance usage includes x pricing estimates', function () {
@@ -239,7 +246,7 @@ test('instance usage includes x pricing estimates', function () {
             ->where('workspace_usage.data.0.x_estimated_cost_usd', 0.03)
             ->where('workspace_usage.data.0.x_previous_cost_usd', 0.015)
             ->where('workspace_usage.data.0.x_cost_delta_usd', 0.015)
-            ->where('instance.x_estimated_cost_usd', 0.03));
+            ->where('instance_summary.x_estimated_cost_usd', 0.03));
 });
 
 test('instance owner can fetch x api usage', function () {

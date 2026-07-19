@@ -20,7 +20,7 @@ it('paginates and searches the workspace usage table', function (): void {
             ->component('settings/instance-usage')
             ->has('workspace_usage.data', 1)
             ->where('workspace_usage.data.0.name', 'Acme')
-            ->has('instance.workspace_count'));
+            ->has('instance_summary.workspace_count'));
 });
 
 it('exposes the quota kind for each workspace', function (): void {
