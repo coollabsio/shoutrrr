@@ -766,6 +766,7 @@ export default function Composer({
               ),
               limit: limitForAccount(previewAccount),
               autoSplit: state.autoSplitByAccount[previewAccount.id] ?? true,
+              format: state.formatByAccount[previewAccount.id] ?? 'feed',
           })
         : buildPlatformPreview({
               account: PREVIEW_FALLBACK_ACCOUNT,
@@ -775,6 +776,7 @@ export default function Composer({
               excludedMediaIds: new Set(),
               limit: limitForPlatform('x'),
               autoSplit: true,
+              format: 'feed',
           });
 
     const blockedAccounts = precheckDestinations({
