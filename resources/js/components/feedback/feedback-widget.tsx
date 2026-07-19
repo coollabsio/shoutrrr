@@ -1,7 +1,7 @@
 import { useHttp, usePage } from '@inertiajs/react';
 import { toBlob } from 'html-to-image';
 import { MessageSquarePlus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import FeedbackController from '@/actions/App/Http/Controllers/FeedbackController';
@@ -77,6 +77,12 @@ export default function FeedbackWidget() {
     const [capturing, setCapturing] = useState(false);
     const [sending, setSending] = useState(false);
 
+    // Monotonic id for the in-flight capture. Because capture() is async
+    // (idle-wait + toBlob), a reopen can start a new capture while an older one
+    // is still running; only the latest may write its result, so a slow earlier
+    // capture never overwrites a fresh one with a stale screenshot.
+    const captureIdRef = useRef(0);
+
     const http = useHttp<Record<string, never>, { ok: boolean }>({});
 
     // Object URLs are scoped to whatever `previewUrl` currently points at; this
@@ -96,7 +102,16 @@ export default function FeedbackWidget() {
     }
 
     async function capture() {
+        captureIdRef.current += 1;
+        const id = captureIdRef.current;
+
+        // Drop any prior capture immediately so a reopen shows the skeleton, not
+        // the previous page's stale screenshot, and nothing stale can be sent
+        // while the fresh one is in flight.
         setCapturing(true);
+        setScreenshot(null);
+        setPreviewUrl(null);
+
         try {
             // html-to-image clones the whole page and reads computed styles for
             // every node — hundreds of ms of *synchronous* main-thread work. Wait
@@ -122,21 +137,31 @@ export default function FeedbackWidget() {
                 // image URL, forcing a full re-download of the page's images on
                 // each open. Cached images are fine for a screenshot.
             });
+
+            // A newer open superseded this capture — discard the stale result.
+            if (captureIdRef.current !== id) {
+                return;
+            }
             setScreenshot(blob);
             setPreviewUrl(blob ? URL.createObjectURL(blob) : null);
         } catch {
+            if (captureIdRef.current !== id) {
+                return;
+            }
             setScreenshot(null);
             setPreviewUrl(null);
         } finally {
-            setCapturing(false);
+            if (captureIdRef.current === id) {
+                setCapturing(false);
+            }
         }
     }
 
     function onOpenChange(next: boolean) {
         setOpen(next);
         if (next) {
-            // Snapshot the breadcrumbs leading up to this moment, alongside the
-            // screenshot, so both reflect the page the user was just on.
+            // Re-snapshot on every open — the user may have navigated or acted
+            // since last time, so the breadcrumbs and screenshot must be fresh.
             setDiagnostics(snapshotDiagnostics());
             void capture();
         }
