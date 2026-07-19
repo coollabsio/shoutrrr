@@ -25,6 +25,8 @@ function actingOwnerInWorkspace(): User
     return $user;
 }
 
+afterEach(fn () => AppVersion::fake(null));
+
 test('cloud defers a billing prop for billing managers and no community prop', function () {
     config(['subscriptions.enabled' => true]);
     actingOwnerInWorkspace();
@@ -63,6 +65,7 @@ test('members without billing.manage do not receive a billing prop', function ()
 });
 
 test('self-hosted defers a community prop and the update flag, no billing prop', function () {
+    AppVersion::fake('v1.3.0-rc.5');
     config(['subscriptions.enabled' => false]);
     config(['instance.community.repo' => 'coollabsio/shoutrrr']);
     config(['instance.community.sponsor_url' => 'https://github.com/sponsors/coollabsio']);
@@ -84,6 +87,7 @@ test('self-hosted defers a community prop and the update flag, no billing prop',
 });
 
 test('self-hosted names the available version and links to its release', function () {
+    AppVersion::fake('v1.3.0-rc.5');
     config(['subscriptions.enabled' => false]);
     config(['instance.community.repo' => 'coollabsio/shoutrrr']);
     Cache::put(CommunityStats::LatestOverallCacheKey, 'v99.0.0');

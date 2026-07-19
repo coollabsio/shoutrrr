@@ -27,6 +27,16 @@ class AppVersion
         return self::$current = trim((string) file_get_contents($path));
     }
 
+    /**
+     * Pin the running version for tests so channel-dependent behaviour does not
+     * couple to whatever the shipped VERSION file happens to contain. Passing
+     * null clears the override and restores reading from the VERSION file.
+     */
+    public static function fake(?string $version): void
+    {
+        self::$current = $version;
+    }
+
     public static function isOutdated(?string $latest): bool
     {
         if ($latest === null) {

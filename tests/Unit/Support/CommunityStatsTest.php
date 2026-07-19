@@ -4,6 +4,8 @@ use App\Support\AppVersion;
 use App\Support\CommunityStats;
 use Illuminate\Support\Facades\Cache;
 
+afterEach(fn () => AppVersion::fake(null));
+
 test('stars returns the cached integer or null', function () {
     expect(CommunityStats::stars())->toBeNull();
 
@@ -19,6 +21,7 @@ test('selectLatest returns the overall tag on a prerelease channel and the stabl
 });
 
 test('latestVersion follows the running channel (prerelease reads the overall key)', function () {
+    AppVersion::fake('v1.3.0-rc.5');
     expect(AppVersion::isPrerelease())->toBeTrue();
     expect(CommunityStats::latestVersion())->toBeNull();
 
@@ -27,6 +30,7 @@ test('latestVersion follows the running channel (prerelease reads the overall ke
 });
 
 test('updateAvailable reflects the overall tag versus the running prerelease', function () {
+    AppVersion::fake('v1.3.0-rc.5');
     expect(CommunityStats::updateAvailable())->toBeFalse();
 
     Cache::put(CommunityStats::LatestOverallCacheKey, 'v99.0.0');

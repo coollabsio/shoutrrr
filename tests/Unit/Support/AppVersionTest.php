@@ -2,6 +2,8 @@
 
 use App\Support\AppVersion;
 
+afterEach(fn () => AppVersion::fake(null));
+
 test('current reads and trims the VERSION file', function () {
     expect(AppVersion::current())
         ->toBe(trim(file_get_contents(base_path('VERSION'))))
@@ -21,6 +23,11 @@ test('isPrerelease detects prerelease suffixes and defaults to the running versi
     expect(AppVersion::isPrerelease('1.4.0-beta.1'))->toBeTrue();
     expect(AppVersion::isPrerelease('v1.3.0'))->toBeFalse();
     expect(AppVersion::isPrerelease('1.2.3'))->toBeFalse();
-    // Defaults to the running version, which is a prerelease (v1.3.0-rc.5).
+
+    // Defaults to the running version.
+    AppVersion::fake('v1.3.0-rc.5');
     expect(AppVersion::isPrerelease())->toBeTrue();
+
+    AppVersion::fake('v1.3.0');
+    expect(AppVersion::isPrerelease())->toBeFalse();
 });
