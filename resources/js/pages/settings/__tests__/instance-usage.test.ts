@@ -8,12 +8,27 @@ import {
 } from '../instance-usage';
 
 describe('instance usage filters', () => {
-    it('omits cleared platform filters from the query', () => {
-        expect(usageQuery(null, null)).toEqual({});
-        expect(usageQuery('workspace-1', null)).toEqual({
-            workspace: 'workspace-1',
-        });
-        expect(usageQuery(null, 'x')).toEqual({ platform: 'x' });
+    it('omits default/cleared filters from the query', () => {
+        expect(
+            usageQuery({ search: null, sort: 'spend', workspace: null }),
+        ).toEqual({});
+        expect(
+            usageQuery({
+                search: 'acme',
+                sort: 'spend',
+                workspace: null,
+            }),
+        ).toEqual({ search: 'acme' });
+        expect(
+            usageQuery({ search: null, sort: 'name', workspace: null }),
+        ).toEqual({ sort: 'name' });
+        expect(
+            usageQuery({
+                search: null,
+                sort: 'spend',
+                workspace: 'workspace-1',
+            }),
+        ).toEqual({ workspace: 'workspace-1' });
     });
 });
 
