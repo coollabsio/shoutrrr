@@ -216,7 +216,7 @@ class InstanceSettingsController extends Controller
             return null;
         }
 
-        $counters = UsagePeriodCounter::query()
+        $counters = array_values(UsagePeriodCounter::query()
             ->where('workspace_id', $workspaceId)
             ->orderByDesc('period_start')->orderBy('category')->orderBy('platform')->orderBy('operation')
             ->get()
@@ -230,9 +230,9 @@ class InstanceSettingsController extends Controller
                 'event_count' => $counter->event_count,
                 'total_quota' => $counter->total_quota,
                 'pricing' => $pricing->estimate($counter->platform, $counter->operation, $counter->total_quota),
-            ])->all();
+            ])->all());
 
-        $errorEvents = UsageEvent::query()
+        $errorEvents = array_values(UsageEvent::query()
             ->where('workspace_id', $workspaceId)
             ->where('succeeded', false)
             ->latest('occurred_at')->limit(50)->get()
@@ -244,7 +244,7 @@ class InstanceSettingsController extends Controller
                 'quota_weight' => $event->quota_weight,
                 'meta' => $event->meta,
                 'occurred_at' => $event->occurred_at,
-            ])->all();
+            ])->all());
 
         return [
             'workspace' => [

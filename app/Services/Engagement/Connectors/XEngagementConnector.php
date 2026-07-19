@@ -84,7 +84,7 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
             UsageOperation::REPLIES_FETCH,
             $account,
             $response,
-            array_map(static fn (array $tweet): string => (string) ($tweet['id'] ?? ''), (array) $response->json('data', [])),
+            array_values(array_map(static fn (array $tweet): string => (string) ($tweet['id'] ?? ''), (array) $response->json('data', []))),
         );
 
         if ($response->failed()) {
@@ -218,7 +218,7 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
                 UsageOperation::REPLIES_FETCH,
                 $account,
                 $response,
-                array_map(static fn (array $tweet): string => (string) ($tweet['id'] ?? ''), (array) $response->json('data', [])),
+                array_values(array_map(static fn (array $tweet): string => (string) ($tweet['id'] ?? ''), (array) $response->json('data', []))),
             );
 
             if ($response->failed()) {

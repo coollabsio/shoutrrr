@@ -51,7 +51,7 @@ class XMetricsConnector implements MetricsConnector
             UsageOperation::METRICS_FETCH_POST,
             $account,
             $response,
-            array_map(static fn (array $tweet): string => (string) ($tweet['id'] ?? ''), (array) $response->json('data', [])),
+            array_values(array_map(static fn (array $tweet): string => (string) ($tweet['id'] ?? ''), (array) $response->json('data', []))),
         );
 
         if ($response->failed()) {
