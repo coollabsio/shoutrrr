@@ -10,6 +10,7 @@ use App\Http\Requests\Settings\StoreInstanceOwnerRequest;
 use App\Http\Requests\Settings\UpdateInstancePlatformsRequest;
 use App\Http\Requests\Settings\UpdateInstancePollingSettingsRequest;
 use App\Http\Requests\Settings\UpdateInstanceSettingsRequest;
+use App\Http\Requests\Settings\UpdateWorkspaceXBudgetRequest;
 use App\Models\UsageEvent;
 use App\Models\UsagePeriodCounter;
 use App\Models\User;
@@ -403,6 +404,16 @@ class InstanceSettingsController extends Controller
         $settings->update($request->instancePollingSettings());
 
         return back()->with('success', 'Polling settings updated.');
+    }
+
+    public function updateWorkspaceBudget(
+        UpdateWorkspaceXBudgetRequest $request,
+        Workspace $workspace,
+        InstanceSettings $settings,
+    ): RedirectResponse {
+        $settings->setXWorkspaceBudget($workspace->id, $request->budgetValue());
+
+        return back()->with('success', 'Workspace X budget updated.');
     }
 
     public function destroyAdmin(Request $request, User $owner): RedirectResponse
