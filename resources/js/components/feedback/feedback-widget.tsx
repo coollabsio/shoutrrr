@@ -149,23 +149,24 @@ export default function FeedbackWidget() {
                 // each open. Cached images are fine for a screenshot.
             });
 
-            // A newer open superseded this capture — discard the stale result.
+            // A newer open superseded this capture — discard the stale result
+            // and leave `capturing` for the newer capture to clear.
             if (captureIdRef.current !== id) {
                 return;
             }
             setScreenshot(blob);
             setPreviewUrl(blob ? URL.createObjectURL(blob) : null);
+            setCapturing(false);
         } catch {
             if (captureIdRef.current !== id) {
                 return;
             }
             setScreenshot(null);
             setPreviewUrl(null);
-        } finally {
-            if (captureIdRef.current === id) {
-                setCapturing(false);
-            }
+            setCapturing(false);
         }
+        // No finally: the React Compiler bails on try/finally, so clear
+        // `capturing` in each terminal path instead.
     }
 
     function onOpenChange(next: boolean) {

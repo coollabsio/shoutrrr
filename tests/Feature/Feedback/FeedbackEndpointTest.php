@@ -194,6 +194,41 @@ it('redacts the operator origin from diagnostics on self-hosted instances', func
     });
 });
 
+it('redacts both the submitted url host and the actual request host on self-hosted', function () {
+    config([
+        'feedback.enabled' => true,
+        'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok',
+        'instance.self_hosted' => true,
+    ]);
+    Http::fake(['https://discord.com/*' => Http::response('', 204)]);
+
+    // Request host is "localhost" (the test URL); the submitted url claims a
+    // different host. Same-origin diagnostics carry the real request host, so
+    // both must be scrubbed.
+    $diagnostics = UploadedFile::fake()->createWithContent(
+        'diagnostics.json',
+        '{"network":[{"url":"https://acme.example.com/api"},{"url":"http://localhost/internal"}]}',
+    );
+
+    $this->actingAs(actingWorkspaceUser())
+        ->post(route('feedback.store'), [
+            'type' => 'bug',
+            'message' => 'It broke',
+            'url' => 'https://acme.example.com/dashboard',
+            'browser' => 'Mozilla/5.0',
+            'diagnostics' => $diagnostics,
+        ])
+        ->assertOk();
+
+    Http::assertSent(function ($request) {
+        $body = $request->body();
+
+        return ! str_contains($body, 'acme.example.com')
+            && ! str_contains($body, 'localhost')
+            && str_contains($body, '/internal');
+    });
+});
+
 it('keeps diagnostics urls intact on cloud instances', function () {
     config([
         'feedback.enabled' => true,

@@ -129,9 +129,15 @@ class FeedbackController extends Controller
         }
 
         if (config('instance.self_hosted')) {
-            $host = $this->hostOf($rawUrl) ?? $request->getHost();
+            // Redact both the client-claimed host and the authoritative request
+            // host — they usually match, but if the client URL is stale/tampered
+            // the real same-origin host in the payload must still be scrubbed.
+            $hosts = array_unique(array_filter([
+                $this->hostOf($rawUrl),
+                $request->getHost(),
+            ]));
 
-            if ($host !== '') {
+            foreach ($hosts as $host) {
                 $contents = str_replace($host, '[host]', $contents);
             }
         }
