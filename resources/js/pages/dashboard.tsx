@@ -46,7 +46,7 @@ function timeGreeting(): string {
 
 function NoAccountsNotice() {
     return (
-        <Empty className="min-h-72 bg-card/80 backdrop-blur-sm">
+        <Empty className="mb-7 min-h-72 bg-card/80 backdrop-blur-sm">
             <EmptyHeader>
                 <EmptyMedia variant="icon">
                     <Plug />
