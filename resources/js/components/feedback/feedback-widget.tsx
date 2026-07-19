@@ -34,6 +34,29 @@ const TYPES: { value: FeedbackType; label: string }[] = [
 ];
 
 /**
+ * Resolve once the browser is idle (or after 200ms, whichever comes first), so
+ * heavy work scheduled after it runs only once the popover has opened and
+ * painted — never on the click that opens it. Mirrors the emoji picker's
+ * warm-up scheduling. Falls back to a two-frame wait where rIC is unavailable.
+ */
+function whenIdle(): Promise<void> {
+    return new Promise((resolve) => {
+        const idle = window as Window & {
+            requestIdleCallback?: (
+                callback: () => void,
+                options?: { timeout: number },
+            ) => number;
+        };
+        if (typeof idle.requestIdleCallback === 'function') {
+            idle.requestIdleCallback(() => resolve(), { timeout: 200 });
+
+            return;
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+}
+
+/**
  * Floating feedback trigger, mounted globally in the app layout. Captures a
  * screenshot of the page (everything but itself) the moment it opens, so the
  * report always carries visual context unless the user opts out.
@@ -76,14 +99,10 @@ export default function FeedbackWidget() {
         setCapturing(true);
         try {
             // html-to-image clones the whole page and reads computed styles for
-            // every node — hundreds of ms of *synchronous* main-thread work. Let
-            // the popover open and paint first (two frames) so that work never
-            // janks the open animation; the "Capturing…" skeleton covers the gap.
-            await new Promise((resolve) => {
-                requestAnimationFrame(() =>
-                    requestAnimationFrame(() => resolve(undefined)),
-                );
-            });
+            // every node — hundreds of ms of *synchronous* main-thread work. Wait
+            // for the thread to be idle so the popover opens and paints its
+            // skeleton first; the capture then fills in without janking the open.
+            await whenIdle();
 
             const blob = await toBlob(document.body, {
                 filter: (node) =>
