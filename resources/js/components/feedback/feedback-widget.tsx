@@ -21,6 +21,7 @@ import {
     type DiagnosticsSnapshot,
     snapshotDiagnostics,
 } from '@/lib/diagnostics-collector';
+import { redactInertiaProps } from '@/lib/redact-inertia-props';
 
 import {
     buildFeedbackPayload,
@@ -61,8 +62,18 @@ function whenIdle(): Promise<void> {
  * screenshot of the page (everything but itself) the moment it opens, so the
  * report always carries visual context unless the user opts out.
  */
+/**
+ * A diagnostics snapshot plus the page's Inertia props (redacted + bounded) and
+ * component name, so a report shows the exact data the page rendered with.
+ */
+type FeedbackDiagnostics = DiagnosticsSnapshot & {
+    pageComponent: string;
+    pageProps: unknown;
+};
+
 export default function FeedbackWidget() {
-    const enabled = usePage().props.features?.feedback;
+    const page = usePage();
+    const enabled = page.props.features?.feedback;
 
     const [open, setOpen] = useState(false);
     const [type, setType] = useState<FeedbackType>('bug');
@@ -70,7 +81,7 @@ export default function FeedbackWidget() {
     const [screenshot, setScreenshot] = useState<Blob | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [includeShot, setIncludeShot] = useState(true);
-    const [diagnostics, setDiagnostics] = useState<DiagnosticsSnapshot | null>(
+    const [diagnostics, setDiagnostics] = useState<FeedbackDiagnostics | null>(
         null,
     );
     const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
@@ -161,8 +172,13 @@ export default function FeedbackWidget() {
         setOpen(next);
         if (next) {
             // Re-snapshot on every open — the user may have navigated or acted
-            // since last time, so the breadcrumbs and screenshot must be fresh.
-            setDiagnostics(snapshotDiagnostics());
+            // since last time, so the breadcrumbs, page props, and screenshot
+            // must all be fresh. Props are redacted + bounded before attaching.
+            setDiagnostics({
+                ...snapshotDiagnostics(),
+                pageComponent: page.component,
+                pageProps: redactInertiaProps(page.props),
+            });
             void capture();
         }
     }
