@@ -7,6 +7,7 @@ use App\Models\WorkspaceMembership;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\URL;
 
 function actingWorkspaceUser(): User
 {
@@ -195,19 +196,21 @@ it('redacts the operator origin from diagnostics on self-hosted instances', func
 });
 
 it('redacts both the submitted url host and the actual request host on self-hosted', function () {
+    // Pin the request host so the test doesn't depend on the ambient APP_URL.
     config([
         'feedback.enabled' => true,
         'feedback.webhook_url' => 'https://discord.com/api/webhooks/1/tok',
         'instance.self_hosted' => true,
+        'app.url' => 'https://self-hosted.example',
     ]);
+    URL::forceRootUrl('https://self-hosted.example');
     Http::fake(['https://discord.com/*' => Http::response('', 204)]);
 
-    // Request host is "localhost" (the test URL); the submitted url claims a
-    // different host. Same-origin diagnostics carry the real request host, so
-    // both must be scrubbed.
+    // The submitted url claims a different host than the actual request host.
+    // Same-origin diagnostics carry the request host, so both must be scrubbed.
     $diagnostics = UploadedFile::fake()->createWithContent(
         'diagnostics.json',
-        '{"network":[{"url":"https://acme.example.com/api"},{"url":"http://localhost/internal"}]}',
+        '{"network":[{"url":"https://acme.example.com/api"},{"url":"https://self-hosted.example/internal"}]}',
     );
 
     $this->actingAs(actingWorkspaceUser())
@@ -223,9 +226,10 @@ it('redacts both the submitted url host and the actual request host on self-host
     Http::assertSent(function ($request) {
         $body = $request->body();
 
-        return ! str_contains($body, 'acme.example.com')
-            && ! str_contains($body, 'localhost')
-            && str_contains($body, '/internal');
+        return ! str_contains($body, 'acme.example.com') // client-claimed host
+            && ! str_contains($body, 'self-hosted.example') // actual request host
+            && str_contains($body, '/internal')
+            && str_contains($body, '/api');
     });
 });
 
