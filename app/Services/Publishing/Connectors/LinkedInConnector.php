@@ -68,7 +68,7 @@ class LinkedInConnector implements PublishConnector
             return PublishResult::success($context->target->remote_ids ?? [$context->target->remote_id]);
         }
 
-        $author = 'urn:li:person:'.$context->account->remote_account_id;
+        $author = $context->account->linkedInAuthorUrn();
         $text = implode("\n", array_values(array_filter(
             array_map(static fn (string $segment): string => trim($segment), $context->segments),
             static fn (string $segment): bool => $segment !== '',
