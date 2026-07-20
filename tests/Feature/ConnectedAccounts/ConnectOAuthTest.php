@@ -215,6 +215,34 @@ test('linkedin connect requests the community management feed scopes only when e
         ->and($captured)->toContain('w_member_social_feed');
 });
 
+test('linkedin connect requests the organization scopes only when community management is enabled', function () {
+    config()->set('services.linkedin-openid.client_id', 'cid');
+    config()->set('services.linkedin-openid.client_secret', 'secret');
+    config()->set('services.linkedin-openid.redirect', 'https://app.test/accounts/callback/linkedin');
+    ownerActingIn();
+
+    $captured = [];
+    $provider = Mockery::mock(AbstractProvider::class);
+    $provider->shouldReceive('setScopes')->andReturnUsing(function (array $scopes) use ($provider, &$captured) {
+        $captured = $scopes;
+
+        return $provider;
+    });
+    $provider->shouldReceive('redirectUrl')->andReturnSelf();
+    $provider->shouldReceive('redirect')->andReturn(redirect('https://provider.test/oauth'));
+    Socialite::shouldReceive('driver')->with('linkedin-openid')->andReturn($provider);
+
+    test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
+    expect($captured)->not->toContain('w_organization_social');
+
+    app(App\Support\InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+
+    test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
+    expect($captured)->toContain('r_organization_social')
+        ->and($captured)->toContain('w_organization_social')
+        ->and($captured)->toContain('rw_organization_admin');
+});
+
 test('linkedin connect records the engagement capability from the granted scopes', function () {
     config()->set('services.linkedin-openid.client_id', 'cid');
     config()->set('services.linkedin-openid.client_secret', 'secret');

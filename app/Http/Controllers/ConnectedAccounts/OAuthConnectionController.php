@@ -175,7 +175,14 @@ class OAuthConnectionController extends Controller
         $scopes = $platform->scopes();
 
         if ($platform === Platform::LinkedIn && $this->settings->linkedinCommunityManagementEnabled()) {
-            $scopes = [...$scopes, 'r_member_social_feed', 'w_member_social_feed'];
+            $scopes = [
+                ...$scopes,
+                'r_member_social_feed',
+                'w_member_social_feed',
+                'r_organization_social',
+                'w_organization_social',
+                'rw_organization_admin',
+            ];
         }
 
         return $scopes;
