@@ -64,8 +64,8 @@ class LinkedInOrgResolver
         if (is_array($cached) && isset($cached['urn'])) {
             return LinkedInOrgLookupResult::success(
                 (string) $cached['urn'],
-                $cached['name'] !== null ? (string) $cached['name'] : null,
-                (int) $cached['status'],
+                isset($cached['name']) ? (string) $cached['name'] : null,
+                (int) ($cached['status'] ?? 0),
             );
         }
 
