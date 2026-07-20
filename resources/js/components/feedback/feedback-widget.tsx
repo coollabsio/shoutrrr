@@ -35,6 +35,20 @@ const TYPES: { value: FeedbackType; label: string }[] = [
 ];
 
 /**
+ * 1×1 transparent PNG used as the fallback for any image `html-to-image` can't
+ * inline. It fetches every `<img>` to embed it as a data URL; a cross-origin
+ * fetch (e.g. our S3/object-storage media, which sends no CORS header) throws,
+ * and `html-to-image` then falls back to `imagePlaceholder || ''`. Without this
+ * constant the fallback is an empty `src`, which fires the image's `onerror`
+ * and — with no `onImageErrorHandler` — rejects the whole capture, so a single
+ * cross-origin media image silently kills the entire screenshot. A valid
+ * transparent pixel instead resolves via `onload`, so the capture completes
+ * with those images blank rather than not at all.
+ */
+const TRANSPARENT_PIXEL =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+/**
  * Resolve once the browser is idle (or after 200ms, whichever comes first), so
  * heavy work scheduled after it runs only once the popover has opened and
  * painted — never on the click that opens it. Mirrors the emoji picker's
@@ -144,6 +158,11 @@ export default function FeedbackWidget() {
                 // the pixels to encode and decode for a thumbnail nobody zooms.
                 pixelRatio: 1,
                 skipFonts: true,
+                // Cross-origin media (S3/object storage sends no CORS header)
+                // can't be inlined; degrade those to a transparent pixel so one
+                // unfetchable image doesn't reject the whole capture. See
+                // TRANSPARENT_PIXEL.
+                imagePlaceholder: TRANSPARENT_PIXEL,
                 // Deliberately NOT cacheBust: it appends a unique query to every
                 // image URL, forcing a full re-download of the page's images on
                 // each open. Cached images are fine for a screenshot.
