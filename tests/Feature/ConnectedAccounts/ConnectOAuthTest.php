@@ -13,54 +13,9 @@ use Laravel\Socialite\Two\AbstractProvider;
 use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as SocialiteUser;
 
-function ownerActingIn(): array
-{
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
-    WorkspaceMembership::factory()->create([
-        'workspace_id' => $workspace->id,
-        'user_id' => $user->id,
-        'role' => WorkspaceRole::Owner,
-    ]);
-    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
-    test()->actingAs($user);
-
-    return [$user, $workspace];
-}
-
-function fakeOAuthUser(string $driver, array $data): SocialiteUser
-{
-    $user = (new SocialiteUser)
-        ->map([
-            'id' => $data['id'],
-            'nickname' => $data['nickname'] ?? null,
-            'name' => $data['name'] ?? null,
-            'avatar' => $data['avatar'] ?? null,
-        ])
-        ->setToken($data['token'] ?? 'tok');
-
-    if (array_key_exists('refreshToken', $data) && $data['refreshToken'] !== null) {
-        $user->setRefreshToken($data['refreshToken']);
-    }
-
-    if (array_key_exists('expiresIn', $data) && $data['expiresIn'] !== null) {
-        $user->setExpiresIn($data['expiresIn']);
-    }
-
-    if (array_key_exists('approvedScopes', $data)) {
-        $user->setApprovedScopes($data['approvedScopes']);
-    }
-
-    $provider = Mockery::mock(AbstractProvider::class);
-    $provider->shouldReceive('setScopes')->andReturnSelf();
-    $provider->shouldReceive('redirectUrl')->andReturnSelf();
-    $provider->shouldReceive('redirect')->andReturn(redirect('https://provider.test/oauth'));
-    $provider->shouldReceive('user')->andReturn($user);
-
-    Socialite::shouldReceive('driver')->with($driver)->andReturn($provider);
-
-    return $user;
-}
+// ownerActingIn() + fakeOAuthUser() are shared helpers defined in tests/Pest.php
+// (moved there so other Feature test files, e.g. ConnectLinkedInPagesTest, can
+// reuse them without redeclaring the same top-level function name).
 
 test('redirect sends an owner to the X provider when configured', function () {
     config()->set('services.x.client_id', 'cid');
