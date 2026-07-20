@@ -12,6 +12,8 @@ export function imageMedia(id: string): MediaView {
         position: 0,
         edit_settings: null,
         source_url: null,
+        edit_url: `https://app.example.test/media/${id}/raw`,
+        source_edit_url: null,
     };
 }
 
@@ -26,6 +28,8 @@ export function videoMedia(id: string): MediaView {
         position: 0,
         edit_settings: null,
         source_url: null,
+        edit_url: `https://app.example.test/media/${id}/raw`,
+        source_edit_url: null,
     };
 }
 

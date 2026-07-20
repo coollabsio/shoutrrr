@@ -270,6 +270,8 @@ describe('composerReducer', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         expect(state.media.map((m) => m.id)).toEqual(['m1']);
@@ -287,6 +289,8 @@ describe('composerReducer', () => {
                 position: 1,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         expect(state.media.map((m) => m.id)).toEqual(['m1', 'm2']);
@@ -312,6 +316,8 @@ describe('composerReducer', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         state = composerReducer(state, {
@@ -326,6 +332,8 @@ describe('composerReducer', () => {
                 position: 1,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         state = composerReducer(state, {
@@ -349,6 +357,8 @@ describe('composerReducer', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         state = composerReducer(state, {
@@ -363,6 +373,8 @@ describe('composerReducer', () => {
                 position: 1,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         // unknown id ignored; m1 missing from the sequence is appended
@@ -584,6 +596,8 @@ describe('composerReducer', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         const existing = base.media[0];
@@ -701,6 +715,8 @@ describe('buildPutBody', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         state = composerReducer(state, {
@@ -715,6 +731,8 @@ describe('buildPutBody', () => {
                 position: 1,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         const body = buildPutBody(state, ['a1', 'a2']);
@@ -760,6 +778,8 @@ describe('composerHasContent', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         expect(composerHasContent(state)).toBe(true);

@@ -86,6 +86,10 @@ export type MediaView = {
     position: number;
     edit_settings: EditSettings | null;
     source_url: string | null;
+    /** Same-origin proxy URL the canvas editor fetches (display URLs omit CORS headers). */
+    edit_url: string;
+    /** Same-origin proxy URL for the retained pre-edit source; null when none. */
+    source_edit_url: string | null;
 };
 
 /** An upload still in flight (or just failed) — rendered as a ghost chip. */
