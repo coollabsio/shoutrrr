@@ -51,6 +51,7 @@ class ConnectedAccountController extends Controller
                 'token_expires_at' => $account->token_expires_at?->toIso8601String(),
                 'max_text_length' => $account->maxTextLength(),
                 'x_premium' => $account->hasXPremium(),
+                'is_linkedin_page' => $account->isLinkedInOrganization(),
                 'is_default' => $account->id === $defaultAccountId,
                 'disabled' => $account->isDisabled(),
                 'pds_url' => $this->customPdsUrl($account),

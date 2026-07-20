@@ -20,6 +20,7 @@ function account(overrides: Partial<Account>): Account {
         token_expires_at: null,
         max_text_length: 300,
         x_premium: false,
+        is_linkedin_page: false,
         is_default: false,
         disabled: false,
         pds_url: null,
