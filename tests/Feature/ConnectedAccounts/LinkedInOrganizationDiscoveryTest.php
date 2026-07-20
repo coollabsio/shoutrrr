@@ -42,7 +42,9 @@ test('drops organizations whose lookup was not authorized', function () {
             'elements' => [['organizationTarget' => 'urn:li:organization:2414183']],
         ]),
         'https://api.linkedin.com/rest/organizations*' => Http::response([
-            'results' => [],
+            'results' => [
+                '2414183' => ['id' => 2414183, 'localizedName' => 'Acme Inc', 'vanityName' => 'acme'],
+            ],
             'statuses' => ['2414183' => 403],
         ]),
     ]);

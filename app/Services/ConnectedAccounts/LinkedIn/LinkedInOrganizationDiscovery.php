@@ -79,7 +79,7 @@ class LinkedInOrganizationDiscovery
             }
 
             $start += count($elements);
-            $hasNext = $elements !== [] && ! empty($response->json('paging.links'));
+            $hasNext = $elements !== [] && $this->hasNextPage($response->json('paging.links', []));
         } while ($hasNext);
 
         return array_values(array_unique($urns));
@@ -126,6 +126,17 @@ class LinkedInOrganizationDiscovery
         }
 
         return $organizations;
+    }
+
+    private function hasNextPage(mixed $links): bool
+    {
+        foreach ((array) $links as $link) {
+            if (is_array($link) && ($link['rel'] ?? null) === 'next') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function urnId(string $urn): string
