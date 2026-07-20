@@ -141,3 +141,60 @@ test('postReply declines media (LinkedIn comments cannot carry attachments)', fu
 
     expect($result->status)->toBe(EngagementStatus::Failed);
 });
+
+function linkedinPageAccount(): ConnectedAccount
+{
+    return ConnectedAccount::factory()->linkedinPage()->create(['remote_account_id' => '2414183']);
+}
+
+test('fetchReplies filters the org actor for a page account', function () {
+    Http::fake([
+        'api.linkedin.com/rest/socialActions/*' => Http::response([
+            'elements' => [
+                [
+                    'actor' => 'urn:li:person:FAN1',
+                    'commentUrn' => 'urn:li:comment:(urn:li:share:123,900)',
+                    'created' => ['time' => 1_700_000_000_000],
+                    'message' => ['text' => 'nice'],
+                ],
+                [
+                    'actor' => 'urn:li:organization:2414183',
+                    'commentUrn' => 'urn:li:comment:(urn:li:share:123,901)',
+                    'created' => ['time' => 1_700_000_001_000],
+                    'message' => ['text' => 'our own comment'],
+                ],
+            ],
+        ]),
+    ]);
+
+    $target = PostTarget::factory()->create(['platform' => Platform::LinkedIn, 'remote_id' => 'urn:li:share:123']);
+
+    $result = linkedinConnector()->fetchReplies(linkedinPageAccount(), $target, ['access_token' => 't'], null);
+
+    expect($result->replies)->toHaveCount(1)
+        ->and($result->replies[0]->text)->toBe('nice');
+});
+
+test('postReply uses the org actor for a page account', function () {
+    Http::fake(['api.linkedin.com/rest/socialActions/*' => Http::response(['commentUrn' => 'urn:li:comment:(urn:li:share:123,902)'], 201)]);
+
+    $parent = PostTargetReply::factory()->create([
+        'remote_reply_id' => 'urn:li:comment:(urn:li:share:123,900)',
+        'parent_remote_id' => 'urn:li:share:123',
+    ]);
+
+    $result = linkedinConnector()->postReply(linkedinPageAccount(), $parent, 'thanks', ['access_token' => 't']);
+
+    expect($result->isOk())->toBeTrue();
+    Http::assertSent(fn ($req) => str_contains($req->url(), '/comments') && $req['actor'] === 'urn:li:organization:2414183');
+});
+
+test('likeReply uses the org actor for a page account', function () {
+    Http::fake(['api.linkedin.com/rest/socialActions/*' => Http::response([], 201)]);
+
+    $reply = PostTargetReply::factory()->create(['remote_reply_id' => 'urn:li:comment:(urn:li:share:123,900)']);
+
+    linkedinConnector()->likeReply(linkedinPageAccount(), $reply, ['access_token' => 't']);
+
+    Http::assertSent(fn ($req) => str_contains($req->url(), '/likes') && $req['actor'] === 'urn:li:organization:2414183');
+});
