@@ -24,6 +24,8 @@ const image: MediaView = {
     position: 0,
     edit_settings: null,
     source_url: null,
+    edit_url: 'https://app.example.test/media/raw',
+    source_edit_url: null,
 };
 
 const mentions: MentionPlaceholder[] = [

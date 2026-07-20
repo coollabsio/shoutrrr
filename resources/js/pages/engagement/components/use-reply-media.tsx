@@ -285,13 +285,13 @@ export function useReplyMedia({
         if (m.edit_settings && m.source_url) {
             setEditing({
                 kind: 'reedit',
-                url: m.source_url,
+                url: m.source_edit_url ?? m.edit_url,
                 settings: normalizeSettings(m.edit_settings),
                 mediaId: m.id,
                 altText: m.alt_text,
             });
         } else {
-            setEditing({ kind: 'raw', url: m.url, mediaId: m.id });
+            setEditing({ kind: 'raw', url: m.edit_url, mediaId: m.id });
         }
     }
 

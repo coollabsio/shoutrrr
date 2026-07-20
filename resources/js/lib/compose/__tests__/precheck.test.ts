@@ -132,6 +132,8 @@ function mediaItem(over: Partial<MediaView> & { id: string }): MediaView {
         position: 0,
         edit_settings: null,
         source_url: null,
+        edit_url: 'https://app.example.test/media/raw',
+        source_edit_url: null,
         ...over,
     };
 }

@@ -413,7 +413,7 @@ export default function Composer({
         }
         setEditing({
             kind: 'video',
-            url: m.url,
+            url: m.edit_url,
             durationSeconds: m.duration_seconds ?? 0,
             mediaId: m.id,
             altText: m.alt_text,
@@ -431,13 +431,13 @@ export default function Composer({
         if (m.edit_settings && m.source_url) {
             setEditing({
                 kind: 'reedit',
-                url: m.source_url,
+                url: m.source_edit_url ?? m.edit_url,
                 settings: normalizeSettings(m.edit_settings),
                 mediaId: m.id,
                 altText: m.alt_text,
             });
         } else {
-            setEditing({ kind: 'raw', url: m.url, mediaId: m.id });
+            setEditing({ kind: 'raw', url: m.edit_url, mediaId: m.id });
         }
     }
 

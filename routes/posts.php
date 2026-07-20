@@ -11,6 +11,7 @@ use App\Http\Controllers\Posts\NextSlotController;
 use App\Http\Controllers\Posts\PostController;
 use App\Http\Controllers\Posts\PostImageEditController;
 use App\Http\Controllers\Posts\PostingScheduleController;
+use App\Http\Controllers\Posts\PostMediaContentController;
 use App\Http\Controllers\Posts\PostMediaController;
 use App\Http\Controllers\Posts\PostMetricsRefreshController;
 use App\Http\Controllers\Posts\PostQueueController;
@@ -89,6 +90,10 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::put('posts/{post}/image-edit/{media}', [PostImageEditController::class, 'update'])->name('posts.image-edit.update');
     });
     Route::delete('posts/{post}/media/{media}', [PostMediaController::class, 'destroy'])->name('posts.media.destroy');
+
+    // Same-origin proxy for editor fetches — the storage bucket serves display
+    // URLs without CORS headers, which blocks the canvas-based image/video editors.
+    Route::get('media/{media}/raw', [PostMediaContentController::class, 'show'])->name('media.raw');
 
     Route::get('posts/{post}/shares', [PostShareController::class, 'index'])->name('posts.shares.index');
     Route::post('posts/{post}/shares', [PostShareController::class, 'store'])->name('posts.shares.store');
