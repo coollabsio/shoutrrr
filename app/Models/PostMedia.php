@@ -134,6 +134,10 @@ class PostMedia extends Model
     }
 
     /**
+     * `edit_url` / `source_edit_url` are same-origin proxy URLs the canvas
+     * editors fetch instead of the display URLs, whose storage origin may omit
+     * CORS headers. `source_edit_url` is null when no pre-edit source is kept.
+     *
      * @return array{id: string, url: string, mime: string, kind: string, duration_seconds: int|null, alt_text: string|null, position: int, edit_settings: array<string, mixed>|null, source_url: string|null, edit_url: string, source_edit_url: string|null}
      */
     public function toView(): array
@@ -148,8 +152,6 @@ class PostMedia extends Model
             'position' => $this->position,
             'edit_settings' => $this->edit_settings,
             'source_url' => $this->source_url(),
-            // Same-origin proxy URLs the canvas editors fetch instead of the
-            // display URLs, whose storage origin omits CORS headers.
             'edit_url' => route('media.raw', $this),
             'source_edit_url' => $this->source_path === null
                 ? null

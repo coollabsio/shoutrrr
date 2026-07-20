@@ -40,6 +40,27 @@ test('GET media/{media}/raw streams the composed file same-origin for the worksp
     expect($response->streamedContent())->toBe('COMPOSED-BYTES');
 });
 
+test('GET media/{media}/raw streams from the local disk for self-hosters without S3', function () {
+    // A self-hosted install with no object storage keeps media on the private
+    // `local` disk (storage/app/private). The proxy must stream those bytes just
+    // the same — this is the default self-host configuration.
+    Storage::fake('local');
+    [, $workspace] = mediaContentMember();
+    Storage::disk('local')->put('media/ws/local.png', 'LOCAL-DISK-BYTES');
+
+    $media = PostMedia::factory()->create([
+        'workspace_id' => $workspace->id,
+        'disk' => 'local',
+        'path' => 'media/ws/local.png',
+        'mime' => 'image/png',
+    ]);
+
+    $response = test()->get(route('media.raw', $media));
+
+    $response->assertOk();
+    expect($response->streamedContent())->toBe('LOCAL-DISK-BYTES');
+});
+
 test('GET media/{media}/raw?variant=source streams the retained source file', function () {
     Storage::fake('public');
     [, $workspace] = mediaContentMember();
