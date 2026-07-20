@@ -7,6 +7,7 @@ use App\Models\ConnectedAccount;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Http;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider;
@@ -163,7 +164,7 @@ test('linkedin connect requests the community management feed scopes only when e
     test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
     expect($captured)->not->toContain('r_member_social_feed');
 
-    app(App\Support\InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+    app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
 
     test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
     expect($captured)->toContain('r_member_social_feed')
@@ -190,7 +191,7 @@ test('linkedin connect requests the organization scopes only when community mana
     test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
     expect($captured)->not->toContain('w_organization_social');
 
-    app(App\Support\InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+    app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
 
     test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
     expect($captured)->toContain('r_organization_social')

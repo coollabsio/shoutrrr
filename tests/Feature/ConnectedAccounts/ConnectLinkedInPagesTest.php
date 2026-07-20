@@ -3,8 +3,6 @@
 use App\Models\ConnectedAccount;
 use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Http;
-use Laravel\Socialite\Facades\Socialite;
-use Laravel\Socialite\Two\AbstractProvider;
 
 // Reuses ownerActingIn() + fakeOAuthUser() from tests/Pest.php (shared across
 // the connected-accounts Feature suite).
