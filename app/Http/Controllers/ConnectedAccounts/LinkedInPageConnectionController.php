@@ -42,7 +42,7 @@ class LinkedInPageConnectionController extends Controller
         $validated = $request->validate([
             'selected' => ['required', 'array', 'min:1'],
             'selected.*.type' => ['required', 'string', Rule::in(['person', 'organization'])],
-            'selected.*.id' => ['nullable', 'string', Rule::in(array_keys($organizations))],
+            'selected.*.id' => ['required_if:selected.*.type,organization', 'nullable', 'string', Rule::in(array_keys($organizations))],
         ]);
 
         $token = (string) ($stash['accessToken'] ?? '');
@@ -50,6 +50,9 @@ class LinkedInPageConnectionController extends Controller
         $expiresAt = isset($stash['tokenExpiresAt'])
             ? CarbonImmutable::parse((string) $stash['tokenExpiresAt'])
             : null;
+
+        /** @var array<int, string> $granted */
+        $granted = (array) ($stash['approvedScopes'] ?? []);
 
         $created = 0;
 
@@ -65,7 +68,7 @@ class LinkedInPageConnectionController extends Controller
                     authMethod: 'oauth',
                     accessToken: $token,
                     refreshToken: $refresh,
-                    capabilities: ['linkedin_account_type' => 'person', 'linkedin_engagement' => true],
+                    capabilities: ['linkedin_account_type' => 'person', 'linkedin_engagement' => in_array('r_member_social_feed', $granted, true)],
                     tokenExpiresAt: $expiresAt,
                 );
             } else {
@@ -79,7 +82,7 @@ class LinkedInPageConnectionController extends Controller
                     authMethod: 'oauth',
                     accessToken: $token,
                     refreshToken: $refresh,
-                    capabilities: ['linkedin_account_type' => 'organization', 'linkedin_engagement' => true],
+                    capabilities: ['linkedin_account_type' => 'organization', 'linkedin_engagement' => in_array('r_organization_social', $granted, true)],
                     tokenExpiresAt: $expiresAt,
                 );
             }

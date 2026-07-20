@@ -90,14 +90,16 @@ class OAuthConnectionController extends Controller
             $data = $data->withCapabilities($this->xCapabilities->forAccessToken($data->accessToken));
         }
 
+        $linkedInGrantedScopes = [];
+
         if ($resolved === Platform::LinkedIn) {
             // Record whether LinkedIn actually granted the restricted Community
             // Management read scope, so the engagement inbox only polls accounts
             // that can read replies (others 403). `approvedScopes` comes from the
             // token response's `scope` field.
-            $granted = (array) $oauthUser->approvedScopes;
+            $linkedInGrantedScopes = array_values((array) $oauthUser->approvedScopes);
             $data = $data->withCapabilities([
-                'linkedin_engagement' => in_array('r_member_social_feed', $granted, true),
+                'linkedin_engagement' => in_array('r_member_social_feed', $linkedInGrantedScopes, true),
             ]);
         }
 
@@ -120,7 +122,7 @@ class OAuthConnectionController extends Controller
         }
 
         if ($resolved === Platform::LinkedIn && $this->settings->linkedinCommunityManagementEnabled()) {
-            $picker = $this->renderLinkedInPagePicker($request, $data);
+            $picker = $this->renderLinkedInPagePicker($request, $data, $linkedInGrantedScopes);
 
             if ($picker !== null) {
                 return $picker;
@@ -138,8 +140,10 @@ class OAuthConnectionController extends Controller
      * administered Pages alongside their personal profile. Returns the picker
      * response, or null when the member administers no Pages (then the caller
      * falls through to the normal single personal-account store).
+     *
+     * @param  list<string>  $grantedScopes
      */
-    private function renderLinkedInPagePicker(Request $request, ConnectedAccountData $data): ?InertiaResponse
+    private function renderLinkedInPagePicker(Request $request, ConnectedAccountData $data, array $grantedScopes): ?InertiaResponse
     {
         $organizations = $this->linkedInOrganizations->administeredOrganizations((string) $data->accessToken);
 
@@ -170,6 +174,7 @@ class OAuthConnectionController extends Controller
             'accessToken' => $data->accessToken,
             'refreshToken' => $data->refreshToken,
             'tokenExpiresAt' => $data->tokenExpiresAt?->toIso8601String(),
+            'approvedScopes' => $grantedScopes,
         ]);
 
         return Inertia::render('accounts/connect-linkedin', [

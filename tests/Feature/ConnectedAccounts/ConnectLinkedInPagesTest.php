@@ -62,6 +62,7 @@ test('store persists the personal profile and selected pages', function () {
         'accessToken' => 'tok',
         'refreshToken' => 'ref',
         'tokenExpiresAt' => null,
+        'approvedScopes' => ['r_member_social_feed', 'r_organization_social'],
     ]]);
 
     test()->post(route('accounts.linkedin.store'), [
@@ -73,5 +74,71 @@ test('store persists the personal profile and selected pages', function () {
 
     expect($person->isLinkedInOrganization())->toBeFalse()
         ->and($page->isLinkedInOrganization())->toBeTrue()
-        ->and($page->display_name)->toBe('Acme Inc');
+        ->and($page->display_name)->toBe('Acme Inc')
+        ->and($person->capabilities['linkedin_engagement'])->toBeTrue()
+        ->and($page->capabilities['linkedin_engagement'])->toBeTrue();
+});
+
+test('store gates page engagement capability off when the org scope was not granted', function () {
+    ownerActingIn();
+    app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+
+    session(['accounts.linkedin.connect' => [
+        'person' => ['remoteAccountId' => 'PERSON1', 'handle' => 'jane', 'displayName' => 'Jane', 'avatarUrl' => null],
+        'organizations' => ['2414183' => ['id' => '2414183', 'urn' => 'urn:li:organization:2414183', 'name' => 'Acme Inc', 'vanityName' => 'acme']],
+        'accessToken' => 'tok',
+        'refreshToken' => 'ref',
+        'tokenExpiresAt' => null,
+        'approvedScopes' => ['r_member_social_feed'],
+    ]]);
+
+    test()->post(route('accounts.linkedin.store'), [
+        'selected' => [['type' => 'person'], ['type' => 'organization', 'id' => '2414183']],
+    ])->assertRedirect(route('accounts.index'));
+
+    $person = ConnectedAccount::where('remote_account_id', 'PERSON1')->firstOrFail();
+    $page = ConnectedAccount::where('remote_account_id', '2414183')->firstOrFail();
+
+    expect($person->capabilities['linkedin_engagement'])->toBeTrue()
+        ->and($page->capabilities['linkedin_engagement'])->toBeFalse();
+});
+
+test('store rejects an organization selection missing an id and persists nothing', function () {
+    ownerActingIn();
+    app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+
+    session(['accounts.linkedin.connect' => [
+        'person' => ['remoteAccountId' => 'PERSON1', 'handle' => 'jane', 'displayName' => 'Jane', 'avatarUrl' => null],
+        'organizations' => ['2414183' => ['id' => '2414183', 'urn' => 'urn:li:organization:2414183', 'name' => 'Acme Inc', 'vanityName' => 'acme']],
+        'accessToken' => 'tok',
+        'refreshToken' => 'ref',
+        'tokenExpiresAt' => null,
+        'approvedScopes' => ['r_member_social_feed', 'r_organization_social'],
+    ]]);
+
+    test()->post(route('accounts.linkedin.store'), [
+        'selected' => [['type' => 'organization']],
+    ])->assertSessionHasErrors('selected.0.id');
+
+    expect(ConnectedAccount::where('platform', 'linkedin')->count())->toBe(0);
+});
+
+test('store rejects an organization selection with an id outside the stashed whitelist and persists nothing', function () {
+    ownerActingIn();
+    app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+
+    session(['accounts.linkedin.connect' => [
+        'person' => ['remoteAccountId' => 'PERSON1', 'handle' => 'jane', 'displayName' => 'Jane', 'avatarUrl' => null],
+        'organizations' => ['2414183' => ['id' => '2414183', 'urn' => 'urn:li:organization:2414183', 'name' => 'Acme Inc', 'vanityName' => 'acme']],
+        'accessToken' => 'tok',
+        'refreshToken' => 'ref',
+        'tokenExpiresAt' => null,
+        'approvedScopes' => ['r_member_social_feed', 'r_organization_social'],
+    ]]);
+
+    test()->post(route('accounts.linkedin.store'), [
+        'selected' => [['type' => 'organization', 'id' => '9999999']],
+    ])->assertSessionHasErrors('selected.0.id');
+
+    expect(ConnectedAccount::where('platform', 'linkedin')->count())->toBe(0);
 });
