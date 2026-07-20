@@ -83,7 +83,7 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
         }
 
         try {
-            $credentials = in_array($account->platform, [Platform::X, Platform::Facebook, Platform::Instagram, Platform::Threads, Platform::Discord], true)
+            $credentials = in_array($account->platform, [Platform::X, Platform::Facebook, Platform::Instagram, Platform::Threads, Platform::Discord, Platform::LinkedIn], true)
                 ? $tokens->fresh($account)
                 : [];
         } catch (TokenRefreshException) {

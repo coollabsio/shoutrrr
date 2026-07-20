@@ -83,7 +83,7 @@ class CaptureAccountMetrics implements ShouldBeUnique, ShouldQueue
         }
 
         try {
-            $credentials = in_array($account->platform, [Platform::X, Platform::Facebook, Platform::Instagram, Platform::Threads], true)
+            $credentials = in_array($account->platform, [Platform::X, Platform::Facebook, Platform::Instagram, Platform::Threads, Platform::LinkedIn], true)
                 ? $tokens->fresh($account)
                 : [];
         } catch (TokenRefreshException) {
