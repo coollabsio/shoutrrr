@@ -16,7 +16,6 @@ describe('analytics disabled metric notices', () => {
             'Some account metrics are temporarily disabled',
         );
         expect(source).toContain('Some post metrics are temporarily disabled');
-        expect(source).toContain('account metrics temporarily disabled');
     });
 
     it('derives disabled platform labels from the polling payload keys', () => {
@@ -61,12 +60,25 @@ describe('analytics post comparison links', () => {
     });
 });
 
-describe('analytics graph series toggles', () => {
-    it('wires shared hide/show state for the chart legend and account cards', () => {
-        expect(source).toContain('hiddenAccountIds');
-        expect(source).toContain('toggleAccountOnGraph');
-        expect(source).toContain('nextHiddenAccountIds');
-        expect(source).toContain('onToggleAccount={toggleAccountOnGraph}');
-        expect(source).toContain('hidden from graph');
+describe('analytics headline summary', () => {
+    it('renders stat tiles for followers, engagement, and posts', () => {
+        expect(source).toContain('StatTile');
+        expect(source).toContain('metric={summary.followers}');
+        expect(source).toContain('metric={summary.engagement}');
+        expect(source).toContain('metric={summary.posts}');
+    });
+
+    it('renders a per-account follower growth chart with post markers', () => {
+        expect(source).toContain('FollowerChart');
+        expect(source).toContain('accountMetricsEnabled={');
+        expect(source).toContain('posts={posts}');
+    });
+});
+
+describe('analytics range switching', () => {
+    it('reloads only the range-dependent props and preserves scroll/state', () => {
+        expect(source).toContain('preserveScroll');
+        expect(source).toContain('preserveState');
+        expect(source).toContain('only={RANGE_RELOAD_PROPS}');
     });
 });

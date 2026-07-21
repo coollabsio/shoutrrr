@@ -100,6 +100,16 @@
     --chart-3: oklch(0.646 0.222 41.116);
     --chart-4: oklch(0.553 0.195 38.402);
     --chart-5: oklch(0.47 0.157 37.304);
+    /* Categorical account-line palette — distinct hues assigned in fixed order,
+       validated colorblind-safe for the light card surface (dataviz method). */
+    --account-1: #2a78d6;
+    --account-2: #eb6834;
+    --account-3: #1baf7a;
+    --account-4: #eda100;
+    --account-5: #e87ba4;
+    --account-6: #008300;
+    --account-7: #4a3aa7;
+    --account-8: #e34948;
     --radius: 0.625rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
@@ -136,6 +146,15 @@
     --chart-3: oklch(0.646 0.222 41.116);
     --chart-4: oklch(0.553 0.195 38.402);
     --chart-5: oklch(0.47 0.157 37.304);
+    /* Same eight hues, re-stepped for the dark card surface. */
+    --account-1: #3987e5;
+    --account-2: #d95926;
+    --account-3: #199e70;
+    --account-4: #c98500;
+    --account-5: #d55181;
+    --account-6: #008300;
+    --account-7: #9085e9;
+    --account-8: #e66767;
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.768 0.233 130.85);

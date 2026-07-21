@@ -319,6 +319,12 @@ class MetaConnectionController extends Controller
         return redirect()->route('accounts.index')->with('error', $message);
     }
 
+    /**
+     * Reads live session state that a concurrent OAuth callback may stash while
+     * we hold the lock, so its result changes between calls within one request.
+     *
+     * @phpstan-impure
+     */
     private function hasStashedAssets(Request $request): bool
     {
         $stash = $request->session()->get(self::SESSION_KEY);

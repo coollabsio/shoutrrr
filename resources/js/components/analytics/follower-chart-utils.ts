@@ -1,17 +1,17 @@
 import { dayjs } from '@/lib/datetime/dayjs';
-import type { AnalyticsPageProps } from '@/types/metrics';
 
+// Distinct categorical hues (not a warm monochrome ramp) so each account line
+// stays tellable-apart. Assigned in fixed order and validated colorblind-safe.
 const ACCOUNT_COLORS = [
-    'var(--chart-1)',
-    'var(--chart-2)',
-    'var(--chart-3)',
-    'var(--chart-4)',
-    'var(--chart-5)',
+    'var(--account-1)',
+    'var(--account-2)',
+    'var(--account-3)',
+    'var(--account-4)',
+    'var(--account-5)',
+    'var(--account-6)',
+    'var(--account-7)',
+    'var(--account-8)',
 ];
-
-export type FollowerChartRow = Record<string, number | undefined> & {
-    date: number;
-};
 
 type TooltipPayloadWithDate = readonly {
     payload?: {
@@ -23,20 +23,29 @@ export function accountChartColor(index: number): string {
     return ACCOUNT_COLORS[index % ACCOUNT_COLORS.length];
 }
 
-/** Toggle membership of `accountId` in a hidden-id set. */
-export function nextHiddenAccountIds(
-    hidden: ReadonlySet<string>,
-    accountId: string,
-): Set<string> {
-    const next = new Set(hidden);
-
-    if (next.has(accountId)) {
-        next.delete(accountId);
-    } else {
-        next.add(accountId);
+/**
+ * A padded [min, max] window around a follower series so the trend fills the
+ * panel rather than being crushed against a zero baseline. Each account is
+ * plotted on its own axis (one chart per account), so a +100 change on 1,600
+ * and a +25 change from 0 both read as real movement instead of a flat line.
+ */
+export function followerYDomain(values: number[]): [number, number] {
+    if (values.length === 0) {
+        return [0, 1];
     }
 
-    return next;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+
+    if (min === max) {
+        // Flat series — sit the line mid-panel with a small symmetric band.
+        const pad = Math.max(Math.abs(min) * 0.05, 1);
+        return [min - pad, max + pad];
+    }
+
+    // Headroom above and below so peaks and troughs don't touch the edges.
+    const pad = (max - min) * 0.15;
+    return [min - pad, max + pad];
 }
 
 export function formatFollowerTooltipDate(
@@ -52,43 +61,4 @@ export function formatFollowerTooltipDate(
     const formattedDate = dayjs(date);
 
     return formattedDate.isValid() ? formattedDate.format('MMM D, YYYY') : '';
-}
-
-/**
- * Merge account series onto one row per calendar day so the tooltip can show
- * every account at the hovered time (capture timestamps rarely align exactly).
- */
-export function buildFollowerChartData(
-    accounts: AnalyticsPageProps['accounts'],
-): FollowerChartRow[] {
-    const dayKeys = [
-        ...new Set(
-            accounts.flatMap((account) =>
-                account.series.map((point) =>
-                    dayjs(point.at).format('YYYY-MM-DD'),
-                ),
-            ),
-        ),
-    ].sort();
-
-    return dayKeys.map((day) => {
-        const row: FollowerChartRow = {
-            date: dayjs(day).startOf('day').valueOf(),
-        };
-
-        for (const account of accounts) {
-            // Server already downsamples to one reading per day; take the last
-            // of that day if multiple slipped through.
-            const dayPoints = account.series.filter(
-                (point) => dayjs(point.at).format('YYYY-MM-DD') === day,
-            );
-            const point = dayPoints.at(-1);
-
-            if (point?.followers != null) {
-                row[account.id] = point.followers;
-            }
-        }
-
-        return row;
-    });
 }
