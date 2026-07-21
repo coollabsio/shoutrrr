@@ -13,6 +13,7 @@ use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Engagement\RetryAfter;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
@@ -28,8 +29,11 @@ use Illuminate\Http\Client\Response;
  * erroring.
  *
  * The Graph API rejects media on comment replies, so reply media is declined
- * with a clear message. Instagram has no documented comment-like API, so
- * like/unlike always return `Unsupported` without making a request.
+ * with a clear message. Likes go through the user-scoped Like Media and
+ * Comments API (added 2026-04-22): `POST`/`DELETE /<ig-user-id>/likes` with a
+ * `comment_id`, gated by `instagram_manage_engagement`; without that permission
+ * Instagram returns 403, which we map to `Unsupported` so the heart degrades
+ * cleanly rather than erroring.
  */
 class InstagramEngagementConnector implements EngagementConnector
 {
@@ -135,12 +139,36 @@ class InstagramEngagementConnector implements EngagementConnector
 
     public function likeReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
     {
-        return ReplyActionResult::unsupported('Instagram does not support liking comments via API');
+        try {
+            $response = $this->http
+                ->asForm()
+                ->post($this->baseUrl().'/'.$account->remote_account_id.'/likes', [
+                    'comment_id' => $reply->remote_reply_id,
+                    'access_token' => (string) ($credentials['access_token'] ?? ''),
+                ]);
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_LIKE, $account, $response);
+
+        return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }
 
     public function unlikeReply(ConnectedAccount $account, PostTargetReply $reply, ?string $likeRemoteId, array $credentials): ReplyActionResult
     {
-        return ReplyActionResult::unsupported('Instagram does not support liking comments via API');
+        try {
+            $response = $this->http->delete($this->baseUrl().'/'.$account->remote_account_id.'/likes', [
+                'comment_id' => $reply->remote_reply_id,
+                'access_token' => (string) ($credentials['access_token'] ?? ''),
+            ]);
+        } catch (ConnectionException $e) {
+            return ReplyActionResult::failed($e->getMessage());
+        }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_UNLIKE, $account, $response);
+
+        return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
     }
 
     public function deleteReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
@@ -173,7 +201,7 @@ class InstagramEngagementConnector implements EngagementConnector
         return match (true) {
             $response->status() === 401 => ReplyFetchResult::authExpired($this->excerpt($response)),
             $response->status() === 403 => ReplyFetchResult::unsupported($this->excerpt($response)),
-            $response->status() === 429 => ReplyFetchResult::rateLimited($this->excerpt($response)),
+            $response->status() === 429 => ReplyFetchResult::rateLimited($this->excerpt($response), RetryAfter::seconds($response)),
             default => ReplyFetchResult::failed($this->excerpt($response)),
         };
     }

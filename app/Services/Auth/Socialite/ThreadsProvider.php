@@ -31,7 +31,7 @@ class ThreadsProvider extends AbstractProvider
      *
      * @var array<int, string>
      */
-    protected $scopes = ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights'];
+    protected $scopes = ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights', 'threads_delete'];
 
     protected function getAuthUrl($state): string
     {

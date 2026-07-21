@@ -29,9 +29,9 @@ class ListPostsTool extends WorkspaceTool
         ]);
 
         $posts = Post::query()
-            ->with(['author:id,name', 'targets'])
+            ->with(['author:id,name', 'targets', 'media'])
             ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->when($validated['q'] ?? null, fn ($query, $q) => $query->where('base_text', 'like', "%{$q}%"))
+            ->when($validated['q'] ?? null, fn ($query, $q) => $query->whereLike('base_text', "%{$q}%"))
             ->latest()
             ->limit($validated['limit'] ?? 20)
             ->get()

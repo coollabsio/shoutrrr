@@ -1,5 +1,6 @@
-import { Deferred, Head, Link, usePage } from '@inertiajs/react';
+import { Deferred, Head, Link, router, usePage } from '@inertiajs/react';
 import { Plug } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 import Composer from '@/components/compose/composer';
 import { DashboardAura } from '@/components/dashboard/dashboard-aura';
@@ -45,7 +46,7 @@ function timeGreeting(): string {
 
 function NoAccountsNotice() {
     return (
-        <Empty className="min-h-72 bg-card/80 backdrop-blur-sm">
+        <Empty className="mb-7 min-h-72 bg-card/80 backdrop-blur-sm">
             <EmptyHeader>
                 <EmptyMedia variant="icon">
                     <Plug />
@@ -73,6 +74,28 @@ export default function Dashboard({ posts, onboarding, savedMentions }: Props) {
     const showNoAccountsNotice = shouldShowDashboardNoAccountsNotice(
         shell.accounts,
         workspaces.current?.permissions ?? [],
+    );
+
+    // Autosave persists drafts via a standalone XHR that never triggers an
+    // Inertia visit, so the deferred `posts` feed below would stay stale after a
+    // save. Refresh just that prop when the composer reports a save, debounced so
+    // a burst of keystroke-driven saves coalesces into one partial reload.
+    const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    function refreshRecentPosts() {
+        if (reloadTimer.current) {
+            clearTimeout(reloadTimer.current);
+        }
+        reloadTimer.current = setTimeout(() => {
+            router.reload({ only: ['posts'] });
+        }, 600);
+    }
+    useEffect(
+        () => () => {
+            if (reloadTimer.current) {
+                clearTimeout(reloadTimer.current);
+            }
+        },
+        [],
     );
 
     // A calendar slot click opens the composer here with a pre-set schedule time.
@@ -120,6 +143,7 @@ export default function Dashboard({ posts, onboarding, savedMentions }: Props) {
                     initialDestination={initialDestination}
                     initialSavedMentions={savedMentions}
                     autoFocusEditor
+                    onSaved={refreshRecentPosts}
                 />
 
                 <Deferred data="posts" fallback={<RecentFeedSkeleton />}>

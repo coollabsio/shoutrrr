@@ -32,6 +32,11 @@ import {
 } from '@/components/ui/select';
 import { dayjs } from '@/lib/datetime/dayjs';
 
+const SCOPE_ITEMS = [
+    { value: 'read', label: 'Read' },
+    { value: 'write', label: 'Read & write' },
+];
+
 export default function CreateApiKeyDialog() {
     const [open, setOpen] = useState(false);
     const [expiresAt, setExpiresAt] = useState<Date | undefined>(undefined);
@@ -94,17 +99,23 @@ export default function CreateApiKeyDialog() {
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="scope">Access</Label>
-                                    <Select name="scope" defaultValue="read">
+                                    <Select
+                                        name="scope"
+                                        defaultValue="read"
+                                        items={SCOPE_ITEMS}
+                                    >
                                         <SelectTrigger id="scope">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="read">
-                                                Read
-                                            </SelectItem>
-                                            <SelectItem value="write">
-                                                Read &amp; write
-                                            </SelectItem>
+                                            {SCOPE_ITEMS.map((item) => (
+                                                <SelectItem
+                                                    key={item.value}
+                                                    value={item.value}
+                                                >
+                                                    {item.label}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                     <InputError message={errors.scope} />

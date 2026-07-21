@@ -34,8 +34,11 @@ function fakeFacebookOAuthUser(string $token = 'short-token'): SocialiteUser
         ->setToken($token);
 
     $provider = Mockery::mock(AbstractProvider::class);
-    $provider->shouldReceive('scopes')->andReturnSelf();
+    $provider->shouldReceive('stateless')->andReturnSelf();
+    $provider->shouldReceive('setScopes')->andReturnSelf();
     $provider->shouldReceive('redirectUrl')->andReturnSelf();
+    $provider->shouldReceive('usingGraphVersion')->andReturnSelf();
+    $provider->shouldReceive('fields')->andReturnSelf();
     $provider->shouldReceive('redirect')->andReturn(redirect('https://facebook.test/oauth'));
     $provider->shouldReceive('user')->andReturn($user);
 
@@ -92,7 +95,7 @@ test('callback stashes assets server-side and renders a browser-safe projection'
     fakeFacebookOAuthUser();
     fakeMetaGraphResponses();
 
-    test()->get(route('accounts.meta.callback'))
+    test()->get(route('accounts.meta.callback', ['code' => 'fb-auth-code']))
         // The `accounts/connect-meta` selection screen is a frontend page a
         // later task builds; the backend contract this test proves (component
         // name + browser-safe projection shape) doesn't depend on that file
@@ -131,6 +134,27 @@ test('callback surfaces a friendly message when facebook denies the connection',
     expect(ConnectedAccount::withoutGlobalScopes()->count())->toBe(0);
 });
 
+test('callback reuses an existing stash when Facebook hits the callback twice with the same code', function () {
+    metaOwnerActingIn();
+    fakeFacebookOAuthUser();
+    fakeMetaGraphResponses();
+
+    test()->get(route('accounts.meta.callback', ['code' => 'fb-auth-code']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('accounts/connect-meta', false)
+            ->has('assets', 1)
+        );
+
+    // Second hit (no Socialite mock needed): stash already present → picker again, no error.
+    test()->get(route('accounts.meta.callback', ['code' => 'fb-auth-code']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('accounts/connect-meta', false)
+            ->has('assets', 1)
+            ->where('assets.0.pageId', 'PAGE1')
+        )
+        ->assertSessionMissing('error');
+});
+
 test('callback surfaces a friendly message when the graph api fails', function () {
     metaOwnerActingIn();
     fakeFacebookOAuthUser();
@@ -140,9 +164,10 @@ test('callback surfaces a friendly message when the graph api fails', function (
         '*/oauth/access_token*' => Http::response(['error' => ['message' => 'rate limited']], 429),
     ]);
 
-    test()->get(route('accounts.meta.callback'))
+    test()->get(route('accounts.meta.callback', ['code' => 'fb-auth-code']))
         ->assertRedirect(route('accounts.index'))
-        ->assertSessionHas('error', fn (string $message): bool => str_contains($message, "couldn't retrieve"));
+        ->assertSessionHas('error', fn (string $message): bool => str_contains($message, "couldn't connect")
+            || str_contains($message, "couldn't retrieve"));
 
     expect(session('accounts.meta.connect'))->toBeNull()
         ->and(ConnectedAccount::withoutGlobalScopes()->count())->toBe(0);

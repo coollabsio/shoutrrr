@@ -80,6 +80,36 @@ class UsageMeter
     }
 
     /**
+     * @return array<string, int> operation => total_quota for the current calendar month
+     */
+    public function currentPeriodQuotaByOperation(string $workspaceId, Platform $platform): array
+    {
+        return $this->query($workspaceId, $platform, null)
+            ->selectRaw('operation, sum(total_quota) as quota')
+            ->groupBy('operation')
+            ->pluck('quota', 'operation')
+            ->map(fn ($quota): int => (int) $quota)
+            ->all();
+    }
+
+    /**
+     * @return array<string, int> operation => sum(quota_weight) for succeeded events since $since
+     */
+    public function quotaByOperationSince(string $workspaceId, CarbonImmutable $since, Platform $platform): array
+    {
+        return UsageEvent::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('succeeded', true)
+            ->where('platform', $platform->value)
+            ->where('occurred_at', '>=', $since)
+            ->selectRaw('operation, sum(quota_weight) as quota')
+            ->groupBy('operation')
+            ->pluck('quota', 'operation')
+            ->map(fn ($quota): int => (int) $quota)
+            ->all();
+    }
+
+    /**
      * @return Builder<UsagePeriodCounter>
      */
     private function query(string $workspaceId, ?Platform $platform, ?string $operation): Builder

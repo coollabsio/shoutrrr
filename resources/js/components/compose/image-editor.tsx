@@ -78,6 +78,10 @@ export function ImageEditor({
 }: Props) {
     const stageRef = useRef<HTMLDivElement | null>(null);
     const croppedUrlRef = useRef<string | null>(null);
+    // Primary footer action — focused on open so Enter accepts the upload.
+    const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
+    // Only auto-focus once per open/image; never steal focus mid-edit.
+    const hasFocusedPrimaryRef = useRef(false);
     // Tracks whether picking a background has already styled this image, so the
     // one-time padding/radius/shadow defaults are applied on the FIRST background
     // choice only — never re-imposed if the user later dials them back.
@@ -198,6 +202,36 @@ export function ImageEditor({
         [],
     );
 
+    // Reset the focus latch when the dialog closes or the queue advances to a
+    // new image (open stays true across multi-image batches).
+    useEffect(() => {
+        if (!open) {
+            hasFocusedPrimaryRef.current = false;
+        }
+    }, [open]);
+
+    useEffect(() => {
+        hasFocusedPrimaryRef.current = false;
+    }, [sourceUrl]);
+
+    // The primary button is disabled until the cropped preview is ready, so Base
+    // UI's open-time focus would land on the close X. Focus Upload/Apply once it
+    // becomes clickable so Enter accepts the image.
+    useEffect(() => {
+        if (!open || hasFocusedPrimaryRef.current) {
+            return;
+        }
+        if (isSaving || (!cropMode && !croppedUrl)) {
+            return;
+        }
+        hasFocusedPrimaryRef.current = true;
+        const id = requestAnimationFrame(() => {
+            primaryButtonRef.current?.focus();
+        });
+
+        return () => cancelAnimationFrame(id);
+    }, [open, croppedUrl, cropMode, isSaving]);
+
     const contentW = settings.crop?.width ?? sourceImg?.naturalWidth ?? 1;
     const contentH = settings.crop?.height ?? sourceImg?.naturalHeight ?? 1;
     // Zoom scales the (cropped) image within the frame; the background padding
@@ -250,6 +284,12 @@ export function ImageEditor({
     }
 
     const hasQueue = queue !== undefined && queue.thumbnails.length > 1;
+    // Whether the user actually changed anything. With no edits, applying would
+    // just re-encode the original for no benefit — so the primary button instead
+    // takes the "keep as-is" path and the redundant skip shortcut is dropped.
+    const isEdited =
+        altText !== (initialAltText ?? '') ||
+        JSON.stringify(settings) !== JSON.stringify(initialSettings);
     const cancelLabel =
         variant === 'new' ? 'Continue without editing' : 'Cancel';
     // Closing via X / Escape discards a fresh upload, or just closes a re-edit.
@@ -258,10 +298,22 @@ export function ImageEditor({
         ? 'Done cropping'
         : isSaving
           ? 'Saving…'
-          : hasQueue
-            ? 'Apply & next'
-            : 'Apply';
-    const primaryAction = cropMode ? () => setCropMode(false) : apply;
+          : isEdited
+            ? hasQueue
+                ? 'Apply & next'
+                : 'Apply'
+            : variant === 'new'
+              ? hasQueue
+                  ? 'Upload & next'
+                  : 'Upload'
+              : 'Done';
+    // Unedited: onCancel already implements "keep as-is" (upload the original &
+    // advance for a fresh batch, or just close a re-edit).
+    const primaryAction = cropMode
+        ? () => setCropMode(false)
+        : isEdited
+          ? apply
+          : onCancel;
 
     return (
         <Dialog
@@ -274,6 +326,7 @@ export function ImageEditor({
         >
             <DialogContent
                 showCloseButton={false}
+                initialFocus={primaryButtonRef}
                 className="flex h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[85vh] sm:max-h-[760px] sm:w-[min(1080px,95vw)] sm:max-w-none sm:rounded-[min(var(--radius-4xl),24px)]"
             >
                 {/* Header — own the close button so it aligns with the title */}
@@ -653,14 +706,17 @@ export function ImageEditor({
                         Remove
                     </button>
                     <div className="ml-auto flex items-center gap-2">
+                        {isEdited && (
+                            <button
+                                type="button"
+                                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground md:py-2"
+                                onClick={onCancel}
+                            >
+                                {cancelLabel}
+                            </button>
+                        )}
                         <button
-                            type="button"
-                            className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground md:py-2"
-                            onClick={onCancel}
-                        >
-                            {cancelLabel}
-                        </button>
-                        <button
+                            ref={primaryButtonRef}
                             type="button"
                             disabled={isSaving || (!cropMode && !croppedUrl)}
                             onClick={primaryAction}

@@ -1,6 +1,8 @@
 <?php
 
+use App\Enums\Platform;
 use App\Enums\PostStatus;
+use App\Enums\PostTargetStatus;
 use App\Jobs\PublishPostTarget;
 use App\Models\Post;
 use App\Models\PostTarget;
@@ -72,6 +74,22 @@ test('the staleness window is configurable', function () {
 
     expect($stale->refresh()->status)->toBe(PostStatus::Missed);
     Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
+test('a scheduled post blocked by the precheck is failed, not dispatched', function () {
+    Bus::fake();
+
+    $due = Post::factory()->create(['status' => PostStatus::Scheduled, 'scheduled_at' => now()->subMinute()]);
+    $target = PostTarget::factory()->for($due)->create([
+        'platform' => Platform::X->value,
+        'sections' => [''],
+    ]);
+
+    $this->artisan('posts:dispatch-due')->assertExitCode(0);
+
+    Bus::assertNotDispatched(PublishPostTarget::class);
+    expect($due->refresh()->status)->toBe(PostStatus::Failed)
+        ->and($target->refresh()->status)->toBe(PostTargetStatus::Failed);
 });
 
 test('a second run does not double-dispatch an already-publishing post', function () {

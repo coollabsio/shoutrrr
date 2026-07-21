@@ -264,19 +264,33 @@ export function readVideoMetadata(file: File): Promise<VideoMeta> {
  * PUT a file directly to a presigned storage URL with the signed headers (no app CSRF).
  * Resolves on a 2xx, rejects otherwise. `onProgress` fires only when the whole-number
  * percent changes — a large upload emits hundreds of events but the UI needs at most 100.
+ * Passing an aborted (or later-aborted) `signal` cancels the in-flight PUT and rejects
+ * with an `AbortError`, so a user can bail out of a slow upload.
  */
 export function putWithProgress(
     url: string,
     headers: Record<string, string>,
     body: Blob,
     onProgress: (percent: number) => void,
+    signal?: AbortSignal,
 ): Promise<void> {
     return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'));
+
+            return;
+        }
+
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', url);
         for (const [header, value] of Object.entries(headers)) {
             xhr.setRequestHeader(header, value);
         }
+
+        const onAbort = (): void => xhr.abort();
+        signal?.addEventListener('abort', onAbort, { once: true });
+        const cleanup = (): void =>
+            signal?.removeEventListener('abort', onAbort);
 
         let lastPct = -1;
         xhr.upload.onprogress = (e) => {
@@ -289,11 +303,22 @@ export function putWithProgress(
                 onProgress(pct);
             }
         };
-        xhr.onload = () =>
-            xhr.status >= 200 && xhr.status < 300
-                ? resolve()
-                : reject(new Error(`upload failed: ${xhr.status}`));
-        xhr.onerror = () => reject(new Error('network error'));
+        xhr.onload = () => {
+            cleanup();
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve();
+            } else {
+                reject(new Error(`upload failed: ${xhr.status}`));
+            }
+        };
+        xhr.onabort = () => {
+            cleanup();
+            reject(new DOMException('Aborted', 'AbortError'));
+        };
+        xhr.onerror = () => {
+            cleanup();
+            reject(new Error('network error'));
+        };
         xhr.send(body);
     });
 }

@@ -20,6 +20,30 @@ test('x scopes include users.email so Socialite can read confirmed_email', funct
         ->and(Platform::X->scopes())->toContain('media.write');
 });
 
+test('x scopes include like.write so the engagement inbox can like and unlike', function () {
+    // Regression guard for a real production bug: without like.write, X 403s
+    // POST/DELETE /2/users/{id}/likes ("Missing required OAuth2 scopes"), the
+    // connector maps that 403 to `unsupported`, and likes silently never persist.
+    // One scope covers both like and unlike. Do not drop it.
+    expect(Platform::X->scopes())->toContain('like.write');
+});
+
+test('platforms report whether their connector can like a reply', function () {
+    // Only Threads still has no like/unlike write for replies; Instagram gained
+    // it with the Like Media and Comments API (2026-04-22).
+    expect(Platform::X->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::Bluesky->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::LinkedIn->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::Facebook->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::Discord->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::Instagram->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::Threads->supportsReplyLikes())->toBeFalse();
+});
+
+test('instagram requests the engagement scope that powers reply likes', function () {
+    expect(Platform::Instagram->scopes())->toContain('instagram_manage_engagement');
+});
+
 test('socialite driver names match core socialite keys', function () {
     expect(Platform::X->socialiteDriver())->toBe('x')
         ->and(Platform::LinkedIn->socialiteDriver())->toBe('linkedin-openid')
@@ -60,8 +84,8 @@ test('capabilities array exposes one entry per platform for the frontend', funct
 
     $caps = Platform::capabilities();
 
-    expect($caps)->toHaveCount(6)
-        ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'configured', 'launched']);
+    expect($caps)->toHaveCount(7)
+        ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'supportsWebhook', 'configured', 'launched', 'enabled']);
 });
 
 test('every platform is launched', function () {
@@ -70,7 +94,8 @@ test('every platform is launched', function () {
         ->and(Platform::LinkedIn->isLaunched())->toBeTrue()
         ->and(Platform::Facebook->isLaunched())->toBeTrue()
         ->and(Platform::Instagram->isLaunched())->toBeTrue()
-        ->and(Platform::Threads->isLaunched())->toBeTrue();
+        ->and(Platform::Threads->isLaunched())->toBeTrue()
+        ->and(Platform::Discord->isLaunched())->toBeTrue();
 });
 
 test('facebook scopes cover the reconciled facebook-login set', function () {

@@ -1,15 +1,12 @@
-import { useHttp, usePoll } from '@inertiajs/react';
+import { useHttp } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
 import {
     applyOptimisticSubmit,
-    shouldPollPostStatus,
     type OptimisticSubmit,
 } from '@/lib/compose/publish-status';
 import { retry as retryRoute } from '@/routes/posts/targets';
 import type { PostView } from '@/types/compose';
-
-const POLL_INTERVAL_MS = 3000;
 
 type RetryResponse = { post: PostView };
 
@@ -39,31 +36,6 @@ export function usePublishStatus({ pagePost }: UsePublishStatus) {
             setSnapshot(pagePost);
         }
     }, [pagePost]);
-
-    const active = snapshot ? shouldPollPostStatus(snapshot) : false;
-
-    // Poll the page while any target is in motion. We refresh BOTH `post` and the
-    // deferred `stats` prop: publishing is async, so the initial `stats` defer
-    // resolves to null (no published targets yet). Re-evaluating it on each poll
-    // means the same response that flips a target to `published` also carries its
-    // metrics — otherwise the stats card stays empty until a manual reload.
-    // The returned `start`/`stop` are unused — `usePoll` auto-cleans on unmount
-    // and we gate by toggling it below.
-    const poll = usePoll(
-        POLL_INTERVAL_MS,
-        { only: ['post', 'stats'] },
-        { autoStart: false },
-    );
-
-    useEffect(() => {
-        if (active) {
-            poll.start();
-
-            return () => poll.stop();
-        }
-        poll.stop();
-        // oxlint-disable-next-line react-hooks/exhaustive-deps -- poll identity is stable per Inertia; gating on `active` is intentional
-    }, [active]);
 
     /** Adopt the server's post after a publish/queue/schedule mutation. */
     function applyServerPost(post: PostView) {

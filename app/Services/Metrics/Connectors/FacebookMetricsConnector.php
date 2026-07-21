@@ -39,6 +39,8 @@ class FacebookMetricsConnector implements MetricsConnector
 
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->get($this->baseUrl().'/'.$postId, [
                     'fields' => 'likes.summary(true),comments.summary(true),shares',
@@ -70,6 +72,8 @@ class FacebookMetricsConnector implements MetricsConnector
     {
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->get($this->baseUrl().'/'.$postId.'/insights', [
                     'metric' => 'post_impressions',
@@ -94,6 +98,8 @@ class FacebookMetricsConnector implements MetricsConnector
     {
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->get($this->baseUrl().'/'.$account->remote_account_id, [
                     'fields' => 'followers_count,fan_count',

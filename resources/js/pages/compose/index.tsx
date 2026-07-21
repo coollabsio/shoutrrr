@@ -5,6 +5,7 @@ import Composer from '@/components/compose/composer';
 import { PostPageActions } from '@/components/posts/post-page-actions';
 import { PublishedPostView } from '@/components/posts/published-post-view';
 import { Button } from '@/components/ui/button';
+import { usePostStatusPoll } from '@/hooks/compose/use-post-status-poll';
 import { firstLineTitle } from '@/lib/compose/composer-state';
 import { dashboard } from '@/routes';
 import { index as postsRoute } from '@/routes/posts';
@@ -22,6 +23,7 @@ export default function ComposePage({
     const isPublished = Boolean(
         post && post.targets.some((t) => t.status === 'published'),
     );
+    usePostStatusPoll(post);
 
     return (
         <>

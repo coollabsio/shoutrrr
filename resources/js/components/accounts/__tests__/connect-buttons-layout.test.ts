@@ -16,6 +16,7 @@ function capability(overrides: Partial<Capability>): Capability {
         label: 'Facebook',
         supportsOAuth: true,
         supportsAppPassword: false,
+        supportsWebhook: false,
         configured: true,
         launched: false,
         enabled: true,
@@ -140,5 +141,25 @@ describe('Meta connect entry point', () => {
                 capability({ platform: 'instagram', launched: true }),
             ]),
         ).toBe('Facebook / Instagram');
+    });
+});
+
+describe('Discord connect entry point', () => {
+    it('treats discord as a supported platform glyph', () => {
+        expect(isSupportedPlatformIcon('discord')).toBe(true);
+    });
+
+    it('renders a webhook-URL dialog wired to the Discord connect action', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/accounts/connect-buttons.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('DiscordConnectionController');
+        expect(source).toContain('name="webhook_url"');
+        expect(source).toContain('capability.supportsWebhook');
     });
 });

@@ -14,6 +14,7 @@ import {
     nextDownscale,
     planVideoEncode,
     readVideoMetadata,
+    type VideoMeta,
     VIDEO_MIN_BITRATE,
 } from '@/lib/compose/video';
 
@@ -46,12 +47,20 @@ export async function compressVideoToFit(
     source: Blob,
     maxBytes: number,
     onProgress: (fraction: number) => void,
+    knownMeta?: VideoMeta,
+    signal?: AbortSignal,
 ): Promise<Blob | null> {
-    const probe =
-        source instanceof File
-            ? source
-            : new File([source], 'video.mp4', { type: 'video/mp4' });
-    const meta = await readVideoMetadata(probe);
+    // A caller that already probed the source (the format-conversion path reads
+    // metadata via mediabunny) passes it in: the `<video>`-based
+    // `readVideoMetadata` can't open containers the browser won't natively play
+    // (.mkv/.avi), so the transcode path must not depend on it.
+    const meta =
+        knownMeta ??
+        (await readVideoMetadata(
+            source instanceof File
+                ? source
+                : new File([source], 'video.mp4', { type: 'video/mp4' }),
+        ));
     const plan = planVideoEncode(meta, maxBytes);
 
     let { width, height, videoBitrate } = plan;
@@ -63,6 +72,10 @@ export async function compressVideoToFit(
     let progressFloor = 0;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+        if (signal?.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+        }
+
         // Confirm an encoder that actually works at this exact output size —
         // the same probe gating the crop UI, so they can't disagree.
         const codec = await firstEncodableVideoCodec(width, height);
@@ -77,6 +90,7 @@ export async function compressVideoToFit(
             source,
             { codec, width, height, videoBitrate, audioBitrate },
             (fraction) => onProgress(base + fraction * span),
+            signal,
         );
         if (blob === null) {
             return null;
@@ -106,6 +120,7 @@ async function encodeOnce(
     source: Blob,
     params: EncodeParams,
     onProgress: (fraction: number) => void,
+    signal?: AbortSignal,
 ): Promise<Blob | null> {
     const input = new Input({
         formats: ALL_FORMATS,
@@ -140,7 +155,15 @@ async function encodeOnce(
         }
 
         conversion.onProgress = (progress) => onProgress(progress);
-        await conversion.execute();
+        // Cancelling makes `execute()` throw `ConversionCanceledError`, which
+        // propagates out as the abort signal for the whole upload.
+        const onAbort = (): void => void conversion.cancel();
+        signal?.addEventListener('abort', onAbort, { once: true });
+        try {
+            await conversion.execute();
+        } finally {
+            signal?.removeEventListener('abort', onAbort);
+        }
 
         const buffer = output.target.buffer;
         return buffer === null

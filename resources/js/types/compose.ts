@@ -8,18 +8,31 @@ export type PlatformName =
     | 'linkedin'
     | 'facebook'
     | 'instagram'
-    | 'threads';
+    | 'threads'
+    | 'discord';
+
+export type PostFormat = 'feed' | 'reels' | 'story';
+
+/**
+ * Per-platform display text / handles for a mention, plus the non-platform
+ * `linkedin_urn` key which carries a raw LinkedIn company URL / numeric id /
+ * `urn:li:organization:ID`. The server normalizes it into a canonical URN on
+ * save; the client only captures and round-trips the raw string.
+ */
+export type MentionHandles = Partial<
+    Record<PlatformName | 'linkedin_urn', string>
+>;
 
 export type WorkspaceMention = {
     id: string;
     name: string;
-    handles: Partial<Record<PlatformName, string>>;
+    handles: MentionHandles;
 };
 
 export type MentionPlaceholder = {
     id: string;
     label: string;
-    handles: Partial<Record<PlatformName, string>>;
+    handles: MentionHandles;
 };
 
 export type Destination =
@@ -54,6 +67,8 @@ export type PlatformLimits = {
     maxLength: number;
     maxBytes: number | null;
     maxMedia: number;
+    /** Platform rejects a post with no image or video (Instagram). */
+    requiresMedia: boolean;
     maxMediaBytes: number;
     allowedMime: string[];
     threadMax: number | null;
@@ -73,6 +88,10 @@ export type MediaView = {
     position: number;
     edit_settings: EditSettings | null;
     source_url: string | null;
+    /** Same-origin proxy URL the canvas editor fetches (display URLs omit CORS headers). */
+    edit_url: string;
+    /** Same-origin proxy URL for the retained pre-edit source; null when none. */
+    source_edit_url: string | null;
 };
 
 /** An upload still in flight (or just failed) — rendered as a ghost chip. */
@@ -116,6 +135,7 @@ export type TargetView = {
     sections: string[];
     content_override: { segments?: string[]; media_ids?: string[] } | null;
     auto_split: boolean;
+    format: PostFormat;
     issues: string[];
     status: TargetStatus;
     error_kind: string | null;

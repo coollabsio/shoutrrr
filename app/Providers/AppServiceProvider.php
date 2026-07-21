@@ -5,13 +5,16 @@ namespace App\Providers;
 use App\Enums\Platform;
 use App\Listeners\BindWorkspaceToAccessToken;
 use App\Listeners\SetCurrentWorkspaceOnLogin;
+use App\Listeners\SetSentryUserContext;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Auth\Socialite\ThreadsProvider;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\Authenticated;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Routing\Middleware\ValidateSignature;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -50,8 +53,10 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configureErrorPages();
         $this->configureTrustedProxies();
+        $this->configureSignedUrls();
         $this->guardAgainstMisconfiguredStripe();
         Cashier::useCustomerModel(Workspace::class);
+        Cashier::calculateTaxes();
 
         // Threads has no first-party Socialite driver (separate OAuth surface
         // from the rest of Meta — authorizes at threads.net, token/API at
@@ -101,6 +106,7 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(Login::class, SetCurrentWorkspaceOnLogin::class);
         Event::listen(AccessTokenCreated::class, BindWorkspaceToAccessToken::class);
+        Event::listen(Authenticated::class, SetSentryUserContext::class);
 
         Passport::authorizationView(
             /** @param array<string, mixed> $parameters */
@@ -116,6 +122,23 @@ class AppServiceProvider extends ServiceProvider
             }
         );
 
+    }
+
+    /**
+     * Email service providers rewrite delivered links and append click-tracking
+     * query parameters (utm_*, bento_uuid, …). Laravel signs the whole query
+     * string, so those appended params would 403 the email-verification link.
+     * Excluding them from signature validation keeps the id/hash path segments
+     * and `expires` timestamp signed while ignoring the harmless tracking noise.
+     */
+    protected function configureSignedUrls(): void
+    {
+        /** @var array<int, string> $ignored */
+        $ignored = config('auth.email_verification.ignored_signature_parameters', []);
+
+        if ($ignored !== []) {
+            ValidateSignature::except($ignored);
+        }
     }
 
     /**

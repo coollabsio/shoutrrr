@@ -15,7 +15,11 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         if (app()->isLocal()) {
-            $this->call(DefaultUserSeeder::class);
+            $this->call([
+                DefaultUserSeeder::class,
+                DummyEngagementSeeder::class,
+                DummyAnalyticsSeeder::class,
+            ]);
         }
     }
 }

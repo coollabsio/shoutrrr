@@ -33,7 +33,7 @@ class BillingController extends Controller
         return Inertia::render('settings/workspace/subscription', [
             'subscribed' => $subscribed,
             'monthlyPrice' => (int) config('subscriptions.monthly_price_cents'),
-            'monthlyXBudgetMicrousd' => $subscriptionGate->monthlyXBudgetMicrousd(),
+            'monthlyXBudgetMicrousd' => $subscriptionGate->monthlyXBudgetMicrousd($workspace),
             'monthlyXBudgetUsedMicrousd' => $subscriptionGate->currentXCostMicrousd($workspace),
             'monthlyXBudgetRemainingMicrousd' => $remainingBudget === PHP_INT_MAX ? null : $remainingBudget,
             'canManageSubscription' => $subscribed,
@@ -65,7 +65,7 @@ class BillingController extends Controller
         $hadStripeCustomer = $workspace->hasStripeId();
         $customerOptions = [
             'email' => $user->email,
-            'name' => $workspace->name,
+            'name' => $user->name,
         ];
 
         try {
@@ -87,6 +87,8 @@ class BillingController extends Controller
 
             return $workspace
                 ->newSubscription('default', $priceId)
+                ->allowPromotionCodes()
+                ->collectTaxIds()
                 ->checkout([
                     'success_url' => route('billing.index').'?billing=success',
                     'cancel_url' => route('billing.index').'?billing=cancelled',

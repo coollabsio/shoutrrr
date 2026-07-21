@@ -34,6 +34,16 @@ export default function InviteMemberDialog({
 }) {
     const [open, setOpen] = useState(false);
 
+    const roleItems = availableRoles.map((role) => ({
+        value: role,
+        label: (
+            <span className="flex items-center gap-2">
+                {roleIcon(role)}
+                <span className="capitalize">{role}</span>
+            </span>
+        ),
+    }));
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger render={<Button />}>
@@ -72,22 +82,21 @@ export default function InviteMemberDialog({
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="role">Role</Label>
-                                    <Select name="role" defaultValue="member">
+                                    <Select
+                                        name="role"
+                                        defaultValue="member"
+                                        items={roleItems}
+                                    >
                                         <SelectTrigger id="role">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {availableRoles.map((role) => (
+                                            {roleItems.map((item) => (
                                                 <SelectItem
-                                                    key={role}
-                                                    value={role}
+                                                    key={item.value}
+                                                    value={item.value}
                                                 >
-                                                    <span className="flex items-center gap-2">
-                                                        {roleIcon(role)}
-                                                        <span className="capitalize">
-                                                            {role}
-                                                        </span>
-                                                    </span>
+                                                    {item.label}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>

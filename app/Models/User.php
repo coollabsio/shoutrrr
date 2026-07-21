@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Casts\NotificationPreferencesCast;
 use App\Enums\InstanceRole;
 use App\Enums\SocialProvider;
+use App\Support\FileStorage;
 use App\Support\Notifications\NotificationPreferences;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -18,7 +19,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -72,7 +72,7 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
         $path = $this->attributes['avatar_path'] ?? null;
 
         if ($path) {
-            return Storage::disk('public')->url($path);
+            return FileStorage::url($path, FileStorage::publicImageDiskName());
         }
 
         return "https://api.dicebear.com/9.x/glass/svg?seed={$this->attributes['id']}";

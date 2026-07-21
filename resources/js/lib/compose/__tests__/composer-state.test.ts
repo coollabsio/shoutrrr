@@ -46,6 +46,7 @@ function hydrated(): ReturnType<typeof composerReducer> {
                 sections: ['hello'],
                 content_override: null,
                 auto_split: true,
+                format: 'feed',
                 issues: [],
                 status: 'pending',
                 error_kind: null,
@@ -63,6 +64,7 @@ function hydrated(): ReturnType<typeof composerReducer> {
                 sections: ['hello'],
                 content_override: null,
                 auto_split: true,
+                format: 'feed',
                 issues: [],
                 status: 'pending',
                 error_kind: null,
@@ -268,6 +270,8 @@ describe('composerReducer', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         expect(state.media.map((m) => m.id)).toEqual(['m1']);
@@ -285,6 +289,8 @@ describe('composerReducer', () => {
                 position: 1,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         expect(state.media.map((m) => m.id)).toEqual(['m1', 'm2']);
@@ -310,6 +316,8 @@ describe('composerReducer', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         state = composerReducer(state, {
@@ -324,6 +332,8 @@ describe('composerReducer', () => {
                 position: 1,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         state = composerReducer(state, {
@@ -347,6 +357,8 @@ describe('composerReducer', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         state = composerReducer(state, {
@@ -361,6 +373,8 @@ describe('composerReducer', () => {
                 position: 1,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         // unknown id ignored; m1 missing from the sequence is appended
@@ -582,6 +596,8 @@ describe('composerReducer', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         const existing = base.media[0];
@@ -645,6 +661,7 @@ describe('buildPutBody', () => {
         expect(body.targets[0]).toEqual({
             connected_account_id: 'a1',
             auto_split: true,
+            format: 'feed',
             content_override: null,
         });
         expect(body.targets[0].content_override).toBeNull();
@@ -698,6 +715,8 @@ describe('buildPutBody', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         state = composerReducer(state, {
@@ -712,6 +731,8 @@ describe('buildPutBody', () => {
                 position: 1,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         const body = buildPutBody(state, ['a1', 'a2']);
@@ -757,6 +778,8 @@ describe('composerHasContent', () => {
                 position: 0,
                 edit_settings: null,
                 source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
             },
         });
         expect(composerHasContent(state)).toBe(true);
@@ -816,6 +839,36 @@ describe('initialComposerState with a destination', () => {
 
     it('defaults to all', () => {
         expect(initialComposerState().destination).toEqual({ kind: 'all' });
+    });
+});
+
+describe('composer format state', () => {
+    it('setFormat records the per-account format and marks dirty', () => {
+        const state = initialComposerState();
+        const next = composerReducer(state, {
+            type: 'setFormat',
+            accountId: 'acc-1',
+            format: 'story',
+        });
+
+        expect(next.formatByAccount['acc-1']).toBe('story');
+        expect(next.saveState).toBe('dirty');
+    });
+
+    it('buildPutBody emits format per target, defaulting to feed', () => {
+        let state = initialComposerState();
+        state = composerReducer(state, {
+            type: 'setFormat',
+            accountId: 'acc-1',
+            format: 'reels',
+        });
+
+        const body = buildPutBody(state, ['acc-1', 'acc-2']);
+        expect(body.targets[0]).toMatchObject({
+            connected_account_id: 'acc-1',
+            format: 'reels',
+        });
+        expect(body.targets[1].format).toBe('feed');
     });
 });
 

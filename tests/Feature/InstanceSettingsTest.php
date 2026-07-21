@@ -39,11 +39,13 @@ test('instance owner can update instance settings', function () {
             'workspace_creation_enabled' => false,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
+            'linkedin_community_management_enabled' => true,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->registrationsEnabled())->toBeFalse()
-        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
+        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse()
+        ->and(app(InstanceSettings::class)->linkedinCommunityManagementEnabled())->toBeTrue();
 });
 
 test('workspace creation setting is disabled when workspaces are globally disabled', function () {
@@ -72,10 +74,23 @@ test('workspace creation setting cannot be enabled when workspaces are globally 
             'workspace_creation_enabled' => true,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
+            'linkedin_community_management_enabled' => false,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
+});
+
+test('linkedin engagement polling is gated on the community management setting', function () {
+    $settings = app(InstanceSettings::class);
+
+    // Off by default: LinkedIn must never be polled for replies (every fetch 403s
+    // without the restricted r_member_social_feed scope).
+    expect($settings->engagementPollingEnabled(Platform::LinkedIn))->toBeFalse();
+
+    $settings->update(['linkedin_community_management_enabled' => true]);
+
+    expect($settings->engagementPollingEnabled(Platform::LinkedIn))->toBeTrue();
 });
 
 test('instance owner can view polling settings', function () {
@@ -105,12 +120,12 @@ test('instance owner can view usage details', function () {
     config()->set('services.x.bearer_token', 'x-bearer-token');
 
     $owner = User::factory()->instanceOwner()->create();
-    $workspace = Workspace::factory()->create(['name' => 'Usage Workspace']);
+    $workspace = Workspace::factory()->create(['name' => 'Usage Workspace', 'is_initial' => false]);
 
     UsagePeriodCounter::factory()->create([
         'workspace_id' => $workspace->id,
         'category' => UsageCategory::Publish->value,
-        'platform' => Platform::Bluesky->value,
+        'platform' => Platform::X->value,
         'operation' => UsageOperation::POST,
         'event_count' => 2,
         'total_quota' => 2,
@@ -121,20 +136,10 @@ test('instance owner can view usage details', function () {
         'period_start' => Date::now()->subMonthNoOverflow()->startOfMonth()->toDateString(),
         'period_end' => Date::now()->subMonthNoOverflow()->endOfMonth()->toDateString(),
         'category' => UsageCategory::Publish->value,
-        'platform' => Platform::Bluesky->value,
+        'platform' => Platform::X->value,
         'operation' => UsageOperation::POST,
         'event_count' => 1,
         'total_quota' => 1,
-    ]);
-
-    UsageEvent::factory()->create([
-        'workspace_id' => $workspace->id,
-        'category' => UsageCategory::Publish->value,
-        'platform' => Platform::Bluesky->value,
-        'operation' => UsageOperation::POST,
-        'quota_weight' => 1,
-        'succeeded' => false,
-        'meta' => ['status' => 429],
     ]);
 
     $this->actingAs($owner)
@@ -142,22 +147,15 @@ test('instance owner can view usage details', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('settings/instance-usage')
-            ->where('workspace_options.0.id', $workspace->id)
-            ->where('workspace_options.0.name', 'Usage Workspace')
-            ->where('platforms.0.value', 'bluesky')
             ->where('filters.workspace', null)
-            ->where('filters.platform', null)
             ->where('x_usage_available', true)
-            ->where('summaries.0.workspace.name', 'Usage Workspace')
-            ->where('summaries.0.current_total_quota', 2)
-            ->where('summaries.0.previous_total_quota', 1)
-            ->where('summaries.0.quota_delta', 1)
-            ->where('summaries.0.posts_quota', 2)
-            ->where('counters.0.workspace.name', 'Usage Workspace')
-            ->where('counters.0.platform', 'bluesky')
-            ->where('counters.0.event_count', 2)
-            ->where('error_events.0.operation', UsageOperation::POST)
-            ->where('error_events.0.meta.status', 429));
+            ->where('instance_summary.workspace_count', 1)
+            ->where('instance_summary.x_estimated_cost_usd', 0.03)
+            ->has('workspace_usage.data', 1)
+            ->where('workspace_usage.data.0.name', 'Usage Workspace')
+            ->where('workspace_usage.data.0.x_estimated_cost_usd', 0.03)
+            ->where('workspace_usage.data.0.x_previous_cost_usd', 0.015)
+            ->where('workspace_usage.data.0.quota.kind', 'default'));
 });
 
 test('instance usage marks x api usage unavailable without bearer token', function () {
@@ -173,7 +171,7 @@ test('instance usage marks x api usage unavailable without bearer token', functi
             ->where('x_usage_available', false));
 });
 
-test('instance usage can be filtered by workspace', function () {
+test('instance usage drilldown scopes counters and error events to the selected workspace', function () {
     $owner = User::factory()->instanceOwner()->create();
     $shownWorkspace = Workspace::factory()->create(['name' => 'Shown Workspace']);
     $hiddenWorkspace = Workspace::factory()->create(['name' => 'Hidden Workspace']);
@@ -184,14 +182,18 @@ test('instance usage can be filtered by workspace', function () {
     UsageEvent::factory()->create(['workspace_id' => $hiddenWorkspace->id, 'succeeded' => false]);
 
     $this->actingAs($owner)
+        ->get(route('instance-settings.usage'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->missing('drilldown'));
+
+    $this->actingAs($owner)
         ->get(route('instance-settings.usage', ['workspace' => $shownWorkspace->id]))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('filters.workspace', $shownWorkspace->id)
-            ->has('counters', 1)
-            ->where('counters.0.workspace.id', $shownWorkspace->id)
-            ->has('error_events', 1)
-            ->where('error_events.0.workspace.id', $shownWorkspace->id));
+            ->where('drilldown.workspace.id', $shownWorkspace->id)
+            ->has('drilldown.counters', 1)
+            ->has('drilldown.error_events', 1));
 });
 
 test('instance usage does not override shared workspace shell props', function () {
@@ -201,53 +203,22 @@ test('instance usage does not override shared workspace shell props', function (
         ->get(route('instance-settings.usage'))
         ->assertOk();
 
-    expect($response->inertiaProps())->toHaveKey('workspace_options')
+    expect($response->inertiaProps())->toHaveKey('workspace_usage')
         ->and($response->inertiaProps('workspaces'))->toHaveKeys(['enabled', 'current', 'all']);
-});
 
-test('instance usage can be filtered by platform', function () {
-    $owner = User::factory()->instanceOwner()->create();
-    $workspace = Workspace::factory()->create();
-
-    UsagePeriodCounter::factory()->create([
-        'workspace_id' => $workspace->id,
-        'platform' => Platform::Bluesky->value,
-        'total_quota' => 3,
-    ]);
-    UsagePeriodCounter::factory()->create([
-        'workspace_id' => $workspace->id,
-        'platform' => Platform::X->value,
-        'total_quota' => 5,
-    ]);
-    UsageEvent::factory()->create([
-        'workspace_id' => $workspace->id,
-        'platform' => Platform::Bluesky->value,
-        'succeeded' => false,
-    ]);
-    UsageEvent::factory()->create([
-        'workspace_id' => $workspace->id,
-        'platform' => Platform::X->value,
-        'succeeded' => false,
-    ]);
-
-    $this->actingAs($owner)
-        ->get(route('instance-settings.usage', ['platform' => Platform::Bluesky->value]))
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('filters.platform', Platform::Bluesky->value)
-            ->has('summaries', 1)
-            ->where('summaries.0.current_total_quota', 3)
-            ->has('counters', 1)
-            ->where('counters.0.platform', Platform::Bluesky->value)
-            ->has('error_events', 1)
-            ->where('error_events.0.platform', Platform::Bluesky->value));
+    // Guards the shared `instance.isOwner` prop (used by the sidebar and command
+    // palette to show instance settings) against being clobbered by the page's
+    // own usage-summary data, which is exposed separately as `instance_summary`.
+    $response->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('instance.isOwner', true)
+        ->has('instance_summary.workspace_count'));
 });
 
 test('instance usage includes x pricing estimates', function () {
     config(['usage_pricing.platforms.x.currency' => 'EUR']);
 
     $owner = User::factory()->instanceOwner()->create();
-    $workspace = Workspace::factory()->create();
+    $workspace = Workspace::factory()->create(['is_initial' => false]);
 
     UsagePeriodCounter::factory()->create([
         'workspace_id' => $workspace->id,
@@ -267,17 +238,15 @@ test('instance usage includes x pricing estimates', function () {
     ]);
 
     $this->actingAs($owner)
-        ->get(route('instance-settings.usage', ['platform' => Platform::X->value]))
+        ->get(route('instance-settings.usage'))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('pricing_source', 'https://developer.x.com/#pricing')
             ->where('pricing_currency', 'EUR')
-            ->where('summaries.0.current_estimated_cost_usd', 0.03)
-            ->where('summaries.0.previous_estimated_cost_usd', 0.015)
-            ->where('summaries.0.estimated_cost_delta_usd', 0.015)
-            ->where('counters.0.pricing.resource', 'post_create')
-            ->where('counters.0.pricing.unit_cost_usd', 0.015)
-            ->where('counters.0.pricing.estimated_cost_usd', 0.03));
+            ->where('workspace_usage.data.0.x_estimated_cost_usd', 0.03)
+            ->where('workspace_usage.data.0.x_previous_cost_usd', 0.015)
+            ->where('workspace_usage.data.0.x_cost_delta_usd', 0.015)
+            ->where('instance_summary.x_estimated_cost_usd', 0.03));
 });
 
 test('instance owner can fetch x api usage', function () {
@@ -373,89 +342,74 @@ test('instance owner can update polling settings', function () {
     $this->actingAs($owner)
         ->put(route('instance-settings.polling.update'), [
             'engagement' => [
-                'enabled' => [
-                    'x' => false,
-                    'bluesky' => true,
-                    'linkedin' => true,
-                ],
-                'x' => 720,
-                'bluesky' => 30,
-                'linkedin' => 120,
+                'enabled' => ['x' => false, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 720, 'bluesky' => 30, 'linkedin' => 120, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
             'post_metrics' => [
-                'enabled' => [
-                    'x' => false,
-                    'bluesky' => true,
-                    'linkedin' => true,
-                ],
-                'x' => 1440,
-                'bluesky' => 45,
-                'linkedin' => 180,
+                'enabled' => ['x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
+                'x' => 1440, 'bluesky' => 45, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 90,
             ],
             'account_metrics' => [
-                'enabled' => [
-                    'x' => false,
-                    'bluesky' => true,
-                    'linkedin' => true,
-                ],
-                'x' => 1440,
-                'bluesky' => 240,
-                'linkedin' => 480,
+                'enabled' => ['x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 1440, 'bluesky' => 240, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
+            'metrics_enabled' => true,
+            'engagement_enabled' => true,
         ])
         ->assertRedirect();
 
-    // Platforms not included in the update keep their defaults (enabled, 15 min).
-    expect(app(InstanceSettings::class)->polling())->toMatchArray([
-        'engagement' => [
-            'enabled' => [
-                'x' => false,
-                'bluesky' => true,
-                'linkedin' => true,
-                'facebook' => true,
-                'instagram' => true,
-                'threads' => true,
+    $polling = app(InstanceSettings::class)->polling();
+
+    // Every sent platform's enabled flag and interval persisted correctly, section by section.
+    expect($polling['engagement']['enabled'])->toMatchArray([
+        'x' => false, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true,
+    ])
+        ->and($polling['engagement'])->toMatchArray([
+            'x' => 720, 'bluesky' => 30, 'linkedin' => 120, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+        ])
+        ->and($polling['post_metrics']['enabled'])->toMatchArray([
+            'x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true,
+        ])
+        ->and($polling['post_metrics'])->toMatchArray([
+            'x' => 1440, 'bluesky' => 45, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 90,
+        ])
+        ->and($polling['account_metrics']['enabled'])->toMatchArray([
+            'x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true,
+        ])
+        ->and($polling['account_metrics'])->toMatchArray([
+            'x' => 1440, 'bluesky' => 240, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+        ]);
+
+    // LinkedIn is not a configurable metrics platform, so it keeps its read default
+    // (enabled + per-platform fallback) even though we never sent it.
+    expect($polling['post_metrics']['enabled']['linkedin'])->toBeTrue()
+        ->and($polling['account_metrics']['enabled']['linkedin'])->toBeTrue();
+});
+
+test('instance owner can toggle the metrics and engagement master switches from the polling page', function () {
+    $owner = User::factory()->instanceOwner()->create();
+
+    $this->actingAs($owner)
+        ->put(route('instance-settings.polling.update'), [
+            'engagement' => [
+                'enabled' => ['x' => true, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 360, 'bluesky' => 15, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
-            'x' => 720,
-            'bluesky' => 30,
-            'linkedin' => 120,
-            'facebook' => 15,
-            'instagram' => 15,
-            'threads' => 15,
-        ],
-        'post_metrics' => [
-            'enabled' => [
-                'x' => false,
-                'bluesky' => true,
-                'linkedin' => true,
-                'facebook' => true,
-                'instagram' => true,
-                'threads' => true,
+            'post_metrics' => [
+                'enabled' => ['x' => true, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
+                'x' => 360, 'bluesky' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 15,
             ],
-            'x' => 1440,
-            'bluesky' => 45,
-            'linkedin' => 180,
-            'facebook' => 15,
-            'instagram' => 15,
-            'threads' => 15,
-        ],
-        'account_metrics' => [
-            'enabled' => [
-                'x' => false,
-                'bluesky' => true,
-                'linkedin' => true,
-                'facebook' => true,
-                'instagram' => true,
-                'threads' => true,
+            'account_metrics' => [
+                'enabled' => ['x' => true, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 1440, 'bluesky' => 1440, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
-            'x' => 1440,
-            'bluesky' => 240,
-            'linkedin' => 480,
-            'facebook' => 15,
-            'instagram' => 15,
-            'threads' => 15,
-        ],
-    ]);
+            'metrics_enabled' => false,
+            'engagement_enabled' => false,
+        ])
+        ->assertRedirect();
+
+    expect(app(InstanceSettings::class)->metricsEnabled())->toBeFalse()
+        ->and(app(InstanceSettings::class)->engagementEnabled())->toBeFalse();
 });
 
 test('regular users cannot view polling settings', function () {

@@ -62,8 +62,10 @@ function fakePostReply(ReplyPostResult $result): void
 test('responding posts the reply and records our row', function (): void {
     fakePostReply(ReplyPostResult::ok('at://mine', 'cidmine'));
 
-    $this->post(route('engagement.respond', $this->reply), ['text' => 'thank you!'])
-        ->assertRedirect();
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => 'thank you!'])
+        ->assertCreated()
+        ->assertJsonPath('reply.text', 'thank you!')
+        ->assertJsonPath('reply.is_ours', true);
 
     expect($this->reply->fresh()->status)->toBe(ReplyStatus::Responded);
     expect($this->reply->fresh()->our_reply_remote_id)->toBe('at://mine');
@@ -75,8 +77,8 @@ test('our outgoing reply joins the conversation of the reply it answers', functi
 
     $this->reply->forceFill(['conversation_remote_id' => 'at://base'])->save();
 
-    $this->post(route('engagement.respond', $this->reply), ['text' => 'thank you!'])
-        ->assertRedirect();
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => 'thank you!'])
+        ->assertCreated();
 
     $ourRow = PostTargetReply::withoutGlobalScopes()->where('remote_reply_id', 'at://mine')->firstOrFail();
 
@@ -88,8 +90,8 @@ test('our outgoing reply starts the conversation when it answers a base reply', 
 
     $this->reply->forceFill(['conversation_remote_id' => null])->save();
 
-    $this->post(route('engagement.respond', $this->reply), ['text' => 'thank you!'])
-        ->assertRedirect();
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => 'thank you!'])
+        ->assertCreated();
 
     $ourRow = PostTargetReply::withoutGlobalScopes()->where('remote_reply_id', 'at://mine')->firstOrFail();
 
@@ -99,8 +101,8 @@ test('our outgoing reply starts the conversation when it answers a base reply', 
 test('responding rejects over-length text', function (): void {
     fakePostReply(ReplyPostResult::ok('at://mine'));
 
-    $this->post(route('engagement.respond', $this->reply), ['text' => str_repeat('x', 5000)])
-        ->assertSessionHasErrors('text');
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => str_repeat('x', 5000)])
+        ->assertJsonValidationErrors('text');
 });
 
 test('replying up to account capability limit is accepted', function (): void {
@@ -136,8 +138,8 @@ test('replying up to account capability limit is accepted', function (): void {
     fakePostReply(ReplyPostResult::ok('id-premium'));
 
     // A ~1000-char text exceeds X default (280) but is within the capability (25000)
-    $this->post(route('engagement.respond', $reply), ['text' => str_repeat('a', 1000)])
-        ->assertSessionHasNoErrors();
+    $this->postJson(route('engagement.respond', $reply), ['text' => str_repeat('a', 1000)])
+        ->assertCreated();
 });
 
 test('responding is blocked when the account is disabled', function (): void {
@@ -145,8 +147,9 @@ test('responding is blocked when the account is disabled', function (): void {
 
     $this->target->account->forceFill(['disabled_at' => now()])->save();
 
-    $this->post(route('engagement.respond', $this->reply), ['text' => 'nope'])
-        ->assertSessionHas('error');
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => 'nope'])
+        ->assertStatus(409)
+        ->assertJson(['status' => 'unsupported']);
 
     expect($this->reply->fresh()->status)->toBe(ReplyStatus::Pending)
         ->and(PostTargetReply::withoutGlobalScopes()->where('is_ours', true)->exists())->toBeFalse();
@@ -155,8 +158,9 @@ test('responding is blocked when the account is disabled', function (): void {
 test('a failed post surfaces an error and does not mark responded', function (): void {
     fakePostReply(ReplyPostResult::failed('platform down'));
 
-    $this->post(route('engagement.respond', $this->reply), ['text' => 'hi'])
-        ->assertSessionHas('error');
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => 'hi'])
+        ->assertStatus(502)
+        ->assertJson(['status' => 'failed', 'message' => 'platform down']);
 
     expect($this->reply->fresh()->status)->toBe(ReplyStatus::Pending);
 });

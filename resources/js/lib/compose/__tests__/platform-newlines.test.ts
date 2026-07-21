@@ -26,6 +26,12 @@ describe('collapsePlatformNewlines', () => {
         );
     });
 
+    it('preserves every newline on Discord', () => {
+        expect(collapsePlatformNewlines('a\n\n\n\n\nb', 'discord')).toBe(
+            'a\n\n\n\n\nb',
+        );
+    });
+
     it('collapses several separate runs in one post', () => {
         expect(collapsePlatformNewlines('a\n\n\n\nb\n\n\n\nc', 'x')).toBe(
             'a\n\nb\n\nc',

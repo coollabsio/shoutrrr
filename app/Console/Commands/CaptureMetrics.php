@@ -24,7 +24,7 @@ class CaptureMetrics extends Command
 
     public function handle(MetricsCaptureCadence $cadence, InstanceSettings $settings): int
     {
-        if (! config('metrics.enabled')) {
+        if (! $settings->metricsEnabled()) {
             return self::SUCCESS;
         }
 
@@ -35,6 +35,7 @@ class CaptureMetrics extends Command
                 ->where('status', PostTargetStatus::Published->value)
                 ->whereNotNull('remote_id')
                 ->whereNotNull('posted_at')
+                ->whereHas('account', fn ($query) => $query->whereNull('disabled_at'))
                 ->where('posted_at', '>=', $now->copy()->subDays(30))
                 ->where(fn ($q) => $q->whereNull('metrics_status')->orWhere('metrics_status', '!=', MetricsStatus::Unsupported->value))
                 ->each(function (PostTarget $target) use ($cadence, $now): void {
@@ -47,6 +48,7 @@ class CaptureMetrics extends Command
         if ($settings->accountMetricsPollingEnabled()) {
             ConnectedAccount::query()
                 ->withoutGlobalScopes()
+                ->enabled()
                 ->where('status', ConnectedAccountStatus::Active->value)
                 ->where(fn ($q) => $q->whereNull('metrics_status')->orWhere('metrics_status', '!=', MetricsStatus::Unsupported->value))
                 ->each(function (ConnectedAccount $account) use ($cadence, $now): void {

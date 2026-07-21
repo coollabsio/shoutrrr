@@ -5,7 +5,9 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Api\ApiKeyManager;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Laravel\Passport\Client;
+use Laravel\Passport\Passport;
 use Laravel\Passport\Token;
 
 beforeEach(function () {
@@ -97,6 +99,45 @@ test('a non-expiring key produces a Passport token expiring far in the future', 
 
     expect($token->expires_at->diffInDays(now(), absolute: true))->toBeGreaterThanOrEqual(99 * 365);
     expect($apiKey->expires_at)->toBeNull();
+});
+
+test('issue generates the encryption keypair when none exists and auto-generation is enabled', function () {
+    $emptyDir = storage_path('framework/testing/passport-keys-'.uniqid());
+    File::ensureDirectoryExists($emptyDir);
+    Passport::loadKeysFrom($emptyDir);
+    config(['passport.auto_generate_keys' => true, 'passport.private_key' => null, 'passport.public_key' => null]);
+
+    try {
+        [$apiKey] = $this->manager->issue($this->workspace, $this->user, 'bootstrap', 'read', null);
+
+        expect(file_exists($emptyDir.'/oauth-private.key'))->toBeTrue();
+        expect(Token::find($apiKey->access_token_id))->not->toBeNull();
+    } finally {
+        Passport::loadKeysFrom(storage_path());
+        File::deleteDirectory($emptyDir);
+    }
+});
+
+test('issue does not generate keys and fails loudly when auto-generation is disabled', function () {
+    $emptyDir = storage_path('framework/testing/passport-keys-'.uniqid());
+    File::ensureDirectoryExists($emptyDir);
+    Passport::loadKeysFrom($emptyDir);
+    config(['passport.auto_generate_keys' => false, 'passport.private_key' => null, 'passport.public_key' => null]);
+
+    try {
+        $threw = false;
+        try {
+            $this->manager->issue($this->workspace, $this->user, 'no keys', 'read', null);
+        } catch (Throwable) {
+            $threw = true;
+        }
+
+        expect($threw)->toBeTrue();
+        expect(file_exists($emptyDir.'/oauth-private.key'))->toBeFalse();
+    } finally {
+        Passport::loadKeysFrom(storage_path());
+        File::deleteDirectory($emptyDir);
+    }
 });
 
 test('revoke marks the row revoked and revokes the passport token', function () {

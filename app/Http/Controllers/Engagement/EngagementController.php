@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Engagement;
 
+use App\Enums\EngagementStatus;
 use App\Enums\Platform;
 use App\Enums\ReplyStatus;
 use App\Enums\SendStatus;
 use App\Exceptions\TokenRefreshException;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\WorkspaceMentionController;
 use App\Http\Requests\Engagement\RespondToReplyRequest;
 use App\Jobs\SendReply;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostTargetReply;
+use App\Models\WorkspaceMention;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
@@ -21,12 +24,12 @@ use App\Support\ReplyListItem;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -101,6 +104,19 @@ class EngagementController extends Controller
                 'bluesky' => $settings->engagementPollingEnabled(Platform::Bluesky),
                 'linkedin' => $settings->engagementPollingEnabled(Platform::LinkedIn),
             ],
+            // LinkedIn engagement is off by default until the operator declares
+            // their app is approved for the restricted Community Management scope.
+            // The UI uses this to keep LinkedIn out of the "temporarily disabled"
+            // banner in that expected-off state.
+            'linkedinCommunityManagementEnabled' => $settings->linkedinCommunityManagementEnabled(),
+            // The reply box reuses the composer's @-mention picker, so it needs
+            // the same saved-mention library the composer receives.
+            'savedMentions' => WorkspaceMention::withoutGlobalScopes()
+                ->where('workspace_id', $request->user()->current_workspace_id)
+                ->orderBy('name')
+                ->get()
+                ->map(fn (WorkspaceMention $mention): array => WorkspaceMentionController::view($mention))
+                ->all(),
         ]);
     }
 
@@ -135,30 +151,22 @@ class EngagementController extends Controller
         ]);
     }
 
-    public function markRead(Request $request, PostTargetReply $reply): RedirectResponse|Response
+    public function markRead(PostTargetReply $reply): Response
     {
         PostTargetReply::query()
             ->whereIn('id', $this->inboundRepliesForBaseThread($reply)->pluck('id'))
             ->update(['read_at' => now()]);
 
-        if ($request->expectsJson()) {
-            return response()->noContent();
-        }
-
-        return back();
+        return response()->noContent();
     }
 
-    public function archive(Request $request, PostTargetReply $reply): RedirectResponse|Response
+    public function archive(PostTargetReply $reply): Response
     {
         PostTargetReply::query()
             ->whereIn('id', $this->inboundRepliesForBaseThread($reply)->pluck('id'))
             ->update(['status' => ReplyStatus::Archived->value]);
 
-        if ($request->expectsJson()) {
-            return response()->noContent();
-        }
-
-        return back();
+        return response()->noContent();
     }
 
     /**
@@ -297,24 +305,28 @@ class EngagementController extends Controller
         PostTargetReply $reply,
         EngagementConnectorRegistry $registry,
         TokenManager $tokens,
-    ): RedirectResponse {
+    ): JsonResponse {
         $target = $reply->target;
         $account = $target?->account;
 
         if ($account === null) {
-            return back()->with('error', 'This account is no longer connected.');
+            $this->logActionFailure('respond', $reply, EngagementStatus::Unsupported, 'Account no longer connected.');
+
+            return $this->actionError(EngagementStatus::Unsupported, 'This account is no longer connected.', 'Could not post the reply.');
         }
 
         if ($account->isDisabled()) {
-            return back()->with('error', 'This account is disabled in the workspace. Enable it to reply.');
+            $this->logActionFailure('respond', $reply, EngagementStatus::Unsupported, 'Account disabled in the workspace.');
+
+            return $this->actionError(EngagementStatus::Unsupported, 'This account is disabled in the workspace. Enable it to reply.', 'Could not post the reply.');
         }
 
         try {
-            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn, Platform::Facebook, Platform::Instagram, Platform::Threads], true)
-                ? $tokens->fresh($account)
-                : [];
+            $credentials = $this->credentialsFor($account, $tokens);
         } catch (TokenRefreshException) {
-            return back()->with('error', 'Could not authenticate with the platform. Reconnect the account.');
+            $this->logActionFailure('respond', $reply, EngagementStatus::AuthExpired, 'Token refresh failed.');
+
+            return $this->actionError(EngagementStatus::AuthExpired, 'Could not authenticate with the platform. Reconnect the account.', 'Could not post the reply.');
         }
 
         $mediaIds = array_values($request->validated('media', []));
@@ -323,7 +335,9 @@ class EngagementController extends Controller
             $result = $registry->for($reply->platform)->postReply($account, $reply, (string) $request->validated('text'), $credentials);
 
             if (! $result->isOk()) {
-                return back()->with('error', $result->message ?? 'Could not post the reply.');
+                $this->logActionFailure('respond', $reply, $result->status, $result->message);
+
+                return $this->actionError($result->status, $result->message, 'Could not post the reply.');
             }
 
             $reply->forceFill([
@@ -331,7 +345,7 @@ class EngagementController extends Controller
                 'our_reply_remote_id' => $result->remoteReplyId,
             ])->save();
 
-            PostTargetReply::withoutGlobalScopes()->create([
+            $ourRow = PostTargetReply::withoutGlobalScopes()->create([
                 'workspace_id' => $reply->workspace_id,
                 'post_target_id' => $reply->post_target_id,
                 'platform' => $reply->platform,
@@ -350,7 +364,7 @@ class EngagementController extends Controller
                 'fetched_at' => now(),
             ]);
 
-            return back()->with('success', 'Reply sent.');
+            return $this->respondedRow($ourRow);
         }
 
         // Media path: create the outgoing row in a sending state, then dispatch.
@@ -375,101 +389,132 @@ class EngagementController extends Controller
 
         SendReply::dispatch($ourRow->id, $reply->id, $mediaIds, (string) $request->validated('text'), $reply->platform);
 
-        return back()->with('success', 'Sending your reply…');
+        return $this->respondedRow($ourRow);
+    }
+
+    /**
+     * Serialize our freshly-created outgoing reply for the client, which swaps
+     * it in for the optimistic bubble. Eager-load the relations ReplyListItem
+     * reads: `create()` leaves them unloaded, so without this the serializer
+     * would lazy-load them one by one (or emit nulls under strict mode).
+     */
+    private function respondedRow(PostTargetReply $ourRow): JsonResponse
+    {
+        $ourRow->load(['target.post', 'target.account']);
+
+        return response()->json(['reply' => ReplyListItem::make($ourRow)], 201);
     }
 
     public function like(
         PostTargetReply $reply,
         EngagementConnectorRegistry $registry,
         TokenManager $tokens,
-    ): RedirectResponse {
+    ): JsonResponse {
         if ($reply->liked_at !== null) {
-            return back();
+            return response()->json(['is_liked' => true]);
         }
 
         $account = $reply->target?->account;
 
         if ($account === null) {
-            return back()->with('error', 'This account is no longer connected.');
+            $this->logActionFailure('like', $reply, EngagementStatus::Unsupported, 'Account no longer connected.');
+
+            return $this->actionError(EngagementStatus::Unsupported, 'This account is no longer connected.', 'Could not like this reply.');
         }
 
         try {
             $credentials = $this->credentialsFor($account, $tokens);
         } catch (TokenRefreshException) {
-            return back()->with('error', 'Could not authenticate with the platform. Reconnect the account.');
+            $this->logActionFailure('like', $reply, EngagementStatus::AuthExpired, 'Token refresh failed.');
+
+            return $this->actionError(EngagementStatus::AuthExpired, 'Could not authenticate with the platform. Reconnect the account.', 'Could not like this reply.');
         }
 
         $result = $registry->for($reply->platform)->likeReply($account, $reply, $credentials);
 
         if (! $result->isOk()) {
-            return back()->with('error', $result->message ?? 'Could not like this reply.');
+            $this->logActionFailure('like', $reply, $result->status, $result->message);
+
+            return $this->actionError($result->status, $result->message, 'Could not like this reply.');
         }
 
         $reply->forceFill(['liked_at' => now(), 'like_remote_id' => $result->remoteId])->save();
 
-        return back();
+        return response()->json(['is_liked' => true]);
     }
 
     public function unlike(
         PostTargetReply $reply,
         EngagementConnectorRegistry $registry,
         TokenManager $tokens,
-    ): RedirectResponse {
+    ): JsonResponse {
         if ($reply->liked_at === null) {
-            return back();
+            return response()->json(['is_liked' => false]);
         }
 
         $account = $reply->target?->account;
 
         if ($account === null) {
-            return back()->with('error', 'This account is no longer connected.');
+            $this->logActionFailure('unlike', $reply, EngagementStatus::Unsupported, 'Account no longer connected.');
+
+            return $this->actionError(EngagementStatus::Unsupported, 'This account is no longer connected.', 'Could not remove the like.');
         }
 
         try {
             $credentials = $this->credentialsFor($account, $tokens);
         } catch (TokenRefreshException) {
-            return back()->with('error', 'Could not authenticate with the platform. Reconnect the account.');
+            $this->logActionFailure('unlike', $reply, EngagementStatus::AuthExpired, 'Token refresh failed.');
+
+            return $this->actionError(EngagementStatus::AuthExpired, 'Could not authenticate with the platform. Reconnect the account.', 'Could not remove the like.');
         }
 
         $result = $registry->for($reply->platform)->unlikeReply($account, $reply, $reply->like_remote_id, $credentials);
 
         if (! $result->isOk()) {
-            return back()->with('error', $result->message ?? 'Could not remove the like.');
+            $this->logActionFailure('unlike', $reply, $result->status, $result->message);
+
+            return $this->actionError($result->status, $result->message, 'Could not remove the like.');
         }
 
         $reply->forceFill(['liked_at' => null, 'like_remote_id' => null])->save();
 
-        return back();
+        return response()->json(['is_liked' => false]);
     }
 
     public function destroyReply(
         PostTargetReply $reply,
         EngagementConnectorRegistry $registry,
         TokenManager $tokens,
-    ): RedirectResponse {
+    ): Response|JsonResponse {
         abort_unless($reply->is_ours, 403);
 
         $account = $reply->target?->account;
 
         if ($account === null) {
-            return back()->with('error', 'This account is no longer connected.');
+            $this->logActionFailure('delete', $reply, EngagementStatus::Unsupported, 'Account no longer connected.');
+
+            return $this->actionError(EngagementStatus::Unsupported, 'This account is no longer connected.', 'Could not delete this reply.');
         }
 
         try {
             $credentials = $this->credentialsFor($account, $tokens);
         } catch (TokenRefreshException) {
-            return back()->with('error', 'Could not authenticate with the platform. Reconnect the account.');
+            $this->logActionFailure('delete', $reply, EngagementStatus::AuthExpired, 'Token refresh failed.');
+
+            return $this->actionError(EngagementStatus::AuthExpired, 'Could not authenticate with the platform. Reconnect the account.', 'Could not delete this reply.');
         }
 
         $result = $registry->for($reply->platform)->deleteReply($account, $reply, $credentials);
 
         if (! $result->isOk()) {
-            return back()->with('error', $result->message ?? 'Could not delete this reply.');
+            $this->logActionFailure('delete', $reply, $result->status, $result->message);
+
+            return $this->actionError($result->status, $result->message, 'Could not delete this reply.');
         }
 
         $reply->delete();
 
-        return back()->with('success', 'Reply deleted.');
+        return response()->noContent();
     }
 
     /**
@@ -480,5 +525,34 @@ class EngagementController extends Controller
         return in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn, Platform::Facebook, Platform::Instagram, Platform::Threads], true)
             ? $tokens->fresh($account)
             : [];
+    }
+
+    /**
+     * Report a failed reply action as JSON at the status mapped from the
+     * connector outcome. The client reads `message` in `onHttpException`; never
+     * returns 422 (see EngagementStatus::httpStatus).
+     */
+    private function actionError(EngagementStatus $status, ?string $message, string $fallback): JsonResponse
+    {
+        return response()->json([
+            'status' => $status->value,
+            'message' => $message ?? $fallback,
+        ], $status->httpStatus());
+    }
+
+    /**
+     * Record why a reply action failed, so a like that the platform rejects is
+     * diagnosable from the logs rather than only from the user's report.
+     */
+    private function logActionFailure(string $action, PostTargetReply $reply, EngagementStatus $status, ?string $message): void
+    {
+        Log::warning('engagement.action.failed', [
+            'action' => $action,
+            'platform' => $reply->platform->value,
+            'reply_id' => $reply->id,
+            'workspace_id' => $reply->workspace_id,
+            'status' => $status->value,
+            'message' => $message,
+        ]);
     }
 }

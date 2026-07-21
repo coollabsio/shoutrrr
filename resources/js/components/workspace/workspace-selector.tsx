@@ -104,7 +104,7 @@ export function WorkspaceSelector() {
                                     <img
                                         alt={workspace.name}
                                         src={workspace.logo}
-                                        className="size-4 rounded"
+                                        className="size-4 shrink-0 rounded object-cover"
                                     />
                                     <span className="truncate">
                                         {workspace.name}

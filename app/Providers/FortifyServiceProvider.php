@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Enums\SocialProvider;
+use App\Http\Responses\EmailVerificationNotificationSentResponse;
 use App\Models\WorkspaceInvitation;
 use App\Support\InstanceSettings;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -14,6 +15,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\EmailVerificationNotificationSentResponse as EmailVerificationNotificationSentResponseContract;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 use Override;
@@ -26,7 +28,10 @@ class FortifyServiceProvider extends ServiceProvider
     #[Override]
     public function register(): void
     {
-        //
+        $this->app->singleton(
+            EmailVerificationNotificationSentResponseContract::class,
+            EmailVerificationNotificationSentResponse::class,
+        );
     }
 
     /**
@@ -78,9 +83,7 @@ class FortifyServiceProvider extends ServiceProvider
             'status' => $request->session()->get('status'),
         ]));
 
-        Fortify::verifyEmailView(fn (Request $request) => Inertia::render('auth/verify-email', [
-            'status' => $request->session()->get('status'),
-        ]));
+        Fortify::verifyEmailView(fn () => Inertia::render('auth/verify-email'));
 
         Fortify::registerView(function (Request $request) {
             $invitationToken = $request->query('invitation');

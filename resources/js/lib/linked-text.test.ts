@@ -55,6 +55,94 @@ describe('linkedTextParts', () => {
         ]);
     });
 
+    it('links Instagram mentions to the matching profile', () => {
+        expect(linkedTextParts('cc @studio.harbor here', 'instagram')).toEqual([
+            { type: 'text', text: 'cc ' },
+            {
+                type: 'link',
+                text: '@studio.harbor',
+                href: 'https://www.instagram.com/studio.harbor/',
+            },
+            { type: 'text', text: ' here' },
+        ]);
+    });
+
+    it('trims a trailing period back out of an Instagram mention', () => {
+        expect(linkedTextParts('thanks @harbor.', 'instagram')).toEqual([
+            { type: 'text', text: 'thanks ' },
+            {
+                type: 'link',
+                text: '@harbor',
+                href: 'https://www.instagram.com/harbor/',
+            },
+            { type: 'text', text: '.' },
+        ]);
+    });
+
+    it('links Instagram hashtags to the explore page, lowercasing the href', () => {
+        expect(linkedTextParts('Golden hour #Harbor', 'instagram')).toEqual([
+            { type: 'text', text: 'Golden hour ' },
+            {
+                type: 'link',
+                text: '#Harbor',
+                href: 'https://www.instagram.com/explore/tags/harbor',
+            },
+        ]);
+    });
+
+    it('links Facebook hashtags but leaves @ text alone', () => {
+        expect(
+            linkedTextParts('Thanks @someone for #LaunchDay', 'facebook'),
+        ).toEqual([
+            { type: 'text', text: 'Thanks @someone for ' },
+            {
+                type: 'link',
+                text: '#LaunchDay',
+                href: 'https://www.facebook.com/hashtag/launchday',
+            },
+        ]);
+    });
+
+    it('does not treat hashtags as links on platforms without them', () => {
+        expect(linkedTextParts('post #nope', 'x')).toEqual([
+            { type: 'text', text: 'post #nope' },
+        ]);
+    });
+
+    it('links Threads mentions to the matching profile', () => {
+        expect(linkedTextParts('cc @studio.harbor here', 'threads')).toEqual([
+            { type: 'text', text: 'cc ' },
+            {
+                type: 'link',
+                text: '@studio.harbor',
+                href: 'https://www.threads.net/@studio.harbor',
+            },
+            { type: 'text', text: ' here' },
+        ]);
+    });
+
+    it('links Threads hashtags to the tag search, lowercasing the href', () => {
+        expect(linkedTextParts('Golden hour #Harbor', 'threads')).toEqual([
+            { type: 'text', text: 'Golden hour ' },
+            {
+                type: 'link',
+                text: '#Harbor',
+                href: 'https://www.threads.net/search?q=harbor&serp_type=tags',
+            },
+        ]);
+    });
+
+    it('keeps a URL fragment intact instead of splitting off an inner hashtag', () => {
+        expect(linkedTextParts('see example.com/#top', 'instagram')).toEqual([
+            { type: 'text', text: 'see ' },
+            {
+                type: 'link',
+                text: 'example.com/#top',
+                href: 'https://example.com/#top',
+            },
+        ]);
+    });
+
     it('keeps excluded bare domains as text while linking other URLs', () => {
         expect(
             linkedTextParts('hello shoutrrr.com heyandras.dev', undefined, [

@@ -125,6 +125,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         jq \
         ffmpeg \
+        supervisor \
     && rm -rf /var/lib/apt/lists/*
 # Install the Bun binary for the target architecture (amd64 -> x64, arm64 -> aarch64).
 # TARGETARCH is provided automatically by buildx.
@@ -179,8 +180,6 @@ ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
     QUEUE_WORKER_COUNT=${QUEUE_WORKER_COUNT}
 
 # Supervisor supervises the web/worker/scheduler/ssr processes
-RUN apt-get update && apt-get install -y --no-install-recommends supervisor \
-    && rm -rf /var/lib/apt/lists/*
 COPY docker/supervisord.conf /etc/supervisor/laravel.conf
 
 # Entrypoint init scripts (run by the serversideup ENTRYPOINT before the CMD)
@@ -191,6 +190,9 @@ COPY --chown=www-data:www-data . .
 # Production vendor + built assets on top (so source copies don't clobber them)
 COPY --from=vendor --chown=www-data:www-data /var/www/html/vendor ./vendor
 COPY --from=assets --chown=www-data:www-data /app/public/build ./public/build
+# Emoji data (emojibase `en`) is generated into public/emoji by the vite build
+# and is gitignored, so it exists only in the assets stage — copy it explicitly.
+COPY --from=assets --chown=www-data:www-data /app/public/emoji ./public/emoji
 COPY --from=assets --chown=www-data:www-data /app/bootstrap/ssr ./bootstrap/ssr
 # node_modules needed for the SSR runtime when toggled on
 COPY --from=assets --chown=www-data:www-data /app/node_modules ./node_modules

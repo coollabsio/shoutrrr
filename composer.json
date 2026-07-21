@@ -25,7 +25,9 @@
         "laravel/passport": "^13.7",
         "laravel/socialite": "^5.27",
         "laravel/tinker": "^3.0",
-        "laravel/wayfinder": "^0.1.14"
+        "laravel/wayfinder": "^0.1.14",
+        "league/flysystem-aws-s3-v3": "^3.0",
+        "sentry/sentry-laravel": "^4.26"
     },
     "require-dev": {
         "driftingly/rector-laravel": "^2.5",
@@ -59,6 +61,7 @@
         "composer install",
         "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
         "@php -r \"preg_match('/^APP_KEY=.+/m', file_get_contents('.env')) || passthru('php artisan key:generate --no-interaction');\"",
+        "@php -r \"file_exists('storage/oauth-private.key') || passthru('php artisan passport:keys --no-interaction');\"",
         "@php artisan storage:link --force",
         "bun install",
         "bun run build"
@@ -67,6 +70,8 @@
         "Composer\\Config::disableProcessTimeout",
         "@php artisan migrate --force --no-interaction",
         "@php artisan db:seed --class=DefaultUserSeeder --force --no-interaction",
+        "@php artisan db:seed --class=DummyEngagementSeeder --force --no-interaction",
+        "@php artisan db:seed --class=DummyAnalyticsSeeder --force --no-interaction",
         "bunx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74,#86efac\" \"php artisan serve --host=0.0.0.0\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"bun run dev\" \"php artisan schedule:work\" --names=server,queue,logs,vite,cron --kill-others"
     ],
     "stripe": [

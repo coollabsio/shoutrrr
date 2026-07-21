@@ -101,6 +101,18 @@ export function VideoEditor({
     // Guard against divide-by-zero when duration hasn't been resolved yet.
     const safeD = mediaDuration > 0 ? mediaDuration : 1;
 
+    // Did the user actually change anything? The full untouched clip has no crop,
+    // the default aspect, and a trim spanning the whole media (start≈0,
+    // end≈duration — the loadedmetadata handler nudges end to the precise
+    // duration, so compare with a small epsilon, not for exact equality). With no
+    // edits, re-encoding is pointless, so the primary button uploads as-is instead.
+    const isEdited =
+        settings.crop !== null ||
+        settings.aspect !== 'auto' ||
+        settings.trim.start > 0.05 ||
+        settings.trim.end < mediaDuration - 0.05 ||
+        altText !== (initialAltText ?? '');
+
     // Compute on-screen video dimensions from the measured canvas area.
     const displayScale = sourceSize
         ? Math.min(
@@ -882,34 +894,49 @@ export function VideoEditor({
                     )}
 
                     <div className="ml-auto flex items-center gap-2">
-                        {variant === 'new' ? (
-                            <button
-                                type="button"
-                                disabled={busy}
-                                onClick={onSkip}
-                                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 md:py-2"
-                            >
-                                Upload without editing
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                disabled={busy}
-                                onClick={onCancel}
-                                className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 md:py-2"
-                            >
-                                Cancel
-                            </button>
-                        )}
+                        {isEdited &&
+                            (variant === 'new' ? (
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={onSkip}
+                                    className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 md:py-2"
+                                >
+                                    Upload without editing
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={onCancel}
+                                    className="rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 md:py-2"
+                                >
+                                    Cancel
+                                </button>
+                            ))}
                         <button
                             type="button"
                             disabled={busy}
                             onClick={() => {
+                                // Unedited: skip re-encoding and just upload the
+                                // original (new) or close the re-edit (existing).
+                                if (!isEdited) {
+                                    if (variant === 'new') {
+                                        onSkip?.();
+                                    } else {
+                                        onCancel();
+                                    }
+                                    return;
+                                }
                                 void onApply(settings, altText);
                             }}
                             className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50 md:py-2"
                         >
-                            Apply
+                            {isEdited
+                                ? 'Apply'
+                                : variant === 'new'
+                                  ? 'Upload'
+                                  : 'Done'}
                         </button>
                     </div>
                 </footer>

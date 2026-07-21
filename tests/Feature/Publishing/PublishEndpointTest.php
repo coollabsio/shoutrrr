@@ -144,3 +144,57 @@ test('retry rejects a target belonging to another post', function () {
 
     test()->postJson("/posts/{$post->id}/targets/{$otherTarget->id}/retry")->assertNotFound();
 });
+
+test('publish-now is blocked (422) for an empty post and does not dispatch', function () {
+    Bus::fake();
+    [$user, $workspace] = publishingMember();
+    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'status' => PostStatus::Draft]);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => [''],
+    ]);
+
+    test()->postJson("/posts/{$post->id}/publish")
+        ->assertStatus(422)
+        ->assertJsonPath('blocked.0.issues.0', 'empty');
+
+    expect($post->refresh()->status)->toBe(PostStatus::Draft);
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
+test('publish-now is blocked (422) for an Instagram target with a caption but no media', function () {
+    Bus::fake();
+    [$user, $workspace] = publishingMember();
+    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'status' => PostStatus::Draft]);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::Instagram->value,
+        'sections' => ['Test'],
+    ]);
+
+    test()->postJson("/posts/{$post->id}/publish")
+        ->assertStatus(422)
+        ->assertJsonPath('blocked.0.platform', 'instagram')
+        ->assertJsonPath('blocked.0.issues.0', 'media_required');
+
+    expect($post->refresh()->status)->toBe(PostStatus::Draft);
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
+test('publish-now is blocked (422) when a target is over the limit and does not dispatch', function () {
+    Bus::fake();
+    [$user, $workspace] = publishingMember();
+    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'status' => PostStatus::Draft]);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::Bluesky->value,
+        'sections' => [str_repeat('x', 400)],
+        'auto_split' => false,
+    ]);
+
+    test()->postJson("/posts/{$post->id}/publish")
+        ->assertStatus(422)
+        ->assertJsonPath('blocked.0.platform', 'bluesky')
+        ->assertJsonPath('blocked.0.issues.0', 'section_too_long');
+
+    expect($post->refresh()->status)->toBe(PostStatus::Draft);
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});

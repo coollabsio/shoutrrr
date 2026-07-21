@@ -5,21 +5,22 @@ declare(strict_types=1);
 namespace App\Services\Posts;
 
 use App\Models\PostMedia;
+use App\Support\FileStorage;
 use App\Support\SafeImageFetcher;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class MediaStorageService
 {
     public function __construct(private readonly SafeImageFetcher $fetcher) {}
 
     /**
-     * Store an uploaded image on the public disk and create an orphan PostMedia row.
+     * Store an uploaded image on the configured disk and create an orphan PostMedia row.
      */
     public function store(string $workspaceId, UploadedFile $file, ?string $altText = null): PostMedia
     {
-        $disk = 'public';
+        $disk = FileStorage::diskName();
         $path = $file->store('media/'.$workspaceId, $disk);
 
         $dimensions = @getimagesize($file->getRealPath()) ?: [null, null];
@@ -43,7 +44,7 @@ class MediaStorageService
      * Download an image from a public URL (SSRF-guarded) and store it as an orphan
      * PostMedia row, mirroring store().
      *
-     * @throws \RuntimeException if the URL is blocked or the response is not a valid image.
+     * @throws RuntimeException if the URL is blocked or the response is not a valid image.
      */
     public function storeFromUrl(string $workspaceId, string $url, ?string $altText = null): PostMedia
     {
@@ -57,9 +58,9 @@ class MediaStorageService
             default => 'bin',
         };
 
-        $disk = 'public';
+        $disk = FileStorage::diskName();
         $path = 'media/'.$workspaceId.'/'.Str::uuid()->toString().'.'.$extension;
-        Storage::disk($disk)->put($path, $image['bytes']);
+        FileStorage::disk($disk)->put($path, $image['bytes']);
 
         $dimensions = @getimagesizefromstring($image['bytes']) ?: [null, null];
 
@@ -86,7 +87,7 @@ class MediaStorageService
      */
     public function storeBeautified(string $workspaceId, UploadedFile $composed, UploadedFile $source, array $settings, ?string $altText = null): PostMedia
     {
-        $disk = 'public';
+        $disk = FileStorage::diskName();
         $path = $composed->store('media/'.$workspaceId, $disk);
         $sourcePath = $source->store('media/'.$workspaceId, $disk);
 
@@ -134,7 +135,7 @@ class MediaStorageService
         ]);
 
         if ($oldPath !== $path) {
-            Storage::disk($media->disk)->delete($oldPath);
+            FileStorage::disk($media->disk)->delete($oldPath);
         }
 
         return $media->refresh();

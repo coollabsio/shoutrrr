@@ -34,6 +34,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Automatic Key Generation
+    |--------------------------------------------------------------------------
+    |
+    | When no keys are configured above and none exist on disk, Shoutrrr
+    | generates the RSA keypair automatically the first time an API key is
+    | issued. Set this to false to require the keys be provisioned out of band
+    | (via `passport:keys` or the env vars above); issuing a key without keys
+    | present will then fail loudly instead of writing new ones.
+    |
+    */
+
+    'auto_generate_keys' => env('PASSPORT_AUTO_GENERATE_KEYS', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Passport Database Connection
     |--------------------------------------------------------------------------
     |

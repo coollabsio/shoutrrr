@@ -25,6 +25,7 @@ const PLATFORM_BRAND: Record<string, { tile: string; glyph: string }> = {
     facebook: { tile: 'bg-[#1877F2]', glyph: 'text-white!' },
     instagram: { tile: 'bg-[#E4405F]', glyph: 'text-white!' },
     threads: { tile: 'bg-black', glyph: 'text-white!' },
+    discord: { tile: 'bg-[#5865F2]', glyph: 'text-white!' },
 };
 
 const PLATFORM_FALLBACK = { tile: 'bg-muted', glyph: 'text-muted-foreground' };
@@ -42,6 +43,8 @@ type PlatformTabsProps = {
     stateFor: (accountId: string) => 'ok' | 'warn' | 'over';
     /** Returns true when the given account has a content override active. */
     hasOverride: (accountId: string) => boolean;
+    /** Account ids with an active non-blocking format notice (e.g. Stories caption drop). */
+    noticeAccountIds: string[];
 };
 
 export function visiblePlatformTabAccounts(
@@ -90,6 +93,7 @@ export default function PlatformTabs({
     chipFor,
     stateFor,
     hasOverride,
+    noticeAccountIds,
 }: PlatformTabsProps) {
     // No accounts → one generic, platform-less tab that edits the base text.
     if (accounts.length === 0) {
@@ -137,6 +141,7 @@ export default function PlatformTabs({
                 chipFor={chipFor}
                 stateFor={stateFor}
                 hasOverride={hasOverride}
+                noticeAccountIds={noticeAccountIds}
             />
             <PlatformTabRow
                 className="hidden md:flex"
@@ -147,6 +152,7 @@ export default function PlatformTabs({
                 chipFor={chipFor}
                 stateFor={stateFor}
                 hasOverride={hasOverride}
+                noticeAccountIds={noticeAccountIds}
             />
         </>
     );
@@ -161,6 +167,7 @@ function PlatformTabRow({
     chipFor,
     stateFor,
     hasOverride,
+    noticeAccountIds,
     compact = false,
 }: {
     className: string;
@@ -171,6 +178,7 @@ function PlatformTabRow({
     chipFor: (accountId: string) => string;
     stateFor: (accountId: string) => 'ok' | 'warn' | 'over';
     hasOverride: (accountId: string) => boolean;
+    noticeAccountIds: string[];
     compact?: boolean;
 }) {
     const [overflowOpen, setOverflowOpen] = useState(false);
@@ -193,6 +201,7 @@ function PlatformTabRow({
                     chipFor={chipFor}
                     stateFor={stateFor}
                     hasOverride={hasOverride}
+                    hasNotice={noticeAccountIds.includes(account.id)}
                     compact={compact}
                 />
             ))}
@@ -238,6 +247,9 @@ function PlatformTabRow({
                                 chipFor={chipFor}
                                 stateFor={stateFor}
                                 hasOverride={hasOverride}
+                                hasNotice={noticeAccountIds.includes(
+                                    account.id,
+                                )}
                                 inMenu
                             />
                         ))}
@@ -255,6 +267,7 @@ function PlatformTabButton({
     chipFor,
     stateFor,
     hasOverride,
+    hasNotice = false,
     inMenu = false,
     compact = false,
 }: {
@@ -264,6 +277,7 @@ function PlatformTabButton({
     chipFor: (accountId: string) => string;
     stateFor: (accountId: string) => 'ok' | 'warn' | 'over';
     hasOverride: (accountId: string) => boolean;
+    hasNotice?: boolean;
     inMenu?: boolean;
     compact?: boolean;
 }) {
@@ -316,6 +330,13 @@ function PlatformTabButton({
                     className="size-1.5 shrink-0 rounded-full bg-primary"
                     aria-label="override active"
                     title="Override active on this account"
+                />
+            )}
+            {hasNotice && (
+                <span
+                    className="size-1.5 shrink-0 rounded-full bg-amber-500"
+                    aria-label="format notice"
+                    title="This account has a format warning"
                 />
             )}
             {needsAttention && <NeedsAttentionIcon account={account} />}

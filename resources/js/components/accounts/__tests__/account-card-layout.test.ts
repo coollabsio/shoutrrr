@@ -36,4 +36,18 @@ describe('account card layout', () => {
         expect(source).toContain('<InputGroupAddon>@</InputGroupAddon>');
         expect(source).toContain('InputGroupInput');
     });
+
+    it('reconnects webhook accounts through a Discord webhook-URL dialog, not the OAuth redirect', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/accounts/account-card.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain("account.auth_method === 'webhook'");
+        expect(source).toContain('ReconnectDiscordDialog');
+        expect(source).toContain('name="webhook_url"');
+    });
 });

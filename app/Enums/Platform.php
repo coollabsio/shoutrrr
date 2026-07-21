@@ -14,6 +14,7 @@ enum Platform: string
     case Facebook = 'facebook';
     case Instagram = 'instagram';
     case Threads = 'threads';
+    case Discord = 'discord';
 
     public function label(): string
     {
@@ -24,6 +25,7 @@ enum Platform: string
             self::Facebook => 'Facebook',
             self::Instagram => 'Instagram',
             self::Threads => 'Threads',
+            self::Discord => 'Discord',
         };
     }
 
@@ -35,6 +37,7 @@ enum Platform: string
             self::Bluesky => null,
             self::Facebook, self::Instagram => 'facebook',
             self::Threads => 'threads',
+            self::Discord => null,
         };
     }
 
@@ -49,12 +52,22 @@ enum Platform: string
             // scope that call 403s ("Missing required OAuth2 scopes: users.email").
             // `media.write` is required to upload media to the v2 /2/media/upload
             // endpoint (the v1.1 endpoint was deprecated 2025-03-31).
-            self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'media.write', 'offline.access'],
+            // `like.write` is required to like/unlike from the engagement inbox
+            // (POST + DELETE /2/users/{id}/likes); without it those calls 403
+            // ("Missing required OAuth2 scopes: like.write"), which the connector
+            // maps to `unsupported`. One scope covers both like and unlike.
+            self::X => ['users.read', 'users.email', 'tweet.read', 'tweet.write', 'media.write', 'like.write', 'offline.access'],
             self::LinkedIn => ['openid', 'profile', 'email', 'w_member_social'],
             self::Bluesky => [],
             self::Facebook => ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_read_user_content', 'pages_manage_engagement', 'read_insights', 'business_management'],
-            self::Instagram => ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'pages_show_list', 'business_management'],
-            self::Threads => ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights'],
+            // `instagram_manage_engagement` powers the Like Media and Comments
+            // API (2026-04-22) used to like/unlike replies from the inbox;
+            // without it the like call 403s → Unsupported.
+            self::Instagram => ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'instagram_manage_engagement', 'pages_show_list', 'business_management'],
+            // `threads_delete` is required for DELETE /{threads-media-id}; without it
+            // Graph returns 403 and the post remains on Threads.
+            self::Threads => ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights', 'threads_delete'],
+            self::Discord => [],
         };
     }
 
@@ -66,6 +79,7 @@ enum Platform: string
             self::Bluesky => null,
             self::Facebook, self::Instagram => 'services.facebook',
             self::Threads => 'services.threads',
+            self::Discord => null,
         };
     }
 
@@ -79,9 +93,84 @@ enum Platform: string
         return $this === self::Bluesky;
     }
 
+    public function supportsWebhook(): bool
+    {
+        return $this === self::Discord;
+    }
+
+    /**
+     * Whether this platform can read replies/mentions for the engagement inbox.
+     * Discord webhooks are write-only — they can't receive replies — so Discord
+     * has no engagement connector and must never be scheduled for reply fetching
+     * (see the gate in InstanceSettings::engagementPollingEnabled, Task 6).
+     */
+    public function supportsEngagement(): bool
+    {
+        return $this !== self::Discord;
+    }
+
+    /**
+     * Whether this platform's metrics connector returns real post-level metrics.
+     * LinkedIn's post-metrics connector returns `unsupported`, so it has no
+     * post-metrics polling to configure.
+     */
+    public function supportsPostMetrics(): bool
+    {
+        return $this !== self::LinkedIn;
+    }
+
+    /**
+     * Whether this platform's metrics connector returns real account-level
+     * metrics. LinkedIn and Discord return `unsupported` (LinkedIn has no
+     * account-metrics API here; a Discord webhook cannot read server stats).
+     */
+    public function supportsAccountMetrics(): bool
+    {
+        return $this !== self::LinkedIn && $this !== self::Discord;
+    }
+
+    /**
+     * Whether this platform's engagement connector can like/unlike a reply.
+     * Threads returns `unsupported` (its Graph API exposes no like/unlike write
+     * for replies), so its heart is an inert affordance. Instagram gained the
+     * capability with the Like Media and Comments API (2026-04-22).
+     */
+    public function supportsReplyLikes(): bool
+    {
+        return $this !== self::Threads;
+    }
+
+    /**
+     * Whether this platform participates in the given polling settings section.
+     */
+    public function supportsPollingSection(string $section): bool
+    {
+        return match ($section) {
+            'engagement' => $this->supportsEngagement(),
+            'post_metrics' => $this->supportsPostMetrics(),
+            'account_metrics' => $this->supportsAccountMetrics(),
+            default => false,
+        };
+    }
+
+    /**
+     * Launched platforms whose connectors back the given polling section, in
+     * enum declaration order. Single source of truth for the polling settings
+     * controller and its update request.
+     *
+     * @return list<self>
+     */
+    public static function pollingSectionPlatforms(string $section): array
+    {
+        return array_values(array_filter(
+            self::cases(),
+            fn (self $platform): bool => $platform->isLaunched() && $platform->supportsPollingSection($section),
+        ));
+    }
+
     public function isConfigured(): bool
     {
-        if ($this->supportsAppPassword()) {
+        if ($this->supportsAppPassword() || $this->supportsWebhook()) {
             return true;
         }
 
@@ -100,8 +189,8 @@ enum Platform: string
      * connecting must stay disabled even when credentials are configured. Flip a
      * platform to `true` when its publish/engagement/metrics connectors land.
      *
-     * All six platforms (X, Bluesky, LinkedIn, Facebook, Instagram, Threads)
-     * are launched as of Threads shipping in Phase 4.
+     * All seven platforms (X, Bluesky, LinkedIn, Facebook, Instagram, Threads,
+     * Discord) are launched.
      */
     public function isLaunched(): bool
     {
@@ -155,7 +244,7 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, configured: bool, launched: bool, enabled: bool}>
+     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, supportsWebhook: bool, configured: bool, launched: bool, enabled: bool}>
      */
     public static function capabilities(): array
     {
@@ -166,6 +255,7 @@ enum Platform: string
             'label' => $platform->label(),
             'supportsOAuth' => $platform->supportsOAuth(),
             'supportsAppPassword' => $platform->supportsAppPassword(),
+            'supportsWebhook' => $platform->supportsWebhook(),
             'configured' => $platform->isConfigured(),
             'launched' => $platform->isLaunched(),
             'enabled' => $enabled[$platform->value] ?? true,
@@ -186,6 +276,7 @@ enum Platform: string
             self::Facebook => 63_206,
             self::Instagram => 2_200,
             self::Threads => 500,
+            self::Discord => 2000,
         };
     }
 
@@ -217,6 +308,46 @@ enum Platform: string
             self::X, self::Bluesky => 4,
             self::LinkedIn => 9,
             self::Facebook, self::Instagram, self::Threads => 10,
+            self::Discord => 10,
+        };
+    }
+
+    /**
+     * Whether a post is rejected without at least one image or video. Instagram
+     * is a media-first platform: its container flow has no text-only post type.
+     */
+    public function requiresMedia(): bool
+    {
+        return $this === self::Instagram;
+    }
+
+    /**
+     * Whether a post mixing a video with images survives publish intact.
+     * Instagram/Threads build a real mixed carousel (each item keeps its own
+     * media_type) and Discord attaches every file to the webhook message
+     * untouched — none of them lose content. X, Bluesky, Facebook, and LinkedIn
+     * each take only the first video and silently drop every image, so mixing
+     * there is blocked before publish rather than discovered after.
+     */
+    public function combinesVideoAndImages(): bool
+    {
+        return match ($this) {
+            self::Instagram, self::Threads, self::Discord => true,
+            self::X, self::Bluesky, self::Facebook, self::LinkedIn => false,
+        };
+    }
+
+    /**
+     * Whether the platform permits an animated GIF alongside other media. X and
+     * Bluesky treat a GIF as a video-like embed: at most one per post, never
+     * mixed with images or a second GIF. Both reject the mix at publish, so the
+     * precheck blocks it up front.
+     */
+    public function allowsGifWithOtherMedia(): bool
+    {
+        return match ($this) {
+            self::X, self::Bluesky => false,
+            default => true,
         };
     }
 
@@ -228,6 +359,7 @@ enum Platform: string
             self::LinkedIn => 8_388_608,
             self::Facebook => 4_194_304,
             self::Instagram, self::Threads => 8_388_608,
+            self::Discord => 10_485_760, // 10 MiB (Discord's default webhook attachment cap)
         };
     }
 
@@ -242,6 +374,7 @@ enum Platform: string
             self::Facebook => ['image/jpeg', 'image/png', 'image/gif'],
             self::Instagram => ['image/jpeg'],
             self::Threads => ['image/jpeg', 'image/png'],
+            self::Discord => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
         };
     }
 
@@ -256,6 +389,7 @@ enum Platform: string
             self::LinkedIn => ['width' => 7680, 'height' => 4320],
             self::Facebook => ['width' => 8192, 'height' => 8192],
             self::Instagram, self::Threads => ['width' => 1440, 'height' => 1800],
+            self::Discord => ['width' => 8192, 'height' => 8192],
         };
     }
 
@@ -275,6 +409,7 @@ enum Platform: string
             self::LinkedIn => 524_288_000, // 500 MB (organic feed)
             self::Bluesky => 100_000_000,
             self::Facebook, self::Instagram, self::Threads => 1_073_741_824,
+            self::Discord => 10_485_760, // 10 MiB (Discord's default webhook attachment cap)
         };
     }
 
@@ -290,6 +425,7 @@ enum Platform: string
             self::Facebook => 1200,
             self::Instagram => 900,
             self::Threads => 300,
+            self::Discord => 600,
         };
     }
 
@@ -310,13 +446,12 @@ enum Platform: string
             // UTF-16 code units: 2 bytes each in UTF-16LE.
             self::X => intdiv(strlen((string) mb_convert_encoding($text, 'UTF-16LE', 'UTF-8')), 2),
             self::Bluesky => grapheme_strlen($text) ?: 0,
-            self::LinkedIn => mb_strlen($text),
-            self::Facebook, self::Instagram, self::Threads => mb_strlen($text),
+            self::LinkedIn, self::Facebook, self::Instagram, self::Threads, self::Discord => mb_strlen($text),
         };
     }
 
     /**
-     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
+     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
      */
     public function limits(): array
     {
@@ -325,6 +460,7 @@ enum Platform: string
             'maxLength' => $this->maxLength(),
             'maxBytes' => $this->maxBytes(),
             'maxMedia' => $this->maxMedia(),
+            'requiresMedia' => $this->requiresMedia(),
             'maxMediaBytes' => $this->maxMediaBytes(),
             'allowedMime' => $this->allowedMime(),
             'threadMax' => $this->threadMax(),
@@ -336,7 +472,7 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
+     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
      */
     public static function allLimits(): array
     {

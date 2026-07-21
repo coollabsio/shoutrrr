@@ -30,8 +30,21 @@ declare module '@inertiajs/core' {
                 analytics: boolean;
                 billing?: boolean;
                 engagement?: boolean;
+                feedback?: boolean;
             };
             instance: { isOwner: boolean };
+            billing?: {
+                subscribed: boolean;
+                manageUrl: string;
+            } | null;
+            community?: {
+                repoUrl: string;
+                sponsorUrl: string;
+                stars: number | null;
+            } | null;
+            updateAvailable?: boolean;
+            latestVersion?: string | null;
+            latestReleaseUrl?: string | null;
             [key: string]: unknown;
         };
     }

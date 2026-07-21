@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CaptureMcpWorkspaceSelection;
 use App\Http\Middleware\EnsureEngagementEnabled;
+use App\Http\Middleware\EnsureFeedbackEnabled;
 use App\Http\Middleware\EnsureMetricsEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -11,6 +12,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Sentry\Laravel\Integration;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -26,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'engagement.enabled' => EnsureEngagementEnabled::class,
             'metrics.enabled' => EnsureMetricsEnabled::class,
+            'feedback.enabled' => EnsureFeedbackEnabled::class,
         ]);
 
         $middleware->web(append: [
@@ -52,6 +55,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Report unhandled exceptions to Sentry. No-op unless a DSN is set, so
+        // self-hosted instances without Sentry are unaffected.
+        Integration::handles($exceptions);
+
         // Render exceptions as JSON for API paths and for any client that
         // explicitly asks for JSON (e.g. the composer's useHttp XHR autosave).
         // Inertia visits send `Accept: text/html` + `X-Inertia`, so their

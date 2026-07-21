@@ -14,6 +14,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import type { PlatformName } from '@/types/compose';
 
 type PollingGroup = Record<PlatformName, number> & {
@@ -24,24 +25,24 @@ export type PollingSettings = {
     engagement: PollingGroup;
     post_metrics: PollingGroup;
     account_metrics: PollingGroup;
+    /** Instance-wide master switches. When off, the matching section(s) below are moot. */
+    metrics_enabled: boolean;
+    engagement_enabled: boolean;
 };
+
+/** The three per-platform sections, excluding the two flat master-switch keys. */
+type PollingSectionKey = 'engagement' | 'post_metrics' | 'account_metrics';
+
+type SectionPlatform = { platform: PlatformName; label: string };
 
 type Props = {
     settings: PollingSettings;
+    sections: Record<PollingSectionKey, SectionPlatform[]>;
 };
-
-const platforms: { key: PlatformName; label: string }[] = [
-    { key: 'x', label: 'X' },
-    { key: 'bluesky', label: 'Bluesky' },
-    { key: 'linkedin', label: 'LinkedIn' },
-    { key: 'facebook', label: 'Facebook' },
-    { key: 'instagram', label: 'Instagram' },
-    { key: 'threads', label: 'Threads' },
-];
 
 export function pollingWithMinutes(
     settings: PollingSettings,
-    group: keyof PollingSettings,
+    group: PollingSectionKey,
     platform: PlatformName,
     value: string,
 ): PollingSettings {
@@ -56,7 +57,7 @@ export function pollingWithMinutes(
 
 export function pollingWithPlatformEnabled(
     settings: PollingSettings,
-    group: keyof PollingSettings,
+    group: PollingSectionKey,
     platform: PlatformName,
     enabled: boolean,
 ): PollingSettings {
@@ -72,7 +73,7 @@ export function pollingWithPlatformEnabled(
     };
 }
 
-export default function InstancePolling({ settings }: Props) {
+export default function InstancePolling({ settings, sections }: Props) {
     const { data, setData, put, processing, errors } =
         useForm<PollingSettings>(settings);
 
@@ -85,7 +86,7 @@ export default function InstancePolling({ settings }: Props) {
     }
 
     function setMinutes(
-        group: keyof PollingSettings,
+        group: PollingSectionKey,
         platform: PlatformName,
         value: string,
     ) {
@@ -93,7 +94,7 @@ export default function InstancePolling({ settings }: Props) {
     }
 
     function setPlatformEnabled(
-        group: keyof PollingSettings,
+        group: PollingSectionKey,
         platform: PlatformName,
         enabled: boolean,
     ) {
@@ -123,34 +124,98 @@ export default function InstancePolling({ settings }: Props) {
                 />
 
                 <form onSubmit={handleSubmit} className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Feature availability</CardTitle>
+                            <CardDescription>
+                                Turn engagement or metrics off for the whole
+                                instance without touching environment variables.
+                                The sections below only take effect while their
+                                switch here is on.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-start gap-3">
+                                <Checkbox
+                                    id="engagement_enabled"
+                                    checked={data.engagement_enabled}
+                                    onCheckedChange={(checked) =>
+                                        setData(
+                                            'engagement_enabled',
+                                            checked === true,
+                                        )
+                                    }
+                                />
+                                <div className="space-y-1">
+                                    <Label htmlFor="engagement_enabled">
+                                        Enable engagement
+                                    </Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Governs the Engagement section below.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-3">
+                                <Checkbox
+                                    id="metrics_enabled"
+                                    checked={data.metrics_enabled}
+                                    onCheckedChange={(checked) =>
+                                        setData(
+                                            'metrics_enabled',
+                                            checked === true,
+                                        )
+                                    }
+                                />
+                                <div className="space-y-1">
+                                    <Label htmlFor="metrics_enabled">
+                                        Enable metrics
+                                    </Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Governs both the Post metrics and
+                                        Account metrics sections below.
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     <PollingCard
                         title="Engagement"
-                        description="How often to check published posts for new replies."
+                        description="The minimum time between reply checks. Fresh posts are checked more often and back off as they age, so this sets the floor, not a fixed interval."
                         group="engagement"
+                        platforms={sections.engagement}
                         values={data.engagement}
                         errors={errors}
                         onChange={setMinutes}
                         onEnabledChange={setPlatformEnabled}
+                        minutesHelp="Minimum interval in minutes."
+                        disabled={!data.engagement_enabled}
                     />
 
                     <PollingCard
                         title="Post metrics"
-                        description="How often to refresh likes, replies, reposts, and impressions for published posts."
+                        description="The minimum time between metric refreshes. Fresh posts are refreshed more often and back off as they age, so this sets the floor, not a fixed interval."
                         group="post_metrics"
+                        platforms={sections.post_metrics}
                         values={data.post_metrics}
                         errors={errors}
                         onChange={setMinutes}
                         onEnabledChange={setPlatformEnabled}
+                        minutesHelp="Minimum interval in minutes."
+                        disabled={!data.metrics_enabled}
                     />
 
                     <PollingCard
                         title="Account metrics"
                         description="How often to snapshot follower, following, and post counts for connected accounts."
                         group="account_metrics"
+                        platforms={sections.account_metrics}
                         values={data.account_metrics}
                         errors={errors}
                         onChange={setMinutes}
                         onEnabledChange={setPlatformEnabled}
+                        disabled={!data.metrics_enabled}
                     />
 
                     <Button type="submit" disabled={processing}>
@@ -166,75 +231,89 @@ function PollingCard({
     title,
     description,
     group,
+    platforms,
     values,
     errors,
     onChange,
     onEnabledChange,
+    minutesHelp = 'Interval in minutes.',
+    disabled = false,
 }: {
     title: string;
     description: string;
-    group: keyof PollingSettings;
+    group: PollingSectionKey;
+    platforms: SectionPlatform[];
     values: PollingGroup;
     errors: Partial<Record<string, string>>;
     onChange: (
-        group: keyof PollingSettings,
+        group: PollingSectionKey,
         platform: PlatformName,
         value: string,
     ) => void;
     onEnabledChange: (
-        group: keyof PollingSettings,
+        group: PollingSectionKey,
         platform: PlatformName,
         enabled: boolean,
     ) => void;
+    minutesHelp?: string;
+    /** The instance-wide master switch for this section is off; every row below is moot. */
+    disabled?: boolean;
 }) {
     const hasDisabledPlatform = platforms.some(
-        (platform) => !values.enabled[platform.key],
+        (p) => !values.enabled[p.platform],
     );
 
     return (
-        <Card>
+        <Card className={cn(disabled && 'opacity-60')}>
             <CardHeader>
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <CardTitle>{title}</CardTitle>
                         <CardDescription>{description}</CardDescription>
                     </div>
-                    {hasDisabledPlatform && (
+                    {disabled ? (
                         <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                            Partially disabled
+                            Disabled instance-wide
                         </span>
+                    ) : (
+                        hasDisabledPlatform && (
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                Partially disabled
+                            </span>
+                        )
                     )}
                 </div>
             </CardHeader>
             <CardContent className="space-y-4">
-                {platforms.map((platform) => {
-                    const errorKey = `${group}.${platform.key}`;
-                    const isEnabled = values.enabled[platform.key];
+                {platforms.map((p) => {
+                    const errorKey = `${group}.${p.platform}`;
+                    const isEnabled = values.enabled[p.platform];
 
                     return (
                         <div
-                            key={platform.key}
+                            key={p.platform}
                             className="grid gap-2 sm:grid-cols-[1fr_9rem] sm:items-start"
                         >
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                     <Checkbox
-                                        id={`${group}-${platform.key}-enabled`}
+                                        id={`${group}-${p.platform}-enabled`}
                                         checked={isEnabled}
+                                        disabled={disabled}
                                         onCheckedChange={(checked) =>
                                             onEnabledChange(
                                                 group,
-                                                platform.key,
+                                                p.platform,
                                                 checked === true,
                                             )
                                         }
                                     />
                                     <Label
-                                        htmlFor={`${group}-${platform.key}-enabled`}
+                                        htmlFor={`${group}-${p.platform}-enabled`}
                                     >
-                                        {platform.label}
+                                        {p.label}
                                     </Label>
-                                    {!isEnabled && (
+                                    {!disabled && !isEnabled && (
                                         <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
                                             Temporarily disabled
                                         </span>
@@ -242,23 +321,23 @@ function PollingCard({
                                 </div>
                                 <p className="text-sm text-muted-foreground">
                                     {isEnabled
-                                        ? 'Interval in minutes.'
-                                        : `Polling for ${platform.label} is paused.`}
+                                        ? minutesHelp
+                                        : `Polling for ${p.label} is paused.`}
                                 </p>
                             </div>
                             <div>
                                 <Input
-                                    id={`${group}-${platform.key}`}
+                                    id={`${group}-${p.platform}`}
                                     type="number"
                                     min={5}
                                     max={10080}
                                     step={5}
-                                    value={values[platform.key]}
-                                    disabled={!isEnabled}
+                                    value={values[p.platform]}
+                                    disabled={disabled || !isEnabled}
                                     onChange={(event) =>
                                         onChange(
                                             group,
-                                            platform.key,
+                                            p.platform,
                                             event.target.value,
                                         )
                                     }

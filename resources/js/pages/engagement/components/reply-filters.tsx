@@ -48,6 +48,23 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
     const [postPickerOpen, setPostPickerOpen] = useState(false);
     const activePost = posts.find((p) => p.id === filters.post);
 
+    const platformItems = [
+        { value: 'all', label: 'All platforms' },
+        ...PLATFORMS.map((p) => ({
+            value: p.value,
+            label: (
+                <>
+                    <PlatformGlyph platform={p.value} />
+                    {p.label}
+                </>
+            ),
+        })),
+    ];
+    const accountItems = [
+        { value: 'all', label: 'All accounts' },
+        ...accounts.map((a) => ({ value: a.id, label: a.handle ?? a.id })),
+    ];
+
     function update(patch: Partial<EngagementFilters>) {
         const next = { ...filters, ...patch };
         router.get(
@@ -97,6 +114,7 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
             </ToggleGroup>
 
             <Select
+                items={platformItems}
                 value={filters.platform || 'all'}
                 onValueChange={(v) =>
                     update({ platform: !v || v === 'all' ? '' : v })
@@ -106,11 +124,9 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
                     <SelectValue placeholder="Platform" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="all">All platforms</SelectItem>
-                    {PLATFORMS.map((p) => (
-                        <SelectItem key={p.value} value={p.value}>
-                            <PlatformGlyph platform={p.value} />
-                            {p.label}
+                    {platformItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                            {item.label}
                         </SelectItem>
                     ))}
                 </SelectContent>
@@ -118,6 +134,7 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
 
             {accounts.length > 0 ? (
                 <Select
+                    items={accountItems}
                     value={filters.account || 'all'}
                     onValueChange={(v) =>
                         update({ account: !v || v === 'all' ? '' : v })
@@ -130,10 +147,9 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
                         <SelectValue placeholder="Account" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">All accounts</SelectItem>
-                        {accounts.map((a) => (
-                            <SelectItem key={a.id} value={a.id}>
-                                {a.handle ?? a.id}
+                        {accountItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                                {item.label}
                             </SelectItem>
                         ))}
                     </SelectContent>

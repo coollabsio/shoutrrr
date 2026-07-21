@@ -35,6 +35,7 @@ describe('analytics disabled metric notices', () => {
                 facebook: true,
                 instagram: true,
                 threads: true,
+                discord: true,
             }),
         ).toEqual(['Bluesky', 'LinkedIn']);
         expect(
@@ -45,6 +46,7 @@ describe('analytics disabled metric notices', () => {
                 facebook: true,
                 instagram: true,
                 threads: true,
+                discord: true,
             }),
         ).toEqual([]);
     });
@@ -56,5 +58,15 @@ describe('analytics post comparison links', () => {
             "import { show as postRoute } from '@/routes/posts';",
         );
         expect(source).toContain('href={postRoute(row.id).url}');
+    });
+});
+
+describe('analytics graph series toggles', () => {
+    it('wires shared hide/show state for the chart legend and account cards', () => {
+        expect(source).toContain('hiddenAccountIds');
+        expect(source).toContain('toggleAccountOnGraph');
+        expect(source).toContain('nextHiddenAccountIds');
+        expect(source).toContain('onToggleAccount={toggleAccountOnGraph}');
+        expect(source).toContain('hidden from graph');
     });
 });

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/tooltip';
 import { celebrate } from '@/lib/compose/celebrate';
 import type { ScheduleTray } from '@/lib/compose/composer-state';
+import { type AccountBlock, describeReason } from '@/lib/compose/precheck';
 import {
     OPTIMISTIC_PUBLISH,
     OPTIMISTIC_SCHEDULE,
@@ -21,7 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import { index as billingRoute } from '@/routes/billing';
 import { publish, queue } from '@/routes/posts';
-import type { PostView } from '@/types/compose';
+import type { PlatformLimits, PlatformName, PostView } from '@/types/compose';
 
 type Props = {
     tray: ScheduleTray;
@@ -48,7 +49,70 @@ type Props = {
     onOptimisticSubmit: (optimistic: OptimisticSubmit) => () => void;
     /** Adopt the server's post after a successful publish/queue/schedule. */
     onServerPost: (post: PostView) => void;
+    /** Accounts whose content will be rejected by the platform (live). */
+    blockedAccounts: AccountBlock[];
+    /** Per-platform limits, for rendering block reasons. */
+    limits: PlatformLimits[];
 };
+
+export function hasBlockingIssues(blocked: AccountBlock[]): boolean {
+    return blocked.length > 0;
+}
+
+function limitsFor(
+    limits: PlatformLimits[],
+    platform: PlatformName,
+): PlatformLimits {
+    return (
+        limits.find((item) => item.platform === platform) ?? {
+            platform,
+            maxLength: 0,
+            maxBytes: null,
+            maxMedia: 0,
+            requiresMedia: false,
+            maxMediaBytes: 0,
+            allowedMime: [],
+            threadMax: null,
+            maxImageDimensions: { width: 0, height: 0 },
+            allowedVideoMime: [],
+            maxVideoBytes: 0,
+            maxVideoDurationSeconds: 0,
+        }
+    );
+}
+
+// onHttpException's response.data is typed `string` but may arrive already
+// parsed at runtime — handle both, mirroring the pattern in
+// resources/js/hooks/compose/use-autosave.ts.
+function parseServerBlocked(raw: unknown): AccountBlock[] {
+    let data: unknown = raw;
+    if (typeof raw === 'string') {
+        try {
+            data = JSON.parse(raw);
+        } catch {
+            return [];
+        }
+    }
+    if (typeof data !== 'object' || data === null || !('blocked' in data)) {
+        return [];
+    }
+    const blocked = (data as { blocked?: unknown }).blocked;
+    if (!Array.isArray(blocked)) {
+        return [];
+    }
+
+    return blocked.map((item) => ({
+        accountId: String(
+            (item as { connected_account_id?: string }).connected_account_id ??
+                '',
+        ),
+        handle: String((item as { handle?: string }).handle ?? ''),
+        platform: (item as { platform?: unknown }).platform as PlatformName,
+        reasons:
+            ((item as { issues?: unknown })
+                .issues as AccountBlock['reasons']) ?? [],
+    }));
+}
 
 type ShortcutEvent = Pick<
     KeyboardEvent,
@@ -101,6 +165,8 @@ export function SubmitBar({
     queueDisabled,
     onOptimisticSubmit,
     onServerPost,
+    blockedAccounts,
+    limits,
 }: Props) {
     // useHttp verbs take NO inline data — the body is injected via transform()
     // at submit time so it always reflects the latest reducer state.
@@ -110,6 +176,14 @@ export function SubmitBar({
     const [noSlot, setNoSlot] = useState(false);
     const [pastTime, setPastTime] = useState(false);
     const attentionBlocked = attentionHandles.length > 0;
+    // Server-reported blocks (belt-and-suspenders for edge cases the client
+    // pre-check missed). Keyed identically to client AccountBlock.
+    const [serverBlocked, setServerBlocked] = useState<AccountBlock[]>([]);
+    // Only reveal the block list after a submit attempt, so it doesn't nag before.
+    const [showBlocked, setShowBlocked] = useState(false);
+
+    // Prefer live client blocks; fall back to the last server response.
+    const blocks = blockedAccounts.length > 0 ? blockedAccounts : serverBlocked;
 
     const submitLabel =
         tray.mode === 'now'
@@ -119,6 +193,13 @@ export function SubmitBar({
               : 'Schedule';
 
     async function handleSubmit() {
+        if (hasBlockingIssues(blockedAccounts)) {
+            setShowBlocked(true);
+            setServerBlocked([]);
+
+            return;
+        }
+
         if (
             !shouldAllowSubmit({
                 disabled,
@@ -151,12 +232,21 @@ export function SubmitBar({
             router.visit(ComposerController.show(id).url);
         };
         const handleSubmitException = (
-            response: { status: number },
+            response: { status: number; data?: unknown },
             revert: () => void,
         ) => {
             revert();
             if (response.status === 402) {
                 router.visit(billingRoute().url);
+
+                return;
+            }
+            if (response.status === 422) {
+                const blocked = parseServerBlocked(response.data);
+                if (blocked.length > 0) {
+                    setServerBlocked(blocked);
+                    setShowBlocked(true);
+                }
             }
         };
 
@@ -307,6 +397,25 @@ export function SubmitBar({
                 <p className="text-[12px] text-destructive">
                     That time has already passed — pick a time in the future.
                 </p>
+            )}
+            {showBlocked && blocks.length > 0 && (
+                <ul className="space-y-0.5 text-[12px] text-destructive">
+                    {blocks.map((block) => (
+                        <li key={block.accountId}>
+                            <span className="font-medium">{block.handle}</span>
+                            {' — '}
+                            {block.reasons
+                                .map((reason) =>
+                                    describeReason(
+                                        reason,
+                                        block.platform,
+                                        limitsFor(limits, block.platform),
+                                    ),
+                                )
+                                .join('; ')}
+                        </li>
+                    ))}
+                </ul>
             )}
         </div>
     );

@@ -31,6 +31,19 @@ class InstanceSettings
 
     public function engagementPollingEnabled(?Platform $platform = null): bool
     {
+        // Discord (and any future write-only platform) has no engagement connector;
+        // never report it as pollable so the reply-fetch dispatcher skips it.
+        if ($platform !== null && ! $platform->supportsEngagement()) {
+            return false;
+        }
+
+        // LinkedIn reply-fetching needs the restricted `r_member_social_feed`
+        // Community Management scope. Unless the operator declares their app is
+        // approved for it, never poll LinkedIn — otherwise every fetch 403s.
+        if ($platform === Platform::LinkedIn && ! $this->linkedinCommunityManagementEnabled()) {
+            return false;
+        }
+
         return $this->platformAvailable($platform)
             && $this->platformEnabled('engagement_polling_enabled', $platform);
     }
@@ -50,6 +63,30 @@ class InstanceSettings
     public function quoteTweetsEnabled(): bool
     {
         return $this->boolean('quote_tweets_enabled');
+    }
+
+    /**
+     * Whether the operator has declared this instance's LinkedIn app is approved
+     * for the Community Management API. Gates requesting the restricted
+     * `r_member_social_feed`/`w_member_social_feed` scopes at connect and polling
+     * LinkedIn for replies. Off by default — the scopes are a closed LinkedIn
+     * product, so requesting them on an unapproved app breaks the connect flow.
+     */
+    public function linkedinCommunityManagementEnabled(): bool
+    {
+        return $this->boolean('linkedin_community_management_enabled');
+    }
+
+    /** Instance-wide metrics master switch. Defaults to `metrics.enabled` (env) until overridden here. */
+    public function metricsEnabled(): bool
+    {
+        return $this->boolean('metrics_enabled', (bool) config('metrics.enabled'));
+    }
+
+    /** Instance-wide engagement master switch. Defaults to `engagement.enabled` (env) until overridden here. */
+    public function engagementEnabled(): bool
+    {
+        return $this->boolean('engagement_enabled', (bool) config('engagement.enabled'));
     }
 
     public function platformAvailable(?Platform $platform = null): bool
@@ -93,7 +130,7 @@ class InstanceSettings
     }
 
     /**
-     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool}
+     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool, linkedin_community_management_enabled: bool}
      */
     public function all(): array
     {
@@ -102,6 +139,7 @@ class InstanceSettings
             'workspace_creation_enabled' => $this->workspaceCreationEnabled(),
             'usage_tracking_enabled' => $this->usageTrackingEnabled(),
             'quote_tweets_enabled' => $this->quoteTweetsEnabled(),
+            'linkedin_community_management_enabled' => $this->linkedinCommunityManagementEnabled(),
         ];
     }
 
@@ -112,7 +150,9 @@ class InstanceSettings
      * @return array{
      *     engagement: array<string, array<string, bool>|int>,
      *     post_metrics: array<string, array<string, bool>|int>,
-     *     account_metrics: array<string, array<string, bool>|int>
+     *     account_metrics: array<string, array<string, bool>|int>,
+     *     metrics_enabled: bool,
+     *     engagement_enabled: bool
      * }
      */
     public function polling(): array
@@ -130,7 +170,46 @@ class InstanceSettings
                 'enabled' => $this->platformEnabledValues('account_metrics_polling_enabled'),
                 ...$this->platformMinutes('account_metrics_poll_interval_minutes', 'account_metrics'),
             ],
+            // Instance-wide master switches: when off, the sections above are moot
+            // (nothing polls regardless of their per-platform settings).
+            'metrics_enabled' => $this->metricsEnabled(),
+            'engagement_enabled' => $this->engagementEnabled(),
         ];
+    }
+
+    /**
+     * @return array<string, int|string> workspace id => cents or the string "unlimited"
+     */
+    public function xWorkspaceBudgets(): array
+    {
+        /** @var array<string, int|string> $map */
+        $map = (array) ($this->settings()['x_workspace_budgets'] ?? []);
+
+        return $map;
+    }
+
+    public function xWorkspaceBudget(string $workspaceId): int|string|null
+    {
+        $value = $this->xWorkspaceBudgets()[$workspaceId] ?? null;
+
+        if ($value === 'unlimited') {
+            return 'unlimited';
+        }
+
+        return $value === null ? null : (int) $value;
+    }
+
+    public function setXWorkspaceBudget(string $workspaceId, int|string|null $value): void
+    {
+        $map = $this->xWorkspaceBudgets();
+
+        if ($value === null) {
+            unset($map[$workspaceId]);
+        } else {
+            $map[$workspaceId] = $value === 'unlimited' ? 'unlimited' : (int) $value;
+        }
+
+        $this->update(['x_workspace_budgets' => $map]);
     }
 
     public function engagementPollIntervalMinutes(Platform $platform): int
@@ -149,7 +228,7 @@ class InstanceSettings
     }
 
     /**
-     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, engagement_polling_enabled?: bool|array<string, bool>, post_metrics_polling_enabled?: bool|array<string, bool>, account_metrics_polling_enabled?: bool|array<string, bool>, engagement_poll_interval_minutes?: array<string, int>, post_metrics_poll_interval_minutes?: array<string, int>, account_metrics_poll_interval_minutes?: array<string, int>}  $values
+     * @param  array{registrations_enabled?: bool, workspace_creation_enabled?: bool, usage_tracking_enabled?: bool, quote_tweets_enabled?: bool, linkedin_community_management_enabled?: bool, engagement_polling_enabled?: bool|array<string, bool>, post_metrics_polling_enabled?: bool|array<string, bool>, account_metrics_polling_enabled?: bool|array<string, bool>, engagement_poll_interval_minutes?: array<string, int>, post_metrics_poll_interval_minutes?: array<string, int>, account_metrics_poll_interval_minutes?: array<string, int>, x_workspace_budgets?: array<string, int|string>}  $values
      */
     public function update(array $values): void
     {

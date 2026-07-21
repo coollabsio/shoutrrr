@@ -6,6 +6,7 @@ namespace App\Services\Publishing;
 
 use App\Enums\Platform;
 use App\Services\Publishing\Connectors\BlueskyPublishConnector;
+use App\Services\Publishing\Connectors\DiscordPublishConnector;
 use App\Services\Publishing\Connectors\FacebookConnector;
 use App\Services\Publishing\Connectors\InstagramConnector;
 use App\Services\Publishing\Connectors\LinkedInConnector;
@@ -24,6 +25,7 @@ class PublishConnectorRegistry
             Platform::Facebook => app(FacebookConnector::class),
             Platform::Instagram => app(InstagramConnector::class),
             Platform::Threads => app(ThreadsConnector::class),
+            Platform::Discord => app(DiscordPublishConnector::class),
         };
     }
 }

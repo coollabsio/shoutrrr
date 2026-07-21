@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\ErrorKind;
 use App\Enums\MetricsStatus;
 use App\Enums\Platform;
+use App\Enums\PostFormat;
 use App\Enums\PostTargetStatus;
 use Carbon\CarbonImmutable;
 use Database\Factories\PostTargetFactory;
@@ -26,6 +27,7 @@ use Override;
  * @property list<string> $sections
  * @property array{text?: string|null, media_ids?: list<string>}|null $content_override
  * @property bool $auto_split
+ * @property PostFormat $format
  * @property PostTargetStatus $status
  * @property string|null $remote_id
  * @property list<string>|null $remote_ids
@@ -42,7 +44,9 @@ use Override;
  * @property int|null $impressions
  * @property CarbonImmutable|null $metrics_captured_at
  * @property MetricsStatus|null $metrics_status
+ * @property int $metrics_unchanged_streak
  * @property CarbonImmutable|null $reply_fetched_at
+ * @property int $reply_fetch_empty_streak
  */
 #[Fillable([
     'post_id',
@@ -51,6 +55,7 @@ use Override;
     'sections',
     'content_override',
     'auto_split',
+    'format',
     'status',
     'remote_id',
     'remote_ids',
@@ -67,7 +72,9 @@ use Override;
     'impressions',
     'metrics_captured_at',
     'metrics_status',
+    'metrics_unchanged_streak',
     'reply_fetched_at',
+    'reply_fetch_empty_streak',
 ])]
 class PostTarget extends Model
 {
@@ -86,6 +93,7 @@ class PostTarget extends Model
             'sections' => 'array',
             'content_override' => 'array',
             'auto_split' => 'boolean',
+            'format' => PostFormat::class,
             'remote_ids' => 'array',
             'media_upload_state' => 'array',
             'error_kind' => ErrorKind::class,
@@ -98,7 +106,9 @@ class PostTarget extends Model
             'impressions' => 'integer',
             'metrics_captured_at' => 'immutable_datetime',
             'metrics_status' => MetricsStatus::class,
+            'metrics_unchanged_streak' => 'integer',
             'reply_fetched_at' => 'immutable_datetime',
+            'reply_fetch_empty_streak' => 'integer',
         ];
     }
 

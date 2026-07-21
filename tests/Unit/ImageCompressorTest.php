@@ -24,6 +24,23 @@ function compressorJpeg(int $width = 1200, int $height = 1200): string
     return $bytes;
 }
 
+/**
+ * Build a small, well-under-any-byte-cap WebP so "does it get converted" tests
+ * aren't confused by the compressor's own size-driven re-encode path.
+ */
+function compressorWebp(): string
+{
+    $img = imagecreatetruecolor(4, 4);
+    imagefill($img, 0, 0, imagecolorallocate($img, 10, 20, 30));
+
+    ob_start();
+    imagewebp($img);
+    $bytes = (string) ob_get_clean();
+    imagedestroy($img);
+
+    return $bytes;
+}
+
 /** Platforms that accept WebP (X, Bluesky). */
 const WEBP_ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -38,6 +55,26 @@ test('image within the limit is returned byte-identical and untouched', function
     expect($result->wasCompressed)->toBeFalse()
         ->and($result->bytes)->toBe($bytes)
         ->and($result->mime)->toBe('image/jpeg');
+});
+
+test('an under-cap webp is converted to jpeg when the platform does not accept webp', function () {
+    $bytes = compressorWebp();
+
+    $result = app(ImageCompressor::class)->compressToFit($bytes, strlen($bytes) + 1_000_000, 'image/webp', NO_WEBP_ALLOWED);
+
+    expect($result->wasCompressed)->toBeTrue()
+        ->and($result->mime)->toBe('image/jpeg')
+        ->and(bin2hex(substr($result->bytes, 0, 2)))->toBe('ffd8'); // JPEG SOI marker
+});
+
+test('an under-cap webp is left untouched when the platform accepts webp', function () {
+    $bytes = compressorWebp();
+
+    $result = app(ImageCompressor::class)->compressToFit($bytes, strlen($bytes) + 1_000_000, 'image/webp', WEBP_ALLOWED);
+
+    expect($result->wasCompressed)->toBeFalse()
+        ->and($result->bytes)->toBe($bytes)
+        ->and($result->mime)->toBe('image/webp');
 });
 
 test('oversized image is compressed under the limit as jpeg when webp is not allowed', function () {

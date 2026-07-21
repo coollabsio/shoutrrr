@@ -9,6 +9,7 @@ import type {
     MediaView,
     MentionPlaceholder,
     PlatformName,
+    PostFormat,
 } from '@/types/compose';
 
 export type PlatformPreviewItem = {
@@ -27,6 +28,12 @@ export type PlatformPreview = {
     avatarUrl: string | null;
     limit: number;
     autoSplit: boolean;
+    /**
+     * The surface this account publishes to. Drives which preview the panel
+     * renders for Instagram/Facebook (feed post, reel, or story); every other
+     * platform is always `feed`.
+     */
+    format: PostFormat;
     items: PlatformPreviewItem[];
 };
 
@@ -38,6 +45,8 @@ type BuildPlatformPreviewInput = {
     excludedMediaIds: Set<string>;
     limit: number;
     autoSplit: boolean;
+    /** Publishing surface; only Instagram/Facebook use anything but `feed`. */
+    format?: PostFormat;
 };
 
 export function buildPlatformPreview({
@@ -48,6 +57,7 @@ export function buildPlatformPreview({
     excludedMediaIds,
     limit,
     autoSplit,
+    format = 'feed',
 }: BuildPlatformPreviewInput): PlatformPreview {
     const resolvedSegments = segments.map((segment) =>
         replaceMentionTokens(segment, mentions, account.platform),
@@ -79,6 +89,7 @@ export function buildPlatformPreview({
         avatarUrl: account.avatar_url,
         limit,
         autoSplit,
+        format,
         items: sections.map((section, index) => ({
             id: `${account.platform}-preview-${index + 1}`,
             // Show the spacing the platform will actually render; the character

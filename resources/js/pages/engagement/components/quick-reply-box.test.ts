@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,6 +13,7 @@ vi.mock('./use-reply-media', () => ({
         dropHandlers: {},
         editor: null,
         fileInput: null,
+        handleAddedFiles: vi.fn(),
         isUploading: false,
         openFilePicker: vi.fn(),
     }),
@@ -30,8 +34,18 @@ describe('QUICK_REPLY_SEND_SHORTCUT', () => {
         );
 
         expect(html).not.toContain('to send');
-        expect(html).toContain(
-            `<span>Reply</span><kbd aria-hidden="true" class="ml-0.5 hidden h-4 items-center rounded border border-primary-foreground/25 bg-primary-foreground/15 px-1 font-mono text-[10px] leading-none font-normal text-primary-foreground/90 sm:inline-flex">${QUICK_REPLY_SEND_SHORTCUT}</kbd>`,
-        );
+        expect(html).toContain(QUICK_REPLY_SEND_SHORTCUT);
+        expect(html).toContain('data-slot="kbd"');
+        expect(html).toContain('sm:inline-flex');
     });
+});
+
+it('blurs the reply field on Escape so triage shortcuts work again', () => {
+    const source = readFileSync(
+        resolve(import.meta.dirname, 'quick-reply-box.tsx'),
+        'utf8',
+    );
+
+    expect(source).toContain("e.key === 'Escape'");
+    expect(source).toContain('editorRef.current?.blur()');
 });

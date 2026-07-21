@@ -34,6 +34,8 @@ class XMetricsConnector implements MetricsConnector
 
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->withToken((string) ($credentials['access_token'] ?? ''))
                 ->acceptJson()
                 ->get(self::BASE.'/tweets', [
@@ -44,7 +46,13 @@ class XMetricsConnector implements MetricsConnector
             return PostMetricsResult::failed($e->getMessage());
         }
 
-        $this->meter(UsageCategory::ExternalApi, UsageOperation::METRICS_FETCH_POST, $account, $response);
+        $this->meterRead(
+            UsageCategory::ExternalApi,
+            UsageOperation::METRICS_FETCH_POST,
+            $account,
+            $response,
+            array_values(array_map(static fn (array $tweet): string => (string) ($tweet['id'] ?? ''), (array) $response->json('data', []))),
+        );
 
         if ($response->failed()) {
             return match (true) {
@@ -79,6 +87,8 @@ class XMetricsConnector implements MetricsConnector
     {
         try {
             $response = $this->http
+                ->timeout(10)
+                ->connectTimeout(5)
                 ->withToken((string) ($credentials['access_token'] ?? ''))
                 ->acceptJson()
                 ->get(self::BASE.'/users/'.$account->remote_account_id, ['user.fields' => 'public_metrics']);
@@ -86,7 +96,13 @@ class XMetricsConnector implements MetricsConnector
             return AccountMetricsResult::failed($e->getMessage());
         }
 
-        $this->meter(UsageCategory::ExternalApi, UsageOperation::METRICS_FETCH_ACCOUNT, $account, $response);
+        $this->meterRead(
+            UsageCategory::ExternalApi,
+            UsageOperation::METRICS_FETCH_ACCOUNT,
+            $account,
+            $response,
+            [(string) $account->remote_account_id],
+        );
 
         if ($response->failed()) {
             return match (true) {

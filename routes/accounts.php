@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\ConnectedAccounts\BlueskyConnectionController;
 use App\Http\Controllers\ConnectedAccounts\BlueskyOAuthController;
 use App\Http\Controllers\ConnectedAccounts\ConnectedAccountController;
+use App\Http\Controllers\ConnectedAccounts\DiscordConnectionController;
 use App\Http\Controllers\ConnectedAccounts\MetaConnectionController;
 use App\Http\Controllers\ConnectedAccounts\OAuthConnectionController;
 use App\Http\Controllers\OAuth\BlueskyClientMetadataController;
@@ -40,6 +41,10 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('accounts/connect/bluesky', [BlueskyConnectionController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('accounts.bluesky.store');
+
+    Route::post('accounts/connect/discord', [DiscordConnectionController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.discord.store');
 
     // These bespoke `accounts/{connect,callback}/meta` routes must be registered
     // before the generic `{platform}` wildcard routes below — Laravel matches

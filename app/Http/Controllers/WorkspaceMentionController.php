@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\Platform;
 use App\Models\WorkspaceMention;
+use App\Support\LinkedInOrg;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,6 +20,7 @@ class WorkspaceMentionController extends Controller
             'handles.x' => ['nullable', 'string', 'max:255'],
             'handles.bluesky' => ['nullable', 'string', 'max:255'],
             'handles.linkedin' => ['nullable', 'string', 'max:255'],
+            'handles.linkedin_urn' => ['nullable', 'string', 'max:255'],
         ]);
 
         $allowedPlatforms = array_map(
@@ -31,6 +33,11 @@ class WorkspaceMentionController extends Controller
             if ($handle !== '') {
                 $handles[$platform] = $handle;
             }
+        }
+
+        $linkedinUrn = LinkedInOrg::normalizeUrn($validated['handles']['linkedin_urn'] ?? null);
+        if ($linkedinUrn !== null) {
+            $handles['linkedin_urn'] = $linkedinUrn;
         }
 
         $mention = WorkspaceMention::withoutGlobalScopes()->updateOrCreate(

@@ -4,6 +4,16 @@ import { ConfirmProvider } from '@/components/common/confirm-dialog';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
+import { installDiagnostics } from '@/lib/diagnostics-collector';
+import { initSentry } from '@/lib/sentry';
+
+// Initialize error/performance monitoring before the app renders so early
+// failures are captured. No-op unless a DSN was injected by the server.
+initSentry();
+
+// Start capturing console/network/navigation breadcrumbs as early as possible
+// so the feedback widget can attach the events leading up to a report.
+installDiagnostics();
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import InstanceSettingsLayout from '@/layouts/settings/instance-layout';
@@ -29,6 +39,7 @@ void createInertiaApp({
                 return AuthLayout;
             case name === 'settings/instance' ||
                 name === 'settings/instance-polling' ||
+                name === 'settings/instance-platforms' ||
                 name === 'settings/instance-usage' ||
                 name === 'settings/instance-admins':
                 return [AppLayout, InstanceSettingsLayout];

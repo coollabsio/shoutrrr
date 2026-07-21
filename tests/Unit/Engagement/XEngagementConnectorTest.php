@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
 
 function xAccount(): ConnectedAccount
 {
-    return ConnectedAccount::factory()->create(['platform' => Platform::X, 'remote_account_id' => '111', 'handle' => 'owner']);
+    return ConnectedAccount::factory()->create(['platform' => Platform::X, 'remote_account_id' => '111', 'handle' => '@owner']);
 }
 
 function xConnector(): XEngagementConnector
@@ -40,6 +40,12 @@ test('fetchReplies parses the conversation search and resolves authors', functio
     expect($result->replies[0]->remoteReplyId)->toBe('900');
     expect($result->replies[0]->authorHandle)->toBe('fan');
     expect($result->replies[0]->authorAvatarUrl)->toBe('http://a/p.jpg');
+
+    // The '@' on the stored handle must be stripped before it reaches the
+    // search `from:` operator, otherwise X rejects the query as invalid.
+    Http::assertSent(fn ($req) => str_contains($req->url(), '/2/tweets/search/recent')
+        && str_contains(urldecode($req->url()), 'conversation_id:500 -from:owner')
+        && ! str_contains(urldecode($req->url()), '-from:@'));
 });
 
 test('fetchReplies maps 403 to unsupported (no paid tier)', function () {

@@ -4,18 +4,18 @@ namespace App\Http\Controllers\Settings;
 
 use App\Enums\InstanceRole;
 use App\Enums\Platform;
-use App\Enums\UsageCategory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\StoreInstanceOwnerRequest;
 use App\Http\Requests\Settings\UpdateInstancePlatformsRequest;
 use App\Http\Requests\Settings\UpdateInstancePollingSettingsRequest;
 use App\Http\Requests\Settings\UpdateInstanceSettingsRequest;
+use App\Http\Requests\Settings\UpdateWorkspaceXBudgetRequest;
 use App\Models\UsageEvent;
 use App\Models\UsagePeriodCounter;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Support\InstanceSettings;
-use App\Support\UsageOperation;
 use App\Support\UsagePricing;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\RequestException;
@@ -62,7 +62,7 @@ class InstanceSettingsController extends Controller
             : User::query()
                 ->select(['id', 'name', 'email'])
                 ->whereNull('instance_role')
-                ->where('email', 'like', "%{$search}%")
+                ->whereLike('email', "%{$search}%")
                 ->orderBy('email')
                 ->limit(10)
                 ->get()
@@ -99,6 +99,16 @@ class InstanceSettingsController extends Controller
 
         return Inertia::render('settings/instance-polling', [
             'settings' => $settings->polling(),
+            'sections' => collect(['engagement', 'post_metrics', 'account_metrics'])
+                ->mapWithKeys(fn (string $section): array => [
+                    $section => array_map(
+                        fn (Platform $platform): array => [
+                            'platform' => $platform->value,
+                            'label' => $platform->label(),
+                        ],
+                        Platform::pollingSectionPlatforms($section),
+                    ),
+                ])->all(),
         ]);
     }
 
@@ -127,101 +137,105 @@ class InstanceSettingsController extends Controller
         return back()->with('success', 'Platform settings updated.');
     }
 
-    public function usage(Request $request, UsagePricing $pricing): Response
+    public function usage(Request $request, UsagePricing $pricing, InstanceSettings $settings, WorkspaceSubscriptionGate $gate): Response
     {
         /** @var User|null $user */
         $user = $request->user();
         abort_unless($user?->isInstanceOwner(), 403);
 
-        $workspaceId = $request->string('workspace')->trim()->toString();
-        $workspaceId = $workspaceId === '' ? null : $workspaceId;
-        $platform = $this->usagePlatformFilter($request);
+        $search = $request->string('search')->trim()->toString();
+        $sort = $request->string('sort')->toString() === 'name' ? 'name' : 'spend';
+        $workspaceId = $request->string('workspace')->trim()->toString() ?: null;
+
         $now = CarbonImmutable::instance(Date::now());
         $currentPeriodStart = $now->startOfMonth()->toDateString();
         $previousPeriodStart = $now->subMonthNoOverflow()->startOfMonth()->toDateString();
+        $defaultDollars = (int) config('subscriptions.monthly_x_budget_cents') / 100;
 
-        $workspaces = Workspace::query()
-            ->select(['id', 'name'])
-            ->whereIn('id', function ($query): void {
-                $query->select('workspace_id')
-                    ->from('usage_period_counters')
-                    ->whereNotNull('workspace_id')
-                    ->union(
-                        UsageEvent::query()
-                            ->select('workspace_id')
-                            ->whereNotNull('workspace_id')
-                            ->toBase(),
-                    );
-            })
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Workspace $workspace): array => [
+        $query = Workspace::query()
+            ->select(['id', 'name', 'is_initial'])
+            ->when($search !== '', fn ($q) => $q->whereLike('name', "%{$search}%"))
+            ->withSum(['usagePeriodCounters as x_cost_sum' => fn ($q) => $q
+                ->where('platform', Platform::X->value)
+                ->where('period_start', $currentPeriodStart)], 'total_cost_microusd')
+            ->when($sort === 'name', fn ($q) => $q->orderBy('name'), fn ($q) => $q->orderByDesc('x_cost_sum')->orderBy('name'));
+
+        $workspaces = $query->paginate(20)->withQueryString()->through(function (Workspace $workspace) use ($gate, $settings, $pricing, $previousPeriodStart, $defaultDollars): array {
+            $currentCostUsd = round($gate->currentXCostMicrousd($workspace) / 1_000_000, 6);
+            $budgetMicrousd = $gate->monthlyXBudgetMicrousd($workspace);
+
+            $previousRows = UsagePeriodCounter::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('platform', Platform::X->value)
+                ->where('period_start', $previousPeriodStart)
+                ->get();
+            $previousCostUsd = $this->estimateCountersCost($pricing, $previousRows);
+
+            return [
                 'id' => $workspace->id,
                 'name' => $workspace->name,
-            ]);
+                'x_estimated_cost_usd' => $currentCostUsd,
+                'x_previous_cost_usd' => $previousCostUsd,
+                'x_cost_delta_usd' => round($currentCostUsd - $previousCostUsd, 6),
+                'quota' => $this->xQuotaFor($workspace, $gate, $settings, $defaultDollars),
+                'percent_used' => ($budgetMicrousd === null || $budgetMicrousd === 0)
+                    ? null
+                    : round(($currentCostUsd * 1_000_000) / $budgetMicrousd * 100, 1),
+            ];
+        });
 
-        $comparisonCounters = UsagePeriodCounter::query()
-            ->with('workspace:id,name')
-            ->whereIn('period_start', [$currentPeriodStart, $previousPeriodStart])
-            ->when($workspaceId, fn ($query) => $query->where('workspace_id', $workspaceId))
-            ->when($platform, fn ($query) => $query->where('platform', $platform))
+        $instanceXRows = UsagePeriodCounter::query()
+            ->where('platform', Platform::X->value)
+            ->where('period_start', $currentPeriodStart)
             ->get();
 
-        $summaries = $comparisonCounters
-            ->groupBy('workspace_id')
-            ->map(function ($rows) use ($currentPeriodStart, $previousPeriodStart, $pricing): array {
-                /** @var UsagePeriodCounter $first */
-                $first = $rows->first();
+        return Inertia::render('settings/instance-usage', [
+            'filters' => ['search' => $search === '' ? null : $search, 'sort' => $sort, 'workspace' => $workspaceId],
+            // Renamed from 'instance' to avoid colliding with the shared top-level
+            // `instance` prop (HandleInertiaRequests::share -> instance.isOwner),
+            // which Inertia would otherwise merge over with this page's array.
+            //
+            // Note on time windows: this header total is calendar-month
+            // (UsagePeriodCounter, period_start = start of this month), while a
+            // subscribed workspace's per-row x_estimated_cost_usd below is
+            // billing-cycle-anchored (WorkspaceSubscriptionGate::currentXCostMicrousd).
+            // Under subscriptions.enabled the sum of rows may not equal this total;
+            // they reconcile exactly when subscriptions are disabled, since both are
+            // calendar-month in that case.
+            'instance_summary' => [
+                'workspace_count' => Workspace::query()->count(),
+                'x_estimated_cost_usd' => $this->estimateCountersCost($pricing, $instanceXRows),
+            ],
+            'workspace_usage' => $workspaces,
+            'pricing_source' => config('usage_pricing.source_url'),
+            'pricing_currency' => config('usage_pricing.platforms.x.currency', 'USD'),
+            'x_usage_available' => (string) config('services.x.bearer_token', '') !== '',
+            ...($workspaceId === null
+                ? []
+                : ['drilldown' => fn () => $this->workspaceDrilldown($workspaceId, $pricing, $gate, $settings, $defaultDollars)]),
+        ]);
+    }
 
-                $currentRows = $rows->where('period_start', $currentPeriodStart);
-                $previousRows = $rows->where('period_start', $previousPeriodStart);
-                $currentTotalQuota = (int) $currentRows->sum('total_quota');
-                $previousTotalQuota = (int) $previousRows->sum('total_quota');
-                $currentEstimatedCostUsd = $this->estimateCountersCost($pricing, $currentRows);
-                $previousEstimatedCostUsd = $this->estimateCountersCost($pricing, $previousRows);
+    /**
+     * @return array{workspace: array{id: string, name: string, quota: array{kind: string, dollars: float|null}}, counters: list<array<string, mixed>>, error_events: list<array<string, mixed>>}|null
+     */
+    private function workspaceDrilldown(string $workspaceId, UsagePricing $pricing, WorkspaceSubscriptionGate $gate, InstanceSettings $settings, float $defaultDollars): ?array
+    {
+        $workspace = Workspace::query()
+            ->select(['id', 'name', 'is_initial', 'owner_id'])
+            ->with('owner:id,name,email,avatar_path')
+            ->find($workspaceId);
 
-                return [
-                    'workspace' => [
-                        'id' => $first->workspace_id,
-                        'name' => $this->workspaceName($first->workspace),
-                    ],
-                    'current_event_count' => (int) $currentRows->sum('event_count'),
-                    'current_total_quota' => $currentTotalQuota,
-                    'previous_total_quota' => $previousTotalQuota,
-                    'quota_delta' => $currentTotalQuota - $previousTotalQuota,
-                    'quota_delta_percent' => $previousTotalQuota > 0
-                        ? round((($currentTotalQuota - $previousTotalQuota) / $previousTotalQuota) * 100, 1)
-                        : null,
-                    'current_estimated_cost_usd' => $currentEstimatedCostUsd,
-                    'previous_estimated_cost_usd' => $previousEstimatedCostUsd,
-                    'estimated_cost_delta_usd' => round($currentEstimatedCostUsd - $previousEstimatedCostUsd, 6),
-                    'publish_quota' => (int) $currentRows->where('category', UsageCategory::Publish->value)->sum('total_quota'),
-                    'external_api_quota' => (int) $currentRows->where('category', UsageCategory::ExternalApi->value)->sum('total_quota'),
-                    'api_request_quota' => (int) $currentRows->where('category', UsageCategory::ApiRequest->value)->sum('total_quota'),
-                    'posts_quota' => (int) $currentRows->where('operation', UsageOperation::POST)->sum('total_quota'),
-                ];
-            })
-            ->sortByDesc('current_total_quota')
-            ->values()
-            ->take(100);
+        if ($workspace === null) {
+            return null;
+        }
 
-        $counters = UsagePeriodCounter::query()
-            ->with('workspace:id,name')
-            ->when($workspaceId, fn ($query) => $query->where('workspace_id', $workspaceId))
-            ->when($platform, fn ($query) => $query->where('platform', $platform))
-            ->orderByDesc('period_start')
-            ->orderBy('workspace_id')
-            ->orderBy('category')
-            ->orderBy('platform')
-            ->orderBy('operation')
-            ->limit(100)
+        $counters = array_values(UsagePeriodCounter::query()
+            ->where('workspace_id', $workspaceId)
+            ->orderByDesc('period_start')->orderBy('category')->orderBy('platform')->orderBy('operation')
             ->get()
             ->map(fn (UsagePeriodCounter $counter): array => [
                 'id' => $counter->id,
-                'workspace' => [
-                    'id' => $counter->workspace_id,
-                    'name' => $this->workspaceName($counter->workspace),
-                ],
                 'period_start' => $counter->period_start,
                 'period_end' => $counter->period_end,
                 'category' => $counter->category,
@@ -230,62 +244,53 @@ class InstanceSettingsController extends Controller
                 'event_count' => $counter->event_count,
                 'total_quota' => $counter->total_quota,
                 'pricing' => $pricing->estimate($counter->platform, $counter->operation, $counter->total_quota),
-            ]);
+            ])->all());
 
-        $errorEvents = UsageEvent::query()
-            ->with('workspace:id,name')
+        $errorEvents = array_values(UsageEvent::query()
+            ->where('workspace_id', $workspaceId)
             ->where('succeeded', false)
-            ->when($workspaceId, fn ($query) => $query->where('workspace_id', $workspaceId))
-            ->when($platform, function ($query) use ($platform): void {
-                if ($platform === 'none') {
-                    $query->whereNull('platform');
-
-                    return;
-                }
-
-                $query->where('platform', $platform);
-            })
-            ->latest('occurred_at')
-            ->limit(50)
-            ->get()
+            ->latest('occurred_at')->limit(50)->get()
             ->map(fn (UsageEvent $event): array => [
                 'id' => $event->id,
-                'workspace' => [
-                    'id' => $event->workspace_id,
-                    'name' => $this->workspaceName($event->workspace),
-                ],
                 'category' => $event->category,
                 'operation' => $event->operation,
                 'platform' => $event->platform ?? 'none',
                 'quota_weight' => $event->quota_weight,
-                'succeeded' => $event->succeeded,
                 'meta' => $event->meta,
                 'occurred_at' => $event->occurred_at,
-            ]);
+            ])->all());
 
-        return Inertia::render('settings/instance-usage', [
-            'workspace_options' => $workspaces,
-            'platforms' => [
-                ['value' => Platform::Bluesky->value, 'label' => 'Bluesky'],
-                ['value' => Platform::X->value, 'label' => 'X / Twitter'],
-                ['value' => Platform::LinkedIn->value, 'label' => 'LinkedIn'],
-                ['value' => 'none', 'label' => 'No platform'],
+        return [
+            'workspace' => [
+                'id' => $workspace->id,
+                'name' => $workspace->name,
+                'is_initial' => $workspace->is_initial,
+                'quota' => $this->xQuotaFor($workspace, $gate, $settings, $defaultDollars),
+                'owner' => $workspace->owner === null ? null : [
+                    'name' => $workspace->owner->name,
+                    'email' => $workspace->owner->email,
+                    'avatar' => $workspace->owner->avatar,
+                ],
             ],
-            'filters' => [
-                'workspace' => $workspaceId,
-                'platform' => $platform,
-            ],
-            'comparison_periods' => [
-                'current' => $currentPeriodStart,
-                'previous' => $previousPeriodStart,
-            ],
-            'pricing_source' => config('usage_pricing.source_url'),
-            'pricing_currency' => config('usage_pricing.platforms.x.currency', 'USD'),
-            'x_usage_available' => (string) config('services.x.bearer_token', '') !== '',
-            'summaries' => $summaries,
             'counters' => $counters,
             'error_events' => $errorEvents,
-        ]);
+        ];
+    }
+
+    /**
+     * @return array{kind: string, dollars: float|null}
+     */
+    private function xQuotaFor(Workspace $workspace, WorkspaceSubscriptionGate $gate, InstanceSettings $settings, float $defaultDollars): array
+    {
+        $override = $settings->xWorkspaceBudget($workspace->id);
+        // Reuse the gate's single definition of "no X ceiling" so the badge shown
+        // to owners can never disagree with what the gate actually enforces.
+        $unlimited = $gate->isXUnlimited($workspace);
+
+        return [
+            'kind' => $unlimited ? 'unlimited' : (is_int($override) ? 'custom' : 'default'),
+            'dollars' => $unlimited ? null : (is_int($override) ? $override / 100 : $defaultDollars),
+        ];
     }
 
     public function xUsage(Request $request): JsonResponse
@@ -362,25 +367,6 @@ class InstanceSettingsController extends Controller
         return round($total, 6);
     }
 
-    private function usagePlatformFilter(Request $request): ?string
-    {
-        $platform = $request->string('platform')->trim()->toString();
-        $allowed = collect(Platform::cases())
-            ->map(fn (Platform $platform): string => $platform->value)
-            ->push('none');
-
-        return $allowed->contains($platform) ? $platform : null;
-    }
-
-    private function workspaceName(?Workspace $workspace): string
-    {
-        if ($workspace === null) {
-            return 'Deleted workspace';
-        }
-
-        return $workspace->name;
-    }
-
     public function update(UpdateInstanceSettingsRequest $request, InstanceSettings $settings): RedirectResponse
     {
         $settings->update($request->instanceSettings());
@@ -393,6 +379,16 @@ class InstanceSettingsController extends Controller
         $settings->update($request->instancePollingSettings());
 
         return back()->with('success', 'Polling settings updated.');
+    }
+
+    public function updateWorkspaceBudget(
+        UpdateWorkspaceXBudgetRequest $request,
+        Workspace $workspace,
+        InstanceSettings $settings,
+    ): RedirectResponse {
+        $settings->setXWorkspaceBudget($workspace->id, $request->budgetValue());
+
+        return back()->with('success', 'Workspace X budget updated.');
     }
 
     public function destroyAdmin(Request $request, User $owner): RedirectResponse

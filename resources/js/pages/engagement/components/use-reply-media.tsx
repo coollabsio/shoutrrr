@@ -61,6 +61,12 @@ type ReplyMedia = {
         onDragOver: (e: React.DragEvent) => void;
         onDrop: (e: React.DragEvent) => void;
     };
+    /**
+     * Validate + attach a batch of files. Exposed for surfaces that source files
+     * themselves rather than through the picker or drop handlers — the editor's
+     * paste-to-upload passes its clipboard FileList straight in.
+     */
+    handleAddedFiles: (files: FileList | File[]) => Promise<void>;
 };
 
 function blobToFile(blob: Blob, name: string): File {
@@ -107,7 +113,7 @@ export function useReplyMedia({
 
     // --- useMediaUploads ---------------------------------------------------
 
-    const { pending, isUploading, handleFiles, dismissPending } =
+    const { pending, isUploading, handleFiles, dismissPending, cancelPending } =
         useMediaUploads({
             media,
             videoLimits,
@@ -242,7 +248,10 @@ export function useReplyMedia({
         }
 
         const videos = all.filter((f) => f.type.startsWith('video/'));
-        const images = all.filter((f) => !f.type.startsWith('video/'));
+        // The paste path supplies raw clipboard batches, so filter to real images
+        // rather than "anything non-video" — otherwise a pasted PDF is queued into
+        // the crop/beautify editor as if it were an image.
+        const images = all.filter((f) => f.type.startsWith('image/'));
 
         if (wouldMixVideoAndImages(media, all)) {
             toast.error('A reply can contain one video or images, not both.');
@@ -276,13 +285,13 @@ export function useReplyMedia({
         if (m.edit_settings && m.source_url) {
             setEditing({
                 kind: 'reedit',
-                url: m.source_url,
+                url: m.source_edit_url ?? m.edit_url,
                 settings: normalizeSettings(m.edit_settings),
                 mediaId: m.id,
                 altText: m.alt_text,
             });
         } else {
-            setEditing({ kind: 'raw', url: m.url, mediaId: m.id });
+            setEditing({ kind: 'raw', url: m.edit_url, mediaId: m.id });
         }
     }
 
@@ -344,6 +353,7 @@ export function useReplyMedia({
             }
             onRemove={(id) => onChange(media.filter((m) => m.id !== id))}
             onDismissPending={dismissPending}
+            onCancelPending={cancelPending}
             onImageClick={openEditor}
         />
     ) : null;
@@ -379,5 +389,6 @@ export function useReplyMedia({
                 }
             },
         },
+        handleAddedFiles,
     };
 }

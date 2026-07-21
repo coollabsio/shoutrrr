@@ -107,8 +107,26 @@ test('postReply declines media (Instagram comments cannot carry attachments)', f
     expect($result->status)->toBe(EngagementStatus::Unsupported);
 });
 
-test('likeReply is unsupported and sends no HTTP request', function () {
-    Http::preventStrayRequests();
+test('likeReply likes the comment via the user-scoped likes edge', function () {
+    Http::fake(['graph.facebook.com/*/IGUSER1/likes' => Http::response(['success' => true])]);
+
+    $reply = PostTargetReply::factory()->create([
+        'platform' => Platform::Instagram,
+        'remote_reply_id' => 'C1',
+    ]);
+
+    $result = instagramConnector()->likeReply(instagramAccount(), $reply, ['access_token' => 't']);
+
+    expect($result->isOk())->toBeTrue();
+
+    Http::assertSent(fn ($req) => $req->method() === 'POST'
+        && str_contains($req->url(), '/IGUSER1/likes')
+        && $req['comment_id'] === 'C1'
+        && $req['access_token'] === 't');
+});
+
+test('likeReply maps 403 to unsupported (missing instagram_manage_engagement)', function () {
+    Http::fake(['graph.facebook.com/*/IGUSER1/likes' => Http::response(['error' => ['message' => 'no perms']], 403)]);
 
     $reply = PostTargetReply::factory()->create([
         'platform' => Platform::Instagram,
@@ -118,13 +136,11 @@ test('likeReply is unsupported and sends no HTTP request', function () {
     $result = instagramConnector()->likeReply(instagramAccount(), $reply, ['access_token' => 't']);
 
     expect($result->status)->toBe(EngagementStatus::Unsupported);
-    expect($result->message)->toBe('Instagram does not support liking comments via API');
-
-    Http::assertNothingSent();
+    expect($result->message)->toBe('no perms');
 });
 
-test('unlikeReply is unsupported and sends no HTTP request', function () {
-    Http::preventStrayRequests();
+test('unlikeReply unlikes the comment via the user-scoped likes edge', function () {
+    Http::fake(['graph.facebook.com/*/IGUSER1/likes' => Http::response(['success' => true])]);
 
     $reply = PostTargetReply::factory()->create([
         'platform' => Platform::Instagram,
@@ -133,10 +149,12 @@ test('unlikeReply is unsupported and sends no HTTP request', function () {
 
     $result = instagramConnector()->unlikeReply(instagramAccount(), $reply, null, ['access_token' => 't']);
 
-    expect($result->status)->toBe(EngagementStatus::Unsupported);
-    expect($result->message)->toBe('Instagram does not support liking comments via API');
+    expect($result->isOk())->toBeTrue();
 
-    Http::assertNothingSent();
+    Http::assertSent(fn ($req) => $req->method() === 'DELETE'
+        && str_contains($req->url(), '/IGUSER1/likes')
+        && $req['comment_id'] === 'C1'
+        && $req['access_token'] === 't');
 });
 
 test('deleteReply deletes the comment', function () {

@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\BlueskyConnector;
+use App\Services\ConnectedAccounts\DiscordConnector;
 use App\Services\ConnectedAccounts\XAccountCapabilities;
 use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
@@ -26,6 +27,7 @@ class ConnectedAccountController extends Controller
 {
     public function __construct(
         private readonly BlueskyConnector $connector,
+        private readonly DiscordConnector $discord,
         private readonly AccountConnectionService $connections,
         private readonly XAccountCapabilities $xCapabilities,
         private readonly TokenManager $tokens,
@@ -112,6 +114,26 @@ class ConnectedAccountController extends Controller
             }
 
             return redirect()->route('accounts.bluesky.oauth', ['identifier' => ltrim($account->handle, '@')]);
+        }
+
+        // Webhook accounts (Discord) reconnect by resubmitting a webhook URL.
+        // A deleted-and-recreated webhook has a new remote id, so adopt it onto
+        // this row in place instead of upserting — which, keyed on the new id,
+        // would spawn a duplicate card rather than heal the existing one.
+        if ($account->auth_method === 'webhook') {
+            $validated = $request->validate([
+                'webhook_url' => ['required', 'string', 'max:2048'],
+            ]);
+
+            try {
+                $data = $this->discord->connect($validated['webhook_url']);
+            } catch (RuntimeException $exception) {
+                return back()->with('error', $exception->getMessage());
+            }
+
+            $this->connections->reconnect($account, $data, $request->user());
+
+            return redirect()->route('accounts.index')->with('success', 'Account reconnected.');
         }
 
         if (! $account->platform->supportsAppPassword()) {

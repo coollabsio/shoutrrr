@@ -15,7 +15,15 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 
-const MINUTES = Array.from({ length: 60 }, (_, m) => m);
+const HOUR_ITEMS = Array.from({ length: 12 }, (_, i) => i + 1).map((h) => ({
+    value: String(h),
+    label: String(h).padStart(2, '0'),
+}));
+
+const MINUTE_ITEMS = Array.from({ length: 60 }, (_, m) => m).map((m) => ({
+    value: String(m),
+    label: String(m).padStart(2, '0'),
+}));
 
 /** Inline time-picker popover that emits a 24-hour (hour, minute) pair on confirm. */
 export function AddTimePopover({
@@ -57,6 +65,7 @@ export function AddTimePopover({
             <PopoverContent align="start" className="w-auto p-3">
                 <div className="flex items-center gap-1.5">
                     <Select
+                        items={HOUR_ITEMS}
                         value={String(hour12)}
                         onValueChange={(v) => setHour12(Number(v))}
                     >
@@ -67,21 +76,20 @@ export function AddTimePopover({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            {Array.from({ length: 12 }, (_, i) => i + 1).map(
-                                (h) => (
-                                    <SelectItem
-                                        key={h}
-                                        value={String(h)}
-                                        className="font-mono tabular-nums"
-                                    >
-                                        {String(h).padStart(2, '0')}
-                                    </SelectItem>
-                                ),
-                            )}
+                            {HOUR_ITEMS.map((item) => (
+                                <SelectItem
+                                    key={item.value}
+                                    value={item.value}
+                                    className="font-mono tabular-nums"
+                                >
+                                    {item.label}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     <span className="text-muted-foreground/60">:</span>
                     <Select
+                        items={MINUTE_ITEMS}
                         value={String(minute)}
                         onValueChange={(v) => setMinute(Number(v))}
                     >
@@ -92,13 +100,13 @@ export function AddTimePopover({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="max-h-60">
-                            {MINUTES.map((m) => (
+                            {MINUTE_ITEMS.map((item) => (
                                 <SelectItem
-                                    key={m}
-                                    value={String(m)}
+                                    key={item.value}
+                                    value={item.value}
                                     className="font-mono tabular-nums"
                                 >
-                                    {String(m).padStart(2, '0')}
+                                    {item.label}
                                 </SelectItem>
                             ))}
                         </SelectContent>

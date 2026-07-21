@@ -7,6 +7,7 @@ namespace App\Services\Billing;
 use App\Enums\Platform;
 use App\Models\Workspace;
 use App\Services\Usage\UsageMeter;
+use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
 use App\Support\UsagePricing;
 use Carbon\CarbonImmutable;
@@ -25,6 +26,7 @@ class WorkspaceSubscriptionGate
     public function __construct(
         private readonly UsageMeter $usageMeter,
         private readonly UsagePricing $pricing,
+        private readonly InstanceSettings $settings,
     ) {}
 
     public function isEnabled(): bool
@@ -48,7 +50,7 @@ class WorkspaceSubscriptionGate
 
     public function canPublishX(Workspace $workspace): bool
     {
-        if (! $this->isEnabled() || $workspace->is_initial) {
+        if (! $this->isEnabled() || $this->isXUnlimited($workspace)) {
             return true;
         }
 
@@ -58,27 +60,37 @@ class WorkspaceSubscriptionGate
     }
 
     /**
-     * Monthly X publish quota, or null when unlimited (a non-positive per-post
-     * cost means X publishing is not billed).
+     * Monthly X publish quota for a workspace, or null when unlimited (unlimited
+     * override / initial workspace, or a non-positive per-post cost).
      */
-    public function monthlyXPostLimit(): ?int
+    public function monthlyXPostLimit(Workspace $workspace): ?int
     {
+        if ($this->isXUnlimited($workspace)) {
+            return null;
+        }
+
         $publishCostMicrousd = $this->xPublishCostMicrousd();
 
         if ($publishCostMicrousd <= 0) {
             return null;
         }
 
-        return (int) floor($this->monthlyXBudgetMicrousd() / $publishCostMicrousd);
+        $budget = $this->monthlyXBudgetMicrousd($workspace);
+
+        if ($budget === null) {
+            return null;
+        }
+
+        return (int) floor($budget / $publishCostMicrousd);
     }
 
     public function remainingXPosts(Workspace $workspace): int
     {
-        if (! $this->isEnabled() || $workspace->is_initial) {
+        if (! $this->isEnabled() || $this->isXUnlimited($workspace)) {
             return PHP_INT_MAX;
         }
 
-        $limit = $this->monthlyXPostLimit();
+        $limit = $this->monthlyXPostLimit($workspace);
 
         if ($limit === null) {
             return PHP_INT_MAX;
@@ -87,34 +99,66 @@ class WorkspaceSubscriptionGate
         return max(0, $limit - $this->currentXPostUsage($workspace));
     }
 
-    public function monthlyXBudgetMicrousd(): int
+    /**
+     * Monthly X budget in micro-USD for a workspace: a per-workspace override
+     * (cents) when set, otherwise the global default. Null = unlimited.
+     */
+    public function monthlyXBudgetMicrousd(Workspace $workspace): ?int
     {
-        return (int) config('subscriptions.monthly_x_budget_cents') * 10_000;
+        if ($this->isXUnlimited($workspace)) {
+            return null;
+        }
+
+        $override = $this->settings->xWorkspaceBudget($workspace->id);
+        $cents = is_int($override) ? $override : (int) config('subscriptions.monthly_x_budget_cents');
+
+        return $cents * 10_000;
     }
 
     public function remainingXBudgetMicrousd(Workspace $workspace): int
     {
-        if (! $this->isEnabled() || $workspace->is_initial) {
+        if (! $this->isEnabled() || $this->isXUnlimited($workspace)) {
             return PHP_INT_MAX;
         }
 
-        return max(0, $this->monthlyXBudgetMicrousd() - $this->currentXCostMicrousd($workspace));
+        $budget = $this->monthlyXBudgetMicrousd($workspace);
+
+        if ($budget === null) {
+            return PHP_INT_MAX;
+        }
+
+        return max(0, $budget - $this->currentXCostMicrousd($workspace));
     }
 
     /**
-     * Total X API spend in the current billing period across every metered
-     * operation (publishes, media uploads, reply sends, metrics fetches), not
-     * only publishes: every X call bills against the same monthly budget.
+     * A workspace with no X ceiling: the initial workspace, or one an instance
+     * owner has explicitly marked unlimited.
+     */
+    public function isXUnlimited(Workspace $workspace): bool
+    {
+        return $workspace->is_initial || $this->settings->xWorkspaceBudget($workspace->id) === 'unlimited';
+    }
+
+    /**
+     * Total X API spend in the current billing period, recomputed from the current
+     * pricing map (not stored cost columns) so pricing corrections apply to already
+     * recorded usage. Sums every metered X operation — the whole budget is shared.
      */
     public function currentXCostMicrousd(Workspace $workspace): int
     {
         $periodStart = $this->billingPeriodStart($workspace);
 
-        if ($periodStart !== null) {
-            return $this->usageMeter->costSinceMicrousd($workspace->id, $periodStart, Platform::X);
+        $quotaByOperation = $periodStart !== null
+            ? $this->usageMeter->quotaByOperationSince($workspace->id, $periodStart, Platform::X)
+            : $this->usageMeter->currentPeriodQuotaByOperation($workspace->id, Platform::X);
+
+        $cost = 0;
+
+        foreach ($quotaByOperation as $operation => $quota) {
+            $cost += $this->pricing->costWeightMicrousd(Platform::X->value, (string) $operation, $quota);
         }
 
-        return $this->usageMeter->currentPeriodCostMicrousd($workspace->id, Platform::X);
+        return $cost;
     }
 
     /**

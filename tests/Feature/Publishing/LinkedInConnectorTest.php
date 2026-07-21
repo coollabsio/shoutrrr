@@ -197,6 +197,50 @@ test('linkedin joins every segment into one post', function () {
         && $request['commentary'] === "first\nsecond");
 });
 
+test('linkedin escapes little-text reserved characters in commentary', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    app(LinkedInConnector::class)->publish(liContext(['We shipped v2 (finally). Read more_here!']));
+
+    Http::assertSent(fn ($request) => $request['commentary'] === 'We shipped v2 \(finally\). Read more\_here!');
+});
+
+test('linkedin preserves mention annotations while escaping surrounding text', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    app(LinkedInConnector::class)->publish(liContext([
+        'Built with @[coolLabs](urn:li:organization:2414183) (open source)',
+    ]));
+
+    Http::assertSent(fn ($request) => $request['commentary'] === 'Built with @[coolLabs](urn:li:organization:2414183) \(open source\)');
+});
+
+test('linkedin leaves hashtags unescaped so LinkedIn links them', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    app(LinkedInConnector::class)->publish(liContext(['Shipping #v2 today (really) in C# too']));
+
+    Http::assertSent(fn ($request) => $request['commentary'] === 'Shipping #v2 today \(really\) in C\# too');
+});
+
+test('linkedin throws rather than publishing empty commentary when escaping fails', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:1']),
+    ]);
+
+    // Truncated multibyte sequence: the /u escape pattern bails with PREG_BAD_UTF8_ERROR.
+    expect(fn () => app(LinkedInConnector::class)->publish(liContext(["broken \xC3 text"])))
+        ->toThrow(RuntimeException::class, 'Failed to escape LinkedIn commentary');
+
+    Http::assertNothingSent();
+});
+
 test('linkedin maps 401 to AuthExpired', function () {
     Http::fake(['https://api.linkedin.com/rest/posts' => Http::response(['message' => 'expired'], 401)]);
 

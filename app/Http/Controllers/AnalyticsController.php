@@ -52,7 +52,10 @@ class AnalyticsController extends Controller
     {
         $from = Date::now()->subDays($days);
 
+        // Discord webhooks have no follower/member metrics — omit them from the
+        // follower growth chart and account cards entirely.
         $accounts = ConnectedAccount::query()
+            ->where('platform', '!=', Platform::Discord->value)
             ->with(['metrics' => fn ($q) => $q
                 ->where('captured_at', '>=', $from)
                 ->orderBy('captured_at')

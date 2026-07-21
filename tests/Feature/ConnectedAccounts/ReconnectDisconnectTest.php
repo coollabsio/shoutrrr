@@ -86,6 +86,69 @@ test('reconnect is rejected when the submitted credentials resolve to a differen
     ])->assertRedirect()->assertSessionHasErrors('identifier');
 });
 
+test('reconnecting a discord webhook adopts a recreated webhook onto the same account in place', function () {
+    [$user, $workspace] = ownerWithWorkspace();
+
+    $account = ConnectedAccount::factory()->discord()->needsAttention()->create([
+        'workspace_id' => $workspace->id,
+        'remote_account_id' => 'old-webhook-id',
+        'handle' => 'Old name',
+        'connected_by_user_id' => $user->id,
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'https://discord.com/api/webhooks/old-webhook-id/old-tok',
+    ]);
+
+    // The user deleted the old webhook and pasted a freshly created one, which
+    // Discord hands back with a brand-new id.
+    $newUrl = 'https://discord.com/api/webhooks/222222/new-tok';
+    Http::fake([$newUrl => Http::response([
+        'id' => '222222', 'name' => 'Releases', 'channel_id' => '5', 'guild_id' => '7',
+    ])]);
+
+    test()->post("/accounts/{$account->id}/reconnect", ['webhook_url' => $newUrl])
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('success');
+
+    $fresh = $account->fresh();
+    expect($fresh->id)->toBe($account->id)
+        ->and($fresh->remote_account_id)->toBe('222222')
+        ->and($fresh->handle)->toBe('Releases')
+        ->and($fresh->status)->toBe(ConnectedAccountStatus::Active)
+        ->and($fresh->secret->access_token)->toBe($newUrl)
+        ->and(ConnectedAccount::withoutGlobalScopes()->count())->toBe(1);
+});
+
+test('reconnecting a discord webhook requires a webhook url', function () {
+    [$user, $workspace] = ownerWithWorkspace();
+    $account = ConnectedAccount::factory()->discord()->create([
+        'workspace_id' => $workspace->id,
+        'connected_by_user_id' => $user->id,
+    ]);
+
+    test()->post("/accounts/{$account->id}/reconnect", [])
+        ->assertSessionHasErrors('webhook_url');
+});
+
+test('reconnecting a discord webhook with an invalid url flashes an error and changes nothing', function () {
+    [$user, $workspace] = ownerWithWorkspace();
+    Http::fake();
+
+    $account = ConnectedAccount::factory()->discord()->needsAttention()->create([
+        'workspace_id' => $workspace->id,
+        'remote_account_id' => 'keep-me',
+        'connected_by_user_id' => $user->id,
+    ]);
+
+    test()->post("/accounts/{$account->id}/reconnect", [
+        'webhook_url' => 'https://evil.com/api/webhooks/1/t',
+    ])->assertRedirect()->assertSessionHas('error');
+
+    expect($account->fresh()->remote_account_id)->toBe('keep-me')
+        ->and($account->fresh()->status)->toBe(ConnectedAccountStatus::NeedsAttention);
+});
+
 test('reconnecting a facebook account restarts the shared meta login flow, not the generic route', function () {
     [$user, $workspace] = ownerWithWorkspace();
     config()->set('services.facebook.client_id', 'cid');

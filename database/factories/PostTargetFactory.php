@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
+use App\Enums\PostFormat;
 use App\Enums\PostTargetStatus;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
@@ -27,6 +28,7 @@ class PostTargetFactory extends Factory
             'sections' => ['Hello world'],
             'content_override' => null,
             'auto_split' => true,
+            'format' => PostFormat::Feed->value,
             'status' => PostTargetStatus::Pending->value,
         ];
     }

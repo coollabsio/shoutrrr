@@ -29,6 +29,14 @@ type Props = {
 
 type Preset = 'never' | '1d' | '7d' | '30d' | 'custom';
 
+const EXPIRY_ITEMS: { value: Preset; label: string }[] = [
+    { value: 'never', label: 'Never' },
+    { value: '1d', label: 'In 24 hours' },
+    { value: '7d', label: 'In 7 days' },
+    { value: '30d', label: 'In 30 days' },
+    { value: 'custom', label: 'Custom…' },
+];
+
 type ShareItem = {
     id: string;
     expires_at: string | null;
@@ -148,6 +156,7 @@ export function ShareDialog({ postId, open, onOpenChange }: Props) {
                             Expires
                         </label>
                         <Select
+                            items={EXPIRY_ITEMS}
                             value={preset}
                             onValueChange={(v) => setPreset(v as Preset)}
                         >
@@ -155,11 +164,14 @@ export function ShareDialog({ postId, open, onOpenChange }: Props) {
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="never">Never</SelectItem>
-                                <SelectItem value="1d">In 24 hours</SelectItem>
-                                <SelectItem value="7d">In 7 days</SelectItem>
-                                <SelectItem value="30d">In 30 days</SelectItem>
-                                <SelectItem value="custom">Custom…</SelectItem>
+                                {EXPIRY_ITEMS.map((item) => (
+                                    <SelectItem
+                                        key={item.value}
+                                        value={item.value}
+                                    >
+                                        {item.label}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>

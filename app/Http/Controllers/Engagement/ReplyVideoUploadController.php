@@ -10,6 +10,7 @@ use App\Http\Requests\Engagement\SignReplyVideoUploadRequest;
 use App\Http\Requests\Engagement\StoreReplyVideoRequest;
 use App\Models\PostMedia;
 use App\Models\PostTargetReply;
+use App\Support\FileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -23,7 +24,7 @@ class ReplyVideoUploadController extends Controller
      */
     public function url(SignReplyVideoUploadRequest $request, PostTargetReply $reply): JsonResponse
     {
-        $disk = config('filesystems.default');
+        $disk = FileStorage::diskName();
         $key = 'tmp/media/'.$reply->workspace_id.'/'.Str::uuid().'.mp4';
 
         ['url' => $uploadUrl, 'headers' => $headers] = Storage::disk($disk)->temporaryUploadUrl(
@@ -46,7 +47,7 @@ class ReplyVideoUploadController extends Controller
     {
         $validated = $request->validated();
         $key = $validated['key'];
-        $disk = config('filesystems.default');
+        $disk = FileStorage::diskName();
 
         // Security: reject any key that is not within tmp/media/{workspace_id}/<uuid>.mp4
         // This prevents clients from finalizing objects in other workspaces or bypassing the

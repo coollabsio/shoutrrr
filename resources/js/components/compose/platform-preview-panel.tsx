@@ -17,6 +17,10 @@ import { LinkedText } from '@/lib/linked-text';
 import { cn } from '@/lib/utils';
 import type { PlatformName } from '@/types/compose';
 
+import { FacebookPreview } from './preview/facebook-preview';
+import { InstagramPreview } from './preview/instagram-preview';
+import { ThreadsPreview } from './preview/threads-preview';
+
 const PLATFORM_LABELS: Record<PlatformName, string> = {
     x: 'X',
     bluesky: 'Bluesky',
@@ -24,6 +28,7 @@ const PLATFORM_LABELS: Record<PlatformName, string> = {
     facebook: 'Facebook',
     instagram: 'Instagram',
     threads: 'Threads',
+    discord: 'Discord',
 };
 
 const PLATFORM_GLYPH_CLASS: Record<PlatformName, string> = {
@@ -33,6 +38,7 @@ const PLATFORM_GLYPH_CLASS: Record<PlatformName, string> = {
     facebook: 'text-[#1877F2]',
     instagram: 'text-[#E4405F]',
     threads: 'text-foreground',
+    discord: 'text-[#5865F2]',
 };
 
 function initials(name: string): string {
@@ -236,6 +242,12 @@ export function PlatformPreviewPanel({
                         </p>
                     </div>
                 </div>
+            ) : preview.platform === 'instagram' ? (
+                <InstagramPreview preview={preview} />
+            ) : preview.platform === 'facebook' ? (
+                <FacebookPreview preview={preview} />
+            ) : preview.platform === 'threads' ? (
+                <ThreadsPreview preview={preview} />
             ) : (
                 <div className="p-4">
                     <div className="rounded-3xl border border-border bg-background px-4 pt-4 shadow-xs">

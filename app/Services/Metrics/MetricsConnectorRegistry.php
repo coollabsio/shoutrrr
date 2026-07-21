@@ -6,6 +6,7 @@ namespace App\Services\Metrics;
 
 use App\Enums\Platform;
 use App\Services\Metrics\Connectors\BlueskyMetricsConnector;
+use App\Services\Metrics\Connectors\DiscordMetricsConnector;
 use App\Services\Metrics\Connectors\FacebookMetricsConnector;
 use App\Services\Metrics\Connectors\InstagramMetricsConnector;
 use App\Services\Metrics\Connectors\LinkedInMetricsConnector;
@@ -24,6 +25,7 @@ class MetricsConnectorRegistry
             Platform::Facebook => app(FacebookMetricsConnector::class),
             Platform::Instagram => app(InstagramMetricsConnector::class),
             Platform::Threads => app(ThreadsMetricsConnector::class),
+            Platform::Discord => app(DiscordMetricsConnector::class),
         };
     }
 }

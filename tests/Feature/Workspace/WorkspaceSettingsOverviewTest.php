@@ -22,7 +22,11 @@ test('owner can view and update workspace', function () {
 });
 
 test('owner can upload a workspace photo', function () {
-    Storage::fake('public');
+    config([
+        'filesystems.default' => 's3',
+        'filesystems.public_images' => null,
+    ]);
+    Storage::fake('s3');
 
     $workspace = Workspace::factory()->create(['name' => 'Old']);
     $owner = User::factory()->create(['current_workspace_id' => $workspace->id]);
@@ -37,8 +41,36 @@ test('owner can upload a workspace photo', function () {
     $workspace->refresh();
 
     expect($workspace->getRawOriginal('logo'))->toStartWith('workspace-photos/');
-    expect($workspace->logo)->toBe('/storage/'.$workspace->getRawOriginal('logo'));
-    Storage::disk('public')->assertExists($workspace->getRawOriginal('logo'));
+    expect($workspace->logo)->toContain($workspace->getRawOriginal('logo'));
+    Storage::disk('s3')->assertExists($workspace->getRawOriginal('logo'));
+});
+
+test('workspace photo uses the configured public image disk', function () {
+    config([
+        'filesystems.default' => 's3',
+        'filesystems.public_images' => 'public-images',
+        'filesystems.disks.public-images.url' => 'https://cdn.shoutrrr.com',
+        'filesystems.disks.public-images.visibility' => 'public',
+    ]);
+    Storage::fake('s3');
+    Storage::fake('public-images', ['url' => 'https://cdn.shoutrrr.com']);
+
+    $workspace = Workspace::factory()->create(['name' => 'Old']);
+    $owner = User::factory()->create(['current_workspace_id' => $workspace->id]);
+    WorkspaceMembership::factory()->owner()->create(['workspace_id' => $workspace->id, 'user_id' => $owner->id]);
+
+    $this->actingAs($owner)->patch(route('settings.workspace.update'), [
+        'name' => 'New',
+        'photo' => UploadedFile::fake()->image('workspace.jpg'),
+    ])->assertSessionHasNoErrors()->assertRedirect();
+
+    $workspace->refresh();
+    $logo = $workspace->getRawOriginal('logo');
+
+    expect($logo)->toStartWith('workspace-photos/');
+    expect($workspace->logo)->toBe("https://cdn.shoutrrr.com/{$logo}");
+    Storage::disk('public-images')->assertExists($logo);
+    Storage::disk('s3')->assertMissing($logo);
 });
 
 test('workspace photo must be an image', function () {

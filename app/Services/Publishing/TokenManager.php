@@ -68,6 +68,13 @@ class TokenManager
             return ['access_token' => $secret->access_token];
         }
 
+        // Discord authenticates with the webhook URL itself (stored in access_token),
+        // which never expires and has no OAuth refresh. Hand it back directly so it
+        // does not fall into the generic refresh path (null expiry => "needs refresh").
+        if ($account->platform === Platform::Discord) {
+            return ['webhook_url' => $secret->access_token];
+        }
+
         if (! $force && ! $this->needsRefresh($account)) {
             return ['access_token' => $secret->access_token];
         }

@@ -12,6 +12,7 @@ it('lets an instance owner enable usage tracking', function () {
         'workspace_creation_enabled' => true,
         'usage_tracking_enabled' => true,
         'quote_tweets_enabled' => false,
+        'linkedin_community_management_enabled' => false,
     ])->assertRedirect();
 
     expect(app(InstanceSettings::class)->usageTrackingEnabled())->toBeTrue();

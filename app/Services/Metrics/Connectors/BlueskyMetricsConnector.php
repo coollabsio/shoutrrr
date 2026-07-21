@@ -38,7 +38,7 @@ class BlueskyMetricsConnector implements MetricsConnector
         ));
 
         try {
-            $response = $this->http->acceptJson()->get(self::APPVIEW.'/xrpc/app.bsky.feed.getPosts?'.$query);
+            $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()->get(self::APPVIEW.'/xrpc/app.bsky.feed.getPosts?'.$query);
         } catch (ConnectionException $e) {
             return PostMetricsResult::failed($e->getMessage());
         }
@@ -72,7 +72,7 @@ class BlueskyMetricsConnector implements MetricsConnector
     public function fetchAccount(ConnectedAccount $account, array $credentials): AccountMetricsResult
     {
         try {
-            $response = $this->http->acceptJson()->get(self::APPVIEW.'/xrpc/app.bsky.actor.getProfile', [
+            $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()->get(self::APPVIEW.'/xrpc/app.bsky.actor.getProfile', [
                 'actor' => $account->remote_account_id,
             ]);
         } catch (ConnectionException $e) {

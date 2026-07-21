@@ -20,6 +20,7 @@ it('derives disabled platform labels from enabled keys', () => {
         facebook: true,
         instagram: true,
         threads: true,
+        discord: true,
     };
 
     expect(platformKeys(enabled)).toEqual([
@@ -29,6 +30,7 @@ it('derives disabled platform labels from enabled keys', () => {
         'facebook',
         'instagram',
         'threads',
+        'discord',
     ]);
     expect(disabledPlatformLabels(enabled)).toEqual(['X', 'LinkedIn']);
 });

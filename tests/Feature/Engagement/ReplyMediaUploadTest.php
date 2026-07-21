@@ -65,7 +65,7 @@ test('updating alt text on media from another workspace 404s', function () {
 });
 
 test('a foreign-workspace reply 404s', function () {
-    $foreign = PostTargetReply::factory()->create(['workspace_id' => 'other-ws']);
+    $foreign = PostTargetReply::factory()->create(['workspace_id' => '11111111-1111-1111-1111-111111111111']);
 
     $this->actingAs($this->user)
         ->postJson(route('engagement.media.store', $foreign), [

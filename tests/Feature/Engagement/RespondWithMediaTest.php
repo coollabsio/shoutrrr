@@ -17,6 +17,7 @@ use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use App\Services\Engagement\Contracts\EngagementConnector;
 use App\Services\Engagement\EngagementConnectorRegistry;
+use App\Services\Engagement\ReplyPersister;
 use App\Services\Publishing\TokenManager;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Queue;
@@ -38,7 +39,7 @@ beforeEach(function (): void {
     $this->media = PostMedia::factory()->create(['workspace_id' => $this->workspace->id, 'kind' => 'image']);
 });
 
-test('a text-only reply still posts synchronously (no job)', function () {
+test('a text-only reply still posts synchronously (no job)', function (): void {
     Queue::fake();
     $connector = Mockery::mock(EngagementConnector::class);
     $connector->shouldReceive('postReply')->andReturn(ReplyPostResult::ok('x1'));
@@ -46,56 +47,58 @@ test('a text-only reply still posts synchronously (no job)', function () {
     $registry->shouldReceive('for')->andReturn($connector);
     app()->instance(EngagementConnectorRegistry::class, $registry);
 
-    $this->post(route('engagement.respond', $this->reply), ['text' => 'hi'])->assertRedirect();
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => 'hi'])->assertCreated();
     Queue::assertNothingPushed();
     expect($this->reply->fresh()->status->value)->toBe('responded');
 });
 
-test('a reply with media creates a sending row and dispatches SendReply', function () {
+// JSON-encoded (not multipart): `media` is an array of string ids, never Files,
+// so the client can drop forceFormData. These tests are what prove that.
+test('a reply with media creates a sending row and dispatches SendReply', function (): void {
     Queue::fake();
 
-    $this->post(route('engagement.respond', $this->reply), [
+    $this->postJson(route('engagement.respond', $this->reply), [
         'text' => 'with pic', 'media' => [$this->media->id],
-    ])->assertRedirect();
+    ])->assertCreated()->assertJsonPath('reply.is_ours', true);
 
     $ourRow = PostTargetReply::withoutGlobalScopes()->where('is_ours', true)->firstOrFail();
     expect($ourRow->send_status)->toBe(SendStatus::Sending);
     Queue::assertPushed(SendReply::class, 1);
 });
 
-test('a media-only reply with empty text is accepted', function () {
+test('a media-only reply with empty text is accepted', function (): void {
     Queue::fake();
 
-    $this->post(route('engagement.respond', $this->reply), [
+    $this->postJson(route('engagement.respond', $this->reply), [
         'text' => '', 'media' => [$this->media->id],
-    ])->assertRedirect()->assertSessionHasNoErrors();
+    ])->assertCreated();
 
     Queue::assertPushed(SendReply::class, 1);
 });
 
-test('a reply with neither text nor media is rejected', function () {
+test('a reply with neither text nor media is rejected', function (): void {
     Queue::fake();
 
-    $this->post(route('engagement.respond', $this->reply), [])
-        ->assertSessionHasErrors('text');
+    $this->postJson(route('engagement.respond', $this->reply), [])
+        ->assertJsonValidationErrors('text');
 
     Queue::assertNothingPushed();
 });
 
-test('a foreign-workspace media id is rejected', function () {
+test('a foreign-workspace media id is rejected', function (): void {
     Queue::fake();
 
     $otherWorkspace = Workspace::factory()->create();
     $foreignMedia = PostMedia::factory()->create(['workspace_id' => $otherWorkspace->id, 'kind' => 'image']);
 
-    $this->post(route('engagement.respond', $this->reply), [
+    $this->postJson(route('engagement.respond', $this->reply), [
         'text' => 'with pic', 'media' => [$foreignMedia->id],
-    ])->assertSessionHasErrors('media.0');
+    ])->assertJsonValidationErrors('media.0');
 
     Queue::assertNothingPushed();
 });
 
-test('SendReply::failed marks the row failed', function () {
+test('SendReply::failed marks the row failed', function (): void {
     $ourRow = PostTargetReply::factory()->create([
         'workspace_id' => $this->workspace->id, 'post_target_id' => $this->reply->post_target_id,
         'platform' => Platform::X, 'is_ours' => true, 'send_status' => SendStatus::Sending->value,
@@ -108,7 +111,7 @@ test('SendReply::failed marks the row failed', function () {
     expect($ourRow->fresh()->send_status)->toBe(SendStatus::Failed);
 });
 
-test('SendReply fails the row without posting when the account is disabled', function () {
+test('SendReply fails the row without posting when the account is disabled', function (): void {
     $this->reply->target->account->forceFill(['disabled_at' => now()])->save();
 
     $ourRow = PostTargetReply::factory()->create([
@@ -118,12 +121,12 @@ test('SendReply fails the row without posting when the account is disabled', fun
     ]);
 
     (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic', Platform::X))
-        ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+        ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class), app(ReplyPersister::class));
 
     expect($ourRow->fresh()->send_status)->toBe(SendStatus::Failed);
 });
 
-test('SendReply posts the media reply and marks it sent', function () {
+test('SendReply posts the media reply and marks it sent', function (): void {
     $connector = Mockery::mock(EngagementConnector::class);
     $connector->shouldReceive('postReply')->andReturn(ReplyPostResult::ok('rid', 'cid'));
     $registry = Mockery::mock(EngagementConnectorRegistry::class);
@@ -137,7 +140,7 @@ test('SendReply posts the media reply and marks it sent', function () {
     ]);
 
     (new SendReply($ourRow->id, $this->reply->id, [$this->media->id], 'with pic', Platform::X))
-        ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
+        ->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class), app(ReplyPersister::class));
 
     expect($ourRow->fresh()->send_status)->toBe(SendStatus::Sent);
     expect($ourRow->fresh()->remote_reply_id)->toBe('rid');

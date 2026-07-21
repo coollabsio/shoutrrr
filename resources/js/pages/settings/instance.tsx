@@ -11,6 +11,7 @@ type InstanceSettings = {
     workspace_creation_enabled: boolean;
     usage_tracking_enabled: boolean;
     quote_tweets_enabled: boolean;
+    linkedin_community_management_enabled: boolean;
 };
 
 type PageProps = {
@@ -25,6 +26,8 @@ export default function Instance({ settings, workspaces_enabled }: PageProps) {
             workspaces_enabled && settings.workspace_creation_enabled,
         usage_tracking_enabled: settings.usage_tracking_enabled,
         quote_tweets_enabled: settings.quote_tweets_enabled,
+        linkedin_community_management_enabled:
+            settings.linkedin_community_management_enabled,
     });
 
     function handleSubmit(event: React.FormEvent) {
@@ -139,6 +142,38 @@ export default function Instance({ settings, workspaces_enabled }: PageProps) {
                                     becomes a quote tweet instead of a plain
                                     link. Requires X Enterprise API access;
                                     leave off on other tiers. Off by default.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                            <Checkbox
+                                id="linkedin_community_management_enabled"
+                                checked={
+                                    data.linkedin_community_management_enabled
+                                }
+                                onCheckedChange={(checked) =>
+                                    setData(
+                                        'linkedin_community_management_enabled',
+                                        checked === true,
+                                    )
+                                }
+                            />
+                            <div className="space-y-1">
+                                <Label htmlFor="linkedin_community_management_enabled">
+                                    LinkedIn engagement inbox (Community
+                                    Management API)
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                    When enabled, connecting LinkedIn requests
+                                    the restricted{' '}
+                                    <code>r_member_social_feed</code> scope so
+                                    the engagement inbox can read replies.
+                                    Requires your LinkedIn app to be approved
+                                    for the Community Management API — leave off
+                                    otherwise, or LinkedIn will reject the
+                                    connection. Reconnect existing LinkedIn
+                                    accounts after enabling. Off by default.
                                 </p>
                             </div>
                         </div>

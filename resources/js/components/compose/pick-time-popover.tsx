@@ -31,6 +31,16 @@ type Props = {
 
 const MINUTE_STEPS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
+const HOUR_ITEMS = Array.from({ length: 12 }, (_, i) => i + 1).map((h) => ({
+    value: String(h),
+    label: String(h).padStart(2, '0'),
+}));
+
+const MINUTE_ITEMS = MINUTE_STEPS.map((m) => ({
+    value: String(m),
+    label: String(m).padStart(2, '0'),
+}));
+
 /**
  * The next clock hour in `tz`, as a UTC ISO string.
  *
@@ -173,6 +183,7 @@ export function PickTimePopover({ value, onChange, tz }: Props) {
                     </span>
                     <div className="flex items-center gap-1">
                         <Select
+                            items={HOUR_ITEMS}
                             value={String(hour12)}
                             onValueChange={(v) =>
                                 commit(
@@ -189,22 +200,20 @@ export function PickTimePopover({ value, onChange, tz }: Props) {
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {Array.from(
-                                    { length: 12 },
-                                    (_, i) => i + 1,
-                                ).map((h) => (
+                                {HOUR_ITEMS.map((item) => (
                                     <SelectItem
-                                        key={h}
-                                        value={String(h)}
+                                        key={item.value}
+                                        value={item.value}
                                         className="font-mono tabular-nums"
                                     >
-                                        {String(h).padStart(2, '0')}
+                                        {item.label}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                         <span className="text-muted-foreground/60">:</span>
                         <Select
+                            items={MINUTE_ITEMS}
                             value={String(minute)}
                             onValueChange={(v) =>
                                 commit(dayIso, hour, Number(v))
@@ -217,13 +226,13 @@ export function PickTimePopover({ value, onChange, tz }: Props) {
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {MINUTE_STEPS.map((m) => (
+                                {MINUTE_ITEMS.map((item) => (
                                     <SelectItem
-                                        key={m}
-                                        value={String(m)}
+                                        key={item.value}
+                                        value={item.value}
                                         className="font-mono tabular-nums"
                                     >
-                                        {String(m).padStart(2, '0')}
+                                        {item.label}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

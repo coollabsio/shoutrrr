@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Support\FileStorage;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Vite;
@@ -70,9 +71,8 @@ class SecurityHeaders
         // <video> element (media-src). Adding it only when the disk is remote
         // keeps local and public-disk deployments on the tightest policy.
         $storage = $this->storageOrigins();
-        $connect = trim("'self' blob: ".implode(' ', $storage));
+        $connect = trim("'self' blob: ".implode(' ', array_merge($storage, $this->sentryOrigins())));
         $media = trim("'self' blob: ".implode(' ', $storage));
-
         $directives = [
             "default-src 'self'",
             "script-src 'self' 'nonce-{$nonce}' 'strict-dynamic'",
@@ -90,7 +90,7 @@ class SecurityHeaders
             "connect-src {$connect}",
             "frame-ancestors 'none'",
             "base-uri 'self'",
-            "form-action 'self'",
+            "form-action 'self' https:",
             "object-src 'none'",
         ];
 
@@ -109,7 +109,7 @@ class SecurityHeaders
      */
     private function storageOrigins(): array
     {
-        if (config('filesystems.default') !== 's3') {
+        if (FileStorage::diskName() !== 's3') {
             return [];
         }
 
@@ -124,6 +124,20 @@ class SecurityHeaders
         }
 
         return $origins === [] ? ['https:'] : array_values($origins);
+    }
+
+    /**
+     * CSP source origin for the browser Sentry SDK. It POSTs event envelopes to
+     * the ingest host encoded in the frontend DSN, so that origin must be in
+     * connect-src or the browser blocks the reports. Empty when no DSN is set.
+     *
+     * @return list<string>
+     */
+    private function sentryOrigins(): array
+    {
+        $origin = $this->originOf((string) config('sentry-browser.dsn'));
+
+        return $origin === null ? [] : [$origin];
     }
 
     /**

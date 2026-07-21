@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 
@@ -34,5 +35,33 @@ test('outputs the count of pruned files', function (): void {
 
     $this->artisan('media:prune-uploads')
         ->expectsOutput('Pruned 1 abandoned upload file(s).')
+        ->assertExitCode(0);
+});
+
+test('survives a storage listing error instead of failing the scheduled run', function (): void {
+    // S3's allFiles()/listContents() does not honor `throw => false`, so a
+    // transient listing error (throttling, timeout) reaches the command.
+    $disk = Mockery::mock(Filesystem::class);
+    $disk->shouldReceive('allFiles')->with('tmp/media')->andThrow(new RuntimeException('S3 SlowDown'));
+
+    Storage::shouldReceive('disk')->andReturn($disk);
+
+    $this->artisan('media:prune-uploads')
+        ->expectsOutput('Pruned 0 abandoned upload file(s).')
+        ->assertExitCode(0);
+});
+
+test('does not delete a file whose mtime cannot be read', function (): void {
+    // Under `throw => false`, lastModified() returns false on a per-object S3
+    // error; the command must not treat that as "ancient" and delete the file.
+    $disk = Mockery::mock(Filesystem::class);
+    $disk->shouldReceive('allFiles')->with('tmp/media')->andReturn(['tmp/media/unreadable.mp4']);
+    $disk->shouldReceive('lastModified')->with('tmp/media/unreadable.mp4')->andReturn(false);
+    $disk->shouldNotReceive('delete');
+
+    Storage::shouldReceive('disk')->andReturn($disk);
+
+    $this->artisan('media:prune-uploads')
+        ->expectsOutput('Pruned 0 abandoned upload file(s).')
         ->assertExitCode(0);
 });

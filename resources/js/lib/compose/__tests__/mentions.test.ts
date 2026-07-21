@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest';
 
 import {
     createMention,
+    extractLinkedInOrgRef,
+    hasEmptyActiveHandle,
     mentionInputValue,
     mentionToken,
+    normalizeLinkedInUrn,
+    platformSupportsMention,
     replaceMentionLabel,
     replaceMentionTokens,
+    savedMentionToPlaceholder,
     setPlatformMentionMode,
     updateMentionHandle,
+    updateMentionLinkedInUrn,
     updateMentionName,
     syncMentionsFromText,
     usesPlatformMention,
@@ -62,8 +68,8 @@ describe('mention helpers', () => {
             bluesky: '@Guest',
             linkedin: 'Guest',
             facebook: 'Guest',
-            instagram: 'Guest',
-            threads: 'Guest',
+            instagram: '@Guest',
+            threads: '@Guest',
         });
         expect(mentionToken(mention.id)).toBe(`{{mention:${mention.id}}}`);
     });
@@ -97,6 +103,73 @@ describe('mention helpers', () => {
         expect(updateMentionHandle(mention, 'x', 'guest_x').handles.x).toBe(
             '@guest_x',
         );
+    });
+
+    it('keeps an emptied handle blank instead of snapping back to the label', () => {
+        const mention: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { x: '@guest', linkedin: 'Guest' },
+        };
+
+        // Clearing the field stores '' (not a delete), so the input stays blank
+        // rather than falling back to `handles[platform] ?? label`.
+        const cleared = updateMentionHandle(mention, 'linkedin', '', false);
+
+        expect(cleared.handles.linkedin).toBe('');
+        expect(cleared.handles.linkedin ?? cleared.label).toBe('');
+    });
+
+    it('preserves inter-word whitespace while a plain-text name is typed', () => {
+        const mention: MentionPlaceholder = {
+            id: 'acme',
+            label: '@acme',
+            handles: { linkedin: 'Acme' },
+        };
+
+        // Controlled input: trimming here would eat the trailing space between
+        // words and strand "Acme Corp" at "AcmeCorp".
+        const typed = updateMentionHandle(mention, 'linkedin', 'Acme ', false);
+        expect(typed.handles.linkedin).toBe('Acme ');
+
+        const finished = updateMentionHandle(
+            typed,
+            'linkedin',
+            'Acme Corp',
+            false,
+        );
+        expect(finished.handles.linkedin).toBe('Acme Corp');
+    });
+
+    it('flags an empty active handle so saving can be blocked', () => {
+        const filled: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { x: '@guest', linkedin: 'Guest' },
+        };
+        expect(hasEmptyActiveHandle(filled, ['x', 'linkedin'])).toBe(false);
+
+        const cleared = updateMentionHandle(filled, 'linkedin', '', false);
+        expect(hasEmptyActiveHandle(cleared, ['x', 'linkedin'])).toBe(true);
+
+        // An untouched platform falls back to the label, so it is not "empty".
+        const untouched: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: {},
+        };
+        expect(hasEmptyActiveHandle(untouched, ['x'])).toBe(false);
+    });
+
+    it('knows which platforms support an @ mention', () => {
+        // Platforms that auto-link a bare @handle offer a mention toggle.
+        expect(platformSupportsMention('x')).toBe(true);
+        expect(platformSupportsMention('bluesky')).toBe(true);
+        expect(platformSupportsMention('instagram')).toBe(true);
+        expect(platformSupportsMention('threads')).toBe(true);
+        // LinkedIn has its own company-tag flow; Facebook's API won't auto-link.
+        expect(platformSupportsMention('linkedin')).toBe(false);
+        expect(platformSupportsMention('facebook')).toBe(false);
     });
 
     it('can store plain display text for a platform instead of an @ mention', () => {
@@ -152,6 +225,24 @@ describe('mention helpers', () => {
             bluesky: '@misterfdsfsfds',
             linkedin: 'misterfdsfsfds',
         });
+    });
+
+    it('preserves linkedin_urn when renaming even if it matches the label', () => {
+        const mention: MentionPlaceholder = {
+            id: 'coolify',
+            label: '@coolify',
+            handles: {
+                x: '@coolify',
+                linkedin: 'coolify',
+                linkedin_urn: 'coolify',
+            },
+        };
+
+        const updated = updateMentionName(mention, 'coolify-labs');
+
+        expect(updated.handles.x).toBe('@coolify-labs');
+        expect(updated.handles.linkedin).toBe('coolify-labs');
+        expect(updated.handles.linkedin_urn).toBe('coolify');
     });
 
     it('forces LinkedIn values to text only', () => {
@@ -210,8 +301,8 @@ describe('syncMentionsFromText', () => {
                     bluesky: '@guest',
                     linkedin: 'guest',
                     facebook: 'guest',
-                    instagram: 'guest',
-                    threads: 'guest',
+                    instagram: '@guest',
+                    threads: '@guest',
                 },
             },
         ]);
@@ -229,8 +320,8 @@ describe('syncMentionsFromText', () => {
                     bluesky: '@',
                     linkedin: '',
                     facebook: '',
-                    instagram: '',
-                    threads: '',
+                    instagram: '@',
+                    threads: '@',
                 },
             },
         ]);
@@ -249,8 +340,8 @@ describe('syncMentionsFromText', () => {
                     bluesky: '@guest',
                     linkedin: 'guest',
                     facebook: 'guest',
-                    instagram: 'guest',
-                    threads: 'guest',
+                    instagram: '@guest',
+                    threads: '@guest',
                 },
             },
         ]);
@@ -281,6 +372,163 @@ describe('syncMentionsFromText', () => {
             x: '@guest_x',
             bluesky: '@guest.bsky.social',
         });
+    });
+});
+
+describe('linkedin org reference', () => {
+    it('carries linkedin_urn through the saved-mention round-trip', () => {
+        const placeholder = savedMentionToPlaceholder({
+            id: 'acme-id',
+            name: '@acme',
+            handles: {
+                linkedin: 'Acme Corp',
+                linkedin_urn: 'https://www.linkedin.com/company/acme/',
+            },
+        });
+
+        expect(placeholder.handles.linkedin_urn).toBe(
+            'https://www.linkedin.com/company/acme/',
+        );
+        // Serializing (as save/autosave payloads do) preserves the key.
+        expect(JSON.parse(JSON.stringify(placeholder.handles))).toEqual({
+            linkedin: 'Acme Corp',
+            linkedin_urn: 'https://www.linkedin.com/company/acme/',
+        });
+    });
+
+    it('leaves the LinkedIn preview output as the plain display name', () => {
+        const mention = savedMentionToPlaceholder({
+            id: 'acme-id',
+            name: '@acme',
+            handles: {
+                linkedin: 'Acme Corp',
+                linkedin_urn: 'urn:li:organization:123',
+            },
+        });
+
+        expect(
+            replaceMentionTokens('Hi {{mention:acme}}', [mention], 'linkedin'),
+        ).toBe('Hi Acme Corp');
+    });
+
+    it('sets a trimmed linkedin_urn and clears it when emptied', () => {
+        const mention: MentionPlaceholder = {
+            id: 'acme',
+            label: '@acme',
+            handles: { linkedin: 'Acme Corp' },
+        };
+
+        const withUrn = updateMentionLinkedInUrn(
+            mention,
+            '  urn:li:organization:123  ',
+        );
+        expect(withUrn.handles.linkedin_urn).toBe('urn:li:organization:123');
+        expect(withUrn.handles.linkedin).toBe('Acme Corp');
+
+        const cleared = updateMentionLinkedInUrn(withUrn, '   ');
+        expect(cleared.handles.linkedin_urn).toBeUndefined();
+    });
+});
+
+describe('normalizeLinkedInUrn', () => {
+    it('passes a canonical org urn through unchanged', () => {
+        expect(normalizeLinkedInUrn('urn:li:organization:12345')).toBe(
+            'urn:li:organization:12345',
+        );
+        expect(normalizeLinkedInUrn('  urn:li:organization:12345  ')).toBe(
+            'urn:li:organization:12345',
+        );
+    });
+
+    it('coerces a bare numeric id into a urn', () => {
+        expect(normalizeLinkedInUrn('12345')).toBe('urn:li:organization:12345');
+    });
+
+    it('coerces a numeric company URL into a urn', () => {
+        expect(
+            normalizeLinkedInUrn('https://www.linkedin.com/company/12345/'),
+        ).toBe('urn:li:organization:12345');
+    });
+
+    it('cannot resolve a vanity company URL and returns null', () => {
+        expect(
+            normalizeLinkedInUrn('https://www.linkedin.com/company/coolify'),
+        ).toBeNull();
+    });
+
+    it('returns null for garbage or empty input', () => {
+        expect(normalizeLinkedInUrn('not a reference')).toBeNull();
+        expect(normalizeLinkedInUrn('   ')).toBeNull();
+    });
+});
+
+describe('extractLinkedInOrgRef', () => {
+    it('pulls a urn token out and leaves the display name in rest', () => {
+        expect(
+            extractLinkedInOrgRef('Acme Corp urn:li:organization:123'),
+        ).toEqual({
+            urn: 'urn:li:organization:123',
+            vanity: null,
+            rest: 'Acme Corp',
+        });
+    });
+
+    it('pulls a numeric company URL out and normalizes it to a urn', () => {
+        expect(
+            extractLinkedInOrgRef(
+                'Acme https://www.linkedin.com/company/123/ team',
+            ),
+        ).toEqual({
+            urn: 'urn:li:organization:123',
+            vanity: null,
+            rest: 'Acme team',
+        });
+    });
+
+    it('reports a vanity slug when the company URL has no numeric id', () => {
+        expect(
+            extractLinkedInOrgRef('Coolify linkedin.com/company/coolify'),
+        ).toEqual({
+            urn: null,
+            vanity: 'coolify',
+            rest: 'Coolify',
+        });
+    });
+
+    it('leaves plain display text untouched with no reference', () => {
+        expect(extractLinkedInOrgRef('Acme Corp')).toEqual({
+            urn: null,
+            vanity: null,
+            rest: 'Acme Corp',
+        });
+    });
+
+    it('does not treat a bare number typed as a name as a urn', () => {
+        expect(extractLinkedInOrgRef('12345')).toEqual({
+            urn: null,
+            vanity: null,
+            rest: '12345',
+        });
+    });
+
+    it('composes into a tag-mode change that sets the urn and keeps the name', () => {
+        // Mirrors LinkedInMentionField.handleChange in tag mode.
+        const mention: MentionPlaceholder = {
+            id: 'acme',
+            label: '@acme',
+            handles: { linkedin: 'Acme Corp' },
+        };
+
+        const { urn, rest } = extractLinkedInOrgRef(
+            'Acme Corp https://www.linkedin.com/company/123/',
+        );
+        let next = updateMentionHandle(mention, 'linkedin', rest, false);
+        if (urn) {
+            next = updateMentionLinkedInUrn(next, urn);
+        }
+
+        expect(next.handles.linkedin).toBe('Acme Corp');
+        expect(next.handles.linkedin_urn).toBe('urn:li:organization:123');
     });
 });
 

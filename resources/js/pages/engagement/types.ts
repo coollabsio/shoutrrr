@@ -12,6 +12,7 @@ export type ReplyItem = {
     remote_created_at: string;
     is_read: boolean;
     is_liked: boolean;
+    can_like: boolean;
     is_ours: boolean;
     send_status: 'sending' | 'sent' | 'failed' | null;
     status: 'pending' | 'responded' | 'archived';

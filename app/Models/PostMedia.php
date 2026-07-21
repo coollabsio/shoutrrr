@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Concerns\HasWorkspaceScope;
+use App\Services\Media\DerivedMedia;
+use App\Support\FileStorage;
 use Database\Factories\PostMediaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * @property string $id
@@ -70,10 +71,14 @@ class PostMedia extends Model
     protected static function booted(): void
     {
         static::deleting(function (PostMedia $media): void {
-            Storage::disk($media->disk)->delete($media->path);
+            FileStorage::disk($media->disk)->delete($media->path);
+
+            // Publish-time format conversions (JPEG for Meta, MP4 for GIFs) live
+            // beside the original and would otherwise be left behind.
+            FileStorage::disk($media->disk)->delete(DerivedMedia::pathsFor($media));
 
             if ($media->source_path !== null) {
-                Storage::disk($media->source_disk ?? $media->disk)->delete($media->source_path);
+                FileStorage::disk($media->source_disk ?? $media->disk)->delete($media->source_path);
             }
         });
     }
@@ -125,15 +130,15 @@ class PostMedia extends Model
      */
     private function resolveUrl(string $disk, string $path): string
     {
-        if (config("filesystems.disks.{$disk}.visibility") === 'public') {
-            return Storage::disk($disk)->url($path);
-        }
-
-        return Storage::disk($disk)->temporaryUrl($path, now()->addHours(6));
+        return FileStorage::url($path, $disk);
     }
 
     /**
-     * @return array{id: string, url: string, mime: string, kind: string, duration_seconds: int|null, alt_text: string|null, position: int, edit_settings: array<string, mixed>|null, source_url: string|null}
+     * `edit_url` / `source_edit_url` are same-origin proxy URLs the canvas
+     * editors fetch instead of the display URLs, whose storage origin may omit
+     * CORS headers. `source_edit_url` is null when no pre-edit source is kept.
+     *
+     * @return array{id: string, url: string, mime: string, kind: string, duration_seconds: int|null, alt_text: string|null, position: int, edit_settings: array<string, mixed>|null, source_url: string|null, edit_url: string, source_edit_url: string|null}
      */
     public function toView(): array
     {
@@ -147,6 +152,10 @@ class PostMedia extends Model
             'position' => $this->position,
             'edit_settings' => $this->edit_settings,
             'source_url' => $this->source_url(),
+            'edit_url' => route('media.raw', $this),
+            'source_edit_url' => $this->source_path === null
+                ? null
+                : route('media.raw', ['media' => $this, 'variant' => 'source']),
         ];
     }
 

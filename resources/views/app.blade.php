@@ -5,6 +5,14 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
+        @if (config('sentry-browser.dsn'))
+            {{-- Browser Sentry config, delivered at runtime so a prebuilt bundle
+                 can be pointed at a DSN via env. The DSN is a public value. --}}
+            <script nonce="{{ Vite::cspNonce() }}">
+                window.__sentry = @js(config('sentry-browser'));
+            </script>
+        @endif
+
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script nonce="{{ Vite::cspNonce() }}">
             (function() {

@@ -35,9 +35,9 @@ class PostsController extends Controller
         ]);
 
         $paginator = Post::query()
-            ->with(['author:id,name', 'targets'])
+            ->with(['author:id,name', 'targets', 'media'])
             ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->when($validated['q'] ?? null, fn ($query, $q) => $query->where('base_text', 'like', "%{$q}%"))
+            ->when($validated['q'] ?? null, fn ($query, $q) => $query->whereLike('base_text', "%{$q}%"))
             ->orderBy('id', 'desc')
             ->cursorPaginate($validated['per_page'] ?? 25)
             ->through(fn (Post $post): array => PostListItem::make($post));
@@ -67,6 +67,7 @@ class PostsController extends Controller
             'mentions.*.handles.x' => ['nullable', 'string'],
             'mentions.*.handles.bluesky' => ['nullable', 'string'],
             'mentions.*.handles.linkedin' => ['nullable', 'string'],
+            'mentions.*.handles.linkedin_urn' => ['nullable', 'string', 'max:255'],
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
@@ -106,6 +107,7 @@ class PostsController extends Controller
             'mentions.*.handles.x' => ['nullable', 'string'],
             'mentions.*.handles.bluesky' => ['nullable', 'string'],
             'mentions.*.handles.linkedin' => ['nullable', 'string'],
+            'mentions.*.handles.linkedin_urn' => ['nullable', 'string', 'max:255'],
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],

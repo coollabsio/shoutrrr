@@ -70,6 +70,9 @@ test('the inbox exposes which engagement platforms are disabled', function (): v
             'bluesky' => true,
             'linkedin' => true,
         ],
+        // LinkedIn reply-fetching also requires the Community Management gate;
+        // without it LinkedIn stays disabled regardless of the polling toggle.
+        'linkedin_community_management_enabled' => true,
     ]);
 
     $this->actingAs($this->user)
@@ -80,6 +83,26 @@ test('the inbox exposes which engagement platforms are disabled', function (): v
             ->where('engagementEnabled.x', false)
             ->where('engagementEnabled.bluesky', true)
             ->where('engagementEnabled.linkedin', true));
+});
+
+test('the inbox exposes whether the LinkedIn community management scope is enabled', function (): void {
+    $this->actingAs($this->user)
+        ->get(route('engagement.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('engagement/index')
+            ->where('linkedinCommunityManagementEnabled', false));
+
+    app(InstanceSettings::class)->update([
+        'linkedin_community_management_enabled' => true,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('engagement.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('engagement/index')
+            ->where('linkedinCommunityManagementEnabled', true));
 });
 
 test('the posts facet lists posts that drew replies with a count', function (): void {
@@ -277,7 +300,7 @@ test('the inbox keeps separate conversations for different authors on the same p
 });
 
 test('replies from another workspace are not visible', function (): void {
-    PostTargetReply::factory()->create(['workspace_id' => 'other-workspace', 'text' => 'foreign']);
+    PostTargetReply::factory()->create(['workspace_id' => '11111111-1111-1111-1111-111111111111', 'text' => 'foreign']);
 
     $this->actingAs($this->user)
         ->get(route('engagement.index', ['unread' => 1]))

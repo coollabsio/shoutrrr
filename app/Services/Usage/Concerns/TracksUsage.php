@@ -6,6 +6,7 @@ namespace App\Services\Usage\Concerns;
 
 use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
+use App\Services\Usage\UsageReadDedup;
 use App\Services\Usage\UsageRecorder;
 use Illuminate\Http\Client\Response;
 
@@ -33,6 +34,28 @@ trait TracksUsage
             succeeded: $succeeded ?? $response->successful(),
             meta: $this->usageMeta($response),
         );
+    }
+
+    /**
+     * Meter a read operation billed per object returned, with X-style daily dedup:
+     * a successful response bills only the object ids not already seen today for
+     * this (workspace, platform). A failed response records the event but bills
+     * nothing (succeeded=false leaves the counter untouched).
+     *
+     * @param  list<string>  $objectIds
+     */
+    protected function meterRead(
+        UsageCategory $category,
+        string $operation,
+        ConnectedAccount $account,
+        Response $response,
+        array $objectIds,
+    ): void {
+        $quotaWeight = $response->successful()
+            ? app(UsageReadDedup::class)->countNew($account->workspace_id, $account->platform->value, $objectIds)
+            : 0;
+
+        $this->meter($category, $operation, $account, $response, quotaWeight: $quotaWeight);
     }
 
     /**
