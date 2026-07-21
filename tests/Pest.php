@@ -1,11 +1,23 @@
 <?php
 
+use App\Dto\Publishing\PublishContext;
+use App\Dto\Publishing\PublishResult;
+use App\Enums\Platform;
+use App\Enums\PostStatus;
 use App\Enums\WorkspaceRole;
+use App\Models\ConnectedAccount;
+use App\Models\ConnectedAccountSecret;
 use App\Models\McpGrantWorkspace;
+use App\Models\Post;
+use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Services\Api\ApiKeyManager;
+use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Publishing\PublishConnectorRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
 use Laravel\Passport\AccessToken;
 use Laravel\Passport\Client;
@@ -59,6 +71,97 @@ expect()->extend('toBeOne', fn () => $this->toBe(1));
 function something()
 {
     // ..
+}
+
+/**
+ * Issue a real key and return [User, Workspace, plaintextToken]. The user is a
+ * member of the workspace.
+ *
+ * @return array{0: User, 1: Workspace, 2: string}
+ */
+function issuedKey(string $scope = 'write'): array
+{
+    if (! file_exists(storage_path('oauth-private.key'))) {
+        Artisan::call('passport:keys', ['--no-interaction' => true]);
+    }
+
+    Client::factory()->asPersonalAccessTokenClient()->create(['provider' => 'users']);
+
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create();
+    $workspace->members()->create(['user_id' => $user->id, 'role' => 'admin']);
+
+    [, $plain] = app(ApiKeyManager::class)->issue($workspace, $user, 'test', $scope, null);
+
+    return [$user, $workspace, $plain];
+}
+
+/**
+ * Build a 4x4 transparent PNG as raw bytes for media-conversion tests.
+ */
+function transparentPng(int $width = 4, int $height = 4): string
+{
+    $image = imagecreatetruecolor($width, $height);
+    imagesavealpha($image, true);
+    imagefill($image, 0, 0, imagecolorallocatealpha($image, 0, 0, 0, 127));
+    ob_start();
+    imagepng($image);
+
+    return (string) ob_get_clean();
+}
+
+/**
+ * Create a pending X PostTarget (with account + secret) ready to publish.
+ *
+ * @param  array<int, string>  $segments
+ */
+function publishTarget(array $segments = ['hello'], string $status = 'pending'): PostTarget
+{
+    $post = Post::factory()->create(['status' => PostStatus::Publishing]);
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::X->value,
+        'token_expires_at' => now()->addHour(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'tok',
+    ]);
+
+    return PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::X->value,
+        'sections' => $segments,
+        'status' => $status,
+    ]);
+}
+
+/**
+ * Swap the publish connector registry for a stub returning the given result
+ * (or invoking the given callable with the PublishContext).
+ */
+function bindConnector(PublishResult|callable $result): void
+{
+    $connector = new class($result) implements PublishConnector
+    {
+        public function __construct(private $result) {}
+
+        public function publish(PublishContext $context): PublishResult
+        {
+            return is_callable($this->result) ? ($this->result)($context) : $this->result;
+        }
+
+        public function delete(PostTarget $target, array $credentials): void {}
+    };
+
+    app()->instance(PublishConnectorRegistry::class, new class($connector) extends PublishConnectorRegistry
+    {
+        public function __construct(private PublishConnector $connector) {}
+
+        public function for(Platform $platform): PublishConnector
+        {
+            return $this->connector;
+        }
+    });
 }
 
 /**
