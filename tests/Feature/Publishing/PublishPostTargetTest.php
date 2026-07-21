@@ -4,67 +4,16 @@ use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\ErrorKind;
-use App\Enums\Platform;
 use App\Enums\PostStatus;
 use App\Enums\PostTargetStatus;
 use App\Jobs\PublishPostTarget;
-use App\Models\ConnectedAccount;
-use App\Models\ConnectedAccountSecret;
-use App\Models\Post;
-use App\Models\PostTarget;
 use App\Models\PostTargetAttempt;
 use App\Services\Publishing\BackoffSchedule;
-use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Publishing\PostStatusRollup;
 use App\Services\Publishing\PublishConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Date;
-
-function publishTarget(array $segments = ['hello'], string $status = 'pending'): PostTarget
-{
-    $post = Post::factory()->create(['status' => PostStatus::Publishing]);
-    $account = ConnectedAccount::factory()->create([
-        'platform' => Platform::X->value,
-        'token_expires_at' => now()->addHour(),
-    ]);
-    ConnectedAccountSecret::factory()->create([
-        'connected_account_id' => $account->id,
-        'access_token' => 'tok',
-    ]);
-
-    return PostTarget::factory()->for($post)->create([
-        'connected_account_id' => $account->id,
-        'platform' => Platform::X->value,
-        'sections' => $segments,
-        'status' => $status,
-    ]);
-}
-
-function bindConnector(PublishResult|callable $result): void
-{
-    $connector = new class($result) implements PublishConnector
-    {
-        public function __construct(private $result) {}
-
-        public function publish(PublishContext $context): PublishResult
-        {
-            return is_callable($this->result) ? ($this->result)($context) : $this->result;
-        }
-
-        public function delete(PostTarget $target, array $credentials): void {}
-    };
-
-    app()->instance(PublishConnectorRegistry::class, new class($connector) extends PublishConnectorRegistry
-    {
-        public function __construct(private PublishConnector $connector) {}
-
-        public function for(Platform $platform): PublishConnector
-        {
-            return $this->connector;
-        }
-    });
-}
 
 test('successful publish marks the target published with remote ids', function () {
     $target = publishTarget(['one', 'two']);

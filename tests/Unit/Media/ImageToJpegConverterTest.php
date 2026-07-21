@@ -5,17 +5,6 @@ use App\Services\Media\ImageConversionFailed;
 use App\Services\Media\ImageToJpegConverter;
 use Illuminate\Support\Facades\Storage;
 
-function transparentPng(int $width = 4, int $height = 4): string
-{
-    $image = imagecreatetruecolor($width, $height);
-    imagesavealpha($image, true);
-    imagefill($image, 0, 0, imagecolorallocatealpha($image, 0, 0, 0, 127));
-    ob_start();
-    imagepng($image);
-
-    return (string) ob_get_clean();
-}
-
 function mimeOf(string $bytes): string
 {
     return (new finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
