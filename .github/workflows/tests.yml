@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  ci:
+  tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -35,18 +35,28 @@ jobs:
         with:
           php-version: ${{ matrix.php-version }}
           tools: composer:v2
-          coverage: xdebug
+          coverage: none
+
+      - name: Install Dependencies
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          composer-options: "--optimize-autoloader"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: latest
 
+      - name: Cache Bun dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
       - name: Install Node Dependencies
         run: bun install
-
-      - name: Install Dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Copy Environment File
         run: cp .env.example .env
@@ -57,8 +67,38 @@ jobs:
       - name: Build Assets
         run: bun run build
 
+      - name: Tests
+        run: php artisan test --parallel
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-version: ['8.5']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: composer:v2
+          coverage: none
+
+      - name: Install Dependencies
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          composer-options: "--optimize-autoloader"
+
+      - name: Copy Environment File
+        run: cp .env.example .env
+
+      - name: Generate Application Key
+        run: php artisan key:generate
+
       - name: Run Type Analysis
         run: composer types:check
-
-      - name: Tests
-        run: php artisan test

@@ -35,10 +35,21 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install Dependencies
-        run: |
-          composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-          bun install
+      - name: Install Composer Dependencies
+        uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          composer-options: "--no-scripts"
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install Node Dependencies
+        run: bun install
 
       - name: Run Pint
         run: composer lint
