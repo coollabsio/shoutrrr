@@ -262,7 +262,7 @@ class XConnector implements PublishConnector
             }
 
             $status = $this->http->withToken($token)->acceptJson()
-                ->get(self::MEDIA_BASE, ['command' => 'STATUS', 'media_id' => $mediaId]);
+                ->get(self::MEDIA_BASE, ['media_id' => $mediaId]);
 
             $this->meter(UsageCategory::Publish, UsageOperation::MEDIA_STATUS_POLL, $context->account, $status);
 

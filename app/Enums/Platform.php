@@ -413,10 +413,13 @@ enum Platform: string
         };
     }
 
-    public function maxVideoDurationSeconds(): int
+    public function maxVideoDurationSeconds(bool $xPremium = false): int
     {
         return match ($this) {
-            self::X => 140,
+            // X exposes a subscription tier for the authenticated account. Premium
+            // tiers support longer video uploads; free and unknown accounts retain
+            // the standard 140-second cap.
+            self::X => $xPremium ? 14_400 : 140,
             self::LinkedIn => 1800,
             self::Bluesky => 180,
             self::Facebook => 1200,

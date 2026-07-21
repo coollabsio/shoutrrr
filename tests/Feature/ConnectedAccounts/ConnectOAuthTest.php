@@ -7,6 +7,7 @@ use App\Models\ConnectedAccount;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Http;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider;
@@ -123,8 +124,8 @@ test('callback persists an active X account with an encrypted token', function (
         'expiresIn' => 7200,
     ]);
     Http::fake([
-        'https://api.twitter.com/2/users/me*' => Http::response([
-            'data' => ['id' => 'x-99', 'verified_type' => 'none'],
+        'https://api.x.com/2/users/me*' => Http::response([
+            'data' => ['id' => 'x-99', 'subscription_type' => 'None', 'verified_type' => 'none'],
         ]),
     ]);
 
@@ -137,14 +138,17 @@ test('callback persists an active X account with an encrypted token', function (
         ->and($account->handle)->toBe('@ada')
         ->and($account->workspace_id)->toBe($workspace->id)
         ->and($account->secret->access_token)->toBe('access')
-        ->and($account->capabilities)->toBe([
+        ->and($account->capabilities)->toMatchArray([
             'x_premium' => false,
             'max_text_length' => 280,
+            'max_video_duration_seconds' => 140,
             'verified_type' => 'none',
-        ]);
+            'x_subscription_tier' => 'free',
+        ])
+        ->and($account->capabilities['x_subscription_checked_at'])->toBeString()->not->toBe('');
 });
 
-test('callback detects X premium accounts for long tweets', function () {
+test('callback detects the X Premium subscription tier for longer posts', function () {
     config()->set('services.x.client_id', 'cid');
     config()->set('services.x.client_secret', 'secret');
     config()->set('services.x.redirect', 'https://app.test/accounts/callback/x');
@@ -155,8 +159,8 @@ test('callback detects X premium accounts for long tweets', function () {
         'token' => 'access',
     ]);
     Http::fake([
-        'https://api.twitter.com/2/users/me*' => Http::response([
-            'data' => ['id' => 'x-premium', 'verified_type' => 'blue'],
+        'https://api.x.com/2/users/me*' => Http::response([
+            'data' => ['id' => 'x-premium', 'subscription_type' => 'Basic', 'verified_type' => 'none'],
         ]),
     ]);
 
@@ -164,7 +168,38 @@ test('callback detects X premium accounts for long tweets', function () {
 
     $account = ConnectedAccount::withoutGlobalScopes()->firstWhere('remote_account_id', 'x-premium');
     expect($account->hasXPremium())->toBeTrue()
-        ->and($account->maxTextLength())->toBe(25_000);
+        ->and($account->xSubscriptionTier())->toBe('basic')
+        ->and($account->xSubscriptionLabel())->toBe('X Premium Basic')
+        ->and($account->maxTextLength())->toBe(25_000)
+        ->and($account->maxVideoDurationSeconds())->toBe(14_400);
+});
+
+test('callback does not fabricate a free tier when the X lookup fails at connect', function () {
+    config()->set('services.x.client_id', 'cid');
+    config()->set('services.x.client_secret', 'secret');
+    config()->set('services.x.redirect', 'https://app.test/accounts/callback/x');
+    ownerActingIn();
+    fakeOAuthUser('x', [
+        'id' => 'x-blip',
+        'nickname' => 'blip',
+        'token' => 'access',
+    ]);
+    // A transient X outage must not stamp a definitive "free" tier that would
+    // silently cap a Premium account until the user notices and refreshes.
+    Http::fake([
+        'https://api.x.com/2/users/me*' => Http::response([], 503),
+    ]);
+
+    test()->get('/accounts/callback/x')->assertRedirect(route('accounts.index'));
+
+    $account = ConnectedAccount::withoutGlobalScopes()->firstWhere('remote_account_id', 'x-blip');
+    expect($account)->not->toBeNull()
+        ->and($account->status)->toBe(ConnectedAccountStatus::Active)
+        ->and($account->xSubscriptionTier())->toBeNull()
+        ->and($account->xSubscriptionLabel())->toBeNull()
+        ->and($account->hasXPremium())->toBeFalse()
+        ->and($account->maxTextLength())->toBe(280)
+        ->and($account->maxVideoDurationSeconds())->toBe(140);
 });
 
 test('callback maps a linkedin-openid user', function () {
@@ -208,7 +243,7 @@ test('linkedin connect requests the community management feed scopes only when e
     test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
     expect($captured)->not->toContain('r_member_social_feed');
 
-    app(App\Support\InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+    app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
 
     test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
     expect($captured)->toContain('r_member_social_feed')

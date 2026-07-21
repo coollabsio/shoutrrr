@@ -150,12 +150,28 @@ ARG AUTORUN_LARAVEL_ROUTE_CACHE=true
 ARG AUTORUN_LARAVEL_VIEW_CACHE=true
 ARG AUTORUN_LARAVEL_STORAGE_LINK=true
 ARG PHP_OPCACHE_ENABLE=1
+# Local-disk video uploads stream the request body straight to storage
+# (StreamedUploadController), which bounds the bytes it writes, so memory and disk
+# no longer scale with a hostile upload. Laravel's ValidatePostSize middleware
+# still compares an honest Content-Length against post_max_size (PHP itself does
+# not enforce post_max_size on a raw PUT body), so keep this above the 1 GiB
+# platform video ceiling or a legitimate large upload is rejected up front.
+# (upload_max_filesize only applies to multipart form uploads, not the raw PUT
+# body, but is kept aligned.)
+ARG PHP_POST_MAX_SIZE=1100M
+ARG PHP_UPLOAD_MAX_FILE_SIZE=1100M
+# Streaming keeps upload memory flat regardless of file size, so this only needs
+# headroom for normal request handling and image processing — not the whole video.
+ARG PHP_MEMORY_LIMIT=512M
 ARG SSL_MODE=off
 # Number of queue worker processes supervisord runs (numprocs in laravel.conf).
 # Must be a non-empty integer or supervisord fails to start.
 ARG QUEUE_WORKER_COUNT=1
 
 ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
+    PHP_POST_MAX_SIZE=${PHP_POST_MAX_SIZE} \
+    PHP_UPLOAD_MAX_FILE_SIZE=${PHP_UPLOAD_MAX_FILE_SIZE} \
+    PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT} \
     AUTORUN_ENABLED=${AUTORUN_ENABLED} \
     AUTORUN_LARAVEL_CONFIG_CACHE=${AUTORUN_LARAVEL_CONFIG_CACHE} \
     AUTORUN_LARAVEL_EVENT_CACHE=${AUTORUN_LARAVEL_EVENT_CACHE} \

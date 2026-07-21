@@ -110,7 +110,11 @@ test('replying up to account capability limit is accepted', function (): void {
     $premiumAccount = ConnectedAccount::factory()->create([
         'workspace_id' => $this->workspace->id,
         'platform' => Platform::X,
-        'capabilities' => ['max_text_length' => 25000],
+        'capabilities' => [
+            'x_premium' => true,
+            'x_subscription_tier' => 'premium',
+            'max_text_length' => 25_000,
+        ],
         'token_expires_at' => now()->addHour(),
     ]);
     ConnectedAccountSecret::factory()->create([

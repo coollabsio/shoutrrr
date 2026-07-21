@@ -130,6 +130,7 @@ class HandleInertiaRequests extends Middleware
                 'avatar_url' => $account->avatar_url,
                 'status' => $account->status->value,
                 'max_text_length' => $account->maxTextLength(),
+                'max_video_duration_seconds' => $account->maxVideoDurationSeconds(),
                 'x_premium' => $account->hasXPremium(),
             ])->values()->all();
 

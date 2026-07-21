@@ -39,7 +39,7 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 
 | Platform         | Connect with                   | Publishing                                                | Threads         | Analytics                            |
 | ---------------- | ------------------------------ | --------------------------------------------------------- | --------------- | ------------------------------------ |
-| **X** (Twitter)  | OAuth 2.0                      | ✅ (≤280 chars, ≤25,000 for Premium, up to 4 media)       | ✅              | likes, reposts, replies, impressions |
+| **X** (Twitter)  | OAuth 2.0                      | ✅ (Free: ≤280 chars / 2m20 video; Premium tiers: ≤25,000 chars / up to 4h video, up to 4 media) | ✅              | likes, reposts, replies, impressions |
 | **Bluesky**      | ATProto OAuth or app passwords | ✅ (≤300 graphemes, up to 4 images or 1 video)            | ✅              | likes, reposts, replies              |
 | **LinkedIn**     | OAuth 2.0 (OIDC)               | ✅ (≤3000 chars, up to 9 images or 1 video)               | — (single post) | not available for personal accounts  |
 | **Facebook** (Pages) | OAuth 2.0 (Facebook Login) | ✅ (≤63,206 chars, up to 10 images or 1 video)            | — (single post) | likes, comments, shares, impressions |
@@ -49,11 +49,11 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 
 ## Features
 
-- 📝 **Composer** — draft with media and alt text, see a live character count for each network/account (including X Premium limits), and automatically split long posts into threads where the platform supports it.
+- 📝 **Composer** — draft with media and alt text, see live per-account text and video limits (including detected X subscription limits), and automatically split long posts into threads where the platform supports it.
 - 🚀 **Multi-account publishing** — fan one post out to many accounts at once, with optional per-platform overrides. Each target publishes independently and retries on failure.
 - 🗓️ **Queue & calendar** — set recurring posting slots (in your workspace's timezone), drop drafts into the queue, and review everything on a month calendar. Publish instantly whenever you like.
 - 📊 **Analytics** — follower and post-count trends per account, plus per-post engagement (likes, reposts, replies, impressions) where the provider API supports it.
-- 🔗 **Connected accounts** — link accounts via OAuth (X, LinkedIn) or app password (Bluesky), group them into reusable sets, and get nudged when one needs reconnecting. Tokens are stored encrypted and refreshed automatically.
+- 🔗 **Connected accounts** — link accounts via OAuth (X, LinkedIn) or app password (Bluesky), group them into reusable sets, and get nudged when one needs reconnecting. Tokens are stored encrypted and refreshed automatically; a successful authenticated X tier refresh also restores a stale attention state.
 - 👥 **Workspaces & team** — multiple workspaces with role-based memberships, email invitations, and ownership transfer. Every bit of data is scoped to its workspace.
 - 🔔 **Notifications** — in-app alerts when a post publishes or fails, or when an account needs attention.
 - 🔐 **Secure by default** — email/password with verification, two-factor (TOTP), passkeys (WebAuthn), and optional social login (Google, X, LinkedIn).
@@ -101,6 +101,8 @@ docker run -d \
 ```
 
 Shoutrrr runs its startup tasks automatically, including database migrations. Open `http://localhost:8080`, register the first account, and you're in. The image defaults to production mode, SQLite, database-backed cache/queue/session storage, one in-container queue worker, one scheduler, and SSR disabled.
+
+The image accepts videos up to Shoutrrr's 1 GiB application ceiling by default. Local-disk uploads stream the request body straight to storage and the app bounds how many bytes it writes, so memory and disk usage stay flat no matter the video size. If you place it behind a reverse proxy, set that proxy's request-body limit to at least 1.1 GiB too, and keep `PHP_POST_MAX_SIZE` above the ceiling so a legitimate large upload isn't rejected up front. For large or production deployments, configure S3-compatible object storage (`FILESYSTEM_DISK=s3`): uploads then go directly to storage and never pass through the app at all.
 
 For a real public deployment, set `APP_URL` to your HTTPS domain and set `SESSION_SECURE_COOKIE=true`. To test a specific release candidate, replace `latest` with a version tag such as `1.0.0-rc.2` in the commands above.
 
@@ -210,7 +212,7 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI="${APP_URL}/auth/google/callback"
 ```
 
-> **Heads up:** publishing, scheduling, engagement polling, and analytics capture rely on a running queue worker and scheduler. The provided Docker setups start both for you. Metrics and engagement are enabled by default and can be disabled with `METRICS_ENABLED=false` / `ENGAGEMENT_ENABLED=false` (see `config/metrics.php` and `config/engagement.php`).
+> **Heads up:** publishing, scheduling, engagement polling, and analytics capture rely on a running queue worker and scheduler. The provided Docker setups start both for you. Metrics and engagement are enabled by default and can be disabled with `METRICS_ENABLED=false` / `ENGAGEMENT_ENABLED=false` (see `config/metrics.php` and `config/engagement.php`). X accounts read the authenticated account's subscription type when connected or when **Refresh tier** is used in Connected Accounts; Free accounts use a 280-character / 140-second-video limit, while Basic, Premium, and Premium+ accounts use 25,000 characters and can upload videos up to four hours. When a post targets more than one X account, the composer enforces the strictest selected account limit.
 
 ## Development
 

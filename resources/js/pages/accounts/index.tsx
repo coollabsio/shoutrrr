@@ -99,6 +99,22 @@ export default function ConnectedAccounts({
         );
     };
 
+    const [refreshingAccountId, setRefreshingAccountId] = useState<
+        string | null
+    >(null);
+
+    const refreshXAccountTier = (account: Account) => {
+        router.post(
+            ConnectedAccountController.refreshXAccountTier.url(account.id),
+            {},
+            {
+                preserveScroll: true,
+                onStart: () => setRefreshingAccountId(account.id),
+                onFinish: () => setRefreshingAccountId(null),
+            },
+        );
+    };
+
     const { flash } = usePage().props;
     const [dismissedError, setDismissedError] = useState<string | null>(null);
     // Connect/reconnect failures for every platform flash an `error`; surface it
@@ -210,6 +226,10 @@ export default function ConnectedAccounts({
                                 onReconnectOAuth={reconnectOAuth}
                                 onDisconnect={disconnect}
                                 onToggle={toggleEnabled}
+                                onRefreshXAccountTier={refreshXAccountTier}
+                                refreshingXAccountTier={
+                                    refreshingAccountId === account.id
+                                }
                             />
                         ))}
                     </div>
