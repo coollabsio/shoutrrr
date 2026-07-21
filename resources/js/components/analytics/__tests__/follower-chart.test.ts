@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    buildFollowerChartData,
+    followerYDomain,
     formatFollowerTooltipDate,
-    nextHiddenAccountIds,
 } from '../follower-chart-utils';
 
 describe('follower chart tooltip', () => {
@@ -18,74 +17,35 @@ describe('follower chart tooltip', () => {
     });
 });
 
-describe('buildFollowerChartData', () => {
-    it('merges same-day readings from every account onto one row', () => {
-        const rows = buildFollowerChartData([
-            {
-                id: 'x',
-                platform: 'x',
-                handle: '@acme',
-                display_name: 'Acme X',
-                avatar_url: null,
-                status: 'ok',
-                latest_followers: 120,
-                series: [
-                    {
-                        at: '2026-05-14T09:15:00.000Z',
-                        followers: 100,
-                        following: 10,
-                    },
-                    {
-                        at: '2026-05-15T09:15:00.000Z',
-                        followers: 120,
-                        following: 10,
-                    },
-                ],
-            },
-            {
-                id: 'li',
-                platform: 'linkedin',
-                handle: 'acme-inc',
-                display_name: 'Acme Inc',
-                avatar_url: null,
-                status: 'ok',
-                latest_followers: 9800,
-                series: [
-                    {
-                        at: '2026-05-14T11:15:00.000Z',
-                        followers: 9700,
-                        following: 20,
-                    },
-                    {
-                        at: '2026-05-15T11:15:00.000Z',
-                        followers: 9800,
-                        following: 20,
-                    },
-                ],
-            },
-        ]);
-
-        expect(rows).toHaveLength(2);
-        expect(rows[0]).toMatchObject({
-            x: 100,
-            li: 9700,
-        });
-        expect(rows[1]).toMatchObject({
-            x: 120,
-            li: 9800,
-        });
-        expect(Object.keys(rows[0]).filter((k) => k !== 'date')).toEqual(
-            expect.arrayContaining(['x', 'li']),
-        );
+describe('followerYDomain', () => {
+    it('pads a growing series so small changes fill the panel', () => {
+        // 1600 → 1700 must not collapse to a flat line against a 0 baseline.
+        const [min, max] = followerYDomain([1600, 1650, 1700]);
+        expect(min).toBeGreaterThan(1500);
+        expect(min).toBeLessThan(1600);
+        expect(max).toBeGreaterThan(1700);
+        // The visible band is a small window around the data, not [0, 1700].
+        expect(max - min).toBeLessThan(200);
     });
-});
 
-describe('nextHiddenAccountIds', () => {
-    it('hides a visible account and shows a hidden one', () => {
-        const hidden = nextHiddenAccountIds(new Set(), 'x');
-        expect([...hidden]).toEqual(['x']);
+    it('never anchors the window at zero for a high-count account', () => {
+        const [min] = followerYDomain([1600, 1700]);
+        expect(min).toBeGreaterThan(0);
+    });
 
-        const shown = nextHiddenAccountIds(hidden, 'x');
-        expect([...shown]).toEqual([]);
+    it('gives a flat series a small symmetric band', () => {
+        const [min, max] = followerYDomain([50, 50, 50]);
+        expect(min).toBeLessThan(50);
+        expect(max).toBeGreaterThan(50);
+    });
+
+    it('handles a series that starts at zero', () => {
+        const [min, max] = followerYDomain([0, 10, 25]);
+        expect(min).toBeLessThanOrEqual(0);
+        expect(max).toBeGreaterThan(25);
+    });
+
+    it('falls back to a unit window when there are no values', () => {
+        expect(followerYDomain([])).toEqual([0, 1]);
     });
 });
