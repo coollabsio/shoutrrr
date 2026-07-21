@@ -7,6 +7,15 @@ use Illuminate\Support\Facades\Http;
 // Reuses ownerActingIn() + fakeOAuthUser() from tests/Pest.php (shared across
 // the connected-accounts Feature suite).
 
+beforeEach(function () {
+    // The generic OAuth connect/callback routes abort 404 unless the platform
+    // is configured (Platform::isConfigured()). CI copies .env from
+    // .env.example, which ships LinkedIn creds commented out, so set them here
+    // to keep these callback tests independent of the host environment.
+    config()->set('services.linkedin-openid.client_id', 'cid');
+    config()->set('services.linkedin-openid.client_secret', 'secret');
+});
+
 test('linkedin callback renders the page picker when organizations are administered', function () {
     ownerActingIn();
     app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
