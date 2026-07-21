@@ -26,10 +26,9 @@ class PostVideoUploadController extends Controller
     {
         abort_unless($post->status->isEditable(), 422, 'This post can no longer be edited.');
 
-        $disk = FileStorage::diskName();
         $key = 'tmp/media/'.$post->workspace_id.'/'.Str::uuid().'.mp4';
 
-        ['url' => $uploadUrl, 'headers' => $headers] = Storage::disk($disk)->temporaryUploadUrl(
+        ['url' => $uploadUrl, 'headers' => $headers] = FileStorage::temporaryVideoUploadUrl(
             $key,
             now()->addMinutes(15),
         );

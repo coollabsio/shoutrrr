@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Uploads\StreamedUploadController;
 use App\Http\Middleware\CaptureMcpWorkspaceSelection;
 use App\Http\Middleware\EnsureEngagementEnabled;
 use App\Http\Middleware\EnsureFeedbackEnabled;
@@ -12,6 +13,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Sentry\Laravel\Integration;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -21,6 +23,16 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api/v1',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // Registered outside the `web` group: a signed, stateless direct-to-disk
+        // video upload receiver. It must NOT carry session/CSRF/workspace
+        // middleware — the client PUTs the raw file body with no session — and a
+        // relative temporary signature is the sole authorization.
+        then: function (): void {
+            Route::put('uploads/stream/{path}', StreamedUploadController::class)
+                ->where('path', '.*')
+                ->middleware(['throttle:60,1', 'signed:relative'])
+                ->name('uploads.stream');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);

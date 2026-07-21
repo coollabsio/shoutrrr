@@ -7,6 +7,7 @@ use App\Models\ConnectedAccount;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Http;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider;
@@ -173,6 +174,34 @@ test('callback detects the X Premium subscription tier for longer posts', functi
         ->and($account->maxVideoDurationSeconds())->toBe(14_400);
 });
 
+test('callback does not fabricate a free tier when the X lookup fails at connect', function () {
+    config()->set('services.x.client_id', 'cid');
+    config()->set('services.x.client_secret', 'secret');
+    config()->set('services.x.redirect', 'https://app.test/accounts/callback/x');
+    ownerActingIn();
+    fakeOAuthUser('x', [
+        'id' => 'x-blip',
+        'nickname' => 'blip',
+        'token' => 'access',
+    ]);
+    // A transient X outage must not stamp a definitive "free" tier that would
+    // silently cap a Premium account until the user notices and refreshes.
+    Http::fake([
+        'https://api.x.com/2/users/me*' => Http::response([], 503),
+    ]);
+
+    test()->get('/accounts/callback/x')->assertRedirect(route('accounts.index'));
+
+    $account = ConnectedAccount::withoutGlobalScopes()->firstWhere('remote_account_id', 'x-blip');
+    expect($account)->not->toBeNull()
+        ->and($account->status)->toBe(ConnectedAccountStatus::Active)
+        ->and($account->xSubscriptionTier())->toBeNull()
+        ->and($account->xSubscriptionLabel())->toBeNull()
+        ->and($account->hasXPremium())->toBeFalse()
+        ->and($account->maxTextLength())->toBe(280)
+        ->and($account->maxVideoDurationSeconds())->toBe(140);
+});
+
 test('callback maps a linkedin-openid user', function () {
     config()->set('services.linkedin-openid.client_id', 'cid');
     config()->set('services.linkedin-openid.client_secret', 'secret');
@@ -214,7 +243,7 @@ test('linkedin connect requests the community management feed scopes only when e
     test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
     expect($captured)->not->toContain('r_member_social_feed');
 
-    app(App\Support\InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+    app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
 
     test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
     expect($captured)->toContain('r_member_social_feed')

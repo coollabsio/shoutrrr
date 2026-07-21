@@ -24,10 +24,9 @@ class ReplyVideoUploadController extends Controller
      */
     public function url(SignReplyVideoUploadRequest $request, PostTargetReply $reply): JsonResponse
     {
-        $disk = FileStorage::diskName();
         $key = 'tmp/media/'.$reply->workspace_id.'/'.Str::uuid().'.mp4';
 
-        ['url' => $uploadUrl, 'headers' => $headers] = Storage::disk($disk)->temporaryUploadUrl(
+        ['url' => $uploadUrl, 'headers' => $headers] = FileStorage::temporaryVideoUploadUrl(
             $key,
             now()->addMinutes(15),
         );

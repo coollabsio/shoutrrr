@@ -150,15 +150,17 @@ ARG AUTORUN_LARAVEL_ROUTE_CACHE=true
 ARG AUTORUN_LARAVEL_VIEW_CACHE=true
 ARG AUTORUN_LARAVEL_STORAGE_LINK=true
 ARG PHP_OPCACHE_ENABLE=1
-# The local-disk video-upload path uses a signed raw PUT through Laravel.
-# Laravel validates CONTENT_LENGTH against post_max_size for that request too,
-# so the base image's 100M default would reject supported platform videos
-# before they reach storage. Keep this above the 1 GiB platform ceiling.
+# Local-disk video uploads stream the request body straight to storage
+# (StreamedUploadController) instead of buffering it, so memory no longer scales
+# with the video. PHP still gates the request BODY size: post_max_size must stay
+# above the 1 GiB platform video ceiling or PHP rejects a large PUT before it
+# reaches the streaming handler. (upload_max_filesize only applies to multipart
+# form uploads, not the raw PUT body, but is kept aligned.)
 ARG PHP_POST_MAX_SIZE=1100M
 ARG PHP_UPLOAD_MAX_FILE_SIZE=1100M
-# Local temporary uploads are read by Laravel before being written to storage;
-# leave headroom above the largest accepted video for the app and request body.
-ARG PHP_MEMORY_LIMIT=1280M
+# Streaming keeps upload memory flat regardless of file size, so this only needs
+# headroom for normal request handling and image processing — not the whole video.
+ARG PHP_MEMORY_LIMIT=512M
 ARG SSL_MODE=off
 # Number of queue worker processes supervisord runs (numprocs in laravel.conf).
 # Must be a non-empty integer or supervisord fails to start.
