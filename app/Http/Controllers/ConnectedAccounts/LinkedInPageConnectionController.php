@@ -12,6 +12,7 @@ use App\Services\ConnectedAccounts\AccountConnectionService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -54,43 +55,47 @@ class LinkedInPageConnectionController extends Controller
         /** @var array<int, string> $granted */
         $granted = (array) ($stash['approvedScopes'] ?? []);
 
-        $created = 0;
+        $user = $request->user();
 
-        foreach ($validated['selected'] as $selection) {
-            if ($selection['type'] === 'person') {
-                $person = $stash['person'];
-                $data = new ConnectedAccountData(
-                    platform: Platform::LinkedIn,
-                    remoteAccountId: (string) $person['remoteAccountId'],
-                    handle: (string) $person['handle'],
-                    displayName: $person['displayName'] ?? null,
-                    avatarUrl: $person['avatarUrl'] ?? null,
-                    authMethod: 'oauth',
-                    accessToken: $token,
-                    refreshToken: $refresh,
-                    capabilities: ['linkedin_account_type' => 'person', 'linkedin_engagement' => in_array('r_member_social_feed', $granted, true)],
-                    tokenExpiresAt: $expiresAt,
-                );
-            } else {
-                $organization = $organizations[$selection['id']];
-                $data = new ConnectedAccountData(
-                    platform: Platform::LinkedIn,
-                    remoteAccountId: (string) $organization['id'],
-                    handle: (string) $organization['vanityName'],
-                    displayName: (string) $organization['name'],
-                    avatarUrl: null,
-                    authMethod: 'oauth',
-                    accessToken: $token,
-                    refreshToken: $refresh,
-                    capabilities: ['linkedin_account_type' => 'organization', 'linkedin_engagement' => in_array('r_organization_social', $granted, true)],
-                    tokenExpiresAt: $expiresAt,
-                );
+        // Persist every selected account in one transaction so a mid-loop failure
+        // can't leave the workspace with a partial set of connected accounts.
+        DB::transaction(function () use ($validated, $organizations, $stash, $token, $refresh, $expiresAt, $granted, $user): void {
+            foreach ($validated['selected'] as $selection) {
+                if ($selection['type'] === 'person') {
+                    $person = $stash['person'];
+                    $data = new ConnectedAccountData(
+                        platform: Platform::LinkedIn,
+                        remoteAccountId: (string) $person['remoteAccountId'],
+                        handle: (string) $person['handle'],
+                        displayName: $person['displayName'] ?? null,
+                        avatarUrl: $person['avatarUrl'] ?? null,
+                        authMethod: 'oauth',
+                        accessToken: $token,
+                        refreshToken: $refresh,
+                        capabilities: ['linkedin_account_type' => 'person', 'linkedin_engagement' => in_array('r_member_social_feed', $granted, true)],
+                        tokenExpiresAt: $expiresAt,
+                    );
+                } else {
+                    $organization = $organizations[$selection['id']];
+                    $data = new ConnectedAccountData(
+                        platform: Platform::LinkedIn,
+                        remoteAccountId: (string) $organization['id'],
+                        handle: (string) $organization['vanityName'],
+                        displayName: (string) $organization['name'],
+                        avatarUrl: null,
+                        authMethod: 'oauth',
+                        accessToken: $token,
+                        refreshToken: $refresh,
+                        capabilities: ['linkedin_account_type' => 'organization', 'linkedin_engagement' => in_array('r_organization_social', $granted, true)],
+                        tokenExpiresAt: $expiresAt,
+                    );
+                }
+
+                $this->connections->store($data, $user);
             }
+        });
 
-            $this->connections->store($data, $request->user());
-            $created++;
-        }
-
+        $created = count($validated['selected']);
         $request->session()->forget(self::SESSION_KEY);
 
         return redirect()->route('accounts.index')->with(

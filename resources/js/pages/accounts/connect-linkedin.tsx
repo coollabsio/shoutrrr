@@ -29,6 +29,7 @@ type Props = { person: LinkedInPerson; organizations: LinkedInOrganization[] };
 export default function ConnectLinkedIn({ person, organizations }: Props) {
     const [personChecked, setPersonChecked] = useState(true);
     const [checkedOrgs, setCheckedOrgs] = useState<Record<string, boolean>>({});
+    const [processing, setProcessing] = useState(false);
 
     const selection: Selection[] = [
         ...(personChecked ? [{ type: 'person' as const }] : []),
@@ -38,9 +39,14 @@ export default function ConnectLinkedIn({ person, organizations }: Props) {
     ];
 
     const submit = () => {
-        router.post(LinkedInPageConnectionController.store.url(), {
-            selected: selection,
-        });
+        router.post(
+            LinkedInPageConnectionController.store.url(),
+            { selected: selection },
+            {
+                onStart: () => setProcessing(true),
+                onFinish: () => setProcessing(false),
+            },
+        );
     };
 
     return (
@@ -98,7 +104,7 @@ export default function ConnectLinkedIn({ person, organizations }: Props) {
                 <Button
                     type="button"
                     onClick={submit}
-                    disabled={selection.length === 0}
+                    disabled={selection.length === 0 || processing}
                     className="w-full sm:w-auto"
                 >
                     Connect selected

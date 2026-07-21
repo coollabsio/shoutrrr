@@ -1,9 +1,11 @@
 <?php
 
+use App\Enums\MetricsStatus;
 use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Services\Metrics\Connectors\LinkedInMetricsConnector;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 test('fetchPost returns unsupported for a personal account', function () {
@@ -66,4 +68,46 @@ test('fetchAccount returns unsupported for a personal account', function () {
     $result = app(LinkedInMetricsConnector::class)->fetchAccount($account, ['access_token' => 't']);
 
     expect($result->status->value)->toBe('unsupported');
+});
+
+test('fetchPost maps http failures for a page account', function (int $status, MetricsStatus $expected) {
+    Http::fake(['https://api.linkedin.com/rest/organizationalEntityShareStatistics*' => Http::response(['message' => 'nope'], $status)]);
+
+    $account = ConnectedAccount::factory()->linkedinPage()->create(['remote_account_id' => '2414183']);
+    $target = PostTarget::factory()->create(['platform' => Platform::LinkedIn->value, 'remote_id' => 'urn:li:share:1']);
+
+    expect(app(LinkedInMetricsConnector::class)->fetchPost($account, $target, ['access_token' => 't'])->status)->toBe($expected);
+})->with([
+    '403 → unsupported' => [403, MetricsStatus::Unsupported],
+    '429 → rate limited' => [429, MetricsStatus::RateLimited],
+    '500 → failed' => [500, MetricsStatus::Failed],
+]);
+
+test('fetchAccount maps http failures for a page account', function (int $status, MetricsStatus $expected) {
+    Http::fake(['https://api.linkedin.com/rest/networkSizes/*' => Http::response(['message' => 'nope'], $status)]);
+
+    $account = ConnectedAccount::factory()->linkedinPage()->create(['remote_account_id' => '2414183']);
+
+    expect(app(LinkedInMetricsConnector::class)->fetchAccount($account, ['access_token' => 't'])->status)->toBe($expected);
+})->with([
+    '403 → unsupported' => [403, MetricsStatus::Unsupported],
+    '429 → rate limited' => [429, MetricsStatus::RateLimited],
+    '500 → failed' => [500, MetricsStatus::Failed],
+]);
+
+test('fetchPost maps a connection exception to failed for a page account', function () {
+    Http::fake(fn () => throw new ConnectionException('timeout'));
+
+    $account = ConnectedAccount::factory()->linkedinPage()->create(['remote_account_id' => '2414183']);
+    $target = PostTarget::factory()->create(['platform' => Platform::LinkedIn->value, 'remote_id' => 'urn:li:share:1']);
+
+    expect(app(LinkedInMetricsConnector::class)->fetchPost($account, $target, ['access_token' => 't'])->status)->toBe(MetricsStatus::Failed);
+});
+
+test('fetchAccount maps a connection exception to failed for a page account', function () {
+    Http::fake(fn () => throw new ConnectionException('timeout'));
+
+    $account = ConnectedAccount::factory()->linkedinPage()->create(['remote_account_id' => '2414183']);
+
+    expect(app(LinkedInMetricsConnector::class)->fetchAccount($account, ['access_token' => 't'])->status)->toBe(MetricsStatus::Failed);
 });

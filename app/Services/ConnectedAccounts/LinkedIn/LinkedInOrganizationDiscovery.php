@@ -22,6 +22,9 @@ class LinkedInOrganizationDiscovery
 
     private const string ORGANIZATIONS_URL = 'https://api.linkedin.com/rest/organizations';
 
+    /** Safety cap on ACL pagination (20 orgs/page → 400 administered orgs). */
+    private const int MAX_PAGES = 20;
+
     public function __construct(private readonly HttpFactory $http) {}
 
     /**
@@ -45,10 +48,13 @@ class LinkedInOrganizationDiscovery
     {
         $urns = [];
         $start = 0;
+        $page = 0;
 
         do {
             try {
                 $response = $this->http
+                    ->timeout(5)
+                    ->connectTimeout(3)
                     ->withToken($accessToken)
                     ->withHeaders($this->headers())
                     ->acceptJson()
@@ -79,7 +85,11 @@ class LinkedInOrganizationDiscovery
             }
 
             $start += count($elements);
-            $hasNext = $elements !== [] && $this->hasNextPage($response->json('paging.links', []));
+            // Hard page cap: this runs synchronously inside the OAuth callback, so
+            // a misbehaving `next`-forever response must never spin indefinitely.
+            $hasNext = ++$page < self::MAX_PAGES
+                && $elements !== []
+                && $this->hasNextPage($response->json('paging.links', []));
         } while ($hasNext);
 
         return array_values(array_unique($urns));
@@ -95,6 +105,8 @@ class LinkedInOrganizationDiscovery
 
         try {
             $response = $this->http
+                ->timeout(5)
+                ->connectTimeout(3)
                 ->withToken($accessToken)
                 ->withHeaders($this->headers())
                 ->acceptJson()

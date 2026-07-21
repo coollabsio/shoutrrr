@@ -198,3 +198,28 @@ test('likeReply uses the org actor for a page account', function () {
 
     Http::assertSent(fn ($req) => str_contains($req->url(), '/likes') && $req['actor'] === 'urn:li:organization:2414183');
 });
+
+test('unlikeReply uses the org actor for a page account', function () {
+    Http::fake(['api.linkedin.com/rest/socialActions/*' => Http::response([], 204)]);
+
+    $reply = PostTargetReply::factory()->create(['remote_reply_id' => 'urn:li:comment:(urn:li:share:123,900)']);
+
+    linkedinConnector()->unlikeReply(linkedinPageAccount(), $reply, null, ['access_token' => 't']);
+
+    // The actor is the trailing (rawurlencoded) segment of the DELETE URL path.
+    Http::assertSent(fn ($req) => str_contains($req->url(), '/likes/')
+        && str_contains($req->url(), rawurlencode('urn:li:organization:2414183')));
+});
+
+test('deleteReply uses the org actor for a page account', function () {
+    Http::fake(['api.linkedin.com/rest/socialActions/*' => Http::response([], 204)]);
+
+    $reply = PostTargetReply::factory()->create([
+        'remote_reply_id' => 'urn:li:comment:(urn:li:share:123,900)',
+        'parent_remote_id' => 'urn:li:share:123',
+    ]);
+
+    linkedinConnector()->deleteReply(linkedinPageAccount(), $reply, ['access_token' => 't']);
+
+    Http::assertSent(fn ($req) => str_contains($req->url(), '/comments/') && $req['actor'] === 'urn:li:organization:2414183');
+});
