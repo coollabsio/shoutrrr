@@ -67,6 +67,14 @@ class ConnectedAccount extends Model
     use HasFactory, HasUuids, HasWorkspaceScope;
 
     /**
+     * X subscription tiers that unlock Premium limits (longer posts and video).
+     * A tier outside this list — or an absent one — is treated as free.
+     *
+     * @var list<string>
+     */
+    private const array X_PREMIUM_TIERS = ['basic', 'premium', 'premium_plus'];
+
+    /**
      * @return array<string, string>
      */
     #[Override]
@@ -117,7 +125,7 @@ class ConnectedAccount extends Model
 
     public function hasXPremium(): bool
     {
-        return in_array($this->xSubscriptionTier(), ['basic', 'premium', 'premium_plus'], true);
+        return in_array($this->xSubscriptionTier(), self::X_PREMIUM_TIERS, true);
     }
 
     public function xSubscriptionTier(): ?string
@@ -134,7 +142,7 @@ class ConnectedAccount extends Model
 
         $tier = (string) $capabilities['x_subscription_tier'];
 
-        return in_array($tier, ['basic', 'premium', 'premium_plus'], true)
+        return in_array($tier, self::X_PREMIUM_TIERS, true)
             ? $tier
             : 'free';
     }

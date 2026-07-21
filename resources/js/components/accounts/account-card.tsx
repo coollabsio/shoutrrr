@@ -229,6 +229,7 @@ export function AccountCard({
     onDisconnect,
     onToggle,
     onRefreshXAccountTier,
+    refreshingXAccountTier = false,
 }: {
     account: Account;
     canManage: boolean;
@@ -237,6 +238,7 @@ export function AccountCard({
     onDisconnect: (account: Account) => void;
     onToggle: (account: Account, enabled: boolean) => void;
     onRefreshXAccountTier: (account: Account) => void;
+    refreshingXAccountTier?: boolean;
 }) {
     const brand = PLATFORM_BRAND[account.platform] ?? PLATFORM_FALLBACK;
     const needsAttention = account.status !== 'active';
@@ -398,10 +400,15 @@ export function AccountCard({
                             variant="ghost"
                             size="sm"
                             className="h-8 shrink-0"
+                            disabled={refreshingXAccountTier}
                             onClick={() => onRefreshXAccountTier(account)}
                         >
-                            <RefreshCw className="size-4" />
-                            Refresh tier
+                            <RefreshCw
+                                className={`size-4 ${refreshingXAccountTier ? 'animate-spin' : ''}`}
+                            />
+                            {refreshingXAccountTier
+                                ? 'Refreshing…'
+                                : 'Refresh tier'}
                         </Button>
                     )}
                 </div>

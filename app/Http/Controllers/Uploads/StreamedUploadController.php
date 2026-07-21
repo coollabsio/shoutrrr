@@ -9,7 +9,6 @@ use App\Http\Controllers\Controller;
 use App\Support\FileStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use League\Flysystem\PathTraversalDetected;
 
@@ -20,7 +19,7 @@ class StreamedUploadController extends Controller
      * to storage. Laravel's framework receiver (Illuminate\Filesystem\ReceiveFile)
      * buffers the whole body into a PHP string via getContent(), so a video near
      * the 1 GiB platform ceiling would need >1 GiB of worker memory. Copying
-     * php://input to the disk in small chunks keeps peak memory flat regardless
+     * php://input to the disk in bounded chunks keeps peak memory flat regardless
      * of file size — the only viable approach on a local disk.
      *
      * Object-storage disks never reach this route: they presign a direct PUT and
@@ -34,32 +33,39 @@ class StreamedUploadController extends Controller
         $disk = FileStorage::diskName();
         $ceiling = Platform::maxVideoBytesCeiling();
 
-        // Reject an over-ceiling upload before reading a byte when the client
-        // declares its size. (post_max_size is the hard PHP-level gate; this
-        // turns it into a clean, explicit 413.)
+        // Reject early when the client honestly declares an over-ceiling size.
         if ((int) $request->header('Content-Length') > $ceiling) {
             abort(413, 'Video exceeds the maximum allowed size.');
         }
 
-        $stream = $request->getContent(asResource: true);
+        // PHP does NOT enforce post_max_size on a raw PUT body, and Content-Length
+        // can be forged or omitted (chunked transfer). Copy at most `ceiling + 1`
+        // bytes into a memory-bounded buffer (php://temp spills to a temp file past
+        // 8 MiB) so a hostile or buggy client can never fill the disk; if the copy
+        // reaches ceiling + 1, the source is over the limit and nothing is stored.
+        $buffer = fopen('php://temp/maxmemory:'.(8 * 1024 * 1024), 'r+b');
+        if ($buffer === false) {
+            abort(500, 'Could not buffer the upload.');
+        }
+
+        $source = $request->getContent(asResource: true);
 
         try {
-            Storage::disk($disk)->writeStream($path, $stream);
+            $copied = stream_copy_to_stream($source, $buffer, $ceiling + 1);
+
+            if ($copied === false || $copied > $ceiling) {
+                abort(413, 'Video exceeds the maximum allowed size.');
+            }
+
+            rewind($buffer);
+            Storage::disk($disk)->writeStream($path, $buffer);
         } catch (PathTraversalDetected) {
             abort(404);
         } finally {
-            if (is_resource($stream)) {
-                fclose($stream);
+            if (is_resource($source)) {
+                fclose($source);
             }
-        }
-
-        // A client that omits or lies about Content-Length can still stream up to
-        // post_max_size; enforce the real ceiling against the stored size and drop
-        // anything over it rather than leaving it for the confirm step to reject.
-        if ((int) Storage::disk($disk)->size($path) > $ceiling) {
-            Storage::disk($disk)->delete($path);
-            Log::warning('Rejected oversize streamed video upload', ['path' => $path]);
-            abort(413, 'Video exceeds the maximum allowed size.');
+            fclose($buffer);
         }
 
         return response()->noContent();

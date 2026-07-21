@@ -99,11 +99,19 @@ export default function ConnectedAccounts({
         );
     };
 
+    const [refreshingAccountId, setRefreshingAccountId] = useState<
+        string | null
+    >(null);
+
     const refreshXAccountTier = (account: Account) => {
         router.post(
             ConnectedAccountController.refreshXAccountTier.url(account.id),
             {},
-            { preserveScroll: true },
+            {
+                preserveScroll: true,
+                onStart: () => setRefreshingAccountId(account.id),
+                onFinish: () => setRefreshingAccountId(null),
+            },
         );
     };
 
@@ -219,6 +227,9 @@ export default function ConnectedAccounts({
                                 onDisconnect={disconnect}
                                 onToggle={toggleEnabled}
                                 onRefreshXAccountTier={refreshXAccountTier}
+                                refreshingXAccountTier={
+                                    refreshingAccountId === account.id
+                                }
                             />
                         ))}
                     </div>

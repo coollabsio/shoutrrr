@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
+use Throwable;
 
 class ConnectedAccountController extends Controller
 {
@@ -230,10 +231,11 @@ class ConnectedAccountController extends Controller
             $capabilities = $this->xCapabilities->tryForAccessToken(
                 isset($credentials['access_token']) ? (string) $credentials['access_token'] : null,
             );
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             Log::warning('Could not refresh X account subscription tier.', [
                 'account_id' => $account->id,
                 'exception' => $exception::class,
+                'message' => $exception->getMessage(),
             ]);
 
             return back()->with('error', "We couldn't refresh {$account->handle}'s X account tier. Your existing limit was kept.");

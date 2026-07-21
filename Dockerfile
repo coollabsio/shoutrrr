@@ -151,11 +151,13 @@ ARG AUTORUN_LARAVEL_VIEW_CACHE=true
 ARG AUTORUN_LARAVEL_STORAGE_LINK=true
 ARG PHP_OPCACHE_ENABLE=1
 # Local-disk video uploads stream the request body straight to storage
-# (StreamedUploadController) instead of buffering it, so memory no longer scales
-# with the video. PHP still gates the request BODY size: post_max_size must stay
-# above the 1 GiB platform video ceiling or PHP rejects a large PUT before it
-# reaches the streaming handler. (upload_max_filesize only applies to multipart
-# form uploads, not the raw PUT body, but is kept aligned.)
+# (StreamedUploadController), which bounds the bytes it writes, so memory and disk
+# no longer scale with a hostile upload. Laravel's ValidatePostSize middleware
+# still compares an honest Content-Length against post_max_size (PHP itself does
+# not enforce post_max_size on a raw PUT body), so keep this above the 1 GiB
+# platform video ceiling or a legitimate large upload is rejected up front.
+# (upload_max_filesize only applies to multipart form uploads, not the raw PUT
+# body, but is kept aligned.)
 ARG PHP_POST_MAX_SIZE=1100M
 ARG PHP_UPLOAD_MAX_FILE_SIZE=1100M
 # Streaming keeps upload memory flat regardless of file size, so this only needs
