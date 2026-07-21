@@ -152,7 +152,19 @@ class PublishPostTarget implements ShouldQueue
         } else {
             try {
                 $credentials = $tokens->fresh($account);
-                $result = $registry->for($target->platform)->publish($this->context($target, $credentials));
+                $connector = $registry->for($target->platform);
+                $result = $connector->publish($this->context($target, $credentials));
+
+                // The proactive token sweep can rotate a still-valid access token
+                // just after this job reads it. A resulting 401 means the request
+                // was rejected before any side effect, so it is safe to force one
+                // fresh credential exchange and retry the publish once (media that
+                // did upload resumes from stored state) before declaring the
+                // account needs attention.
+                if ($result->errorKind === ErrorKind::AuthExpired) {
+                    $credentials = $tokens->fresh($account, force: true);
+                    $result = $connector->publish($this->context($target, $credentials));
+                }
             } catch (TokenRefreshException $e) {
                 $result = PublishResult::failure(ErrorKind::AuthExpired, $e->getMessage());
             }

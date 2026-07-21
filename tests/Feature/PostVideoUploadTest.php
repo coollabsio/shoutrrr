@@ -44,37 +44,24 @@ function mp4Bytes(int $pad = 1024): string
 // ---------------------------------------------------------------------------
 
 test('url endpoint returns a key under the workspace tmp prefix', function (): void {
-    // NOTE: Storage::fake() on a local disk does not support temporaryUploadUrl
-    // (it throws "This driver does not support creating temporary upload URLs").
-    // The test uses Mockery to stub the disk method, asserting the controller
-    // wiring without invoking the real presigned-URL implementation.
-    $disk = config('filesystems.default');
-    $fakeDisk = Storage::fake($disk);
+    Storage::fake(config('filesystems.default'));
 
     [, $workspace, $post] = memberWithVideoPost();
-
-    Storage::shouldReceive('disk')
-        ->with($disk)
-        ->andReturnUsing(function () use ($fakeDisk) {
-            $mock = Mockery::mock($fakeDisk);
-            $mock->shouldReceive('temporaryUploadUrl')
-                ->once()
-                ->andReturn(['url' => 'https://s3.example.com/presigned', 'headers' => ['x-amz-acl' => 'private']]);
-
-            return $mock;
-        });
 
     $response = test()->postJson(route('posts.media.video-url', $post), [
         'content_type' => 'video/mp4',
     ]);
 
-    $response->assertOk()
-        ->assertJsonStructure(['key', 'url', 'headers'])
-        ->assertJsonPath('url', 'https://s3.example.com/presigned');
+    $response->assertOk()->assertJsonStructure(['key', 'url', 'headers']);
 
     // Key must be scoped to this workspace's tmp prefix.
-    expect($response->json('key'))->toStartWith('tmp/media/'.$workspace->id.'/');
-    expect($response->json('key'))->toEndWith('.mp4');
+    expect($response->json('key'))->toStartWith('tmp/media/'.$workspace->id.'/')
+        ->and($response->json('key'))->toEndWith('.mp4');
+
+    // On a local disk the upload target is a signed route to the streaming
+    // receiver (not a buffering direct PUT).
+    expect($response->json('url'))->toContain('uploads/stream/')
+        ->and($response->json('url'))->toContain('signature=');
 });
 
 test('url endpoint rejects non-mp4 content_type', function (): void {

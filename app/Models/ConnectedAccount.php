@@ -67,6 +67,14 @@ class ConnectedAccount extends Model
     use HasFactory, HasUuids, HasWorkspaceScope;
 
     /**
+     * X subscription tiers that unlock Premium limits (longer posts and video).
+     * A tier outside this list — or an absent one — is treated as free.
+     *
+     * @var list<string>
+     */
+    private const array X_PREMIUM_TIERS = ['basic', 'premium', 'premium_plus'];
+
+    /**
      * @return array<string, string>
      */
     #[Override]
@@ -88,13 +96,77 @@ class ConnectedAccount extends Model
 
     public function maxTextLength(): int
     {
+        if ($this->platform === Platform::X && $this->xSubscriptionTier() === null) {
+            return Platform::X->maxLength();
+        }
+
         return (int) ($this->capabilities['max_text_length'] ?? $this->platform->maxLength());
+    }
+
+    public function maxVideoDurationSeconds(): int
+    {
+        if ($this->platform !== Platform::X) {
+            return $this->platform->maxVideoDurationSeconds();
+        }
+
+        // Do not trust the legacy x_premium flag: only a subscription tier read
+        // from X is allowed to unlock the longer upload path.
+        if ($this->xSubscriptionTier() === null) {
+            return Platform::X->maxVideoDurationSeconds();
+        }
+
+        $value = $this->capabilities['max_video_duration_seconds'] ?? null;
+        if (is_int($value) && $value > 0) {
+            return $value;
+        }
+
+        return Platform::X->maxVideoDurationSeconds($this->hasXPremium());
     }
 
     public function hasXPremium(): bool
     {
-        return $this->platform === Platform::X
-            && (bool) ($this->capabilities['x_premium'] ?? false);
+        return in_array($this->xSubscriptionTier(), self::X_PREMIUM_TIERS, true);
+    }
+
+    public function xSubscriptionTier(): ?string
+    {
+        if ($this->platform !== Platform::X) {
+            return null;
+        }
+
+        $capabilities = $this->capabilities ?? [];
+
+        if (! array_key_exists('x_subscription_tier', $capabilities)) {
+            return null;
+        }
+
+        $tier = (string) $capabilities['x_subscription_tier'];
+
+        return in_array($tier, self::X_PREMIUM_TIERS, true)
+            ? $tier
+            : 'free';
+    }
+
+    public function xSubscriptionLabel(): ?string
+    {
+        return match ($this->xSubscriptionTier()) {
+            'basic' => 'X Premium Basic',
+            'premium' => 'X Premium',
+            'premium_plus' => 'X Premium+',
+            'free' => 'Free',
+            default => null,
+        };
+    }
+
+    public function xSubscriptionCheckedAt(): ?string
+    {
+        if ($this->platform !== Platform::X) {
+            return null;
+        }
+
+        $value = $this->capabilities['x_subscription_checked_at'] ?? null;
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     public function isDisabled(): bool

@@ -51,6 +51,8 @@ export type Account = {
     avatar_url: string | null;
     status?: AccountStatus;
     max_text_length: number;
+    /** Account-specific duration cap; X Premium tiers can exceed the platform default. */
+    max_video_duration_seconds?: number;
     x_premium: boolean;
 };
 

@@ -117,6 +117,19 @@ it('clamps a sub-second duration to 1 so the confirm endpoint does not 422', asy
     expect(el.seeks).toEqual([]);
 });
 
+it('rounds a fractional over-limit duration up so it cannot bypass a strict cap', async () => {
+    const promise = readVideoMetadata(file());
+    const el = created!;
+    el.duration = 140.01;
+    el.videoWidth = 1280;
+    el.videoHeight = 720;
+    el.onloadedmetadata?.();
+
+    await expect(promise).resolves.toMatchObject({
+        durationSeconds: 141,
+    });
+});
+
 it('nudges with a seek when duration comes back non-finite, then resolves', async () => {
     const promise = readVideoMetadata(file());
     const el = created!;

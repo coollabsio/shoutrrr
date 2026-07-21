@@ -87,7 +87,14 @@ class OAuthConnectionController extends Controller
         $data = ConnectedAccountData::fromSocialite($resolved, $oauthUser);
 
         if ($resolved === Platform::X) {
-            $data = $data->withCapabilities($this->xCapabilities->forAccessToken($data->accessToken));
+            // Only stamp a subscription tier we actually read from X. A transient
+            // lookup failure must not fabricate a "free" tier that silently caps a
+            // Premium account — leave capabilities unset so the account shows
+            // "not checked" and the Refresh tier action can fill it in later.
+            $capabilities = $this->xCapabilities->tryForAccessToken($data->accessToken);
+            if ($capabilities !== null) {
+                $data = $data->withCapabilities($capabilities);
+            }
         }
 
         $linkedInGrantedScopes = [];

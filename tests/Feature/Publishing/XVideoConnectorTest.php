@@ -49,6 +49,8 @@ test('still-processing video returns MediaProcessing and persists the media id',
     $entry = $state[array_key_first($state)];
     expect($entry['remote_ref'])->toBe('99')
         ->and($entry['state'])->toBe('processing');
+    Http::assertSent(fn ($request): bool => $request->method() === 'GET'
+        && $request->url() === 'https://api.x.com/2/media/upload?media_id=99');
 });
 
 test('resume skips upload and attaches once succeeded', function (): void {

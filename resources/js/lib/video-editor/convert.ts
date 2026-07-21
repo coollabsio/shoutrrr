@@ -132,9 +132,11 @@ async function probeVideo(
             canDecodeVideo,
             videoCodec,
             audioCodec,
-            // Floor + clamp to ≥1 to match readVideoMetadata's duration contract
-            // (the confirm endpoint rejects a 0-second duration).
-            durationSeconds: Math.max(1, Math.floor(duration)),
+            // Ceil + clamp to ≥1 to match readVideoMetadata's duration contract:
+            // a fractional over-limit clip must be rejected against a strict cap
+            // rather than slip through and fail after upload, and a sub-second
+            // trim must still satisfy the confirm endpoint's min:1 rule.
+            durationSeconds: Math.max(1, Math.ceil(duration)),
             width,
             height,
             sizeBytes: file.size,
