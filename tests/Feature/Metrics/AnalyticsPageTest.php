@@ -38,6 +38,95 @@ test('analytics page renders with accounts and range', function (): void {
             ->where('rangeDays', 90));
 });
 
+test('the summary reports total followers with a window delta', function (): void {
+    $account = ConnectedAccount::factory()->for($this->workspace)->create();
+
+    // Two readings inside the default 90-day window: 100 → 130 = +30.
+    AccountMetric::factory()->create(['connected_account_id' => $account->id, 'captured_at' => Date::now()->subDays(10), 'followers' => 100]);
+    AccountMetric::factory()->create(['connected_account_id' => $account->id, 'captured_at' => Date::now(), 'followers' => 130]);
+
+    $this->actingAs($this->user)
+        ->get(route('analytics.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('summary.account_count', 1)
+            ->where('summary.followers.value', 130)
+            ->where('summary.followers.delta', 30)
+            ->where('accounts.0.followers_delta', 30));
+});
+
+test('the follower delta is null without two comparable readings', function (): void {
+    $account = ConnectedAccount::factory()->for($this->workspace)->create();
+    AccountMetric::factory()->create(['connected_account_id' => $account->id, 'captured_at' => Date::now(), 'followers' => 100]);
+
+    $this->actingAs($this->user)
+        ->get(route('analytics.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('summary.followers.value', 100)
+            ->where('summary.followers.delta', null)
+            ->where('accounts.0.followers_delta', null));
+});
+
+test('the engagement summary compares against the previous window', function (): void {
+    // Previous window (10–20 days ago): one post with 40 engagement.
+    $previous = Post::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'author_id' => $this->user->id,
+        'status' => PostStatus::Published->value,
+        'published_at' => Date::now()->subDays(15),
+    ]);
+    PostTarget::factory()->create([
+        'post_id' => $previous->id,
+        'metrics_status' => MetricsStatus::Ok->value,
+        'likes' => 40, 'comments' => 0, 'reposts' => 0,
+    ]);
+
+    // Current window (last 10 days): one post with 100 engagement.
+    $current = Post::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'author_id' => $this->user->id,
+        'status' => PostStatus::Published->value,
+        'published_at' => Date::now()->subDay(),
+    ]);
+    PostTarget::factory()->create([
+        'post_id' => $current->id,
+        'metrics_status' => MetricsStatus::Ok->value,
+        'likes' => 70, 'comments' => 20, 'reposts' => 10,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('analytics.index', ['days' => 10]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('summary.engagement.value', 100)
+            ->where('summary.engagement.delta', 60)
+            ->where('summary.posts.value', 1)
+            ->where('summary.posts.delta', 0));
+});
+
+test('deltas are null when the previous window has no baseline posts', function (): void {
+    $post = Post::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'author_id' => $this->user->id,
+        'status' => PostStatus::Published->value,
+        'published_at' => Date::now()->subDay(),
+    ]);
+    PostTarget::factory()->create([
+        'post_id' => $post->id,
+        'metrics_status' => MetricsStatus::Ok->value,
+        'likes' => 50, 'comments' => 0, 'reposts' => 0,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('analytics.index', ['days' => 7]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('summary.engagement.value', 50)
+            ->where('summary.engagement.delta', null)
+            ->where('summary.posts.delta', null));
+});
+
 test('analytics polling settings are keyed by platform enum values', function (): void {
     app(InstanceSettings::class)->update([
         'post_metrics_polling_enabled' => [

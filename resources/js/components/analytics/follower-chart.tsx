@@ -1,7 +1,8 @@
+import { router } from '@inertiajs/react';
 import {
+    Area,
+    AreaChart,
     CartesianGrid,
-    Line,
-    LineChart,
     ReferenceLine,
     XAxis,
     YAxis,
@@ -9,9 +10,10 @@ import {
 
 import {
     accountChartColor,
-    buildFollowerChartData,
+    followerYDomain,
     formatFollowerTooltipDate,
 } from '@/components/analytics/follower-chart-utils';
+import { DeltaChip } from '@/components/analytics/metric-delta';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import {
     ChartContainer,
@@ -20,194 +22,292 @@ import {
     type ChartConfig,
 } from '@/components/ui/chart';
 import { dayjs } from '@/lib/datetime/dayjs';
-import { cn } from '@/lib/utils';
-import type { AnalyticsPageProps } from '@/types/metrics';
+import { show as postRoute } from '@/routes/posts';
+import type {
+    AnalyticsAccount,
+    AnalyticsPageProps,
+    AnalyticsPostMarker,
+} from '@/types/metrics';
 
 export {
     accountChartColor,
-    buildFollowerChartData,
+    followerYDomain,
     formatFollowerTooltipDate,
-    nextHiddenAccountIds,
-    type FollowerChartRow,
 } from '@/components/analytics/follower-chart-utils';
 
 type FollowerChartProps = {
     accounts: AnalyticsPageProps['accounts'];
     posts: AnalyticsPageProps['posts'];
-    /** Account ids currently hidden from the graph. */
-    hiddenAccountIds: ReadonlySet<string>;
-    onToggleAccount: (accountId: string) => void;
+    /** Per-platform account-metric polling switches. */
+    accountMetricsEnabled: Record<string, boolean>;
 };
 
+type TrendPoint = { date: number; value: number };
+
+function seriesPoints(account: AnalyticsAccount): TrendPoint[] {
+    return account.series
+        .filter((point) => point.followers != null)
+        .map((point) => ({
+            date: dayjs(point.at).valueOf(),
+            value: point.followers,
+        }));
+}
+
 /**
- * The follower-growth line chart. Lives in its own module so recharts (a heavy
- * dependency) is code-split into a lazily-loaded chunk and only fetched when
- * there is series data to plot.
+ * Follower growth as one auto-scaled area chart per account. Each account gets
+ * its own y-axis so a +100 change on a 1,600-follower account and a +25 change
+ * from zero both read as real movement, instead of being flattened onto one
+ * shared axis. Lives in its own module so recharts is code-split into a lazily
+ * loaded chunk.
  */
 export default function FollowerChart({
     accounts,
     posts,
-    hiddenAccountIds,
-    onToggleAccount,
+    accountMetricsEnabled,
 }: FollowerChartProps) {
-    const chartData = buildFollowerChartData(accounts);
-    const visibleAccounts = accounts.filter(
-        (account) => !hiddenAccountIds.has(account.id),
+    // A shared time window across every panel keeps them comparable left-to-right.
+    const allDates = accounts.flatMap((account) =>
+        seriesPoints(account).map((point) => point.date),
     );
-
-    const chartConfig: ChartConfig = Object.fromEntries(
-        accounts.map((a, i) => [
-            a.id,
-            {
-                label: a.display_name ?? a.handle,
-                color: accountChartColor(i),
-            },
-        ]),
-    );
+    const xDomain: [number, number] | undefined =
+        allDates.length > 0
+            ? [Math.min(...allDates), Math.max(...allDates)]
+            : undefined;
 
     return (
-        <div className="p-5">
-            <ChartContainer
-                config={chartConfig}
-                className="h-[260px] w-full"
-                initialDimension={{ width: 800, height: 260 }}
-            >
-                <LineChart
-                    data={chartData}
-                    margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
-                >
-                    <CartesianGrid
-                        strokeDasharray="3 3"
-                        className="stroke-border/50"
-                        vertical={false}
-                    />
-                    <XAxis
-                        dataKey="date"
-                        type="number"
-                        scale="time"
-                        domain={['dataMin', 'dataMax']}
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={8}
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={(v: number) => dayjs(v).format('MMM D')}
-                        interval="preserveStartEnd"
-                    />
-                    <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={8}
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={(v: number) =>
-                            v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)
-                        }
-                        width={40}
-                    />
-                    <ChartTooltip
-                        shared
-                        content={
-                            <ChartTooltipContent
-                                labelFormatter={formatFollowerTooltipDate}
-                                indicator="dot"
-                            />
-                        }
-                    />
+        <div
+            className={
+                accounts.length > 1
+                    ? 'grid grid-cols-1 gap-4 lg:grid-cols-2'
+                    : 'grid grid-cols-1 gap-4'
+            }
+        >
+            {accounts.map((account, index) => (
+                <AccountTrendCard
+                    key={account.id}
+                    account={account}
+                    color={accountChartColor(index)}
+                    metricsEnabled={
+                        accountMetricsEnabled[account.platform] ?? true
+                    }
+                    posts={posts.filter((post) =>
+                        post.platforms.includes(account.platform),
+                    )}
+                    xDomain={xDomain}
+                />
+            ))}
+        </div>
+    );
+}
 
-                    {/* Post publish markers */}
-                    {posts.map((post) => (
-                        <ReferenceLine
-                            key={post.id}
-                            x={new Date(post.published_at).getTime()}
-                            stroke="var(--primary)"
-                            strokeDasharray="3 3"
-                            strokeWidth={1.5}
-                            opacity={0.6}
-                            label={(props: {
-                                viewBox?: { x?: number; y?: number };
-                            }) => {
-                                const x = (props.viewBox?.x ?? 0) + 3;
-                                const y = (props.viewBox?.y ?? 0) + 12;
-                                return (
-                                    <text
-                                        x={x}
-                                        y={y}
-                                        fontSize={10}
-                                        fill="var(--primary)"
-                                    >
-                                        <title>
-                                            {post.title || 'Untitled post'}
-                                        </title>
-                                        ↑
-                                    </text>
-                                );
-                            }}
+type AccountTrendCardProps = {
+    account: AnalyticsAccount;
+    color: string;
+    metricsEnabled: boolean;
+    posts: AnalyticsPostMarker[];
+    xDomain: [number, number] | undefined;
+};
+
+function AccountTrendCard({
+    account,
+    color,
+    metricsEnabled,
+    posts,
+    xDomain,
+}: AccountTrendCardProps) {
+    const label = account.display_name ?? account.handle;
+    const points = seriesPoints(account);
+    const values = points.map((point) => point.value);
+    const [yMin, yMax] = followerYDomain(values);
+    const fillId = `follower-fill-${account.id}`;
+
+    // Only mark posts that fall inside this panel's visible time window.
+    const markers = posts.filter((post) => {
+        if (!xDomain) {
+            return false;
+        }
+        const at = new Date(post.published_at).getTime();
+        return at >= xDomain[0] && at <= xDomain[1];
+    });
+
+    const chartConfig: ChartConfig = {
+        value: { label, color },
+    };
+
+    return (
+        <div className="flex flex-col gap-3 rounded-[min(var(--radius-4xl),24px)] bg-card p-4 shadow-sm ring-1 ring-foreground/5 dark:ring-foreground/10">
+            <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+                        <PlatformGlyph platform={account.platform} size={13} />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{label}</p>
+                        <p className="text-xs text-muted-foreground">
+                            followers
+                        </p>
+                    </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                    <span className="font-heading text-xl leading-none font-semibold tracking-tight tabular-nums">
+                        {account.latest_followers !== null
+                            ? account.latest_followers.toLocaleString()
+                            : '—'}
+                    </span>
+                    {metricsEnabled && (
+                        <DeltaChip
+                            delta={account.followers_delta}
+                            label="followers this period"
                         />
-                    ))}
+                    )}
+                </div>
+            </div>
 
-                    {visibleAccounts.map((account) => {
-                        const colorIndex = accounts.findIndex(
-                            (a) => a.id === account.id,
-                        );
+            {!metricsEnabled ? (
+                <p className="flex h-[120px] items-center justify-center rounded-lg bg-muted/30 text-center text-xs text-muted-foreground">
+                    Account metrics are paused for this platform.
+                </p>
+            ) : points.length < 2 ? (
+                <p className="flex h-[120px] items-center justify-center rounded-lg bg-muted/30 text-center text-xs text-muted-foreground">
+                    Not enough history yet — check back after the next sync.
+                </p>
+            ) : (
+                <>
+                    <ChartContainer
+                        config={chartConfig}
+                        className="h-[120px] w-full"
+                        initialDimension={{ width: 400, height: 120 }}
+                    >
+                        <AreaChart
+                            data={points}
+                            margin={{ top: 4, right: 4, bottom: 0, left: 4 }}
+                        >
+                            <defs>
+                                <linearGradient
+                                    id={fillId}
+                                    x1="0"
+                                    y1="0"
+                                    x2="0"
+                                    y2="1"
+                                >
+                                    <stop
+                                        offset="5%"
+                                        stopColor={color}
+                                        stopOpacity={0.25}
+                                    />
+                                    <stop
+                                        offset="95%"
+                                        stopColor={color}
+                                        stopOpacity={0}
+                                    />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid
+                                vertical={false}
+                                className="stroke-border/50"
+                            />
+                            <XAxis
+                                dataKey="date"
+                                type="number"
+                                scale="time"
+                                domain={xDomain ?? ['dataMin', 'dataMax']}
+                                hide
+                            />
+                            <YAxis domain={[yMin, yMax]} hide />
+                            <ChartTooltip
+                                content={
+                                    <ChartTooltipContent
+                                        labelFormatter={
+                                            formatFollowerTooltipDate
+                                        }
+                                        indicator="dot"
+                                    />
+                                }
+                            />
 
-                        return (
-                            <Line
-                                key={account.id}
-                                dataKey={account.id}
+                            {/* Post publish markers — when this account posted. */}
+                            {markers.map((post) => (
+                                <ReferenceLine
+                                    key={post.id}
+                                    x={new Date(post.published_at).getTime()}
+                                    stroke="var(--muted-foreground)"
+                                    strokeDasharray="3 3"
+                                    strokeOpacity={0.4}
+                                    label={(props: {
+                                        viewBox?: { x?: number; y?: number };
+                                    }) => (
+                                        <PostMarker
+                                            x={props.viewBox?.x ?? 0}
+                                            y={props.viewBox?.y ?? 0}
+                                            post={post}
+                                        />
+                                    )}
+                                />
+                            ))}
+
+                            <Area
+                                dataKey="value"
                                 type="monotone"
-                                stroke={accountChartColor(colorIndex)}
+                                stroke={color}
                                 strokeWidth={2}
+                                fill={`url(#${fillId})`}
+                                fillOpacity={1}
+                                baseValue={yMin}
                                 dot={false}
-                                activeDot={{ r: 4, strokeWidth: 0 }}
+                                activeDot={{
+                                    r: 4,
+                                    strokeWidth: 2,
+                                    className: 'stroke-background',
+                                }}
                                 connectNulls
                             />
-                        );
-                    })}
-                </LineChart>
-            </ChartContainer>
-
-            {/* Legend — click to show/hide series */}
-            {accounts.length > 1 && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {accounts.map((account, i) => {
-                        const hidden = hiddenAccountIds.has(account.id);
-                        const label = account.display_name ?? account.handle;
-
-                        return (
-                            <button
-                                key={account.id}
-                                type="button"
-                                onClick={() => onToggleAccount(account.id)}
-                                aria-pressed={!hidden}
-                                aria-label={
-                                    hidden
-                                        ? `Show ${label} on graph`
-                                        : `Hide ${label} from graph`
-                                }
-                                className={cn(
-                                    'inline-flex items-center gap-1.5 rounded-full border px-2 py-1 transition-opacity',
-                                    hidden
-                                        ? 'border-transparent opacity-40 hover:opacity-70'
-                                        : 'border-border/60 bg-muted/40 opacity-100 hover:bg-muted/70',
-                                )}
-                            >
+                        </AreaChart>
+                    </ChartContainer>
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span className="tabular-nums">
+                            {dayjs(points[0].date).format('MMM D')}
+                        </span>
+                        {markers.length > 0 && (
+                            <span className="flex items-center gap-1.5">
                                 <span
-                                    className="block h-2 w-4 rounded-full"
-                                    style={{
-                                        backgroundColor: accountChartColor(i),
-                                    }}
+                                    aria-hidden="true"
+                                    className="inline-block h-0 w-4 border-t border-dashed border-muted-foreground/60"
                                 />
-                                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                    <PlatformGlyph
-                                        platform={account.platform}
-                                        size={10}
-                                    />
-                                    {label}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
+                                {markers.length}{' '}
+                                {markers.length === 1 ? 'post' : 'posts'}
+                            </span>
+                        )}
+                        <span className="tabular-nums">
+                            {dayjs(points[points.length - 1].date).format(
+                                'MMM D',
+                            )}
+                        </span>
+                    </div>
+                </>
             )}
         </div>
+    );
+}
+
+type PostMarkerProps = {
+    x: number;
+    y: number;
+    post: AnalyticsPostMarker;
+};
+
+function PostMarker({ x, y, post }: PostMarkerProps) {
+    return (
+        <g
+            transform={`translate(${x}, ${y})`}
+            className="cursor-pointer"
+            onClick={() => router.visit(postRoute(post.id).url)}
+        >
+            <title>
+                {`${post.title || 'Untitled post'} · ${dayjs(post.published_at).format('MMM D')}`}
+            </title>
+            {/* Larger transparent hit target for easy hover/click. */}
+            <circle r={7} fill="transparent" />
+            <circle r={2.5} className="fill-muted-foreground" />
+        </g>
     );
 }
