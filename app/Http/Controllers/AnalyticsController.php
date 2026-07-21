@@ -117,7 +117,13 @@ class AnalyticsController extends Controller
         return [
             'accounts' => $accounts,
             'posts' => $markers,
-            'summary' => $this->buildSummary($accounts, $posts, $ranked, $previousFrom, $from),
+            'summary' => $this->buildSummary(
+                $accounts,
+                (int) $ranked->sum('engagement'),
+                $posts->count(),
+                $previousFrom,
+                $from,
+            ),
             'comparison' => [
                 'top' => $comparisonTop,
                 'bottom' => $comparisonBottom,
@@ -131,20 +137,15 @@ class AnalyticsController extends Controller
      * when there's no honest baseline to compare against.
      *
      * @param  array<int, array<string, mixed>>  $accounts
-     * @param  Collection<int, Post>  $posts
-     * @param  Collection<int, array<string, mixed>>  $ranked
      * @return array<string, mixed>
      */
-    private function buildSummary(array $accounts, Collection $posts, Collection $ranked, CarbonInterface $previousFrom, CarbonInterface $from): array
+    private function buildSummary(array $accounts, int $totalEngagement, int $postsCount, CarbonInterface $previousFrom, CarbonInterface $from): array
     {
         $accountsCollection = collect($accounts);
 
         $totalFollowers = (int) $accountsCollection->sum(fn (array $a): int => (int) ($a['latest_followers'] ?? 0));
         $trackedDeltas = $accountsCollection->pluck('followers_delta')->filter(fn ($d): bool => $d !== null);
         $followersDelta = $trackedDeltas->isEmpty() ? null : (int) $trackedDeltas->sum();
-
-        $totalEngagement = (int) $ranked->sum('engagement');
-        $postsCount = $posts->count();
 
         // Previous window — only used as a baseline for the delta chips.
         $previousPosts = Post::query()
