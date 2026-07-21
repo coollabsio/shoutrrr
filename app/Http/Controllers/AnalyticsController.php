@@ -132,12 +132,18 @@ class AnalyticsController extends Controller
     }
 
     /**
-     * The headline numbers — total followers, engagement, and posts published —
-     * each with a change vs the previous equal-length window. Deltas are null
-     * when there's no honest baseline to compare against.
+     * The headline numbers — total followers, engagement, and posts published.
+     * The follower delta is growth across the selected window; the engagement
+     * and posts deltas compare against the previous equal-length window. Deltas
+     * are null when there's no honest baseline to compare against.
      *
      * @param  array<int, array<string, mixed>>  $accounts
-     * @return array<string, mixed>
+     * @return array{
+     *     account_count: int,
+     *     followers: array{value: int, delta: int|null},
+     *     engagement: array{value: int, delta: int|null},
+     *     posts: array{value: int, delta: int|null},
+     * }
      */
     private function buildSummary(array $accounts, int $totalEngagement, int $postsCount, CarbonInterface $previousFrom, CarbonInterface $from): array
     {
@@ -156,12 +162,18 @@ class AnalyticsController extends Controller
             ->where('published_at', '<', $from)
             ->get();
 
-        $hasBaseline = $previousPosts->isNotEmpty();
-        $previousEngagement = (int) $previousPosts
-            ->filter(fn (Post $post): bool => $post->targets->contains(
-                fn (PostTarget $t): bool => $t->metrics_status === MetricsStatus::Ok,
-            ))
-            ->sum(fn (Post $post): int => (int) $post->targets->sum(fn (PostTarget $t): int => $t->likes + $t->comments + $t->reposts));
+        // Engagement is only measurable on posts that captured Ok metrics, so the
+        // baseline for the engagement delta must also require such a post — a
+        // previous window of unmeasured posts is not a zero baseline.
+        $previousMeasuredPosts = $previousPosts->filter(fn (Post $post): bool => $post->targets->contains(
+            fn (PostTarget $t): bool => $t->metrics_status === MetricsStatus::Ok,
+        ));
+        $hasEngagementBaseline = $previousMeasuredPosts->isNotEmpty();
+        $previousEngagement = (int) $previousMeasuredPosts->sum(
+            fn (Post $post): int => (int) $post->targets->sum(fn (PostTarget $t): int => $t->likes + $t->comments + $t->reposts),
+        );
+
+        $hasPostBaseline = $previousPosts->isNotEmpty();
 
         return [
             'account_count' => $accountsCollection->count(),
@@ -171,11 +183,11 @@ class AnalyticsController extends Controller
             ],
             'engagement' => [
                 'value' => $totalEngagement,
-                'delta' => $hasBaseline ? $totalEngagement - $previousEngagement : null,
+                'delta' => $hasEngagementBaseline ? $totalEngagement - $previousEngagement : null,
             ],
             'posts' => [
                 'value' => $postsCount,
-                'delta' => $hasBaseline ? $postsCount - $previousPosts->count() : null,
+                'delta' => $hasPostBaseline ? $postsCount - $previousPosts->count() : null,
             ],
         ];
     }
@@ -186,7 +198,7 @@ class AnalyticsController extends Controller
      *
      * @param  Collection<int, AccountMetric>  $metrics
      */
-    private function followerDelta($metrics): ?int
+    private function followerDelta(Collection $metrics): ?int
     {
         if ($metrics->count() < 2) {
             return null;

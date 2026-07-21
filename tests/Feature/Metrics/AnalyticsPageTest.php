@@ -127,6 +127,44 @@ test('deltas are null when the previous window has no baseline posts', function 
             ->where('summary.posts.delta', null));
 });
 
+test('engagement delta is null when the previous window has posts but no captured metrics', function (): void {
+    // Previous window has a post, but its target never captured Ok metrics — so
+    // there is no engagement baseline even though a post exists.
+    $previous = Post::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'author_id' => $this->user->id,
+        'status' => PostStatus::Published->value,
+        'published_at' => Date::now()->subDays(15),
+    ]);
+    PostTarget::factory()->create([
+        'post_id' => $previous->id,
+        'metrics_status' => MetricsStatus::Failed->value,
+        'likes' => 0, 'comments' => 0, 'reposts' => 0,
+    ]);
+
+    $current = Post::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'author_id' => $this->user->id,
+        'status' => PostStatus::Published->value,
+        'published_at' => Date::now()->subDay(),
+    ]);
+    PostTarget::factory()->create([
+        'post_id' => $current->id,
+        'metrics_status' => MetricsStatus::Ok->value,
+        'likes' => 50, 'comments' => 0, 'reposts' => 0,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('analytics.index', ['days' => 10]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('summary.engagement.value', 50)
+            // No measured post last window → no fake "+50" spike.
+            ->where('summary.engagement.delta', null)
+            // The post count baseline still exists (one post each window).
+            ->where('summary.posts.delta', 0));
+});
+
 test('analytics polling settings are keyed by platform enum values', function (): void {
     app(InstanceSettings::class)->update([
         'post_metrics_polling_enabled' => [
