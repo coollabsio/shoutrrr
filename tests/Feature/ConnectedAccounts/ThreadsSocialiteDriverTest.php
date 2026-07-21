@@ -22,7 +22,7 @@ test('the threads driver redirects to the threads authorize endpoint with the cl
 
     expect($location)->toStartWith('https://threads.net/oauth/authorize?')
         ->and($location)->toContain('client_id=threads-client-id')
-        ->and($location)->toContain('scope=threads_basic%2Cthreads_content_publish%2Cthreads_manage_replies%2Cthreads_manage_insights');
+        ->and($location)->toContain('scope=threads_basic%2Cthreads_content_publish%2Cthreads_manage_replies%2Cthreads_manage_insights%2Cthreads_delete');
 });
 
 test('the threads driver maps a profile fetched by token into a socialite user', function () {

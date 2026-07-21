@@ -99,3 +99,37 @@ test('short-circuits a company url that carries a numeric id with no http call',
 
     Http::assertNothingSent();
 });
+
+test('caches a successful vanity resolution and skips the second http call', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/organizations*' => Http::response([
+            'elements' => [['id' => 12345, 'localizedName' => 'Coolify', 'vanityName' => 'coolify']],
+        ], 200),
+    ]);
+
+    $account = liOrgAccount();
+
+    $first = liOrgResolver()->resolve($account, 'coolify');
+    $second = liOrgResolver()->resolve($account, 'coolify');
+
+    expect($first->urn)->toBe('urn:li:organization:12345')
+        ->and($second->urn)->toBe('urn:li:organization:12345')
+        ->and($second->name)->toBe('Coolify');
+
+    // Only the first resolve hit the network.
+    Http::assertSentCount(1);
+});
+
+test('does not cache a gated 403 outcome', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/organizations*' => Http::response(['message' => 'nope'], 403),
+    ]);
+
+    $account = liOrgAccount();
+
+    liOrgResolver()->resolve($account, 'coolify');
+    liOrgResolver()->resolve($account, 'coolify');
+
+    // A transient gate must be retried, not served from cache.
+    Http::assertSentCount(2);
+});

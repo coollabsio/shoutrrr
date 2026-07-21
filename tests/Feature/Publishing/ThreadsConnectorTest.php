@@ -7,6 +7,7 @@ use App\Models\ConnectedAccount;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Publishing\Connectors\ThreadsConnector;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -270,7 +271,7 @@ test('threads fails fast with no access token and makes no http calls', function
     Http::assertNothingSent();
 });
 
-test('threads delete removes every post in the chain, best-effort', function () {
+test('threads delete removes every post in the chain', function () {
     Http::fake([
         'https://graph.threads.net/v1.0/post-1*' => Http::response([], 404),
         'https://graph.threads.net/v1.0/post-2*' => Http::response(['success' => true]),
@@ -286,4 +287,25 @@ test('threads delete removes every post in the chain, best-effort', function () 
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/v1.0/post-1') && $request->method() === 'DELETE');
     Http::assertSent(fn ($request) => str_contains($request->url(), '/v1.0/post-2') && $request->method() === 'DELETE');
+});
+
+test('threads delete throws when Graph rejects the call (e.g. missing threads_delete)', function () {
+    Http::fake([
+        'https://graph.threads.net/v1.0/*' => Http::response([
+            'error' => [
+                'message' => 'Missing Permission',
+                'type' => 'OAuthException',
+                'code' => 10,
+            ],
+        ], 403),
+    ]);
+
+    $target = PostTarget::factory()->create([
+        'platform' => Platform::Threads->value,
+        'remote_id' => 'post-1',
+        'remote_ids' => ['post-1'],
+    ]);
+
+    expect(fn () => app(ThreadsConnector::class)->delete($target, ['access_token' => 'tok']))
+        ->toThrow(RequestException::class);
 });

@@ -317,13 +317,20 @@ class ThreadsConnector implements PublishConnector
         }
 
         foreach ($ids as $id) {
-            // Best-effort per post in the chain: swallow a 4xx (already deleted /
-            // unsupported) rather than failing the whole delete flow over it.
+            // Requires `threads_delete`. 404 = already gone; any other non-2xx
+            // fails the job so we do not mark the target deleted locally while
+            // the post remains on Threads (e.g. missing scope → 403).
             $response = $this->http->delete(self::BASE_URL.'/'.$id, ['access_token' => $token]);
 
-            $succeeded = $response->successful() || $response->status() === 404 || $response->clientError();
+            $this->meter(
+                UsageCategory::Publish,
+                UsageOperation::DELETE,
+                $target->account,
+                $response,
+                succeeded: $response->successful() || $response->status() === 404,
+            );
 
-            $this->meter(UsageCategory::Publish, UsageOperation::DELETE, $target->account, $response, succeeded: $succeeded);
+            $this->throwUnlessDeleteAccepted($response);
         }
     }
 

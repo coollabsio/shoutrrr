@@ -52,6 +52,15 @@ class HandleInertiaRequests extends Middleware
     #[Override]
     public function share(Request $request): array
     {
+        // Resolve the update-check once per request and share it across the
+        // three deferred sidebar props. A request-local closure (not an instance
+        // property) keeps this safe under Octane where the middleware instance
+        // may be reused across requests.
+        $update = null;
+        $resolveUpdate = function () use (&$update): array {
+            return $update ??= $this->updateData();
+        };
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -81,9 +90,9 @@ class HandleInertiaRequests extends Middleware
             ],
             'billing' => Inertia::defer(fn () => $this->billingData($request->user()), 'sidebar'),
             'community' => Inertia::defer(fn () => $this->communityData(), 'sidebar')->once(),
-            'updateAvailable' => Inertia::defer(fn () => $this->updateData()['updateAvailable'], 'sidebar')->once(),
-            'latestVersion' => Inertia::defer(fn () => $this->updateData()['latestVersion'], 'sidebar')->once(),
-            'latestReleaseUrl' => Inertia::defer(fn () => $this->updateData()['latestReleaseUrl'], 'sidebar')->once(),
+            'updateAvailable' => Inertia::defer(fn () => $resolveUpdate()['updateAvailable'], 'sidebar')->once(),
+            'latestVersion' => Inertia::defer(fn () => $resolveUpdate()['latestVersion'], 'sidebar')->once(),
+            'latestReleaseUrl' => Inertia::defer(fn () => $resolveUpdate()['latestReleaseUrl'], 'sidebar')->once(),
         ];
     }
 
