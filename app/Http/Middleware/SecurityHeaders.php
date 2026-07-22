@@ -90,45 +90,12 @@ class SecurityHeaders
             "connect-src {$connect}",
             "frame-ancestors 'none'",
             "base-uri 'self'",
-            // Browsers (notably Chrome) enforce form-action against the *redirect
-            // target* of a form POST. Passport's MCP consent approval 302s to the
-            // client's redirect_uri, so Cursor's loopback listener and any
-            // configured custom URI schemes (cursor://, claude://) must be listed
-            // or the browser silently drops the callback.
-            "form-action {$this->formActionSources()}",
+            // Chrome applies form-action to Passport's post-consent redirect.
+            "form-action 'self' https: http://localhost:8787",
             "object-src 'none'",
         ];
 
         return implode('; ', $directives);
-    }
-
-    /**
-     * CSP form-action sources for OAuth consent redirects.
-     *
-     * Keeps the existing https: allowlist for normal HTTPS callbacks, adds
-     * Cursor's exact MCP OAuth loopback origins, and appends any custom URI
-     * schemes from config('mcp.custom_schemes') (laravel/mcp).
-     */
-    private function formActionSources(): string
-    {
-        $schemes = collect(config('mcp.custom_schemes', []))
-            ->filter(fn ($scheme) => is_string($scheme) && $scheme !== '')
-            ->map(fn (string $scheme) => rtrim($scheme, ':').':')
-            ->unique()
-            ->values()
-            ->all();
-
-        $sources = [
-            "'self'",
-            'https:',
-            // Cursor MCP OAuth loopback (RFC 8252). Exact origins only — do not
-            // broaden to http:.
-            'http://localhost:8787',
-            'http://127.0.0.1:8787',
-            ...$schemes,
-        ];
-
-        return implode(' ', $sources);
     }
 
     /**
