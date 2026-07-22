@@ -7,6 +7,7 @@ namespace App\Services\Publishing\Connectors;
 use App\Dto\Publishing\MediaUploadState;
 use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
+use App\Dto\Repost\RepostContext;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\UsageCategory;
@@ -22,6 +23,7 @@ use App\Services\Media\GifToMp4OutputTooLarge;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Repost\Contracts\RepostConnector;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Closure;
@@ -33,7 +35,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Storage;
 
-class BlueskyPublishConnector implements PublishConnector
+class BlueskyPublishConnector implements PublishConnector, RepostConnector
 {
     use MapsHttpErrors, TracksUsage;
 
@@ -158,6 +160,43 @@ class BlueskyPublishConnector implements PublishConnector
         }
 
         return PublishResult::success(array_values($remoteIds));
+    }
+
+    public function repost(RepostContext $context): PublishResult
+    {
+        $session = (array) ($context->credentials['session'] ?? []);
+        $pds = (string) ($session['pds'] ?? self::DEFAULT_PDS);
+        $jwt = (string) ($session['accessJwt'] ?? '');
+        $did = $context->account->remote_account_id;
+        $subjectUri = (string) $context->target->remote_id;
+
+        if ($jwt === '' || $subjectUri === '') {
+            return PublishResult::failure(ErrorKind::AuthExpired, 'Bluesky session unavailable; reconnect the account.');
+        }
+
+        try {
+            $cid = $this->recordCid($pds, $jwt, $did, $subjectUri, $session);
+        } catch (BlueskyRequestFailed) {
+            return PublishResult::failure(ErrorKind::ServerError, 'Could not resolve the Bluesky post to repost.');
+        }
+
+        $response = $this->postJsonAuthorized($pds.'/xrpc/com.atproto.repo.createRecord', $jwt, $session, [
+            'repo' => $did,
+            'collection' => 'app.bsky.feed.repost',
+            'record' => [
+                '$type' => 'app.bsky.feed.repost',
+                'subject' => ['uri' => $subjectUri, 'cid' => $cid],
+                'createdAt' => Date::now()->toIso8601String(),
+            ],
+        ]);
+
+        $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
+
+        if ($response->failed()) {
+            return $this->mapFailure($response);
+        }
+
+        return PublishResult::success([(string) $response->json('uri')]);
     }
 
     public function delete(PostTarget $target, array $credentials): void
