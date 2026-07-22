@@ -7,6 +7,7 @@ namespace App\Services\Publishing\Connectors;
 use App\Dto\Publishing\MediaUploadState;
 use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
+use App\Dto\Repost\RepostContext;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\UsageCategory;
@@ -16,6 +17,7 @@ use App\Models\PostTarget;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Repost\Contracts\RepostConnector;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
@@ -26,7 +28,7 @@ use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
-class LinkedInConnector implements PublishConnector
+class LinkedInConnector implements PublishConnector, RepostConnector
 {
     use MapsHttpErrors, TracksUsage;
 
@@ -144,6 +146,48 @@ class LinkedInConnector implements PublishConnector
 
         if ($urn === '') {
             return PublishResult::failure(ErrorKind::ServerError, 'LinkedIn did not return a post id');
+        }
+
+        return PublishResult::success([$urn]);
+    }
+
+    public function repost(RepostContext $context): PublishResult
+    {
+        $token = (string) ($context->credentials['access_token'] ?? '');
+
+        if ($token === '') {
+            return PublishResult::failure(ErrorKind::AuthExpired, 'LinkedIn access token unavailable; reconnect the account.');
+        }
+
+        $body = [
+            'author' => 'urn:li:person:'.$context->account->remote_account_id,
+            'commentary' => '',
+            'visibility' => 'PUBLIC',
+            'lifecycleState' => 'PUBLISHED',
+            'distribution' => [
+                'feedDistribution' => 'MAIN_FEED',
+                'targetEntities' => [],
+                'thirdPartyDistributionChannels' => [],
+            ],
+            'reshareContext' => ['parent' => (string) $context->target->remote_id],
+        ];
+
+        $response = $this->http
+            ->withToken($token)
+            ->withHeaders(['LinkedIn-Version' => $this->apiVersion(), 'X-Restli-Protocol-Version' => '2.0.0'])
+            ->acceptJson()
+            ->post(self::POSTS_URL, $body);
+
+        $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
+
+        if ($response->failed()) {
+            return $this->mapFailure($response);
+        }
+
+        $urn = $response->header('x-restli-id') ?: (string) $response->json('id');
+
+        if ($urn === '') {
+            return PublishResult::failure(ErrorKind::ServerError, 'LinkedIn returned no repost id.');
         }
 
         return PublishResult::success([$urn]);
