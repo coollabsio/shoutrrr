@@ -27,6 +27,7 @@ function account(overrides: Partial<Account>): Account {
         is_default: false,
         disabled: false,
         pds_url: null,
+        auto_repost_enabled: false,
         ...overrides,
     };
 }

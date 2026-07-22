@@ -7,6 +7,7 @@ namespace App\Http\Controllers\ConnectedAccounts;
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ConnectedAccount\UpdateAutoRepostRequest;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\BlueskyConnector;
@@ -65,6 +66,7 @@ class ConnectedAccountController extends Controller
                 'is_default' => $account->id === $defaultAccountId,
                 'disabled' => $account->isDisabled(),
                 'pds_url' => $this->customPdsUrl($account),
+                'auto_repost_enabled' => $account->autoRepostEnabled(),
             ])
             ->values()
             ->all();
@@ -216,6 +218,26 @@ class ConnectedAccountController extends Controller
             : "{$account->handle} is enabled.";
 
         return redirect()->route('accounts.index')->with('success', $message);
+    }
+
+    public function autoRepost(UpdateAutoRepostRequest $request, ConnectedAccount $account): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        // Only meaningful on platforms with a native repost API.
+        $enabled = $account->platform->supportsRepost() && (bool) $validated['enabled'];
+
+        $autoRepost = array_filter([
+            'enabled' => $enabled,
+            'min_percentile' => isset($validated['min_percentile']) ? (float) $validated['min_percentile'] : null,
+        ], fn ($value): bool => $value !== null);
+
+        // Read-modify-write: never overwrite the whole capabilities array.
+        $account->forceFill([
+            'capabilities' => [...($account->capabilities ?? []), 'auto_repost' => $autoRepost],
+        ])->save();
+
+        return redirect()->route('accounts.index')->with('success', 'Auto-repost updated.');
     }
 
     public function refreshXAccountTier(Request $request, ConnectedAccount $account): RedirectResponse
