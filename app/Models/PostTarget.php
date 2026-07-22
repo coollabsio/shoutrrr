@@ -37,6 +37,8 @@ use Override;
  * @property CarbonImmutable|null $next_attempt_at
  * @property string|null $idempotency_key
  * @property CarbonImmutable|null $posted_at
+ * @property CarbonImmutable|null $reposted_at
+ * @property string|null $repost_remote_id
  * @property array<string, mixed>|null $media_upload_state
  * @property int $likes
  * @property int $comments
@@ -65,6 +67,8 @@ use Override;
     'next_attempt_at',
     'idempotency_key',
     'posted_at',
+    'reposted_at',
+    'repost_remote_id',
     'media_upload_state',
     'likes',
     'comments',
@@ -100,6 +104,7 @@ class PostTarget extends Model
             'attempts' => 'integer',
             'next_attempt_at' => 'immutable_datetime',
             'posted_at' => 'immutable_datetime',
+            'reposted_at' => 'immutable_datetime',
             'likes' => 'integer',
             'comments' => 'integer',
             'reposts' => 'integer',

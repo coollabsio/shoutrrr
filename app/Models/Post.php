@@ -27,6 +27,7 @@ use Override;
  * @property list<string> $segments
  * @property list<array{id: string, label: string, handles: array<string, string>}>|null $mentions
  * @property PostStatus $status
+ * @property bool|null $auto_repost
  * @property CarbonImmutable|null $scheduled_at
  * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable|null $deleted_at
@@ -40,6 +41,7 @@ use Override;
     'segments',
     'mentions',
     'status',
+    'auto_repost',
     'scheduled_at',
     'published_at',
     'deleted_at',
@@ -54,6 +56,7 @@ class Post extends Model
     {
         return [
             'status' => PostStatus::class,
+            'auto_repost' => 'boolean',
             'mentions' => 'array',
             'segments' => 'array',
             'scheduled_at' => 'datetime',
