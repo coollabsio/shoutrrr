@@ -153,6 +153,7 @@ export type PostView = {
     published_at: string | null;
     updated_at: string;
     scheduled_at: string | null;
+    auto_repost: boolean | null;
     destination: { kind: string; id: string | null; ids?: string[] };
     targets: TargetView[];
     media: MediaView[];
