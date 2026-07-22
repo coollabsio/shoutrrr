@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Dto\Repost\RepostContext;
+use App\Enums\Platform;
 use App\Exceptions\TokenRefreshException;
 use App\Models\PostTarget;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Publishing\TokenManager;
 use App\Services\Repost\RepostConnectorRegistry;
 use App\Services\Repost\RepostEligibility;
+use App\Support\InstanceSettings;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -42,8 +45,16 @@ class RepostPostTarget implements ShouldBeUnique, ShouldQueue
         return [10, 30, 60];
     }
 
-    public function handle(RepostConnectorRegistry $registry, TokenManager $tokens, RepostEligibility $eligibility): void
-    {
+    public function handle(
+        RepostConnectorRegistry $registry,
+        TokenManager $tokens,
+        RepostEligibility $eligibility,
+        ?WorkspaceSubscriptionGate $subscriptions = null,
+        ?InstanceSettings $settings = null,
+    ): void {
+        $subscriptions ??= app(WorkspaceSubscriptionGate::class);
+        $settings ??= app(InstanceSettings::class);
+
         if (! config('repost.enabled')) {
             return;
         }
@@ -58,6 +69,26 @@ class RepostPostTarget implements ShouldBeUnique, ShouldQueue
 
         if ($account === null || $account->isDisabled() || ! $target->platform->supportsRepost()) {
             return;
+        }
+
+        // Mirrors PublishPostTarget's instance-wide freeze check: leave reposted_at
+        // null so the target is re-evaluated once the operator un-freezes the platform.
+        if (! $settings->platformAvailable($target->platform)) {
+            return;
+        }
+
+        $workspace = $target->post()->withoutGlobalScopes()->first()?->workspace;
+
+        // Mirrors PublishPostTarget's subscription/X-budget gate. Inert on self-hosted
+        // (WorkspaceSubscriptionGate::isEnabled() reads config('subscriptions.enabled')).
+        if ($workspace !== null) {
+            if (! $subscriptions->canPublish($workspace)) {
+                return;
+            }
+
+            if ($target->platform === Platform::X && ! $subscriptions->canPublishX($workspace)) {
+                return;
+            }
         }
 
         // Re-check at run time — state (metrics, override, config) may have changed since dispatch.

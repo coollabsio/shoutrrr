@@ -227,12 +227,17 @@ class ConnectedAccountController extends Controller
         // Only meaningful on platforms with a native repost API.
         $enabled = $account->platform->supportsRepost() && (bool) $validated['enabled'];
 
-        $autoRepost = array_filter([
+        $updates = array_filter([
             'enabled' => $enabled,
             'min_percentile' => isset($validated['min_percentile']) ? (float) $validated['min_percentile'] : null,
         ], fn ($value): bool => $value !== null);
 
-        // Read-modify-write: never overwrite the whole capabilities array.
+        // Read-modify-write at both levels: never overwrite the whole capabilities
+        // array, and never clobber a previously stored min_percentile when a
+        // request (e.g. a disable toggle) omits it.
+        $existingAutoRepost = $account->capabilities['auto_repost'] ?? [];
+        $autoRepost = [...$existingAutoRepost, ...$updates];
+
         $account->forceFill([
             'capabilities' => [...($account->capabilities ?? []), 'auto_repost' => $autoRepost],
         ])->save();

@@ -37,6 +37,31 @@ test('enabling auto-repost merges into capabilities without clobbering other key
         ->and($account->capabilities['max_text_length'])->toBe(4000);
 });
 
+test('disabling then re-enabling auto-repost without min_percentile preserves the stored value', function (): void {
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'connected_by_user_id' => $this->user->id,
+        'platform' => Platform::X->value,
+    ]);
+
+    $this->patch(route('accounts.auto-repost', $account), ['enabled' => true, 'min_percentile' => 0.7])
+        ->assertRedirect();
+
+    $this->patch(route('accounts.auto-repost', $account), ['enabled' => false])
+        ->assertRedirect();
+
+    $account->refresh();
+    expect($account->capabilities['auto_repost']['enabled'])->toBeFalse()
+        ->and($account->capabilities['auto_repost']['min_percentile'])->toBe(0.7);
+
+    $this->patch(route('accounts.auto-repost', $account), ['enabled' => true])
+        ->assertRedirect();
+
+    $account->refresh();
+    expect($account->capabilities['auto_repost']['enabled'])->toBeTrue()
+        ->and($account->capabilities['auto_repost']['min_percentile'])->toBe(0.7);
+});
+
 test('auto-repost cannot be enabled on an unsupported platform', function (): void {
     $account = ConnectedAccount::factory()->create([
         'workspace_id' => $this->workspace->id,
