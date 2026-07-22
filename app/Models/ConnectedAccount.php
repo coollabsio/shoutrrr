@@ -191,6 +191,31 @@ class ConnectedAccount extends Model
     }
 
     /**
+     * Per-account auto-repost config: stored capabilities merged over config defaults.
+     *
+     * @return array{enabled: bool, min_delay_hours: int, max_delay_hours: int, plateau_streak: int, min_percentile: float}
+     */
+    public function autoRepostConfig(): array
+    {
+        $defaults = (array) config('repost.defaults');
+        $stored = (array) ($this->capabilities['auto_repost'] ?? []);
+
+        return [
+            'enabled' => (bool) ($stored['enabled'] ?? false),
+            'min_delay_hours' => (int) ($stored['min_delay_hours'] ?? $defaults['min_delay_hours']),
+            'max_delay_hours' => (int) ($stored['max_delay_hours'] ?? $defaults['max_delay_hours']),
+            'plateau_streak' => (int) ($stored['plateau_streak'] ?? $defaults['plateau_streak']),
+            'min_percentile' => (float) ($stored['min_percentile'] ?? $defaults['min_percentile']),
+        ];
+    }
+
+    public function autoRepostEnabled(): bool
+    {
+        return $this->platform->supportsRepost()
+            && (bool) ($this->capabilities['auto_repost']['enabled'] ?? false);
+    }
+
+    /**
      * @param  Builder<ConnectedAccount>  $query
      */
     public function scopeEnabled(Builder $query): void
