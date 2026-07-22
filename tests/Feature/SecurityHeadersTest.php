@@ -28,10 +28,23 @@ test('responses carry a nonce-based content security policy', function () {
         ->and($csp)->toContain("'strict-dynamic'");
 });
 
-test('forms may redirect to any https service', function () {
+test('forms may redirect to https services and the cursor mcp oauth loopback', function () {
+    config(['mcp.custom_schemes' => []]);
+
     $csp = $this->get('/login')->headers->get('Content-Security-Policy');
 
-    expect($csp)->toContain("form-action 'self' https:;");
+    expect($csp)->toContain("form-action 'self' https: http://localhost:8787 http://127.0.0.1:8787;")
+        ->and($csp)->not->toContain('cursor:')
+        ->and($csp)->not->toContain('claude:');
+});
+
+test('configured mcp custom schemes are allowlisted in form-action', function () {
+    config(['mcp.custom_schemes' => ['cursor', 'claude:', 'cursor']]);
+
+    $csp = $this->get('/login')->headers->get('Content-Security-Policy');
+
+    expect($csp)->toContain("form-action 'self' https: http://localhost:8787 http://127.0.0.1:8787 cursor: claude:;")
+        ->and(substr_count($csp, 'cursor:'))->toBe(1);
 });
 
 test('a local/public-disk deployment keeps connect-src and media-src tight', function () {
