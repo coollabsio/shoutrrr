@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\ForceOAuthAuthorizationFullPage;
+
 return [
 
     /*
@@ -15,7 +17,9 @@ return [
 
     'guard' => 'web',
 
-    'middleware' => [],
+    'middleware' => [
+        ForceOAuthAuthorizationFullPage::class,
+    ],
 
     /*
     |--------------------------------------------------------------------------
