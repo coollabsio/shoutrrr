@@ -7,6 +7,7 @@ namespace App\Services\Publishing\Connectors;
 use App\Dto\Publishing\MediaUploadState;
 use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
+use App\Dto\Repost\RepostContext;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\UsageCategory;
@@ -16,6 +17,7 @@ use App\Models\PostTarget;
 use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Services\Repost\Contracts\RepostConnector;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
@@ -24,7 +26,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Storage;
 
-class XConnector implements PublishConnector
+class XConnector implements PublishConnector, RepostConnector
 {
     use MapsHttpErrors, TracksUsage;
 
@@ -143,6 +145,33 @@ class XConnector implements PublishConnector
         }
 
         return PublishResult::success(array_values($remoteIds));
+    }
+
+    public function repost(RepostContext $context): PublishResult
+    {
+        $token = (string) ($context->credentials['access_token'] ?? '');
+
+        if ($token === '') {
+            return PublishResult::failure(ErrorKind::AuthExpired, 'X access token unavailable; reconnect the account.');
+        }
+
+        $userId = $context->account->remote_account_id;
+        $tweetId = (string) $context->target->remote_id;
+
+        $response = $this->http
+            ->withToken($token)
+            ->acceptJson()
+            ->post("https://api.twitter.com/2/users/{$userId}/retweets", ['tweet_id' => $tweetId]);
+
+        $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
+
+        if ($response->failed()) {
+            return $this->mapFailure($response);
+        }
+
+        // The retweets endpoint returns {data:{retweeted:true}} with no new id; the
+        // source tweet id is what a future un-retweet (DELETE .../retweets/:id) needs.
+        return PublishResult::success([$tweetId]);
     }
 
     /**
