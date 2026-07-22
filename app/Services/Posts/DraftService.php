@@ -37,9 +37,9 @@ class DraftService
      * @param  list<string>  $segments
      * @param  list<array{id?: mixed, label?: mixed, handles?: array<string, mixed>}>  $mentions
      */
-    public function createDraft(string $workspaceId, User $author, array $destination, array $segments, array $mentions = []): Post
+    public function createDraft(string $workspaceId, User $author, array $destination, array $segments, array $mentions = [], ?bool $autoRepost = null): Post
     {
-        return DB::transaction(function () use ($workspaceId, $author, $destination, $segments, $mentions): Post {
+        return DB::transaction(function () use ($workspaceId, $author, $destination, $segments, $mentions, $autoRepost): Post {
             $post = Post::create([
                 'workspace_id' => $workspaceId,
                 'account_set_id' => $this->scopedAccountSetId($workspaceId, $destination),
@@ -48,6 +48,7 @@ class DraftService
                 'base_text' => implode("\n", $segments),
                 'mentions' => $this->normalizeMentions($mentions),
                 'status' => PostStatus::Draft->value,
+                'auto_repost' => $autoRepost,
             ]);
 
             $accountIds = $this->resolveDestinationAccountIds($workspaceId, $destination);
@@ -248,6 +249,7 @@ class DraftService
                 'base_text' => implode("\n", $data->segments),
                 'mentions' => $this->normalizeMentions($data->mentions),
                 'account_set_id' => $this->scopedAccountSetId($post->workspace_id, $destination),
+                'auto_repost' => $data->autoRepost,
             ])->save();
 
             $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount);

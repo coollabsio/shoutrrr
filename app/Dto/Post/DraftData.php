@@ -28,6 +28,7 @@ final class DraftData
         public readonly array $mentions,
         public readonly array $targetsByAccount,
         public readonly ?string $expectedUpdatedAt,
+        public readonly ?bool $autoRepost = null,
     ) {}
 
     /**
@@ -61,6 +62,7 @@ final class DraftData
             mentions: array_values($payload['mentions'] ?? []),
             targetsByAccount: $targetsByAccount,
             expectedUpdatedAt: $payload['expected_updated_at'] ?? null,
+            autoRepost: $payload['auto_repost'] ?? null,
         );
     }
 

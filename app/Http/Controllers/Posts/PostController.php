@@ -93,6 +93,7 @@ class PostController extends Controller
             $request->validated('destination'),
             array_values(array_map(static fn (mixed $s): string => (string) ($s ?? ''), $request->validated('segments', []))),
             array_values($request->validated('mentions', [])),
+            $request->validated('auto_repost'),
         );
 
         return response()->json(['post' => PostView::make($post->fresh(['targets.account', 'media']))], 201);
