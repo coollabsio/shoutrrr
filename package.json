@@ -5,7 +5,7 @@
     "scripts": {
         "build": "vite build",
         "build:ssr": "vite build && vite build --ssr",
-        "dev": "vite",
+        "dev": "vite --host 0.0.0.0",
         "format": "oxfmt resources/",
         "format:check": "oxfmt --check resources/",
         "lint": "oxlint --fix",
