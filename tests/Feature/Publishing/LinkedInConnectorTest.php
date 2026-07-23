@@ -277,3 +277,27 @@ test('linkedin compresses oversized images via the compressor before upload', fu
         && $request->body() === 'small-bytes'
         && $request->hasHeader('Content-Type', 'image/jpeg'));
 });
+
+test('linkedin publishes as an organization when the account is a page', function () {
+    Http::fake([
+        'https://api.linkedin.com/rest/posts' => Http::response([], 201, ['x-restli-id' => 'urn:li:share:77']),
+    ]);
+
+    $target = PostTarget::factory()->create(['platform' => Platform::LinkedIn->value]);
+    $account = ConnectedAccount::factory()->linkedinPage()->create(['remote_account_id' => '2414183']);
+
+    $context = new PublishContext(
+        target: $target,
+        segments: ['hello from the page'],
+        media: [],
+        account: $account,
+        credentials: ['access_token' => 'tok'],
+    );
+
+    $result = app(LinkedInConnector::class)->publish($context);
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(fn ($request) => $request['author'] === 'urn:li:organization:2414183'
+        && $request['commentary'] === 'hello from the page');
+});

@@ -2,16 +2,15 @@
 
 use App\Enums\Platform;
 
-test('post metrics is supported by every platform except LinkedIn', function () {
+test('post metrics is supported by every platform', function () {
     foreach (Platform::cases() as $platform) {
-        expect($platform->supportsPostMetrics())->toBe($platform !== Platform::LinkedIn);
+        expect($platform->supportsPostMetrics())->toBeTrue();
     }
 });
 
-test('account metrics is supported by every platform except LinkedIn and Discord', function () {
+test('account metrics is supported by every platform except Discord', function () {
     foreach (Platform::cases() as $platform) {
-        expect($platform->supportsAccountMetrics())
-            ->toBe($platform !== Platform::LinkedIn && $platform !== Platform::Discord);
+        expect($platform->supportsAccountMetrics())->toBe($platform !== Platform::Discord);
     }
 });
 
@@ -22,8 +21,8 @@ test('pollingSectionPlatforms returns the capability matrix per section', functi
     );
 
     expect($values('engagement'))->toBe(['x', 'bluesky', 'linkedin', 'facebook', 'instagram', 'threads'])
-        ->and($values('post_metrics'))->toBe(['x', 'bluesky', 'facebook', 'instagram', 'threads', 'discord'])
-        ->and($values('account_metrics'))->toBe(['x', 'bluesky', 'facebook', 'instagram', 'threads']);
+        ->and($values('post_metrics'))->toBe(['x', 'bluesky', 'linkedin', 'facebook', 'instagram', 'threads', 'discord'])
+        ->and($values('account_metrics'))->toBe(['x', 'bluesky', 'linkedin', 'facebook', 'instagram', 'threads']);
 });
 
 test('pollingSectionPlatforms is empty for an unknown section', function () {

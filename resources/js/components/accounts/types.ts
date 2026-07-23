@@ -16,6 +16,7 @@ export type Account = {
     x_subscription_tier: 'free' | 'basic' | 'premium' | 'premium_plus' | null;
     x_subscription_label: string | null;
     x_subscription_checked_at: string | null;
+    is_linkedin_page: boolean;
     is_default: boolean;
     disabled: boolean;
     pds_url: string | null;

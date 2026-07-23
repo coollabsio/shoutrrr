@@ -24,6 +24,7 @@ function account(overrides: Partial<Account>): Account {
         x_subscription_tier: null,
         x_subscription_label: null,
         x_subscription_checked_at: null,
+        is_linkedin_page: false,
         is_default: false,
         disabled: false,
         pds_url: null,
