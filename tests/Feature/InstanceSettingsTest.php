@@ -39,13 +39,11 @@ test('instance owner can update instance settings', function () {
             'workspace_creation_enabled' => false,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
-            'linkedin_community_management_enabled' => true,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->registrationsEnabled())->toBeFalse()
-        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse()
-        ->and(app(InstanceSettings::class)->linkedinCommunityManagementEnabled())->toBeTrue();
+        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
 });
 
 test('workspace creation setting is disabled when workspaces are globally disabled', function () {
@@ -74,7 +72,6 @@ test('workspace creation setting cannot be enabled when workspaces are globally 
             'workspace_creation_enabled' => true,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
-            'linkedin_community_management_enabled' => false,
         ])
         ->assertRedirect();
 
