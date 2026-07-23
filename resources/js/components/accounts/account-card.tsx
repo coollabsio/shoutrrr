@@ -43,6 +43,9 @@ const PLATFORM_BRAND: Record<string, { tile: string; glyph: string }> = {
 
 const PLATFORM_FALLBACK = { tile: 'bg-muted', glyph: 'text-muted-foreground' };
 
+/** Platforms with a native repost/reshare API auto-repost can target. */
+const REPOST_CAPABLE_PLATFORMS = ['x', 'linkedin', 'bluesky'];
+
 export const ACCOUNT_CARD_ACTIONS_CLASS =
     'mt-1 flex flex-wrap items-center gap-2 border-t border-border pt-4';
 
@@ -228,6 +231,7 @@ export function AccountCard({
     onReconnectOAuth,
     onDisconnect,
     onToggle,
+    onAutoRepost,
     onRefreshXAccountTier,
     refreshingXAccountTier = false,
 }: {
@@ -237,6 +241,7 @@ export function AccountCard({
     onReconnectOAuth: (account: Account) => void;
     onDisconnect: (account: Account) => void;
     onToggle: (account: Account, enabled: boolean) => void;
+    onAutoRepost: (account: Account, enabled: boolean) => void;
     onRefreshXAccountTier: (account: Account) => void;
     refreshingXAccountTier?: boolean;
 }) {
@@ -244,6 +249,7 @@ export function AccountCard({
     const needsAttention = account.status !== 'active';
     const disabled = account.disabled;
     const name = account.display_name ?? account.handle;
+    const repostCapable = REPOST_CAPABLE_PLATFORMS.includes(account.platform);
 
     return (
         <div
@@ -421,6 +427,32 @@ export function AccountCard({
                                 ? 'Refreshing…'
                                 : 'Refresh tier'}
                         </Button>
+                    )}
+                </div>
+            )}
+            {repostCapable && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                    <span className="min-w-0">
+                        <span className="block text-[12.5px] font-medium">
+                            Auto-boost posts
+                        </span>
+                        <span className="block truncate text-[11.5px] text-muted-foreground">
+                            Automatically reshare top-performing posts on this
+                            account.
+                        </span>
+                    </span>
+                    {canManage && (
+                        <Switch
+                            checked={account.auto_repost_enabled}
+                            onCheckedChange={(checked) =>
+                                onAutoRepost(account, checked)
+                            }
+                            aria-label={
+                                account.auto_repost_enabled
+                                    ? `Disable auto-boost for ${account.handle}`
+                                    : `Enable auto-boost for ${account.handle}`
+                            }
+                        />
                     )}
                 </div>
             )}

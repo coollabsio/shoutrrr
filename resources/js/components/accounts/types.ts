@@ -20,6 +20,7 @@ export type Account = {
     is_default: boolean;
     disabled: boolean;
     pds_url: string | null;
+    auto_repost_enabled: boolean;
 };
 
 export type Capability = {

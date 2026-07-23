@@ -3,6 +3,7 @@
 use App\Console\Commands\CaptureMetrics;
 use App\Console\Commands\DispatchDuePosts;
 use App\Console\Commands\DispatchDueReplyFetches;
+use App\Console\Commands\DispatchDueReposts;
 use App\Console\Commands\PruneAbandonedUploads;
 use App\Console\Commands\PruneMcpBindings;
 use App\Console\Commands\PruneUsageEvents;
@@ -28,6 +29,10 @@ if (config('metrics.enabled')) {
 
 if (config('engagement.enabled')) {
     Schedule::command(DispatchDueReplyFetches::class)->everyFifteenMinutes()->withoutOverlapping();
+}
+
+if (config('repost.enabled')) {
+    Schedule::command(DispatchDueReposts::class)->everyFifteenMinutes()->withoutOverlapping();
 }
 
 Schedule::command(ReconcileUsageCounters::class)->dailyAt('02:10')->withoutOverlapping();

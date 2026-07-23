@@ -38,6 +38,7 @@ export type ComposerState = {
     media: MediaView[];
     scheduleTray: ScheduleTray;
     conflict: PostView | null;
+    autoRepost: boolean | null;
 };
 
 export type ComposerAction =
@@ -48,6 +49,7 @@ export type ComposerAction =
     | { type: 'setMentions'; mentions: MentionPlaceholder[] }
     | { type: 'setActiveTab'; tab: string }
     | { type: 'setDestination'; destination: Destination }
+    | { type: 'setAutoRepost'; value: boolean | null }
     | { type: 'toggleAutoSplit'; accountId: string }
     | { type: 'setFormat'; accountId: string; format: PostFormat }
     | { type: 'disableAutoSplit'; accountIds: string[] }
@@ -121,6 +123,7 @@ export function initialComposerState(
             ? { mode: 'pick', pickedAt: scheduleAt }
             : { mode: 'now', pickedAt: null },
         conflict: null,
+        autoRepost: null,
     };
 }
 
@@ -191,6 +194,7 @@ function hydrate(post: PostView): ComposerState {
             pickedAt: post.scheduled_at ?? null,
         },
         conflict: null,
+        autoRepost: post.auto_repost ?? null,
     };
 }
 
@@ -269,6 +273,13 @@ export function composerReducer(
             return {
                 ...state,
                 destination: action.destination,
+                saveState: 'dirty',
+            };
+
+        case 'setAutoRepost':
+            return {
+                ...state,
+                autoRepost: action.value,
                 saveState: 'dirty',
             };
 
@@ -462,6 +473,7 @@ export type PutBody = {
     media_ids: string[];
     mentions: MentionPlaceholder[];
     expected_updated_at: string | null;
+    auto_repost: boolean | null;
 };
 
 /**
@@ -506,6 +518,7 @@ export function buildPutBody(
         media_ids: state.media.map((m) => m.id),
         mentions: state.mentions,
         expected_updated_at: state.baselineUpdatedAt,
+        auto_repost: state.autoRepost,
     };
 }
 

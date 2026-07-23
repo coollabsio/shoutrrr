@@ -341,6 +341,20 @@ enum Platform: string
     }
 
     /**
+     * Whether this platform's API can natively re-share the account's own
+     * already-published post (retweet-of-self / LinkedIn repost / Bluesky repost).
+     * Meta platforms and Discord have no such endpoint, so auto-repost is not
+     * offered for them.
+     */
+    public function supportsRepost(): bool
+    {
+        return match ($this) {
+            self::X, self::LinkedIn, self::Bluesky => true,
+            self::Facebook, self::Instagram, self::Threads, self::Discord => false,
+        };
+    }
+
+    /**
      * Whether the platform permits an animated GIF alongside other media. X and
      * Bluesky treat a GIF as a video-like embed: at most one per post, never
      * mixed with images or a second GIF. Both reject the mix at publish, so the

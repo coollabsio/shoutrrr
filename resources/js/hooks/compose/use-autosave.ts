@@ -251,6 +251,7 @@ export function useAutosave({
         state.autoSplitByAccount,
         state.formatByAccount,
         state.media,
+        state.autoRepost,
     ]);
 
     // Keep the version ref in step with externally-driven baseline changes

@@ -97,6 +97,13 @@ type Editing =
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
 const DEFAULT_EDIT_SETTINGS = defaultSettings();
 
+/** Platforms the auto-repost backfeature supports (Task 12). */
+const REPOST_CAPABLE_PLATFORMS = new Set<PlatformName>([
+    'x',
+    'linkedin',
+    'bluesky',
+]);
+
 /** Placeholder identity for the default X preview shown before any account is connected. */
 const PREVIEW_FALLBACK_ACCOUNT: Account = {
     id: 'preview-fallback-x',
@@ -218,6 +225,9 @@ export default function Composer({
     );
     const attentionAccounts = tabAccounts.filter(
         (account) => account.status === 'needs_attention',
+    );
+    const repostAccounts = tabAccounts.filter((account) =>
+        REPOST_CAPABLE_PLATFORMS.has(account.platform),
     );
     const selectedVideoLimits = videoLimitsForTargets(limits, tabAccounts);
     const { flush, ensurePost } = useAutosave({
@@ -1018,6 +1028,19 @@ export default function Composer({
                         }
                         overrideActive={overrideActive}
                         showSplitControls={activeAccount !== null}
+                        boost={
+                            repostAccounts.length > 0
+                                ? {
+                                      value: state.autoRepost,
+                                      onChange: (value) =>
+                                          dispatch({
+                                              type: 'setAutoRepost',
+                                              value,
+                                          }),
+                                      accounts: repostAccounts,
+                                  }
+                                : undefined
+                        }
                         media={state.media}
                         onRemove={(id) =>
                             dispatch({ type: 'removeMedia', mediaId: id })

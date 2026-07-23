@@ -99,6 +99,24 @@ export default function ConnectedAccounts({
         );
     };
 
+    const setAutoRepost = (account: Account, enabled: boolean) => {
+        router.patch(
+            ConnectedAccountController.autoRepost.url(account.id),
+            { enabled },
+            {
+                preserveScroll: true,
+                optimistic: (props) => ({
+                    accounts: (props as { accounts?: Account[] }).accounts?.map(
+                        (a) =>
+                            a.id === account.id
+                                ? { ...a, auto_repost_enabled: enabled }
+                                : a,
+                    ),
+                }),
+            },
+        );
+    };
+
     const [refreshingAccountId, setRefreshingAccountId] = useState<
         string | null
     >(null);
@@ -226,6 +244,7 @@ export default function ConnectedAccounts({
                                 onReconnectOAuth={reconnectOAuth}
                                 onDisconnect={disconnect}
                                 onToggle={toggleEnabled}
+                                onAutoRepost={setAutoRepost}
                                 onRefreshXAccountTier={refreshXAccountTier}
                                 refreshingXAccountTier={
                                     refreshingAccountId === account.id
