@@ -80,6 +80,53 @@ it('preserves saved display text for people without a platform mention', functio
         ->assertJsonPath('mention.handles.linkedin', 'Taylor Otwell');
 });
 
+it('round-trips Meta platform handles on create', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    $this->actingAs($user)
+        ->postJson(route('workspace-mentions.store'), [
+            'name' => '@company-x',
+            'handles' => [
+                'facebook' => 'Company X',
+                'instagram' => 'companyx',
+                'threads' => 'companyx',
+            ],
+        ])
+        ->assertSuccessful()
+        ->assertJsonPath('mention.handles.facebook', 'Company X')
+        ->assertJsonPath('mention.handles.instagram', 'companyx')
+        ->assertJsonPath('mention.handles.threads', 'companyx');
+
+    expect(WorkspaceMention::query()->first()->handles)
+        ->toBe(['facebook' => 'Company X', 'instagram' => 'companyx', 'threads' => 'companyx']);
+});
+
+it('persists an edited Meta plain-text value on update', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+    WorkspaceMention::factory()->create([
+        'workspace_id' => $workspace->id,
+        'name' => '@company-x',
+        'handles' => ['facebook' => 'Company X'],
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('workspace-mentions.store'), [
+            'name' => '@company-x',
+            'handles' => ['facebook' => 'Company X Inc.'],
+        ])
+        ->assertSuccessful()
+        ->assertJsonPath('mention.handles.facebook', 'Company X Inc.');
+
+    expect(WorkspaceMention::query()->where('name', '@company-x')->first()->handles)
+        ->toBe(['facebook' => 'Company X Inc.']);
+});
+
 it('normalizes a saved LinkedIn org reference into a canonical URN', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);

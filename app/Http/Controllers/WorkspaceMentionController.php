@@ -14,19 +14,25 @@ class WorkspaceMentionController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80', 'regex:/^@[A-Za-z0-9_.-]+$/'],
-            'handles' => ['required', 'array'],
-            'handles.x' => ['nullable', 'string', 'max:255'],
-            'handles.bluesky' => ['nullable', 'string', 'max:255'],
-            'handles.linkedin' => ['nullable', 'string', 'max:255'],
-            'handles.linkedin_urn' => ['nullable', 'string', 'max:255'],
-        ]);
-
         $allowedPlatforms = array_map(
             static fn (Platform $platform): string => $platform->value,
             Platform::cases(),
         );
+
+        // Nested rules must cover every platform key: `validated()` strips any
+        // `handles.*` key without an explicit rule (excludeUnvalidatedArrayKeys),
+        // which silently dropped Meta handles before these rules were derived
+        // from the enum (issue #123).
+        $handleRules = [];
+        foreach ([...$allowedPlatforms, 'linkedin_urn'] as $handleKey) {
+            $handleRules['handles.'.$handleKey] = ['nullable', 'string', 'max:255'];
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:80', 'regex:/^@[A-Za-z0-9_.-]+$/'],
+            'handles' => ['required', 'array'],
+            ...$handleRules,
+        ]);
         $handles = [];
         foreach ($allowedPlatforms as $platform) {
             $handle = trim((string) ($validated['handles'][$platform] ?? ''));
