@@ -49,7 +49,7 @@ export type ComposerAction =
     | { type: 'setMentions'; mentions: MentionPlaceholder[] }
     | { type: 'setActiveTab'; tab: string }
     | { type: 'setDestination'; destination: Destination }
-    | { type: 'setAutoRepost'; value: boolean }
+    | { type: 'setAutoRepost'; value: boolean | null }
     | { type: 'toggleAutoSplit'; accountId: string }
     | { type: 'setFormat'; accountId: string; format: PostFormat }
     | { type: 'disableAutoSplit'; accountIds: string[] }
@@ -279,7 +279,7 @@ export function composerReducer(
         case 'setAutoRepost':
             return {
                 ...state,
-                autoRepost: action.value ? true : null,
+                autoRepost: action.value,
                 saveState: 'dirty',
             };
 

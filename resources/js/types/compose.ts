@@ -54,6 +54,8 @@ export type Account = {
     /** Account-specific duration cap; X Premium tiers can exceed the platform default. */
     max_video_duration_seconds?: number;
     x_premium: boolean;
+    /** Account-level Auto-boost opt-in; per-post boost is a no-op without it. */
+    auto_repost_enabled?: boolean;
 };
 
 export type AccountSet = {

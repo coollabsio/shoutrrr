@@ -4,7 +4,6 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
-import { Switch } from '@/components/ui/switch';
 import { useAutosave } from '@/hooks/compose/use-autosave';
 import { useEmojiPreferences } from '@/hooks/compose/use-emoji-preferences';
 import { useImageEditor } from '@/hooks/compose/use-image-editor';
@@ -226,6 +225,9 @@ export default function Composer({
     );
     const attentionAccounts = tabAccounts.filter(
         (account) => account.status === 'needs_attention',
+    );
+    const repostAccounts = tabAccounts.filter((account) =>
+        REPOST_CAPABLE_PLATFORMS.has(account.platform),
     );
     const selectedVideoLimits = videoLimitsForTargets(limits, tabAccounts);
     const { flush, ensurePost } = useAutosave({
@@ -1026,6 +1028,19 @@ export default function Composer({
                         }
                         overrideActive={overrideActive}
                         showSplitControls={activeAccount !== null}
+                        boost={
+                            repostAccounts.length > 0
+                                ? {
+                                      value: state.autoRepost,
+                                      onChange: (value) =>
+                                          dispatch({
+                                              type: 'setAutoRepost',
+                                              value,
+                                          }),
+                                      accounts: repostAccounts,
+                                  }
+                                : undefined
+                        }
                         media={state.media}
                         onRemove={(id) =>
                             dispatch({ type: 'removeMedia', mediaId: id })
@@ -1173,28 +1188,6 @@ export default function Composer({
                         }}
                     />
                 )}
-
-                {/* Auto-boost toggle — only relevant when at least one selected
-                account is on a repost-capable platform; hidden once read-only. */}
-                {!readOnly &&
-                    tabAccounts.some((account) =>
-                        REPOST_CAPABLE_PLATFORMS.has(account.platform),
-                    ) && (
-                        <div className="border-t border-border px-3 py-2.5 sm:px-[14px]">
-                            <label className="flex items-center gap-2 text-sm">
-                                <Switch
-                                    checked={state.autoRepost === true}
-                                    onCheckedChange={(value) =>
-                                        dispatch({
-                                            type: 'setAutoRepost',
-                                            value,
-                                        })
-                                    }
-                                />
-                                Auto-boost this post
-                            </label>
-                        </div>
-                    )}
 
                 {/* Schedule + submit row — hidden once the post is read-only. */}
                 {!readOnly && (

@@ -205,6 +205,21 @@ describe('composerReducer', () => {
         expect(state.saveState).toBe('dirty');
     });
 
+    it('stores the tri-state auto-repost override and marks dirty', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'setAutoRepost',
+            value: true,
+        });
+        expect(state.autoRepost).toBe(true);
+        expect(state.saveState).toBe('dirty');
+
+        state = composerReducer(state, { type: 'setAutoRepost', value: false });
+        expect(state.autoRepost).toBe(false);
+
+        state = composerReducer(state, { type: 'setAutoRepost', value: null });
+        expect(state.autoRepost).toBeNull();
+    });
+
     it('transitions through a successful save', () => {
         let state = composerReducer(hydrated(), {
             type: 'updateSegments',
