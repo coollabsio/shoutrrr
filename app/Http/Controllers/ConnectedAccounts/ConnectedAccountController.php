@@ -62,6 +62,7 @@ class ConnectedAccountController extends Controller
                 'x_subscription_tier' => $account->xSubscriptionTier(),
                 'x_subscription_label' => $account->xSubscriptionLabel(),
                 'x_subscription_checked_at' => $account->xSubscriptionCheckedAt(),
+                'is_linkedin_page' => $account->isLinkedInOrganization(),
                 'is_default' => $account->id === $defaultAccountId,
                 'disabled' => $account->isDisabled(),
                 'pds_url' => $this->customPdsUrl($account),

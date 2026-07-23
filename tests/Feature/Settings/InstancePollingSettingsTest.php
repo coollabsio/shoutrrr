@@ -22,12 +22,12 @@ function fullPollingPayload(array $overrides = []): array
             'x' => 15, 'bluesky' => 15, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
         ],
         'post_metrics' => [
-            'enabled' => ['x' => true, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
-            'x' => 15, 'bluesky' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 15,
+            'enabled' => ['x' => true, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
+            'x' => 15, 'bluesky' => 15, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 15,
         ],
         'account_metrics' => [
-            'enabled' => ['x' => true, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
-            'x' => 15, 'bluesky' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+            'enabled' => ['x' => true, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+            'x' => 15, 'bluesky' => 15, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
         ],
     ];
 
@@ -48,9 +48,9 @@ test('the polling page exposes per-section platform lists', function () {
             ->where('sections.engagement', fn ($p) => collect($p)->pluck('platform')->all()
                 === ['x', 'bluesky', 'linkedin', 'facebook', 'instagram', 'threads'])
             ->where('sections.post_metrics', fn ($p) => collect($p)->pluck('platform')->all()
-                === ['x', 'bluesky', 'facebook', 'instagram', 'threads', 'discord'])
+                === ['x', 'bluesky', 'linkedin', 'facebook', 'instagram', 'threads', 'discord'])
             ->where('sections.account_metrics', fn ($p) => collect($p)->pluck('platform')->all()
-                === ['x', 'bluesky', 'facebook', 'instagram', 'threads']),
+                === ['x', 'bluesky', 'linkedin', 'facebook', 'instagram', 'threads']),
         );
 });
 

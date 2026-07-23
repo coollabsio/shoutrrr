@@ -39,13 +39,11 @@ test('instance owner can update instance settings', function () {
             'workspace_creation_enabled' => false,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
-            'linkedin_community_management_enabled' => true,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->registrationsEnabled())->toBeFalse()
-        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse()
-        ->and(app(InstanceSettings::class)->linkedinCommunityManagementEnabled())->toBeTrue();
+        ->and(app(InstanceSettings::class)->workspaceCreationEnabled())->toBeFalse();
 });
 
 test('workspace creation setting is disabled when workspaces are globally disabled', function () {
@@ -74,7 +72,6 @@ test('workspace creation setting cannot be enabled when workspaces are globally 
             'workspace_creation_enabled' => true,
             'usage_tracking_enabled' => false,
             'quote_tweets_enabled' => false,
-            'linkedin_community_management_enabled' => false,
         ])
         ->assertRedirect();
 
@@ -346,12 +343,12 @@ test('instance owner can update polling settings', function () {
                 'x' => 720, 'bluesky' => 30, 'linkedin' => 120, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
             'post_metrics' => [
-                'enabled' => ['x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
-                'x' => 1440, 'bluesky' => 45, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 90,
+                'enabled' => ['x' => false, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
+                'x' => 1440, 'bluesky' => 45, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 90,
             ],
             'account_metrics' => [
-                'enabled' => ['x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
-                'x' => 1440, 'bluesky' => 240, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+                'enabled' => ['x' => false, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 1440, 'bluesky' => 240, 'linkedin' => 1440, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
             'metrics_enabled' => true,
             'engagement_enabled' => true,
@@ -368,22 +365,17 @@ test('instance owner can update polling settings', function () {
             'x' => 720, 'bluesky' => 30, 'linkedin' => 120, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
         ])
         ->and($polling['post_metrics']['enabled'])->toMatchArray([
-            'x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true,
+            'x' => false, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true,
         ])
         ->and($polling['post_metrics'])->toMatchArray([
-            'x' => 1440, 'bluesky' => 45, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 90,
+            'x' => 1440, 'bluesky' => 45, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 90,
         ])
         ->and($polling['account_metrics']['enabled'])->toMatchArray([
-            'x' => false, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true,
+            'x' => false, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true,
         ])
         ->and($polling['account_metrics'])->toMatchArray([
-            'x' => 1440, 'bluesky' => 240, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+            'x' => 1440, 'bluesky' => 240, 'linkedin' => 1440, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
         ]);
-
-    // LinkedIn is not a configurable metrics platform, so it keeps its read default
-    // (enabled + per-platform fallback) even though we never sent it.
-    expect($polling['post_metrics']['enabled']['linkedin'])->toBeTrue()
-        ->and($polling['account_metrics']['enabled']['linkedin'])->toBeTrue();
 });
 
 test('instance owner can toggle the metrics and engagement master switches from the polling page', function () {
@@ -396,12 +388,12 @@ test('instance owner can toggle the metrics and engagement master switches from 
                 'x' => 360, 'bluesky' => 15, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
             'post_metrics' => [
-                'enabled' => ['x' => true, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
-                'x' => 360, 'bluesky' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 15,
+                'enabled' => ['x' => true, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
+                'x' => 360, 'bluesky' => 15, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 15,
             ],
             'account_metrics' => [
-                'enabled' => ['x' => true, 'bluesky' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
-                'x' => 1440, 'bluesky' => 1440, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+                'enabled' => ['x' => true, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 1440, 'bluesky' => 1440, 'linkedin' => 1440, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
             ],
             'metrics_enabled' => false,
             'engagement_enabled' => false,

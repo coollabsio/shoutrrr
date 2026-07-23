@@ -7,8 +7,11 @@
   "ports": [
     {
       "port": 8000,
-      "label": "Shoutrrr",
-      "host": "127.0.0.1"
+      "label": "app"
+    },
+    {
+      "port": 5173,
+      "label": "vite"
     }
   ]
 }

@@ -295,6 +295,16 @@ test('the accounts page requires authentication', function () {
     test()->get('/accounts')->assertRedirect(route('login'));
 });
 
+test('the accounts index marks a linkedin page account', function () {
+    [, $workspace] = ownerActingIn();
+
+    ConnectedAccount::factory()->linkedinPage()->create(['workspace_id' => $workspace->id]);
+
+    test()->get(route('accounts.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('accounts.0.is_linkedin_page', true));
+});
+
 test('get requests to account member paths return not found instead of method not allowed', function () {
     $owner = viewerInWorkspace(WorkspaceRole::Owner);
 

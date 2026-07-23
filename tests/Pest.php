@@ -22,6 +22,9 @@ use Illuminate\Support\Str;
 use Laravel\Passport\AccessToken;
 use Laravel\Passport\Client;
 use Laravel\Passport\Passport;
+use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\AbstractProvider;
+use Laravel\Socialite\Two\User as SocialiteUser;
 use Tests\TestCase;
 
 ini_set('memory_limit', '512M');
@@ -214,4 +217,67 @@ function bindTokenToWorkspace(User $user, Workspace $workspace): void
     // actingAs() stores the same $user instance on the guard, so token() remains
     // set when the tool resolves $request->user() from the auth guard.
     $user->withAccessToken($accessToken);
+}
+
+/**
+ * Create a workspace owned by a fresh user and act as them. Shared across the
+ * connected-accounts Feature suite (ConnectOAuthTest, ConnectLinkedInPagesTest,
+ * ...) — kept here rather than duplicated per-file to avoid "cannot redeclare
+ * function" fatals when multiple test files load in the same process.
+ *
+ * @return array{0: User, 1: Workspace}
+ */
+function ownerActingIn(): array
+{
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Owner,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    test()->actingAs($user);
+
+    return [$user, $workspace];
+}
+
+/**
+ * Fake a Socialite driver's OAuth user for a connected-accounts callback test.
+ * Shared across the connected-accounts Feature suite — see ownerActingIn().
+ *
+ * @param  array<string, mixed>  $data
+ */
+function fakeOAuthUser(string $driver, array $data): SocialiteUser
+{
+    $user = (new SocialiteUser)
+        ->map([
+            'id' => $data['id'],
+            'nickname' => $data['nickname'] ?? null,
+            'name' => $data['name'] ?? null,
+            'avatar' => $data['avatar'] ?? null,
+        ])
+        ->setToken($data['token'] ?? 'tok');
+
+    if (array_key_exists('refreshToken', $data) && $data['refreshToken'] !== null) {
+        $user->setRefreshToken($data['refreshToken']);
+    }
+
+    if (array_key_exists('expiresIn', $data) && $data['expiresIn'] !== null) {
+        $user->setExpiresIn($data['expiresIn']);
+    }
+
+    if (array_key_exists('approvedScopes', $data)) {
+        $user->setApprovedScopes($data['approvedScopes']);
+    }
+
+    $provider = Mockery::mock(AbstractProvider::class);
+    $provider->shouldReceive('setScopes')->andReturnSelf();
+    $provider->shouldReceive('redirectUrl')->andReturnSelf();
+    $provider->shouldReceive('redirect')->andReturn(redirect('https://provider.test/oauth'));
+    $provider->shouldReceive('user')->andReturn($user);
+
+    Socialite::shouldReceive('driver')->with($driver)->andReturn($provider);
+
+    return $user;
 }

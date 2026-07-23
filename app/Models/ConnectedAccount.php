@@ -191,6 +191,29 @@ class ConnectedAccount extends Model
     }
 
     /**
+     * Whether this account is a LinkedIn Page (Organization) rather than a
+     * personal member profile. Encoded in `capabilities` (matching the Meta
+     * `page_id` precedent) so no new column or enum case is needed.
+     */
+    public function isLinkedInOrganization(): bool
+    {
+        return $this->platform === Platform::LinkedIn
+            && ($this->capabilities['linkedin_account_type'] ?? 'person') === 'organization';
+    }
+
+    /**
+     * The LinkedIn author/actor URN for this account: an organization URN for a
+     * Page, otherwise a person URN. Single source of truth for the publish and
+     * engagement connectors — never rebuild these URNs inline.
+     */
+    public function linkedInAuthorUrn(): string
+    {
+        $prefix = $this->isLinkedInOrganization() ? 'urn:li:organization:' : 'urn:li:person:';
+
+        return $prefix.$this->remote_account_id;
+    }
+
+    /**
      * @param  Builder<ConnectedAccount>  $query
      */
     public function scopeEnabled(Builder $query): void
