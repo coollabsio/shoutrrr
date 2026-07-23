@@ -371,6 +371,17 @@ export function AccountCard({
                         </Badge>
                     </>
                 )}
+                {account.is_linkedin_page && (
+                    <>
+                        <span aria-hidden>·</span>
+                        <Badge
+                            variant="info"
+                            className="h-4 rounded-full px-1.5 text-[10.5px]"
+                        >
+                            Page
+                        </Badge>
+                    </>
+                )}
                 {account.connected_by && (
                     <>
                         <span aria-hidden>·</span>

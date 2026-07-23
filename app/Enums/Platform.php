@@ -111,22 +111,25 @@ enum Platform: string
 
     /**
      * Whether this platform's metrics connector returns real post-level metrics.
-     * LinkedIn's post-metrics connector returns `unsupported`, so it has no
-     * post-metrics polling to configure.
+     * Every launched platform, including LinkedIn (Page/Organization accounts
+     * via the Community Management API), returns real post metrics; personal
+     * LinkedIn member accounts self-mark `unsupported` on first capture instead
+     * of being excluded from polling entirely.
      */
     public function supportsPostMetrics(): bool
     {
-        return $this !== self::LinkedIn;
+        return true;
     }
 
     /**
      * Whether this platform's metrics connector returns real account-level
-     * metrics. LinkedIn and Discord return `unsupported` (LinkedIn has no
-     * account-metrics API here; a Discord webhook cannot read server stats).
+     * metrics. Only Discord returns `unsupported` (a webhook cannot read server
+     * stats). LinkedIn Page (Organization) accounts get real follower counts;
+     * personal LinkedIn member accounts self-mark `unsupported` on first capture.
      */
     public function supportsAccountMetrics(): bool
     {
-        return $this !== self::LinkedIn && $this !== self::Discord;
+        return $this !== self::Discord;
     }
 
     /**

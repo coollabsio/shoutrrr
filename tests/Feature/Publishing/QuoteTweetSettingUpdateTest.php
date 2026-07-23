@@ -16,7 +16,6 @@ it('lets an instance owner enable quote tweets', function () {
         'workspace_creation_enabled' => true,
         'usage_tracking_enabled' => false,
         'quote_tweets_enabled' => true,
-        'linkedin_community_management_enabled' => false,
     ])->assertRedirect();
 
     expect(app(InstanceSettings::class)->quoteTweetsEnabled())->toBeTrue();

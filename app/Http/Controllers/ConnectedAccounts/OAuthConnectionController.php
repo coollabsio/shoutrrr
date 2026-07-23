@@ -9,12 +9,15 @@ use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
+use App\Services\ConnectedAccounts\LinkedIn\LinkedInOrganizationDiscovery;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\ConnectedAccounts\XAccountCapabilities;
 use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider;
 use Laravel\Socialite\Two\InvalidStateException;
@@ -29,6 +32,7 @@ class OAuthConnectionController extends Controller
         private readonly XAccountCapabilities $xCapabilities,
         private readonly ThreadsTokenExchanger $threadsExchanger,
         private readonly InstanceSettings $settings,
+        private readonly LinkedInOrganizationDiscovery $linkedInOrganizations,
     ) {}
 
     public function redirect(Request $request, string $platform): Response
@@ -40,7 +44,7 @@ class OAuthConnectionController extends Controller
         return $this->driver($resolved)->setScopes($this->scopesFor($resolved))->redirect();
     }
 
-    public function callback(Request $request, string $platform): RedirectResponse
+    public function callback(Request $request, string $platform): RedirectResponse|InertiaResponse
     {
         $resolved = $this->resolveOAuthPlatform($platform);
 
@@ -93,14 +97,16 @@ class OAuthConnectionController extends Controller
             }
         }
 
+        $linkedInGrantedScopes = [];
+
         if ($resolved === Platform::LinkedIn) {
             // Record whether LinkedIn actually granted the restricted Community
             // Management read scope, so the engagement inbox only polls accounts
             // that can read replies (others 403). `approvedScopes` comes from the
             // token response's `scope` field.
-            $granted = (array) $oauthUser->approvedScopes;
+            $linkedInGrantedScopes = array_values((array) $oauthUser->approvedScopes);
             $data = $data->withCapabilities([
-                'linkedin_engagement' => in_array('r_member_social_feed', $granted, true),
+                'linkedin_engagement' => in_array('r_member_social_feed', $linkedInGrantedScopes, true),
             ]);
         }
 
@@ -122,10 +128,66 @@ class OAuthConnectionController extends Controller
             $data = $data->withLongLivedToken($long['token'], $long['expiresAt']);
         }
 
+        if ($resolved === Platform::LinkedIn && $this->settings->linkedinCommunityManagementEnabled()) {
+            $picker = $this->renderLinkedInPagePicker($request, $data, $linkedInGrantedScopes);
+
+            if ($picker !== null) {
+                return $picker;
+            }
+        }
+
         $this->connections->store($data, $request->user());
 
         return redirect()->route('accounts.index')
             ->with('success', $this->successMessage($resolved));
+    }
+
+    /**
+     * When the operator has opted into Community Management, offer the member's
+     * administered Pages alongside their personal profile. Returns the picker
+     * response, or null when the member administers no Pages (then the caller
+     * falls through to the normal single personal-account store).
+     *
+     * @param  list<string>  $grantedScopes
+     */
+    private function renderLinkedInPagePicker(Request $request, ConnectedAccountData $data, array $grantedScopes): ?InertiaResponse
+    {
+        $organizations = $this->linkedInOrganizations->administeredOrganizations((string) $data->accessToken);
+
+        if ($organizations === []) {
+            return null;
+        }
+
+        $stashedOrganizations = [];
+        foreach ($organizations as $organization) {
+            $stashedOrganizations[$organization->id] = [
+                'id' => $organization->id,
+                'urn' => $organization->urn,
+                'name' => $organization->name,
+                'vanityName' => $organization->vanityName,
+            ];
+        }
+
+        $person = [
+            'remoteAccountId' => $data->remoteAccountId,
+            'handle' => $data->handle,
+            'displayName' => $data->displayName,
+            'avatarUrl' => $data->avatarUrl,
+        ];
+
+        $request->session()->put('accounts.linkedin.connect', [
+            'person' => $person,
+            'organizations' => $stashedOrganizations,
+            'accessToken' => $data->accessToken,
+            'refreshToken' => $data->refreshToken,
+            'tokenExpiresAt' => $data->tokenExpiresAt?->toIso8601String(),
+            'approvedScopes' => $grantedScopes,
+        ]);
+
+        return Inertia::render('accounts/connect-linkedin', [
+            'person' => $person,
+            'organizations' => array_values($stashedOrganizations),
+        ]);
     }
 
     private function failed(string $message): RedirectResponse
@@ -182,7 +244,14 @@ class OAuthConnectionController extends Controller
         $scopes = $platform->scopes();
 
         if ($platform === Platform::LinkedIn && $this->settings->linkedinCommunityManagementEnabled()) {
-            $scopes = [...$scopes, 'r_member_social_feed', 'w_member_social_feed'];
+            $scopes = [
+                ...$scopes,
+                'r_member_social_feed',
+                'w_member_social_feed',
+                'r_organization_social',
+                'w_organization_social',
+                'rw_organization_admin',
+            ];
         }
 
         return $scopes;

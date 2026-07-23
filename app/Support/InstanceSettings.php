@@ -130,7 +130,7 @@ class InstanceSettings
     }
 
     /**
-     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool, linkedin_community_management_enabled: bool}
+     * @return array{registrations_enabled: bool, workspace_creation_enabled: bool, usage_tracking_enabled: bool, quote_tweets_enabled: bool}
      */
     public function all(): array
     {
@@ -139,7 +139,6 @@ class InstanceSettings
             'workspace_creation_enabled' => $this->workspaceCreationEnabled(),
             'usage_tracking_enabled' => $this->usageTrackingEnabled(),
             'quote_tweets_enabled' => $this->quoteTweetsEnabled(),
-            'linkedin_community_management_enabled' => $this->linkedinCommunityManagementEnabled(),
         ];
     }
 
