@@ -46,7 +46,8 @@ it('lets an owner view the platforms page', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('settings/instance-platforms')
-            ->has('platforms', 7));
+            ->has('platforms', 7)
+            ->where('linkedin_community_management_enabled', false));
 });
 
 it('forbids a non-owner from the platforms page', function () {
@@ -71,8 +72,50 @@ it('persists platform toggles for an owner', function () {
                 'threads' => true,
                 'discord' => true,
             ],
+            'linkedin_community_management_enabled' => false,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->platformAvailable(Platform::X))->toBeFalse();
+});
+
+it('persists the linkedin community management toggle from the platforms page', function () {
+    $owner = User::factory()->create(['instance_role' => InstanceRole::Owner->value]);
+
+    expect(app(InstanceSettings::class)->linkedinCommunityManagementEnabled())->toBeFalse();
+
+    $this->actingAs($owner)
+        ->put(route('instance-settings.updatePlatforms'), [
+            'platforms' => [
+                'x' => true,
+                'bluesky' => true,
+                'linkedin' => true,
+                'facebook' => true,
+                'instagram' => true,
+                'threads' => true,
+                'discord' => true,
+            ],
+            'linkedin_community_management_enabled' => true,
+        ])
+        ->assertRedirect();
+
+    expect(app(InstanceSettings::class)->linkedinCommunityManagementEnabled())->toBeTrue();
+});
+
+it('rejects a platforms update missing the linkedin community management field', function () {
+    $owner = User::factory()->create(['instance_role' => InstanceRole::Owner->value]);
+
+    $this->actingAs($owner)
+        ->put(route('instance-settings.updatePlatforms'), [
+            'platforms' => [
+                'x' => true,
+                'bluesky' => true,
+                'linkedin' => true,
+                'facebook' => true,
+                'instagram' => true,
+                'threads' => true,
+                'discord' => true,
+            ],
+        ])
+        ->assertSessionHasErrors('linkedin_community_management_enabled');
 });

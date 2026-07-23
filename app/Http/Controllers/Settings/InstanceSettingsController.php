@@ -127,12 +127,16 @@ class InstanceSettingsController extends Controller
                 'enabled' => $enabled[$platform->value] ?? true,
                 'configured' => $platform->isConfigured(),
             ], Platform::cases()),
+            'linkedin_community_management_enabled' => $settings->linkedinCommunityManagementEnabled(),
         ]);
     }
 
     public function updatePlatforms(UpdateInstancePlatformsRequest $request, InstanceSettings $settings): RedirectResponse
     {
-        $settings->update(['platforms_enabled' => $request->platformsEnabled()]);
+        $settings->update([
+            'platforms_enabled' => $request->platformsEnabled(),
+            'linkedin_community_management_enabled' => $request->linkedinCommunityManagementEnabled(),
+        ]);
 
         return back()->with('success', 'Platform settings updated.');
     }

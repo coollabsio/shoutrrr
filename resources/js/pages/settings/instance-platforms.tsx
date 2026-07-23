@@ -22,22 +22,39 @@ type PlatformToggle = {
 
 type Props = {
     platforms: PlatformToggle[];
+    linkedin_community_management_enabled: boolean;
 };
 
-export default function InstancePlatforms({ platforms }: Props) {
-    function setEnabled(platform: PlatformName, enabled: boolean) {
-        const next = Object.fromEntries(
-            platforms.map((p) => [
-                p.platform,
-                p.platform === platform ? enabled : p.enabled,
-            ]),
-        );
-
+export default function InstancePlatforms({
+    platforms,
+    linkedin_community_management_enabled,
+}: Props) {
+    function save(overrides: {
+        platforms?: Record<string, boolean>;
+        linkedin_community_management_enabled?: boolean;
+    }) {
         router.put(
             InstanceSettingsController.updatePlatforms().url,
-            { platforms: next },
+            {
+                platforms: Object.fromEntries(
+                    platforms.map((p) => [p.platform, p.enabled]),
+                ),
+                linkedin_community_management_enabled,
+                ...overrides,
+            },
             { preserveScroll: true },
         );
+    }
+
+    function setEnabled(platform: PlatformName, enabled: boolean) {
+        save({
+            platforms: Object.fromEntries(
+                platforms.map((p) => [
+                    p.platform,
+                    p.platform === platform ? enabled : p.enabled,
+                ]),
+            ),
+        });
     }
 
     return (
@@ -86,6 +103,48 @@ export default function InstancePlatforms({ platforms }: Props) {
                                 )}
                             </div>
                         ))}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>LinkedIn</CardTitle>
+                        <CardDescription>
+                            Features that need LinkedIn&apos;s restricted
+                            Community Management API.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-start gap-3">
+                            <Checkbox
+                                id="linkedin_community_management_enabled"
+                                checked={linkedin_community_management_enabled}
+                                onCheckedChange={(checked) =>
+                                    save({
+                                        linkedin_community_management_enabled:
+                                            checked === true,
+                                    })
+                                }
+                            />
+                            <div className="space-y-1">
+                                <Label htmlFor="linkedin_community_management_enabled">
+                                    LinkedIn Pages &amp; engagement inbox
+                                    (Community Management API)
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                    When enabled, connecting LinkedIn requests
+                                    the restricted Community Management scopes
+                                    so members can connect the LinkedIn Pages
+                                    they administer and the engagement inbox can
+                                    read replies. Requires your LinkedIn app to
+                                    be approved for the Community Management API
+                                    — leave off otherwise, or LinkedIn will
+                                    reject the connection. Reconnect existing
+                                    LinkedIn accounts after enabling. Off by
+                                    default.
+                                </p>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             </div>

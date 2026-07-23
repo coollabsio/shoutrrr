@@ -54,6 +54,25 @@ class ConnectedAccountFactory extends Factory
         ]);
     }
 
+    public function linkedin(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'platform' => Platform::LinkedIn->value,
+            'auth_method' => 'oauth',
+            'remote_account_id' => 'person_'.fake()->unique()->bothify('??????????'),
+        ]);
+    }
+
+    public function linkedinPage(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'platform' => Platform::LinkedIn->value,
+            'auth_method' => 'oauth',
+            'remote_account_id' => (string) fake()->unique()->numerify('#######'),
+            'capabilities' => ['linkedin_account_type' => 'organization', 'linkedin_engagement' => true],
+        ]);
+    }
+
     public function needsAttention(): static
     {
         return $this->state(fn (array $attributes): array => [

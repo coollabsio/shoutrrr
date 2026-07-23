@@ -22,13 +22,21 @@ class UpdateInstancePlatformsRequest extends FormRequest
      */
     public function rules(): array
     {
-        $rules = ['platforms' => ['required', 'array']];
+        $rules = [
+            'platforms' => ['required', 'array'],
+            'linkedin_community_management_enabled' => ['required', 'boolean'],
+        ];
 
         foreach (Platform::cases() as $platform) {
             $rules["platforms.{$platform->value}"] = ['required', 'boolean'];
         }
 
         return $rules;
+    }
+
+    public function linkedinCommunityManagementEnabled(): bool
+    {
+        return (bool) $this->validated('linkedin_community_management_enabled');
     }
 
     /**

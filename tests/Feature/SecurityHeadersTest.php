@@ -28,10 +28,10 @@ test('responses carry a nonce-based content security policy', function () {
         ->and($csp)->toContain("'strict-dynamic'");
 });
 
-test('forms may redirect to any https service', function () {
+test('forms may redirect to https services and the cursor mcp oauth loopback', function () {
     $csp = $this->get('/login')->headers->get('Content-Security-Policy');
 
-    expect($csp)->toContain("form-action 'self' https:;");
+    expect($csp)->toContain("form-action 'self' https: http://localhost:8787;");
 });
 
 test('a local/public-disk deployment keeps connect-src and media-src tight', function () {

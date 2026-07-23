@@ -86,7 +86,7 @@ class LinkedInEngagementConnector implements EngagementConnector
             return $this->mapFetchFailure($response);
         }
 
-        $ownerActor = 'urn:li:person:'.$account->remote_account_id;
+        $ownerActor = $account->linkedInAuthorUrn();
 
         $replies = [];
         foreach ((array) $response->json('elements', []) as $element) {
@@ -139,7 +139,7 @@ class LinkedInEngagementConnector implements EngagementConnector
                 ->withHeaders($this->headers())
                 ->acceptJson()
                 ->post(self::SOCIAL_ACTIONS_URL.'/'.rawurlencode($object).'/comments', [
-                    'actor' => 'urn:li:person:'.$account->remote_account_id,
+                    'actor' => $account->linkedInAuthorUrn(),
                     'object' => $object,
                     'message' => ['text' => $text],
                     'parentComment' => $parent->remote_reply_id,
@@ -166,7 +166,7 @@ class LinkedInEngagementConnector implements EngagementConnector
 
     public function likeReply(ConnectedAccount $account, PostTargetReply $reply, array $credentials): ReplyActionResult
     {
-        $actor = 'urn:li:person:'.$account->remote_account_id;
+        $actor = $account->linkedInAuthorUrn();
 
         try {
             $response = $this->http
@@ -188,7 +188,7 @@ class LinkedInEngagementConnector implements EngagementConnector
 
     public function unlikeReply(ConnectedAccount $account, PostTargetReply $reply, ?string $likeRemoteId, array $credentials): ReplyActionResult
     {
-        $actor = 'urn:li:person:'.$account->remote_account_id;
+        $actor = $account->linkedInAuthorUrn();
 
         try {
             $response = $this->http
@@ -220,7 +220,7 @@ class LinkedInEngagementConnector implements EngagementConnector
                 ->withHeaders($this->headers())
                 ->acceptJson()
                 ->delete(self::SOCIAL_ACTIONS_URL.'/'.rawurlencode($object).'/comments/'.rawurlencode($commentId), [
-                    'actor' => 'urn:li:person:'.$account->remote_account_id,
+                    'actor' => $account->linkedInAuthorUrn(),
                 ]);
         } catch (ConnectionException $e) {
             return ReplyActionResult::failed($e->getMessage());
