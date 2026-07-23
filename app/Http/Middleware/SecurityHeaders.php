@@ -90,7 +90,8 @@ class SecurityHeaders
             "connect-src {$connect}",
             "frame-ancestors 'none'",
             "base-uri 'self'",
-            "form-action 'self' https:",
+            // Chrome applies form-action to Passport's post-consent redirect.
+            "form-action 'self' https: http://localhost:8787",
             "object-src 'none'",
         ];
 
