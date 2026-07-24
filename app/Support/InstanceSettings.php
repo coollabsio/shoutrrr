@@ -89,6 +89,22 @@ class InstanceSettings
         return $this->boolean('engagement_enabled', (bool) config('engagement.enabled'));
     }
 
+    /** Instance-wide messages master switch. Defaults to `messages.enabled` (env) until overridden here. */
+    public function messagesEnabled(): bool
+    {
+        return $this->boolean('messages_enabled', (bool) config('messages.enabled'));
+    }
+
+    /**
+     * Instance-level opt-in that DM OAuth scopes may be requested at
+     * connect/re-auth. Defaults to `messages.direct_messages_enabled` (env)
+     * until overridden here.
+     */
+    public function directMessagesEnabled(): bool
+    {
+        return $this->boolean('direct_messages_enabled', (bool) config('messages.direct_messages_enabled'));
+    }
+
     public function platformAvailable(?Platform $platform = null): bool
     {
         return $this->platformEnabled('platforms_enabled', $platform);
