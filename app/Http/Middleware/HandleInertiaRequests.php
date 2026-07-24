@@ -132,6 +132,7 @@ class HandleInertiaRequests extends Middleware
                 'max_text_length' => $account->maxTextLength(),
                 'max_video_duration_seconds' => $account->maxVideoDurationSeconds(),
                 'x_premium' => $account->hasXPremium(),
+                'auto_repost_enabled' => $account->autoRepostEnabled(),
             ])->values()->all();
 
         $sets = AccountSet::query()

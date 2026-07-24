@@ -7,6 +7,7 @@ namespace App\Http\Controllers\ConnectedAccounts;
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ConnectedAccount\UpdateAutoRepostRequest;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\BlueskyConnector;
@@ -66,6 +67,7 @@ class ConnectedAccountController extends Controller
                 'is_default' => $account->id === $defaultAccountId,
                 'disabled' => $account->isDisabled(),
                 'pds_url' => $this->customPdsUrl($account),
+                'auto_repost_enabled' => $account->autoRepostEnabled(),
             ])
             ->values()
             ->all();
@@ -219,6 +221,36 @@ class ConnectedAccountController extends Controller
         return redirect()->route('accounts.index')->with('success', $message);
     }
 
+    public function autoRepost(UpdateAutoRepostRequest $request, ConnectedAccount $account): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        // Only meaningful on platforms with a native repost API.
+        $enabled = $account->platform->supportsRepost() && (bool) $validated['enabled'];
+
+        $updates = array_filter([
+            'enabled' => $enabled,
+            'min_percentile' => isset($validated['min_percentile']) ? (float) $validated['min_percentile'] : null,
+        ], fn ($value): bool => $value !== null);
+
+        // Read-modify-write at both levels: never overwrite the whole capabilities
+        // array, and never clobber a previously stored min_percentile when a
+        // request (e.g. a disable toggle) omits it. Serialize against concurrent
+        // capability writers (e.g. an X tier refresh) by locking the row for the
+        // read-modify-write so one save can't clobber the other's JSON column.
+        DB::transaction(function () use ($account, $updates): void {
+            $locked = ConnectedAccount::query()->lockForUpdate()->findOrFail($account->id);
+
+            $autoRepost = [...($locked->capabilities['auto_repost'] ?? []), ...$updates];
+
+            $locked->forceFill([
+                'capabilities' => [...($locked->capabilities ?? []), 'auto_repost' => $autoRepost],
+            ])->save();
+        });
+
+        return redirect()->route('accounts.index')->with('success', 'Auto-repost updated.');
+    }
+
     public function refreshXAccountTier(Request $request, ConnectedAccount $account): RedirectResponse
     {
         $request->user()->can('update', $account) ?: abort(403);
@@ -246,16 +278,27 @@ class ConnectedAccountController extends Controller
             return back()->with('error', "We couldn't refresh {$account->handle}'s X account tier. Your existing limit was kept.");
         }
 
-        $account->forceFill([
-            'capabilities' => array_replace($account->capabilities ?? [], $capabilities),
-            // A successful authenticated X lookup proves the stored access token
-            // is usable. Recover an account that a previous refresh failure left
-            // blocked, otherwise publishing would fail before it can use that
-            // still-valid token.
-            'status' => ConnectedAccountStatus::Active->value,
-            'refresh_failed_at' => null,
-            'refresh_failure_reason' => null,
-        ])->save();
+        // Lock the row for the capabilities read-modify-write so a concurrent
+        // auto-repost toggle (which writes the same JSON column) can't clobber
+        // the freshly-fetched tier, or vice versa.
+        DB::transaction(function () use ($account, $capabilities): void {
+            $locked = ConnectedAccount::query()->lockForUpdate()->findOrFail($account->id);
+
+            $locked->forceFill([
+                'capabilities' => array_replace($locked->capabilities ?? [], $capabilities),
+                // A successful authenticated X lookup proves the stored access token
+                // is usable. Recover an account that a previous refresh failure left
+                // blocked, otherwise publishing would fail before it can use that
+                // still-valid token.
+                'status' => ConnectedAccountStatus::Active->value,
+                'refresh_failed_at' => null,
+                'refresh_failure_reason' => null,
+            ])->save();
+        });
+
+        // The write landed on the locked instance; refresh so the message reads
+        // the newly-stored tier rather than the pre-refresh capabilities.
+        $account->refresh();
 
         return back()->with(
             'success',

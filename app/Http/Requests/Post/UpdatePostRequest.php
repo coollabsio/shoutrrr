@@ -49,6 +49,7 @@ class UpdatePostRequest extends FormRequest
             'targets.*.content_override.media_ids.*' => ['string'],
             'media_ids' => ['array'],
             'media_ids.*' => ['string'],
+            'auto_repost' => ['sometimes', 'nullable', 'boolean'],
             'expected_updated_at' => ['nullable', 'string'],
         ];
     }

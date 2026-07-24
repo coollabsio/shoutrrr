@@ -30,6 +30,7 @@ test('shell props expose accounts, sets, and limits on every page', function () 
             ->has('shell.accounts', 1)
             ->where('shell.accounts.0.status', 'needs_attention')
             ->where('shell.accounts.0.max_video_duration_seconds', 140)
+            ->where('shell.accounts.0.auto_repost_enabled', false)
             ->has('shell.sets', 1)
             ->has('shell.limits')
         );

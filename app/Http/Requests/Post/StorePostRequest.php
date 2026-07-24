@@ -37,6 +37,7 @@ class StorePostRequest extends FormRequest
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
             'destination.ids' => ['array', 'required_if:destination.kind,accounts'],
             'destination.ids.*' => ['string'],
+            'auto_repost' => ['sometimes', 'nullable', 'boolean'],
         ];
     }
 }

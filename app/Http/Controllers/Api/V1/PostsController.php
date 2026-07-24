@@ -71,6 +71,7 @@ class PostsController extends Controller
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
+            'auto_repost' => ['sometimes', 'nullable', 'boolean'],
         ]);
 
         /** @var User $user */
@@ -86,6 +87,7 @@ class PostsController extends Controller
             $validated['destination'],
             $segments,
             $validated['mentions'] ?? [],
+            $validated['auto_repost'] ?? null,
         );
 
         return response()->json(['post' => PostView::make($post->fresh(['targets.account', 'media']))], 201);
@@ -120,6 +122,7 @@ class PostsController extends Controller
             'targets.*.content_override.media_ids.*' => ['string'],
             'media_ids' => ['array'],
             'media_ids.*' => ['string'],
+            'auto_repost' => ['sometimes', 'nullable', 'boolean'],
             'expected_updated_at' => ['nullable', 'string'],
         ]);
 

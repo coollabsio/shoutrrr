@@ -34,6 +34,7 @@ function hydrated(): ReturnType<typeof composerReducer> {
         published_at: null,
         updated_at: '2026-06-12T10:00:00+00:00',
         scheduled_at: null,
+        auto_repost: null,
         destination: { kind: 'all', id: null },
         targets: [
             {
@@ -204,6 +205,21 @@ describe('composerReducer', () => {
         expect(state.saveState).toBe('dirty');
     });
 
+    it('stores the tri-state auto-repost override and marks dirty', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'setAutoRepost',
+            value: true,
+        });
+        expect(state.autoRepost).toBe(true);
+        expect(state.saveState).toBe('dirty');
+
+        state = composerReducer(state, { type: 'setAutoRepost', value: false });
+        expect(state.autoRepost).toBe(false);
+
+        state = composerReducer(state, { type: 'setAutoRepost', value: null });
+        expect(state.autoRepost).toBeNull();
+    });
+
     it('transitions through a successful save', () => {
         let state = composerReducer(hydrated(), {
             type: 'updateSegments',
@@ -220,6 +236,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T11:00:00+00:00',
             scheduled_at: null,
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],
@@ -246,6 +263,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T11:30:00+00:00',
             scheduled_at: null,
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],
@@ -398,6 +416,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T12:00:00+00:00',
             scheduled_at: null,
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],
@@ -430,6 +449,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T13:00:00+00:00',
             scheduled_at: '2026-06-20T09:00:00+00:00',
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],
@@ -452,6 +472,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T10:00:00+00:00',
             scheduled_at: null,
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],
@@ -476,6 +497,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T13:00:00+00:00',
             scheduled_at: null,
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],
@@ -499,6 +521,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T14:00:00+00:00',
             scheduled_at: null,
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],
@@ -525,6 +548,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T15:00:00+00:00',
             scheduled_at: null,
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],
@@ -548,6 +572,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T15:00:00+00:00',
             scheduled_at: null,
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],
@@ -639,6 +664,7 @@ describe('composerReducer', () => {
             published_at: null,
             updated_at: '2026-06-12T12:00:00+00:00',
             scheduled_at: null,
+            auto_repost: null,
             destination: { kind: 'all', id: null },
             targets: [],
             media: [],

@@ -2,10 +2,13 @@ import { Image as ImageIcon, Shuffle, Smile, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 
+import type { BoostValue } from '@/components/compose/boost-popover';
+import { BoostPopover } from '@/components/compose/boost-popover';
 import { EmojiPopover } from '@/components/compose/emoji-popover';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { cn } from '@/lib/utils';
 import type {
+    Account,
     MediaView,
     PendingUpload,
     PlatformName,
@@ -45,6 +48,15 @@ type Props = {
     onImageClick?: (mediaId: string) => void;
     /** Click a video chip's Edit button to open the video editor. */
     onVideoClick?: (mediaId: string) => void;
+    /**
+     * Per-post Auto-boost control; absent hides the button (read-only, or no
+     * selected account is on a repost-capable platform).
+     */
+    boost?: {
+        value: BoostValue;
+        onChange: (value: BoostValue) => void;
+        accounts: Account[];
+    };
     /** Insert a chosen emoji at the editor caret. */
     onInsertEmoji: (emoji: string) => void;
     /** Recently-used emoji, newest first. */
@@ -74,6 +86,7 @@ export function ComposerToolbar({
     cancelPending,
     onImageClick,
     onVideoClick,
+    boost,
     onInsertEmoji,
     emojiRecents,
     emojiSkinTone,
@@ -121,6 +134,31 @@ export function ComposerToolbar({
             }}
             className="flex flex-wrap items-center gap-1.5 border-t border-border bg-muted/50 px-3 pt-2 pb-2.5 sm:px-[14px]"
         >
+            {!readOnly && (
+                <EmojiPopover
+                    recents={emojiRecents}
+                    skinTone={emojiSkinTone}
+                    onSkinToneChange={onEmojiSkinToneChange}
+                    onSelect={onInsertEmoji}
+                    align="start"
+                    trigger={(open) => (
+                        <button
+                            type="button"
+                            title="Emoji"
+                            data-active={open}
+                            className={cn(
+                                'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
+                                'hover:border-border hover:bg-background hover:text-foreground',
+                                'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
+                            )}
+                        />
+                    )}
+                >
+                    <Smile className="size-3.5" aria-hidden="true" />
+                    <span>Emoji</span>
+                </EmojiPopover>
+            )}
+
             {!readOnly && (
                 <>
                     <input
@@ -220,28 +258,12 @@ export function ComposerToolbar({
                 </>
             )}
 
-            {!readOnly && (
-                <EmojiPopover
-                    recents={emojiRecents}
-                    skinTone={emojiSkinTone}
-                    onSkinToneChange={onEmojiSkinToneChange}
-                    onSelect={onInsertEmoji}
-                    trigger={(open) => (
-                        <button
-                            type="button"
-                            title="Emoji"
-                            data-active={open}
-                            className={cn(
-                                'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
-                                'hover:border-border hover:bg-background hover:text-foreground',
-                                'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
-                            )}
-                        />
-                    )}
-                >
-                    <Smile className="size-3.5" aria-hidden="true" />
-                    <span>Emoji</span>
-                </EmojiPopover>
+            {!readOnly && boost !== undefined && (
+                <BoostPopover
+                    value={boost.value}
+                    onChange={boost.onChange}
+                    accounts={boost.accounts}
+                />
             )}
         </div>
     );

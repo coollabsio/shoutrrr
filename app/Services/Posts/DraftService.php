@@ -37,9 +37,9 @@ class DraftService
      * @param  list<string>  $segments
      * @param  list<array{id?: mixed, label?: mixed, handles?: array<string, mixed>}>  $mentions
      */
-    public function createDraft(string $workspaceId, User $author, array $destination, array $segments, array $mentions = []): Post
+    public function createDraft(string $workspaceId, User $author, array $destination, array $segments, array $mentions = [], ?bool $autoRepost = null): Post
     {
-        return DB::transaction(function () use ($workspaceId, $author, $destination, $segments, $mentions): Post {
+        return DB::transaction(function () use ($workspaceId, $author, $destination, $segments, $mentions, $autoRepost): Post {
             $post = Post::create([
                 'workspace_id' => $workspaceId,
                 'account_set_id' => $this->scopedAccountSetId($workspaceId, $destination),
@@ -48,6 +48,7 @@ class DraftService
                 'base_text' => implode("\n", $segments),
                 'mentions' => $this->normalizeMentions($mentions),
                 'status' => PostStatus::Draft->value,
+                'auto_repost' => $autoRepost,
             ]);
 
             $accountIds = $this->resolveDestinationAccountIds($workspaceId, $destination);
@@ -243,12 +244,19 @@ class DraftService
                 }
             }
 
-            $post->forceFill([
+            $attributes = [
                 'segments' => $data->segments,
                 'base_text' => implode("\n", $data->segments),
                 'mentions' => $this->normalizeMentions($data->mentions),
                 'account_set_id' => $this->scopedAccountSetId($post->workspace_id, $destination),
-            ])->save();
+            ];
+            // Only overwrite the per-post boost override when the caller sent it;
+            // a partial update that omits `auto_repost` must not reset it to null.
+            if ($data->autoRepostProvided) {
+                $attributes['auto_repost'] = $data->autoRepost;
+            }
+
+            $post->forceFill($attributes)->save();
 
             $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount);
             $this->attachMedia($post, $data->mediaIds);

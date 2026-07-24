@@ -47,6 +47,19 @@ test('POST /posts lazily creates a draft and returns its view as JSON', function
     expect(Post::withoutGlobalScopes()->count())->toBe(1);
 });
 
+test('POST /posts persists the auto_repost override sent on create', function () {
+    [$user, $workspace, $accounts] = actingMember(1);
+
+    test()->postJson('/posts', [
+        'base_text' => 'boosted from the first save',
+        'segments' => ['boosted from the first save'],
+        'destination' => ['kind' => 'all'],
+        'auto_repost' => true,
+    ])->assertCreated()->assertJsonPath('post.auto_repost', true);
+
+    expect(Post::withoutGlobalScopes()->first()->auto_repost)->toBeTrue();
+});
+
 test('POST /posts accepts a custom accounts destination', function () {
     [$user, $workspace, $accounts] = actingMember(3);
 
@@ -152,7 +165,10 @@ test('a user cannot autosave a post in another workspace', function () {
 
 test('GET /posts/{post} renders the composer page for an existing post', function () {
     [$user, $workspace, $accounts] = actingMember(1);
-    $accounts[0]->forceFill(['status' => 'needs_attention'])->save();
+    $accounts[0]->forceFill([
+        'status' => 'needs_attention',
+        'capabilities' => ['auto_repost' => ['enabled' => true]],
+    ])->save();
     $post = Post::factory()->create(['workspace_id' => $workspace->id, 'base_text' => 'hello']);
 
     test()->get("/posts/{$post->id}")
@@ -161,7 +177,8 @@ test('GET /posts/{post} renders the composer page for an existing post', functio
             ->component('compose/index')
             ->where('post.id', $post->id)
             ->where('post.base_text', 'hello')
-            ->where('accounts.0.status', 'needs_attention'));
+            ->where('accounts.0.status', 'needs_attention')
+            ->where('accounts.0.auto_repost_enabled', true));
 });
 
 test('GET /posts/{post} includes saved workspace mentions', function () {
