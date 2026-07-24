@@ -30,6 +30,22 @@ trait ReportsReplyFetch
         return $seconds;
     }
 
+    /**
+     * Sibling of parkForRateLimit() for the messages/DM poller, which has its own
+     * `messaging_rate_limited_until` column so a DM rate-limit doesn't also stall
+     * engagement polling on the same account (and vice versa).
+     */
+    protected function parkForMessageRateLimit(ConnectedAccount $account, ?int $retryAfterSeconds): int
+    {
+        $seconds = $retryAfterSeconds ?? (int) config('messages.default_rate_limit_backoff', 900);
+
+        $account->forceFill([
+            'messaging_rate_limited_until' => Date::now()->addSeconds($seconds),
+        ])->saveQuietly();
+
+        return $seconds;
+    }
+
     protected function logFetchOutcome(
         string $platform,
         string $accountId,
