@@ -29,6 +29,13 @@ final class DraftData
         public readonly array $targetsByAccount,
         public readonly ?string $expectedUpdatedAt,
         public readonly ?bool $autoRepost = null,
+        /**
+         * Whether the payload carried an `auto_repost` key at all. Distinguishes
+         * "set the override to null" from "leave the stored override untouched"
+         * so partial updates (MCP / API edits that never mention boosting) don't
+         * silently reset a user's per-post choice.
+         */
+        public readonly bool $autoRepostProvided = false,
     ) {}
 
     /**
@@ -63,6 +70,7 @@ final class DraftData
             targetsByAccount: $targetsByAccount,
             expectedUpdatedAt: $payload['expected_updated_at'] ?? null,
             autoRepost: $payload['auto_repost'] ?? null,
+            autoRepostProvided: array_key_exists('auto_repost', $payload),
         );
     }
 

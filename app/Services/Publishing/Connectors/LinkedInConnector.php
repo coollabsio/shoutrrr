@@ -172,11 +172,15 @@ class LinkedInConnector implements PublishConnector, RepostConnector
             'reshareContext' => ['parent' => (string) $context->target->remote_id],
         ];
 
-        $response = $this->http
-            ->withToken($token)
-            ->withHeaders(['LinkedIn-Version' => $this->apiVersion(), 'X-Restli-Protocol-Version' => '2.0.0'])
-            ->acceptJson()
-            ->post(self::POSTS_URL, $body);
+        try {
+            $response = $this->http
+                ->withToken($token)
+                ->withHeaders(['LinkedIn-Version' => $this->apiVersion(), 'X-Restli-Protocol-Version' => '2.0.0'])
+                ->acceptJson()
+                ->post(self::POSTS_URL, $body);
+        } catch (ConnectionException $e) {
+            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+        }
 
         $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
 

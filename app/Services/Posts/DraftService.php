@@ -244,13 +244,19 @@ class DraftService
                 }
             }
 
-            $post->forceFill([
+            $attributes = [
                 'segments' => $data->segments,
                 'base_text' => implode("\n", $data->segments),
                 'mentions' => $this->normalizeMentions($data->mentions),
                 'account_set_id' => $this->scopedAccountSetId($post->workspace_id, $destination),
-                'auto_repost' => $data->autoRepost,
-            ])->save();
+            ];
+            // Only overwrite the per-post boost override when the caller sent it;
+            // a partial update that omits `auto_repost` must not reset it to null.
+            if ($data->autoRepostProvided) {
+                $attributes['auto_repost'] = $data->autoRepost;
+            }
+
+            $post->forceFill($attributes)->save();
 
             $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount);
             $this->attachMedia($post, $data->mediaIds);

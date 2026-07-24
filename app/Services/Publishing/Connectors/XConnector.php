@@ -158,10 +158,14 @@ class XConnector implements PublishConnector, RepostConnector
         $userId = $context->account->remote_account_id;
         $tweetId = (string) $context->target->remote_id;
 
-        $response = $this->http
-            ->withToken($token)
-            ->acceptJson()
-            ->post("https://api.twitter.com/2/users/{$userId}/retweets", ['tweet_id' => $tweetId]);
+        try {
+            $response = $this->http
+                ->withToken($token)
+                ->acceptJson()
+                ->post("https://api.twitter.com/2/users/{$userId}/retweets", ['tweet_id' => $tweetId]);
+        } catch (ConnectionException $e) {
+            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+        }
 
         $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
 

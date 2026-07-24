@@ -178,17 +178,23 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
             $cid = $this->recordCid($pds, $jwt, $did, $subjectUri, $session);
         } catch (BlueskyRequestFailed) {
             return PublishResult::failure(ErrorKind::ServerError, 'Could not resolve the Bluesky post to repost.');
+        } catch (ConnectionException $e) {
+            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
         }
 
-        $response = $this->postJsonAuthorized($pds.'/xrpc/com.atproto.repo.createRecord', $jwt, $session, [
-            'repo' => $did,
-            'collection' => 'app.bsky.feed.repost',
-            'record' => [
-                '$type' => 'app.bsky.feed.repost',
-                'subject' => ['uri' => $subjectUri, 'cid' => $cid],
-                'createdAt' => Date::now()->toIso8601String(),
-            ],
-        ]);
+        try {
+            $response = $this->postJsonAuthorized($pds.'/xrpc/com.atproto.repo.createRecord', $jwt, $session, [
+                'repo' => $did,
+                'collection' => 'app.bsky.feed.repost',
+                'record' => [
+                    '$type' => 'app.bsky.feed.repost',
+                    'subject' => ['uri' => $subjectUri, 'cid' => $cid],
+                    'createdAt' => Date::now()->toIso8601String(),
+                ],
+            ]);
+        } catch (ConnectionException $e) {
+            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+        }
 
         $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);
 
@@ -196,7 +202,15 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
             return $this->mapFailure($response);
         }
 
-        return PublishResult::success([(string) $response->json('uri')]);
+        // A repost with no record uri means nothing was created — treat it as a
+        // failure so the target isn't marked reposted without a remote id.
+        $uri = (string) $response->json('uri');
+
+        if ($uri === '') {
+            return PublishResult::failure(ErrorKind::ServerError, 'Bluesky returned no repost id.');
+        }
+
+        return PublishResult::success([$uri]);
     }
 
     public function delete(PostTarget $target, array $credentials): void

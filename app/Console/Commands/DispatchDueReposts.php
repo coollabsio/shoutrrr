@@ -37,6 +37,14 @@ class DispatchDueReposts extends Command
         // Coarse SQL prefilter; RepostEligibility::shouldRepost() makes the precise
         // per-target decision (timing + performance gate + per-post override) in PHP.
         PostTarget::query()
+            // Preload the relations RepostEligibility reads so each candidate
+            // doesn't re-query its account and post. The scheduler runs outside
+            // any workspace context, so drop the workspace scope explicitly to
+            // match the eligibility check's scope-free lookups.
+            ->with([
+                'account' => fn ($query) => $query->withoutGlobalScopes(),
+                'post' => fn ($query) => $query->withoutGlobalScopes(),
+            ])
             ->where('status', PostTargetStatus::Published->value)
             ->whereNotNull('remote_id')
             ->whereNotNull('posted_at')

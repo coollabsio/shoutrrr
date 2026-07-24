@@ -28,3 +28,19 @@ test('LinkedIn repost posts a reshare referencing the parent urn', function (): 
         && $request['author'] === 'urn:li:person:PERSON1'
         && $request['reshareContext']['parent'] === 'urn:li:share:111');
 });
+
+test('LinkedIn repost maps a connection failure to a retryable network result', function (): void {
+    Http::fake(fn () => throw new Illuminate\Http\Client\ConnectionException('offline'));
+
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::LinkedIn, 'remote_account_id' => 'PERSON1']);
+    $target = PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::LinkedIn,
+        'remote_id' => 'urn:li:share:111',
+    ]);
+
+    $result = app(LinkedInConnector::class)->repost(new RepostContext($target, $account, ['access_token' => 'tok']));
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind?->isRetryable())->toBeTrue();
+});

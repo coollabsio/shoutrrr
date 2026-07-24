@@ -47,6 +47,19 @@ test('POST /posts lazily creates a draft and returns its view as JSON', function
     expect(Post::withoutGlobalScopes()->count())->toBe(1);
 });
 
+test('POST /posts persists the auto_repost override sent on create', function () {
+    [$user, $workspace, $accounts] = actingMember(1);
+
+    test()->postJson('/posts', [
+        'base_text' => 'boosted from the first save',
+        'segments' => ['boosted from the first save'],
+        'destination' => ['kind' => 'all'],
+        'auto_repost' => true,
+    ])->assertCreated()->assertJsonPath('post.auto_repost', true);
+
+    expect(Post::withoutGlobalScopes()->first()->auto_repost)->toBeTrue();
+});
+
 test('POST /posts accepts a custom accounts destination', function () {
     [$user, $workspace, $accounts] = actingMember(3);
 
