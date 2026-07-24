@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\CaptureMetrics;
+use App\Console\Commands\DispatchDueMessageFetches;
 use App\Console\Commands\DispatchDuePosts;
 use App\Console\Commands\DispatchDueReplyFetches;
 use App\Console\Commands\DispatchDueReposts;
@@ -29,6 +30,10 @@ if (config('metrics.enabled')) {
 
 if (config('engagement.enabled')) {
     Schedule::command(DispatchDueReplyFetches::class)->everyFifteenMinutes()->withoutOverlapping();
+}
+
+if (config('messages.enabled')) {
+    Schedule::command(DispatchDueMessageFetches::class)->everyFifteenMinutes()->withoutOverlapping();
 }
 
 if (config('repost.enabled')) {
