@@ -51,6 +51,7 @@ class UpdatePostTool extends WorkspaceTool
             'targets.*.content_override.media_ids.*' => ['string'],
             'media_ids' => ['array'],
             'media_ids.*' => ['string'],
+            'auto_repost' => ['sometimes', 'nullable', 'boolean'],
             'expected_updated_at' => ['nullable', 'string'],
         ]);
 
@@ -82,6 +83,7 @@ class UpdatePostTool extends WorkspaceTool
                 'id' => $schema->string(),
             ])->description('Where to post.')->required(),
             'media_ids' => $schema->array()->description('Ordered media ids to attach (from add_post_media).'),
+            'auto_repost' => $schema->boolean()->description('Per-post auto-boost override: true always reshares, false never does, omit to leave the current setting unchanged (null = each account\'s automatic performance gate).'),
             'expected_updated_at' => $schema->string()->description('The post updated_at you last saw, for conflict detection.'),
         ];
     }

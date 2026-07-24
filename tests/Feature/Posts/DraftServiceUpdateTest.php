@@ -358,3 +358,33 @@ test('updateDraft routes an org reference typed into the LinkedIn name field to 
         ->and($updated->targets->firstWhere('connected_account_id', $linkedin->id)->sections)
         ->toBe(['Hi @[Coolify](urn:li:organization:12345)']);
 });
+
+test('updateDraft sets the auto_repost override when the payload carries it', function () {
+    [$user, $workspace, $accounts] = draftSetup(1);
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['hi'], [], true);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'hi',
+        'destination' => ['kind' => 'all'],
+        'auto_repost' => false,
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->auto_repost)->toBeFalse();
+});
+
+test('updateDraft leaves a stored auto_repost override untouched when the payload omits it', function () {
+    [$user, $workspace, $accounts] = draftSetup(1);
+    // Force-boost this post, then edit its text via a payload that never mentions
+    // auto_repost (as MCP / the public API do) — the choice must survive.
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['hi'], [], true);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'edited body',
+        'destination' => ['kind' => 'all'],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->auto_repost)->toBeTrue()
+        ->and($updated->base_text)->toBe('edited body');
+});

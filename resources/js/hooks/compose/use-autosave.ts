@@ -71,6 +71,7 @@ export function useAutosave({
             segments: state.segments,
             mentions: state.mentions,
             destination: state.destination,
+            auto_repost: state.autoRepost,
         }));
         const created = await http.post(PostController.store().url, {
             onNetworkError: () => dispatch({ type: 'saveFailedOffline' }),
@@ -251,6 +252,7 @@ export function useAutosave({
         state.autoSplitByAccount,
         state.formatByAccount,
         state.media,
+        state.autoRepost,
     ]);
 
     // Keep the version ref in step with externally-driven baseline changes

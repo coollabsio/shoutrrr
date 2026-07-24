@@ -43,6 +43,7 @@ function post(targets: TargetView[]): PostView {
         published_at: null,
         updated_at: '2026-06-12T10:00:00+00:00',
         scheduled_at: null,
+        auto_repost: null,
         destination: { kind: 'all', id: null },
         targets,
         media: [],

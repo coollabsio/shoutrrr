@@ -75,6 +75,7 @@ function publishingPost(): PostView {
         published_at: '2026-07-16T10:00:00+00:00',
         updated_at: '2026-07-16T10:00:00+00:00',
         scheduled_at: null,
+        auto_repost: null,
         destination: { kind: 'all', id: null },
         targets: [
             target('published', 'published'),
