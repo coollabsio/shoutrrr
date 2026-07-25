@@ -7,6 +7,7 @@ use App\Enums\ReplyStatus;
 use App\Enums\SocialProvider;
 use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
+use App\Models\Conversation;
 use App\Models\PostTargetReply;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
@@ -84,6 +85,7 @@ class HandleInertiaRequests extends Middleware
                 'billing' => (bool) config('subscriptions.enabled'),
                 'engagement' => app(InstanceSettings::class)->engagementEnabled(),
                 'feedback' => FeedbackConfig::enabled(),
+                'messages' => app(InstanceSettings::class)->messagesEnabled(),
             ],
             'instance' => [
                 'isOwner' => $request->user()?->isInstanceOwner() ?? false,
@@ -100,12 +102,12 @@ class HandleInertiaRequests extends Middleware
      * Shell data needed by the sidebar, composer, and command palette on nearly
      * every page. Kept lightweight so it is cheap to resolve per request.
      *
-     * @return array{accounts: array<int, array<string, mixed>>, sets: array<int, array<string, mixed>>, limits: mixed, unreadReplies: int}
+     * @return array{accounts: array<int, array<string, mixed>>, sets: array<int, array<string, mixed>>, limits: mixed, unreadReplies: int, unreadMessages: int}
      */
     private function shellData(?User $user): array
     {
         if (! $user || ! $user->current_workspace_id) {
-            return ['accounts' => [], 'sets' => [], 'limits' => Platform::allLimits(), 'unreadReplies' => 0];
+            return ['accounts' => [], 'sets' => [], 'limits' => Platform::allLimits(), 'unreadReplies' => 0, 'unreadMessages' => 0];
         }
 
         // Scope explicitly to the current workspace. The HasWorkspaceScope global
@@ -156,6 +158,12 @@ class HandleInertiaRequests extends Middleware
                     ->where('status', '!=', ReplyStatus::Archived->value)
                     ->whereNull('read_at')
                     ->count()
+                : 0,
+            'unreadMessages' => $settings->messagesEnabled()
+                ? (int) Conversation::query()
+                    ->where('workspace_id', $workspaceId)
+                    ->whereNull('archived_at')
+                    ->sum('unread_count')
                 : 0,
         ];
     }

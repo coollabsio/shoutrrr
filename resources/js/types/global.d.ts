@@ -24,6 +24,7 @@ declare module '@inertiajs/core' {
                 sets: AccountSet[];
                 limits: PlatformLimits[];
                 unreadReplies: number;
+                unreadMessages: number;
             };
             notifications: NotificationsData;
             features?: {
@@ -31,6 +32,7 @@ declare module '@inertiajs/core' {
                 billing?: boolean;
                 engagement?: boolean;
                 feedback?: boolean;
+                messages?: boolean;
             };
             instance: { isOwner: boolean };
             billing?: {
