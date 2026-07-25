@@ -65,7 +65,9 @@ class InstagramDirectMessageConnector implements DirectMessageConnector
     /** @param array<string, mixed> $convo */
     private function mapConversation(array $convo, string $ourId): FetchedConversation
     {
-        $counterpart = collect($convo['participants']['data'] ?? [])
+        /** @var array<int, array<string, mixed>> $participants */
+        $participants = $convo['participants']['data'] ?? [];
+        $counterpart = collect($participants)
             ->first(fn (array $p): bool => (string) ($p['id'] ?? '') !== $ourId);
 
         $messages = [];

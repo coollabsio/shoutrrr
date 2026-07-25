@@ -102,7 +102,7 @@ class OAuthConnectionController extends Controller
             // app requested, so the Messages inbox only polls/sends through
             // accounts that can reach the DM API (others are silently excluded
             // rather than 403ing at poll time).
-            $granted = array_values((array) ($oauthUser->approvedScopes ?? []));
+            $granted = array_values((array) $oauthUser->approvedScopes);
             $required = $this->directMessageScopeDeltas($resolved);
             $dmGranted = $required !== [] && array_intersect($required, $granted) !== [];
 

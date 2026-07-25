@@ -52,7 +52,10 @@ class BlueskyDirectMessageConnector implements DirectMessageConnector
 
         foreach ($list->json('convos', []) as $convo) {
             $convoId = (string) $convo['id'];
-            $counterpart = collect($convo['members'] ?? [])->first(fn ($m) => ($m['did'] ?? null) !== $ourDid);
+
+            /** @var array<int, array<string, mixed>> $members */
+            $members = $convo['members'] ?? [];
+            $counterpart = collect($members)->first(fn (array $m): bool => ($m['did'] ?? null) !== $ourDid);
 
             $msgResponse = $this->client($session)->get('/xrpc/chat.bsky.convo.getMessages', ['convoId' => $convoId, 'limit' => 50]);
             $this->meter(UsageCategory::ExternalApi, UsageOperation::DM_FETCH, $account, $msgResponse);

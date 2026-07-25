@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Jobs\FetchAccountMessages;
 use App\Models\ConnectedAccount;
@@ -21,6 +22,20 @@ test('dispatches jobs only for consented, non-rate-limited, enabled accounts', f
 
     Queue::assertPushed(FetchAccountMessages::class, 1);
     Queue::assertPushed(FetchAccountMessages::class, fn ($job) => $job->account->is($ok));
+});
+
+test('skips accounts with a broken token that need reattention', function () {
+    Queue::fake();
+
+    ConnectedAccount::factory()->create([
+        'platform' => Platform::X,
+        'capabilities' => ['dm_enabled' => true],
+        'status' => ConnectedAccountStatus::NeedsAttention,
+    ]);
+
+    $this->artisan('messages:dispatch-due')->assertOk();
+
+    Queue::assertNothingPushed();
 });
 
 test('does nothing when messaging disabled', function () {

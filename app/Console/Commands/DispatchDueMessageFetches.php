@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Jobs\FetchAccountMessages;
 use App\Models\ConnectedAccount;
@@ -34,6 +35,7 @@ class DispatchDueMessageFetches extends Command
         ConnectedAccount::withoutGlobalScopes()
             ->whereIn('platform', $supported)
             ->whereNull('disabled_at')
+            ->where('status', ConnectedAccountStatus::Active->value)
             ->where(fn ($q) => $q->whereNull('messaging_rate_limited_until')->orWhere('messaging_rate_limited_until', '<=', $now))
             ->get()
             ->filter(fn (ConnectedAccount $a) => $a->canReceiveDirectMessages())

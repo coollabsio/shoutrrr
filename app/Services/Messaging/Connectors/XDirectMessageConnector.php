@@ -53,7 +53,9 @@ class XDirectMessageConnector implements DirectMessageConnector
             return $this->mapFetchFailure($response);
         }
 
-        $users = collect($response->json('includes.users', []))->keyBy('id');
+        /** @var array<int, array<string, mixed>> $usersData */
+        $usersData = (array) $response->json('includes.users', []);
+        $users = collect($usersData)->keyBy('id');
         $ourId = (string) $account->remote_account_id;
 
         $byConversation = [];
