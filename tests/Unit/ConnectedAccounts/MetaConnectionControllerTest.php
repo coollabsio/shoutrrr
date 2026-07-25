@@ -23,7 +23,9 @@ test('builds facebook account data from a stashed page asset', function () {
         ->and($data->avatarUrl)->toBeNull()
         ->and($data->authMethod)->toBe('oauth')
         ->and($data->accessToken)->toBe('PGT1')
-        ->and($data->tokenExpiresAt)->toBeNull();
+        ->and($data->tokenExpiresAt)->toBeNull()
+        // dm_enabled mirrors the instance opt-in (defaults off in tests).
+        ->and($data->capabilities)->toBe(['dm_enabled' => false]);
 });
 
 test('builds instagram account data from a stashed page asset with a linked ig account', function () {
@@ -44,5 +46,6 @@ test('builds instagram account data from a stashed page asset with a linked ig a
         // IG publishing authenticates with the linked Page's token.
         ->and($data->accessToken)->toBe('PGT1')
         // The IG connector needs the Page id to address the linked Page.
-        ->and($data->capabilities)->toBe(['page_id' => 'PAGE1']);
+        // dm_enabled mirrors the instance opt-in (defaults off in tests).
+        ->and($data->capabilities)->toBe(['page_id' => 'PAGE1', 'dm_enabled' => false]);
 });

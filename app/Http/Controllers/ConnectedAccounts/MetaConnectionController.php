@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\Meta\MetaAssetEnumerator;
+use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -43,6 +44,7 @@ class MetaConnectionController extends Controller
     public function __construct(
         private readonly MetaAssetEnumerator $enumerator,
         private readonly AccountConnectionService $connections,
+        private readonly InstanceSettings $settings,
     ) {}
 
     public function redirect(Request $request): Response
@@ -225,6 +227,15 @@ class MetaConnectionController extends Controller
      */
     public static function buildAccountData(array $stashedAsset, Platform $platform): ConnectedAccountData
     {
+        // `dm_enabled` is driven by the instance opt-in flag rather than a
+        // granted-scope check (contrast `OAuthConnectionController`, which
+        // reads `approvedScopes`): Meta's OAuth token exchange doesn't
+        // reliably echo back the granted scope list, so there is nothing
+        // trustworthy to intersect against here. A real 403 on send/poll is
+        // still mapped to authExpired/unsupported and logged as a runtime
+        // backstop (see the DM connectors), so this stays a safe default.
+        $dmEnabled = app(InstanceSettings::class)->directMessagesEnabled();
+
         if ($platform === Platform::Instagram) {
             return new ConnectedAccountData(
                 platform: Platform::Instagram,
@@ -236,7 +247,7 @@ class MetaConnectionController extends Controller
                 // IG publishing/comments/insights all authenticate with the
                 // linked Page's token — the IG user id is just the target node.
                 accessToken: $stashedAsset['pageAccessToken'],
-                capabilities: ['page_id' => $stashedAsset['pageId']],
+                capabilities: ['page_id' => $stashedAsset['pageId'], 'dm_enabled' => $dmEnabled],
             );
         }
 
@@ -250,13 +261,15 @@ class MetaConnectionController extends Controller
             accessToken: $stashedAsset['pageAccessToken'],
             // Page tokens minted from a long-lived user token don't expire.
             tokenExpiresAt: null,
+            capabilities: ['dm_enabled' => $dmEnabled],
         );
     }
 
     /**
      * The union of the launched Meta platforms' scopes, deduped, so a single
      * Facebook Login only asks for the permissions a launched platform
-     * actually needs.
+     * actually needs. DM scope deltas are appended only when the instance has
+     * opted into Messages DM scopes — mirrors `OAuthConnectionController::scopesFor()`.
      *
      * @return list<string>
      */
@@ -266,9 +279,29 @@ class MetaConnectionController extends Controller
 
         foreach (Platform::availableMetaGraphPlatforms() as $platform) {
             array_push($scopes, ...$platform->scopes());
+
+            if ($platform->supportsDirectMessages() && $this->settings->directMessagesEnabled()) {
+                array_push($scopes, ...$this->directMessageScopeDeltas($platform));
+            }
         }
 
         return array_values(array_unique($scopes));
+    }
+
+    /**
+     * OAuth scopes required to reach a Meta platform's DM API, requested only
+     * when the instance has opted into Messages DM scopes (see `scopes()`).
+     * Mirrors `OAuthConnectionController::directMessageScopeDeltas()`.
+     *
+     * @return list<string>
+     */
+    private function directMessageScopeDeltas(Platform $platform): array
+    {
+        return match ($platform) {
+            Platform::Instagram => ['instagram_business_manage_messages'],
+            Platform::Facebook => ['pages_messaging'],
+            default => [],
+        };
     }
 
     /**

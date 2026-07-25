@@ -65,7 +65,8 @@ test('posting a stashed page selection creates an instagram connected account an
         ->and($account->remote_account_id)->toBe('IG1')
         ->and($account->handle)->toBe('@myig')
         ->and($account->auth_method)->toBe('oauth')
-        ->and($account->capabilities)->toBe(['page_id' => 'PAGE1'])
+        // dm_enabled mirrors the instance opt-in (defaults off in tests).
+        ->and($account->capabilities)->toBe(['page_id' => 'PAGE1', 'dm_enabled' => false])
         ->and($account->secret)->not->toBeNull()
         // IG publishing/comments/insights all authenticate with the linked
         // Page's token, not an IG-specific one.
