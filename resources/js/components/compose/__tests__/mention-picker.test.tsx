@@ -1,14 +1,28 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import {
+import MentionPicker, {
     editSavedMention,
     mentionFilter,
     savedMentionSearchKeywords,
     shouldFocusMentionPickerSearch,
 } from '@/components/compose/mention-picker';
+import type {
+    MentionPlaceholder,
+    WorkspaceMention,
+} from '@/types/compose';
+
+beforeAll(() => {
+    globalThis.ResizeObserver = class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+    };
+    Element.prototype.scrollIntoView = function scrollIntoView() {};
+});
 
 describe('savedMentionSearchKeywords', () => {
     it('includes platform handles without @ prefix', () => {
@@ -88,20 +102,92 @@ describe('saved mention editing', () => {
     });
 
     it('renders a delete action alongside edit when deletion is enabled', () => {
-        const source = readFileSync(
-            resolve(
-                process.cwd(),
-                'resources/js/components/compose/mention-picker.tsx',
-            ),
-            'utf8',
+        const savedMention: WorkspaceMention = {
+            id: 'workspace-mention',
+            name: '@saved',
+            handles: { x: '@saved_x' },
+        };
+        const activeMention: MentionPlaceholder = {
+            id: 'draft',
+            label: '',
+            handles: {},
+        };
+
+        const onApplySavedMention = vi.fn();
+        const onUpdateMention = vi.fn();
+        const onDeleteMention = vi.fn();
+
+        // Render with delete enabled
+        const { rerender, container } = render(
+            <MentionPicker
+                activeMention={activeMention}
+                savedMentions={[savedMention]}
+                activePlatforms={['x']}
+                onApplySavedMention={onApplySavedMention}
+                onUpdateMention={onUpdateMention}
+                onDeleteMention={onDeleteMention}
+            />,
         );
 
-        expect(source).toContain('aria-label={`Delete ${saved.name}`}');
-        expect(source).toContain('onDeleteMention(saved)');
-        // Both actions coexist: the row widens and the edit icon shifts left
-        // to make room for the trash icon.
-        expect(source).toContain('pr-16');
-        expect(source).toContain('right-9');
+        // Delete button should be present
+        const deleteButton = screen.getByRole('button', {
+            name: `Delete ${savedMention.name}`,
+        });
+        expect(deleteButton).toBeInTheDocument();
+
+        // Edit button should also be present
+        const editButton = screen.getByRole('button', {
+            name: `Edit ${savedMention.name}`,
+        });
+        expect(editButton).toBeInTheDocument();
+
+        // Layout: verify the row has wider padding for both buttons
+        const row = container.querySelector('.pr-16');
+        expect(row).toBeInTheDocument();
+
+        // Layout: verify edit button shifted left
+        expect(editButton.className).toContain('right-9');
+
+        // Click delete button
+        deleteButton.click();
+
+        // Should call onDeleteMention with the saved mention
+        expect(onDeleteMention).toHaveBeenCalledTimes(1);
+        expect(onDeleteMention).toHaveBeenCalledWith(savedMention);
+
+        // Should NOT call onApplySavedMention (event isolation)
+        expect(onApplySavedMention).not.toHaveBeenCalled();
+
+        // Click edit button
+        editButton.click();
+
+        // Should call onUpdateMention (edit still works alongside delete)
+        expect(onUpdateMention).toHaveBeenCalledTimes(1);
+        expect(onUpdateMention).toHaveBeenCalledWith(activeMention, {
+            id: 'saved',
+            label: '@saved',
+            handles: { x: '@saved_x' },
+        });
+
+        // Should still NOT call onApplySavedMention (edit event isolation)
+        expect(onApplySavedMention).not.toHaveBeenCalled();
+
+        // Render without delete
+        rerender(
+            <MentionPicker
+                activeMention={activeMention}
+                savedMentions={[savedMention]}
+                activePlatforms={['x']}
+                onApplySavedMention={onApplySavedMention}
+                onUpdateMention={onUpdateMention}
+            />,
+        );
+
+        // Delete button should be absent
+        const noDeleteButton = screen.queryByRole('button', {
+            name: `Delete ${savedMention.name}`,
+        });
+        expect(noDeleteButton).not.toBeInTheDocument();
     });
 });
 
