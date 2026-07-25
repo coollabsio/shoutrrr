@@ -69,8 +69,12 @@ type ReplyMedia = {
     handleAddedFiles: (files: FileList | File[]) => Promise<void>;
 };
 
-function blobToFile(blob: Blob, name: string): File {
-    return new File([blob], name, { type: blob.type || 'image/png' });
+function blobToFile(blob: Blob, baseName: string): File {
+    const type = blob.type || 'image/png';
+    const ext =
+        type === 'image/webp' ? 'webp' : type === 'image/jpeg' ? 'jpg' : 'png';
+
+    return new File([blob], `${baseName}.${ext}`, { type });
 }
 
 /**
@@ -145,10 +149,10 @@ export function useReplyMedia({
         try {
             if (editing.kind === 'batch') {
                 editHttp.transform(() => ({
-                    composed: blobToFile(composed, 'image.png'),
+                    composed: blobToFile(composed, 'image'),
                     source: blobToFile(
                         editing.items[editing.index].file,
-                        'source.png',
+                        'source',
                     ),
                     settings: JSON.stringify(settings),
                     alt_text: altText,
@@ -160,7 +164,7 @@ export function useReplyMedia({
                 onChange([...media, result]);
             } else if (editing.kind === 'reedit') {
                 editHttp.transform(() => ({
-                    composed: blobToFile(composed, 'image.png'),
+                    composed: blobToFile(composed, 'image'),
                     settings: JSON.stringify(settings),
                     alt_text: altText,
                     _method: 'put',
@@ -180,8 +184,8 @@ export function useReplyMedia({
                 // fetch the original blob, upload as new, drop the raw attachment.
                 const rawBlob = await fetch(editing.url).then((r) => r.blob());
                 editHttp.transform(() => ({
-                    composed: blobToFile(composed, 'image.png'),
-                    source: blobToFile(rawBlob, 'source.png'),
+                    composed: blobToFile(composed, 'image'),
+                    source: blobToFile(rawBlob, 'source'),
                     settings: JSON.stringify(settings),
                     alt_text: altText,
                 }));
