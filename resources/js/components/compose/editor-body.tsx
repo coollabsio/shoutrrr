@@ -80,6 +80,7 @@ type EditorBodyProps = {
     ) => void;
     onSaveMention?: (mention: MentionPlaceholder) => Promise<void>;
     saveMentionProcessing?: boolean;
+    onDeleteMention?: (saved: WorkspaceMention) => void | Promise<void>;
     markerState?: {
         platform: PlatformName;
         autoSplit: boolean;
@@ -152,6 +153,7 @@ function EditorBodyInner(
         onApplySavedMention,
         onSaveMention,
         saveMentionProcessing = false,
+        onDeleteMention,
         editable = true,
         emojiSkinTone = 'none',
         onEmojiInsert,
@@ -534,6 +536,7 @@ function EditorBodyInner(
                             onUpdateMention={updateMention}
                             onSaveMention={onSaveMention}
                             saveMentionProcessing={saveMentionProcessing}
+                            onDeleteMention={onDeleteMention}
                             onMentionComplete={completeMention}
                             onRemoveMention={removeActiveMention}
                         />

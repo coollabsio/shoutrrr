@@ -4,6 +4,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
+import { useConfirm } from '@/components/common/confirm-dialog';
 import { useAutosave } from '@/hooks/compose/use-autosave';
 import { useEmojiPreferences } from '@/hooks/compose/use-emoji-preferences';
 import { useImageEditor } from '@/hooks/compose/use-image-editor';
@@ -176,10 +177,12 @@ export default function Composer({
     onSaved,
 }: ComposerProps) {
     const schedulingTz = useSchedulingTimezone();
+    const confirm = useConfirm();
     const saveMentionHttp = useHttp<
         Record<string, never>,
         { mention: WorkspaceMention }
     >({});
+    const deleteMentionHttp = useHttp<Record<string, never>, unknown>({});
     const [savedMentions, setSavedMentions] = useState(initialSavedMentions);
     useEffect(() => {
         setSavedMentions(initialSavedMentions);
@@ -710,6 +713,28 @@ export default function Composer({
         });
     }
 
+    async function deleteMention(saved: WorkspaceMention): Promise<void> {
+        const confirmed = await confirm({
+            title: `Delete ${saved.name}?`,
+            description:
+                'This removes the saved mention from your workspace library. Mentions already added to posts are unaffected.',
+            actionLabel: 'Delete mention',
+            destructive: true,
+        });
+
+        if (!confirmed) {
+            return;
+        }
+
+        await deleteMentionHttp.delete(
+            WorkspaceMentionController.destroy(saved.id).url,
+        );
+
+        setSavedMentions((current) =>
+            current.filter((item) => item.id !== saved.id),
+        );
+    }
+
     function handleSegments(segments: string[]) {
         const manualSplit = segments.length > 1;
         if (
@@ -920,6 +945,7 @@ export default function Composer({
                     onApplySavedMention={applySavedMention}
                     onSaveMention={saveMention}
                     saveMentionProcessing={saveMentionHttp.processing}
+                    onDeleteMention={deleteMention}
                     onMentionsChange={(mentions) =>
                         dispatch({ type: 'setMentions', mentions })
                     }
