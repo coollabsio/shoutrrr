@@ -24,17 +24,19 @@ abstract class AbstractImageEditRequest extends FormRequest
     }
 
     /**
-     * Validation shared by the create and update paths: the composed PNG plus the
-     * full edit-settings schema. Subclasses merge their own rules (e.g. `source`).
+     * Validation shared by the create and update paths: the composed image plus
+     * the full edit-settings schema. Subclasses merge their own rules (e.g. `source`).
+     *
+     * The editor rasterizes to a compressed JPEG (opaque) or WebP (transparent)
+     * sized to fit `max`; a lossless PNG of a photo exceeded the cap and was
+     * silently rejected with a 422, dropping the media (#126). PNG is still
+     * accepted for browsers that fall back to it.
      *
      * @return array<string, mixed>
      */
     protected function baseRules(): array
     {
         return [
-            // The editor rasterizes to a compressed format (JPEG when opaque, WebP
-            // when transparency is possible) and shrinks it to fit under `max` — a
-            // lossless PNG of a photo exceeds the cap and was silently 422'd (#126).
             'composed' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp', 'max:8192'],
             'settings' => ['required', 'array'],
             'settings.version' => ['required', 'integer'],

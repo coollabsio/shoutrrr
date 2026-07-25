@@ -10,7 +10,8 @@ import type { EditSettings } from './settings';
  */
 const MAX_COMPOSED_BYTES = Math.floor(7.5 * 1024 * 1024); // headroom under the 8 MiB (max:8192) server cap
 const QUALITY_STEPS = [0.92, 0.82, 0.72, 0.6] as const;
-const MIN_SCALE = 0.5;
+/** Downscale factors tried in order, ending at the smallest we'll ship. */
+const SCALE_STEPS = [1, 0.8, 0.6, 0.5] as const;
 
 /**
  * Pick a rasterization pixel-ratio: render at `baseScale` for crispness, but
@@ -72,48 +73,58 @@ function scaleCanvas(
 }
 
 /**
+ * Encode `target` at the requested lossy `type`, falling back to PNG when the
+ * browser can't produce that type (older Safari can't encode canvas WebP — it
+ * either returns a PNG blob or `null`). Returns `null` only if even PNG fails.
+ */
+async function encodeCanvas(
+    target: HTMLCanvasElement,
+    type: string,
+    quality: number,
+): Promise<Blob | null> {
+    const blob = await canvasToBlob(target, type, quality);
+    if (blob) {
+        return blob;
+    }
+
+    return type === 'image/png' ? null : canvasToBlob(target, 'image/png');
+}
+
+/**
  * Encode `canvas` to a blob at or under `maxBytes`: step the quality down at full
  * resolution first (to preserve detail), then downscale and retry, until it fits.
- * A browser that can't encode the requested lossy `type` returns a PNG instead —
- * that's still a valid upload, so it's accepted once it fits.
+ * A browser that can't encode the requested lossy `type` produces a PNG instead —
+ * still a valid upload, accepted once it fits. Throws when nothing fits so the
+ * editor surfaces its "couldn't process" error rather than uploading a file the
+ * server will reject with the very 422 this guards against (#126).
  */
 export async function encodeCanvasToFit(
     canvas: HTMLCanvasElement,
     format: { type: string; quality: number },
     maxBytes: number,
 ): Promise<Blob> {
-    for (let scale = 1; scale >= MIN_SCALE - 1e-6; scale -= 0.2) {
+    // Sweep from the caller's chosen starting quality downward, so
+    // pickComposedFormat is the single source of truth for where encoding begins.
+    const qualitySteps = QUALITY_STEPS.filter((q) => q <= format.quality);
+    for (const scale of SCALE_STEPS) {
         const target = scale >= 1 ? canvas : scaleCanvas(canvas, scale);
-        for (const quality of QUALITY_STEPS) {
-            const blob = await canvasToBlob(target, format.type, quality);
+        for (const quality of qualitySteps) {
+            const blob = await encodeCanvas(target, format.type, quality);
             if (!blob) {
-                break;
-            }
-            // A PNG fallback ignores quality, so retrying qualities is pointless —
-            // drop to the next (smaller) scale as soon as it doesn't fit.
-            if (blob.type !== format.type) {
-                if (blob.size <= maxBytes) {
-                    return blob;
-                }
                 break;
             }
             if (blob.size <= maxBytes) {
                 return blob;
             }
+            // A PNG fallback ignores quality, so retrying qualities won't shrink it
+            // — drop straight to the next (smaller) scale.
+            if (blob.type !== format.type) {
+                break;
+            }
         }
     }
 
-    // Nothing fit within the scale/quality budget — return the smallest attempt so
-    // the caller still uploads *something* rather than dropping the media entirely.
-    const smallest = scaleCanvas(canvas, MIN_SCALE);
-    const blob =
-        (await canvasToBlob(smallest, format.type, 0.5)) ??
-        (await canvasToBlob(smallest, 'image/png'));
-    if (!blob) {
-        throw new Error('Failed to rasterize the image.');
-    }
-
-    return blob;
+    throw new Error('Failed to rasterize the image.');
 }
 
 /** Rasterize the stage DOM node to a compressed blob sized to fit the upload cap. */

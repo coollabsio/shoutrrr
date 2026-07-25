@@ -24,13 +24,14 @@ class UpdateReplyImageEditRequest extends FormRequest
     }
 
     /**
+     * `composed` accepts JPEG/PNG/WebP: the editor emits a compressed JPEG/WebP
+     * sized to fit `max`, so a lossless PNG no longer 422s the upload (#126).
+     *
      * @return array<string, mixed>
      */
     public function rules(): array
     {
         return [
-            // See AbstractImageEditRequest: the editor emits a compressed JPEG/WebP
-            // sized to fit `max`, so a lossless PNG no longer 422s the upload (#126).
             'composed' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp', 'max:8192'],
             'settings' => ['required', 'array'],
             'settings.version' => ['required', 'integer'],
