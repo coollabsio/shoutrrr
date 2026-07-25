@@ -47,3 +47,36 @@ test('storing a beautified image creates media on the reply workspace', function
 
     expect(PostMedia::withoutGlobalScopes()->where('workspace_id', $this->workspace->id)->count())->toBe(1);
 });
+
+test('the reply store endpoint accepts a compact composed image', function (string $file, string $mime) {
+    // The editor rasterizes to a compressed JPEG/WebP sized to fit the cap; a
+    // lossless PNG of a photo would 422, blanking the reply media (#126).
+    $this->actingAs($this->user)
+        ->post(route('engagement.image-edit.store', $this->reply), [
+            'composed' => UploadedFile::fake()->image($file, 800, 600),
+            'source' => UploadedFile::fake()->image('in.jpg'),
+            'settings' => editSettings(),
+        ])
+        ->assertCreated()
+        ->assertJsonPath('media.mime', $mime);
+})->with([
+    'jpeg' => ['out.jpg', 'image/jpeg'],
+    'webp' => ['out.webp', 'image/webp'],
+]);
+
+test('the reply update endpoint accepts a compact composed image', function () {
+    $mediaId = $this->actingAs($this->user)
+        ->post(route('engagement.image-edit.store', $this->reply), [
+            'composed' => UploadedFile::fake()->image('out.png')->mimeType('image/png'),
+            'source' => UploadedFile::fake()->image('in.jpg'),
+            'settings' => editSettings(),
+        ])->json('media.id');
+
+    $this->actingAs($this->user)
+        ->put(route('engagement.image-edit.update', ['reply' => $this->reply, 'media' => $mediaId]), [
+            'composed' => UploadedFile::fake()->image('out.webp', 900, 600),
+            'settings' => editSettings(),
+        ])
+        ->assertOk()
+        ->assertJsonPath('media.mime', 'image/webp');
+});

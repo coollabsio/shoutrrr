@@ -12,8 +12,12 @@ type Options = {
     onReplaceMedia: (media: MediaView) => void;
 };
 
-function blobToFile(blob: Blob, name: string): File {
-    return new File([blob], name, { type: blob.type || 'image/png' });
+function blobToFile(blob: Blob, baseName: string): File {
+    const type = blob.type || 'image/png';
+    const ext =
+        type === 'image/webp' ? 'webp' : type === 'image/jpeg' ? 'jpg' : 'png';
+
+    return new File([blob], `${baseName}.${ext}`, { type });
 }
 
 export function useImageEditor({
@@ -40,8 +44,8 @@ export function useImageEditor({
                 return false;
             }
             http.transform(() => ({
-                composed: blobToFile(composed, 'image.png'),
-                source: blobToFile(source, 'source.png'),
+                composed: blobToFile(composed, 'image'),
+                source: blobToFile(source, 'source'),
                 settings: JSON.stringify(settings),
                 alt_text: altText,
             }));
@@ -77,7 +81,7 @@ export function useImageEditor({
                 return false;
             }
             http.transform(() => ({
-                composed: blobToFile(composed, 'image.png'),
+                composed: blobToFile(composed, 'image'),
                 settings: JSON.stringify(settings),
                 alt_text: altText,
                 _method: 'put',
