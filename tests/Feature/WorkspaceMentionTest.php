@@ -127,6 +127,45 @@ it('persists an edited Meta plain-text value on update', function () {
         ->toBe(['facebook' => 'Company X Inc.']);
 });
 
+it('deletes a saved mention for the current workspace', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+    $mention = WorkspaceMention::factory()->create([
+        'workspace_id' => $workspace->id,
+        'name' => '@company-x',
+        'handles' => ['x' => '@companyx'],
+    ]);
+
+    $this->actingAs($user)
+        ->deleteJson(route('workspace-mentions.destroy', $mention))
+        ->assertSuccessful();
+
+    expect(WorkspaceMention::query()->withoutGlobalScopes()->find($mention->id))
+        ->toBeNull();
+});
+
+it('cannot delete a mention belonging to another workspace', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    $otherWorkspace = Workspace::factory()->create();
+    $foreignMention = WorkspaceMention::factory()->create([
+        'workspace_id' => $otherWorkspace->id,
+        'name' => '@foreign',
+    ]);
+
+    $this->actingAs($user)
+        ->deleteJson(route('workspace-mentions.destroy', $foreignMention))
+        ->assertNotFound();
+
+    expect(WorkspaceMention::query()->withoutGlobalScopes()->find($foreignMention->id))
+        ->not->toBeNull();
+});
+
 it('normalizes a saved LinkedIn org reference into a canonical URN', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);

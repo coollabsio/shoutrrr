@@ -86,6 +86,23 @@ describe('saved mention editing', () => {
         expect(source).toContain('absolute right-2');
         expect(source).toContain('editSaved(saved)');
     });
+
+    it('renders a delete action alongside edit when deletion is enabled', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/compose/mention-picker.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('aria-label={`Delete ${saved.name}`}');
+        expect(source).toContain('onDeleteMention(saved)');
+        // Both actions coexist: the row widens and the edit icon shifts left
+        // to make room for the trash icon.
+        expect(source).toContain('pr-16');
+        expect(source).toContain('right-9');
+    });
 });
 
 describe('linkedin mention field', () => {

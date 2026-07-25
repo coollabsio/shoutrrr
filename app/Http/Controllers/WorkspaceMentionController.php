@@ -57,6 +57,16 @@ class WorkspaceMentionController extends Controller
         return response()->json(['mention' => self::view($mention)]);
     }
 
+    public function destroy(Request $request, string $workspaceMention): JsonResponse
+    {
+        WorkspaceMention::withoutGlobalScopes()
+            ->where('workspace_id', $request->user()->current_workspace_id)
+            ->findOrFail($workspaceMention)
+            ->delete();
+
+        return response()->json(['deleted' => true]);
+    }
+
     /**
      * @return array{id: string, name: string, handles: array<string, string>}
      */
