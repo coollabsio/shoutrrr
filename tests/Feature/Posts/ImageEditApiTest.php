@@ -111,3 +111,22 @@ test('it rejects a non-image composed file', function () {
         'settings' => settingsPayload(),
     ], ['Accept' => 'application/json'])->assertStatus(422);
 });
+
+test('it accepts a compact composed image', function (string $file, string $mime) {
+    Storage::fake('public');
+    [$user, $workspace, $post] = imageEditMember();
+
+    // The editor rasterizes to a compressed format (JPEG when opaque, WebP when
+    // transparency is possible) so the payload stays under the upload cap — a
+    // lossless PNG of a phone photo blows past it. The endpoint must accept them.
+    test()->post("/posts/{$post['id']}/image-edit", [
+        'composed' => UploadedFile::fake()->image($file, 800, 600),
+        'source' => UploadedFile::fake()->image('src.png', 1200, 900),
+        'settings' => settingsPayload(),
+    ], ['Accept' => 'application/json'])
+        ->assertCreated()
+        ->assertJsonPath('media.mime', $mime);
+})->with([
+    'jpeg' => ['out.jpg', 'image/jpeg'],
+    'webp' => ['out.webp', 'image/webp'],
+]);

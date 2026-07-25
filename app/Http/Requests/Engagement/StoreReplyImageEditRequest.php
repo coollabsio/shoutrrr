@@ -29,7 +29,9 @@ class StoreReplyImageEditRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'composed' => ['required', 'file', 'mimetypes:image/png', 'max:8192'],
+            // See AbstractImageEditRequest: the editor emits a compressed JPEG/WebP
+            // sized to fit `max`, so a lossless PNG no longer 422s the upload (#126).
+            'composed' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp', 'max:8192'],
             'settings' => ['required', 'array'],
             'settings.version' => ['required', 'integer'],
             'settings.background' => ['required', 'array'],

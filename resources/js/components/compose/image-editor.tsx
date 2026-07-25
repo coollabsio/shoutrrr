@@ -274,6 +274,7 @@ export function ImageEditor({
             const composed = await rasterizeStage(
                 node,
                 Math.max(stage.width, stage.height),
+                settings,
             );
             await onApply(composed, settings, altText);
         } catch {

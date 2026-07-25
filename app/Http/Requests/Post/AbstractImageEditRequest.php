@@ -32,7 +32,10 @@ abstract class AbstractImageEditRequest extends FormRequest
     protected function baseRules(): array
     {
         return [
-            'composed' => ['required', 'file', 'mimetypes:image/png', 'max:8192'],
+            // The editor rasterizes to a compressed format (JPEG when opaque, WebP
+            // when transparency is possible) and shrinks it to fit under `max` — a
+            // lossless PNG of a photo exceeds the cap and was silently 422'd (#126).
+            'composed' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp', 'max:8192'],
             'settings' => ['required', 'array'],
             'settings.version' => ['required', 'integer'],
             'settings.background' => ['required', 'array'],
