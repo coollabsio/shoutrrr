@@ -23,6 +23,16 @@ class MessagePersister
         $insertedInbound = 0;
 
         foreach ($conversations as $fetched) {
+            $existing = Conversation::withoutGlobalScopes()
+                ->where('connected_account_id', $account->id)
+                ->where('remote_conversation_id', $fetched->remoteConversationId)
+                ->first();
+
+            // A conversation whose poll only surfaced outbound events (e.g. an X
+            // re-poll right after we sent a reply) resolves the counterpart to
+            // null. Don't let that wipe out the counterpart identity we already
+            // stored from an earlier inbound message — only overwrite when the
+            // freshly fetched value is non-null.
             $conversation = Conversation::withoutGlobalScopes()->updateOrCreate(
                 [
                     'connected_account_id' => $account->id,
@@ -31,10 +41,10 @@ class MessagePersister
                 [
                     'workspace_id' => $account->workspace_id,
                     'platform' => $account->platform,
-                    'counterpart_handle' => $fetched->counterpartHandle,
-                    'counterpart_name' => $fetched->counterpartName,
-                    'counterpart_avatar_url' => $fetched->counterpartAvatarUrl,
-                    'counterpart_remote_id' => $fetched->counterpartRemoteId,
+                    'counterpart_handle' => $fetched->counterpartHandle ?? $existing?->counterpart_handle,
+                    'counterpart_name' => $fetched->counterpartName ?? $existing?->counterpart_name,
+                    'counterpart_avatar_url' => $fetched->counterpartAvatarUrl ?? $existing?->counterpart_avatar_url,
+                    'counterpart_remote_id' => $fetched->counterpartRemoteId ?? $existing?->counterpart_remote_id,
                     'messaging_window_expires_at' => $fetched->messagingWindowExpiresAt,
                     'last_synced_at' => Date::now(),
                     'sync_cursor' => $fetched->cursor,

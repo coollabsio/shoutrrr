@@ -8,7 +8,7 @@ use App\Enums\EngagementStatus;
 use App\Exceptions\TokenRefreshException;
 use App\Jobs\Concerns\ReportsReplyFetch;
 use App\Jobs\Contracts\ReleasableJob;
-use App\Jobs\Middleware\ThrottlesEngagementFetch;
+use App\Jobs\Middleware\ThrottlesMessageFetch;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Services\Messaging\MessageConnectorRegistry;
@@ -48,7 +48,7 @@ class FetchAccountMessages implements ReleasableJob, ShouldBeUnique, ShouldQueue
      */
     public function middleware(): array
     {
-        return [new ThrottlesEngagementFetch($this->account->id)];
+        return [new ThrottlesMessageFetch($this->account->id)];
     }
 
     /**

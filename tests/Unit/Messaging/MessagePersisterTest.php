@@ -63,3 +63,30 @@ test('persist copies meta window and does not count outbound as unread', functio
     expect($convo->unread_count)->toBe(1);
     expect($convo->messaging_window_expires_at->timestamp)->toBe($window->timestamp);
 });
+
+test('persist preserves counterpart fields when a re-poll returns them null', function () {
+    $account = ConnectedAccount::factory()->create(['platform' => \App\Enums\Platform::X]);
+    $persister = app(MessagePersister::class);
+
+    $persister->persist($account, [fetchedConvo()]);
+
+    // Simulate an outbound-only X re-poll: the connector derives the
+    // counterpart from inbound senders, so it resolves to null when only our
+    // own dm_event came back.
+    $persister->persist($account, [new FetchedConversation(
+        remoteConversationId: 'convo-1',
+        counterpartHandle: null,
+        counterpartName: null,
+        counterpartAvatarUrl: null,
+        counterpartRemoteId: null,
+        messagingWindowExpiresAt: null,
+        messages: [
+            new FetchedMessage('m2', MessageDirection::Outbound, 'us', 'thanks', [], now()->toImmutable()),
+        ],
+    )]);
+
+    $convo = Conversation::withoutGlobalScopes()->first();
+    expect($convo->counterpart_handle)->toBe('@alice');
+    expect($convo->counterpart_name)->toBe('Alice');
+    expect($convo->counterpart_remote_id)->toBe('did:alice');
+});

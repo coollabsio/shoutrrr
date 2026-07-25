@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Enums\Platform;
 use App\Enums\WorkspaceRole;
+use App\Models\ConnectedAccount;
+use App\Models\Conversation;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
@@ -32,4 +35,21 @@ test('messages route renders when enabled', function (): void {
     $this->actingAs($this->user)->get('/messages')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->component('messages/index'));
+});
+
+test('read and archive routes 404 when disabled', function (): void {
+    config()->set('messages.enabled', true);
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::Bluesky,
+        'capabilities' => ['dm_enabled' => true],
+    ]);
+    $convo = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $this->workspace->id,
+    ]);
+
+    config()->set('messages.enabled', false);
+
+    $this->actingAs($this->user)->post("/messages/{$convo->id}/read")->assertNotFound();
+    $this->actingAs($this->user)->post("/messages/{$convo->id}/archive")->assertNotFound();
 });
