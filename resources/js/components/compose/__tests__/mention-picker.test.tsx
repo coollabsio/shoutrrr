@@ -10,10 +10,7 @@ import MentionPicker, {
     savedMentionSearchKeywords,
     shouldFocusMentionPickerSearch,
 } from '@/components/compose/mention-picker';
-import type {
-    MentionPlaceholder,
-    WorkspaceMention,
-} from '@/types/compose';
+import type { MentionPlaceholder, WorkspaceMention } from '@/types/compose';
 
 beforeAll(() => {
     globalThis.ResizeObserver = class {
