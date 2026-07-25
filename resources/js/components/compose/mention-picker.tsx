@@ -1,4 +1,12 @@
-import { ArrowLeft, Building2, Info, Pencil, Plus, X } from 'lucide-react';
+import {
+    ArrowLeft,
+    Building2,
+    Info,
+    Pencil,
+    Plus,
+    Trash2,
+    X,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -49,6 +57,8 @@ type MentionPickerProps = {
     ) => void;
     onSaveMention?: (mention: MentionPlaceholder) => Promise<void>;
     saveMentionProcessing?: boolean;
+    /** Delete a saved mention from the workspace library. Hidden when omitted. */
+    onDeleteMention?: (saved: WorkspaceMention) => void | Promise<void>;
     onMentionComplete?: (mention: MentionPlaceholder) => void;
     /** Discard the in-progress mention (Backspace on an empty search field). */
     onRemoveMention?: () => void;
@@ -113,6 +123,7 @@ export default function MentionPicker({
     onUpdateMention,
     onSaveMention,
     saveMentionProcessing = false,
+    onDeleteMention,
     onMentionComplete,
     onRemoveMention,
 }: MentionPickerProps) {
@@ -254,7 +265,10 @@ export default function MentionPicker({
                                 value={saved.name}
                                 keywords={savedMentionKeywords.get(saved.id)}
                                 onSelect={() => selectSaved(saved)}
-                                className="relative flex items-center gap-3 pr-9"
+                                className={cn(
+                                    'relative flex items-center gap-3',
+                                    onDeleteMention ? 'pr-16' : 'pr-9',
+                                )}
                             >
                                 <span className="font-medium">
                                     {saved.name}
@@ -283,10 +297,32 @@ export default function MentionPicker({
                                         event.stopPropagation();
                                         editSaved(saved);
                                     }}
-                                    className="absolute right-2 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                    className={cn(
+                                        'absolute inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                                        onDeleteMention ? 'right-9' : 'right-2',
+                                    )}
                                 >
                                     <Pencil className="size-3.5" aria-hidden />
                                 </button>
+                                {onDeleteMention && (
+                                    <button
+                                        type="button"
+                                        aria-label={`Delete ${saved.name}`}
+                                        onPointerDown={(event) =>
+                                            event.stopPropagation()
+                                        }
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            void onDeleteMention(saved);
+                                        }}
+                                        className="absolute right-2 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                                    >
+                                        <Trash2
+                                            className="size-3.5"
+                                            aria-hidden
+                                        />
+                                    </button>
+                                )}
                             </CommandItem>
                         ))}
                     </CommandGroup>
