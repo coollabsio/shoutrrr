@@ -3,7 +3,7 @@ import { router } from '@inertiajs/react';
 import type { CSSProperties, MouseEvent } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
-import { PlatformGlyph } from '@/components/common/platform-glyph';
+import { PlatformGlyphStack } from '@/components/common/platform-glyph-stack';
 import type { PostRowData } from '@/components/posts/post-row';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { toUserTz } from '@/lib/datetime/dayjs';
@@ -57,7 +57,10 @@ export function PostChip({
         ? toUserTz(post.scheduled_at, tz).format('h:mma')
         : '';
     const tone = toneStyles[toneOf(post.status)];
-    const platform = (post.platforms ?? [])[0];
+    const targetCount = post.target_count ?? 0;
+    const label = post.base_text || 'Untitled';
+    const title =
+        targetCount > 1 ? `${label} — ${targetCount} accounts` : label;
 
     const style: CSSProperties = transform
         ? {
@@ -92,7 +95,7 @@ export function PostChip({
                     : 'cursor-pointer',
                 isDragging && 'opacity-50',
             )}
-            title={post.base_text}
+            title={title}
         >
             <span
                 aria-hidden
@@ -101,15 +104,14 @@ export function PostChip({
                     tone.strip,
                 )}
             />
-            {platform && (
-                <PlatformGlyph
-                    platform={platform}
-                    size={10}
-                    className="shrink-0 opacity-80"
-                />
-            )}
+            <PlatformGlyphStack
+                platforms={post.platforms ?? []}
+                targetCount={targetCount}
+                size={10}
+                className="shrink-0 opacity-80"
+            />
             {when && <span className="shrink-0 opacity-75">{when}</span>}
-            <span className="truncate">{post.base_text || 'Untitled'}</span>
+            <span className="truncate">{label}</span>
         </div>
     );
 }
