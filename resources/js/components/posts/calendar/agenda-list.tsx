@@ -2,7 +2,7 @@ import { router } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
-import { PlatformGlyph } from '@/components/common/platform-glyph';
+import { PlatformGlyphStack } from '@/components/common/platform-glyph-stack';
 import type { PostRowData, PostStatus } from '@/components/posts/post-row';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { dayjs, toUserTz, weekRange } from '@/lib/datetime/dayjs';
@@ -148,14 +148,17 @@ function AgendaItem({ post }: { post: PostRowData }) {
     const tz = useSchedulingTimezone();
     const at = post.scheduled_at ?? post.published_at;
     const when = at ? toUserTz(at, tz).format('h:mm a') : '';
-    const platform = (post.platforms ?? [])[0];
+    const targetCount = post.target_count ?? 0;
+    const label = post.base_text || 'Untitled';
+    const title =
+        targetCount > 1 ? `${label} — ${targetCount} accounts` : label;
 
     return (
         <button
             type="button"
             onClick={() => router.visit(ComposerController.show(post.id).url)}
             className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition-colors hover:bg-muted/60 active:bg-muted"
-            title={post.base_text}
+            title={title}
         >
             <span
                 aria-hidden
@@ -167,16 +170,13 @@ function AgendaItem({ post }: { post: PostRowData }) {
             <span className="w-16 shrink-0 text-[12px] text-muted-foreground tabular-nums">
                 {when}
             </span>
-            {platform && (
-                <PlatformGlyph
-                    platform={platform}
-                    size={13}
-                    className="shrink-0 opacity-70"
-                />
-            )}
-            <span className="min-w-0 flex-1 truncate text-[13px]">
-                {post.base_text || 'Untitled'}
-            </span>
+            <PlatformGlyphStack
+                platforms={post.platforms ?? []}
+                targetCount={targetCount}
+                size={13}
+                className="shrink-0 opacity-70"
+            />
+            <span className="min-w-0 flex-1 truncate text-[13px]">{label}</span>
         </button>
     );
 }
