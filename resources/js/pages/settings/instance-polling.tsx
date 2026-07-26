@@ -28,6 +28,9 @@ export type PollingSettings = {
     /** Instance-wide master switches. When off, the matching section(s) below are moot. */
     metrics_enabled: boolean;
     engagement_enabled: boolean;
+    messages_enabled: boolean;
+    /** Opt-in to requesting DM OAuth scopes at connect/re-auth. Requires messages_enabled. */
+    direct_messages_enabled: boolean;
 };
 
 /** The three per-platform sections, excluding the two flat master-switch keys. */
@@ -128,10 +131,10 @@ export default function InstancePolling({ settings, sections }: Props) {
                         <CardHeader>
                             <CardTitle>Feature availability</CardTitle>
                             <CardDescription>
-                                Turn engagement or metrics off for the whole
-                                instance without touching environment variables.
-                                The sections below only take effect while their
-                                switch here is on.
+                                Turn engagement, metrics, or messages off for
+                                the whole instance without touching environment
+                                variables. The sections below only take effect
+                                while their switch here is on.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -174,6 +177,59 @@ export default function InstancePolling({ settings, sections }: Props) {
                                     <p className="text-sm text-muted-foreground">
                                         Governs both the Post metrics and
                                         Account metrics sections below.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-3">
+                                <Checkbox
+                                    id="messages_enabled"
+                                    checked={data.messages_enabled}
+                                    onCheckedChange={(checked) =>
+                                        setData(
+                                            'messages_enabled',
+                                            checked === true,
+                                        )
+                                    }
+                                />
+                                <div className="space-y-1">
+                                    <Label htmlFor="messages_enabled">
+                                        Enable messages
+                                    </Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Shows the Messages inbox and polls
+                                        direct messages on X, Bluesky,
+                                        Instagram, and Facebook.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="ml-7 flex items-start gap-3">
+                                <Checkbox
+                                    id="direct_messages_enabled"
+                                    checked={data.direct_messages_enabled}
+                                    disabled={!data.messages_enabled}
+                                    onCheckedChange={(checked) =>
+                                        setData(
+                                            'direct_messages_enabled',
+                                            checked === true,
+                                        )
+                                    }
+                                />
+                                <div className="space-y-1">
+                                    <Label
+                                        htmlFor="direct_messages_enabled"
+                                        className={cn(
+                                            !data.messages_enabled &&
+                                                'text-muted-foreground',
+                                        )}
+                                    >
+                                        Request DM permissions when connecting
+                                    </Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Asks for direct-message access during
+                                        account connect. Existing accounts must
+                                        reconnect before their DMs appear.
                                     </p>
                                 </div>
                             </div>

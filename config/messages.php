@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 return [
-    'enabled' => (bool) env('MESSAGES_ENABLED', false),
+    // On by default, like engagement/metrics. Instance owners flip it at
+    // Settings → Instance → Polling; the persisted toggle wins over this.
+    'enabled' => (bool) env('MESSAGES_ENABLED', true),
 
     // Instance-level opt-in that DM OAuth scopes may be requested at connect/re-auth.
-    'direct_messages_enabled' => (bool) env('DIRECT_MESSAGES_ENABLED', false),
+    'direct_messages_enabled' => (bool) env('DIRECT_MESSAGES_ENABLED', true),
 
     // Per-account poll interval floor (minutes), keyed by platform value.
     // X is billable per poll, so its floor is deliberately high.

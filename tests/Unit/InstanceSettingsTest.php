@@ -32,7 +32,32 @@ it('lets a persisted override take precedence over the engagement config default
     expect(app(InstanceSettings::class)->engagementEnabled())->toBeFalse();
 });
 
-it('includes both master switches in the polling settings array', function () {
+it('defaults messages enabled to the messages.enabled config value', function () {
+    config(['messages.enabled' => true]);
+    expect(app(InstanceSettings::class)->messagesEnabled())->toBeTrue();
+
+    config(['messages.enabled' => false]);
+    expect(app(InstanceSettings::class)->messagesEnabled())->toBeFalse();
+});
+
+it('lets a persisted override take precedence over the messages config default', function () {
+    config(['messages.enabled' => true]);
+    app(InstanceSettings::class)->update(['messages_enabled' => false]);
+
+    expect(app(InstanceSettings::class)->messagesEnabled())->toBeFalse();
+});
+
+it('ships with messages and DM scopes on by default', function () {
+    expect(config('messages.enabled'))->toBeTrue()
+        ->and(config('messages.direct_messages_enabled'))->toBeTrue();
+});
+
+it('includes every master switch in the polling settings array', function () {
     expect(app(InstanceSettings::class)->polling())
-        ->toHaveKeys(['metrics_enabled', 'engagement_enabled']);
+        ->toHaveKeys([
+            'metrics_enabled',
+            'engagement_enabled',
+            'messages_enabled',
+            'direct_messages_enabled',
+        ]);
 });

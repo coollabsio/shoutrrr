@@ -352,6 +352,8 @@ test('instance owner can update polling settings', function () {
             ],
             'metrics_enabled' => true,
             'engagement_enabled' => true,
+            'messages_enabled' => true,
+            'direct_messages_enabled' => true,
         ])
         ->assertRedirect();
 
@@ -397,11 +399,46 @@ test('instance owner can toggle the metrics and engagement master switches from 
             ],
             'metrics_enabled' => false,
             'engagement_enabled' => false,
+            'messages_enabled' => false,
+            'direct_messages_enabled' => false,
         ])
         ->assertRedirect();
 
     expect(app(InstanceSettings::class)->metricsEnabled())->toBeFalse()
-        ->and(app(InstanceSettings::class)->engagementEnabled())->toBeFalse();
+        ->and(app(InstanceSettings::class)->engagementEnabled())->toBeFalse()
+        ->and(app(InstanceSettings::class)->messagesEnabled())->toBeFalse();
+});
+
+test('instance owner can toggle the messages master switch from the polling page', function () {
+    $owner = User::factory()->instanceOwner()->create();
+
+    expect(app(InstanceSettings::class)->messagesEnabled())->toBeTrue();
+
+    $this->actingAs($owner)
+        ->put(route('instance-settings.polling.update'), [
+            'engagement' => [
+                'enabled' => ['x' => true, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 360, 'bluesky' => 15, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+            ],
+            'post_metrics' => [
+                'enabled' => ['x' => true, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true, 'discord' => true],
+                'x' => 360, 'bluesky' => 15, 'linkedin' => 15, 'facebook' => 15, 'instagram' => 15, 'threads' => 15, 'discord' => 15,
+            ],
+            'account_metrics' => [
+                'enabled' => ['x' => true, 'bluesky' => true, 'linkedin' => true, 'facebook' => true, 'instagram' => true, 'threads' => true],
+                'x' => 1440, 'bluesky' => 1440, 'linkedin' => 1440, 'facebook' => 15, 'instagram' => 15, 'threads' => 15,
+            ],
+            'metrics_enabled' => true,
+            'engagement_enabled' => true,
+            'messages_enabled' => false,
+            'direct_messages_enabled' => true,
+        ])
+        ->assertRedirect();
+
+    // Turning messages off also stops asking connecting users for DM scopes.
+    expect(app(InstanceSettings::class)->messagesEnabled())->toBeFalse()
+        ->and(app(InstanceSettings::class)->directMessagesEnabled())->toBeFalse()
+        ->and(app(InstanceSettings::class)->engagementEnabled())->toBeTrue();
 });
 
 test('regular users cannot view polling settings', function () {

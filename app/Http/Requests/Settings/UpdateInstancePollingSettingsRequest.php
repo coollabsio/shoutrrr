@@ -28,6 +28,8 @@ class UpdateInstancePollingSettingsRequest extends FormRequest
         $rules = [
             'metrics_enabled' => ['required', 'boolean'],
             'engagement_enabled' => ['required', 'boolean'],
+            'messages_enabled' => ['required', 'boolean'],
+            'direct_messages_enabled' => ['required', 'boolean'],
         ];
 
         foreach (['engagement', 'post_metrics', 'account_metrics'] as $section) {
@@ -53,11 +55,13 @@ class UpdateInstancePollingSettingsRequest extends FormRequest
      *     account_metrics_poll_interval_minutes: array<string, int>,
      *     metrics_enabled: bool,
      *     engagement_enabled: bool,
+     *     messages_enabled: bool,
+     *     direct_messages_enabled: bool,
      * }
      */
     public function instancePollingSettings(): array
     {
-        /** @var array{engagement: array<string, mixed>, post_metrics: array<string, mixed>, account_metrics: array<string, mixed>, metrics_enabled: mixed, engagement_enabled: mixed} $validated */
+        /** @var array{engagement: array<string, mixed>, post_metrics: array<string, mixed>, account_metrics: array<string, mixed>, metrics_enabled: mixed, engagement_enabled: mixed, messages_enabled: mixed, direct_messages_enabled: mixed} $validated */
         $validated = $this->validated();
 
         return [
@@ -69,6 +73,11 @@ class UpdateInstancePollingSettingsRequest extends FormRequest
             'account_metrics_poll_interval_minutes' => $this->minutes($validated['account_metrics']),
             'metrics_enabled' => (bool) $validated['metrics_enabled'],
             'engagement_enabled' => (bool) $validated['engagement_enabled'],
+            'messages_enabled' => (bool) $validated['messages_enabled'],
+            // Requesting DM scopes only makes sense while the feature is on;
+            // otherwise connecting users get consent friction for nothing.
+            'direct_messages_enabled' => (bool) $validated['messages_enabled']
+                && (bool) $validated['direct_messages_enabled'],
         ];
     }
 

@@ -167,7 +167,9 @@ class InstanceSettings
      *     post_metrics: array<string, array<string, bool>|int>,
      *     account_metrics: array<string, array<string, bool>|int>,
      *     metrics_enabled: bool,
-     *     engagement_enabled: bool
+     *     engagement_enabled: bool,
+     *     messages_enabled: bool,
+     *     direct_messages_enabled: bool
      * }
      */
     public function polling(): array
@@ -189,6 +191,8 @@ class InstanceSettings
             // (nothing polls regardless of their per-platform settings).
             'metrics_enabled' => $this->metricsEnabled(),
             'engagement_enabled' => $this->engagementEnabled(),
+            'messages_enabled' => $this->messagesEnabled(),
+            'direct_messages_enabled' => $this->directMessagesEnabled(),
         ];
     }
 
