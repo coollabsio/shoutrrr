@@ -19,6 +19,7 @@ use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class XDirectMessageConnector implements DirectMessageConnector
@@ -73,10 +74,20 @@ class XDirectMessageConnector implements DirectMessageConnector
             ];
         }
 
+        // Resolve who each conversation is with before mapping, so a batched
+        // user lookup can fill in anyone the expansion didn't cover.
+        $counterparts = [];
+        foreach ($byConversation as $convoId => $events) {
+            $counterparts[$convoId] = collect($events)->firstWhere('inbound', true)['senderId']
+                ?? $this->counterpartFromConversationId((string) $convoId, $ourId);
+        }
+
+        $users = $this->hydrateMissingUsers($users, $counterparts, $account, $credentials);
+
         $conversations = [];
         foreach ($byConversation as $convoId => $events) {
-            $counterpart = collect($events)->firstWhere('inbound', true)['senderId'] ?? null;
-            $user = $counterpart ? $users->get($counterpart) : null;
+            $counterpart = $counterparts[$convoId] ?? null;
+            $user = $counterpart !== null ? $users->get($counterpart) : null;
 
             $messages = array_map(function (array $e): FetchedMessage {
                 return new FetchedMessage(
@@ -101,6 +112,78 @@ class XDirectMessageConnector implements DirectMessageConnector
         }
 
         return ConversationFetchResult::ok($conversations, $response->json('meta.next_token'));
+    }
+
+    /**
+     * X names a 1:1 DM conversation `{userA_id}-{userB_id}`, so the person we
+     * are talking to is recoverable even when the fetch window contains only
+     * our own outbound messages (no inbound sender to read it off). Group
+     * conversations don't follow the two-id shape and resolve to null.
+     */
+    private function counterpartFromConversationId(string $conversationId, string $ourId): ?string
+    {
+        $parts = explode('-', $conversationId);
+
+        if (count($parts) !== 2 || ! in_array($ourId, $parts, true)) {
+            return null;
+        }
+
+        $counterpart = $parts[0] === $ourId ? $parts[1] : $parts[0];
+
+        return $counterpart === '' ? null : $counterpart;
+    }
+
+    /**
+     * `expansions=sender_id` only describes users who sent something in the
+     * window, so counterparts recovered from a conversation id have no profile
+     * attached and would render as a nameless row. Look those up in one extra
+     * call rather than per conversation.
+     *
+     * @param  Collection<string, array<string, mixed>>  $users
+     * @param  array<string, string|null>  $counterparts
+     * @param  array<string, mixed>  $credentials
+     * @return Collection<string, array<string, mixed>>
+     */
+    private function hydrateMissingUsers(Collection $users, array $counterparts, ConnectedAccount $account, array $credentials): Collection
+    {
+        $missing = collect($counterparts)
+            ->filter(fn (?string $id): bool => $id !== null && ! $users->has($id))
+            ->unique()
+            ->values()
+            ->take(100); // X caps a users lookup at 100 ids.
+
+        if ($missing->isEmpty()) {
+            return $users;
+        }
+
+        $response = $this->http->withToken((string) ($credentials['access_token'] ?? ''))
+            ->acceptJson()
+            ->get(self::BASE.'/users', [
+                'ids' => $missing->implode(','),
+                'user.fields' => 'username,name,profile_image_url',
+            ]);
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::DM_FETCH, $account, $response);
+
+        // A failed lookup is cosmetic only — the conversation still syncs, it
+        // just shows without a display name until the next fetch.
+        if ($response->failed()) {
+            return $users;
+        }
+
+        /** @var array<int, array<string, mixed>> $found */
+        $found = (array) $response->json('data', []);
+
+        // Not merge(): X ids are numeric strings, so PHP stores them as integer
+        // keys and array_merge() would renumber them, detaching every profile
+        // from its id. put() keeps the key.
+        foreach ($found as $user) {
+            if (isset($user['id'])) {
+                $users->put((string) $user['id'], $user);
+            }
+        }
+
+        return $users;
     }
 
     /** @param array<string, mixed> $credentials */
