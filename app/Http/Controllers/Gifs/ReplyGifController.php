@@ -27,8 +27,14 @@ class ReplyGifController extends Controller
         // reply's media list lives in client state (quick-reply-box.tsx) until
         // the reply is sent, so the client tells us which of its own media ids
         // to treat as "existing" for GifAttacher's mixing-rule guard.
-        // Workspace-scoped: an unscoped lookup would let a caller probe another
-        // workspace's media by id.
+        //
+        // Primary enforcement of workspace isolation here is PostMedia's
+        // HasWorkspaceScope global scope, keyed off Context::get('workspace_id')
+        // and populated by WorkspaceMiddleware before this controller runs. The
+        // explicit where('workspace_id', ...) below is a redundant second layer
+        // that keeps this query correct even if the context is ever unset —
+        // the same reason routes/engagement.php's Route::bind('media', ...)
+        // filters explicitly rather than relying on the global scope alone.
         $existing = PostMedia::query()
             ->where('workspace_id', $reply->workspace_id)
             ->whereIn('id', $validated['media_ids'] ?? [])

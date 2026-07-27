@@ -192,14 +192,19 @@ test('attaching a reply gif with an explicit empty media_ids array still succeed
         ->assertCreated();
 });
 
-test('a foreign-workspace media_id is silently dropped, not treated as existing media', function () {
+test('ignores media ids from another workspace', function () {
     $user = User::factory()->withWorkspace()->create();
     $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
     $reply = PostTargetReply::factory()
         ->for(PostTarget::factory()->for($post), 'target')
         ->create(['workspace_id' => $user->current_workspace_id]);
-    // Belongs to a different workspace — an unscoped whereIn() lookup would
-    // find it and wrongly trip the "already has an image" mixing guard.
+    // Belongs to a different workspace. This proves a foreign media id cannot
+    // influence the mixing guard (it is dropped rather than causing the 422 a
+    // same-workspace image would) — not that any one specific layer of
+    // workspace scoping is doing the filtering. In this request, PostMedia's
+    // HasWorkspaceScope global scope (Context::get('workspace_id'), populated
+    // by WorkspaceMiddleware) already excludes it before the controller's own
+    // explicit where('workspace_id', ...) clause ever runs.
     $foreignImage = PostMedia::factory()->create([
         'workspace_id' => Workspace::factory()->create()->id,
         'kind' => 'image',
