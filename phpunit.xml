@@ -36,5 +36,9 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="OCTANE_SERVER" value="frankenphp"/>
+        <!-- Unset so the suite behaves the same whether or not a developer has a
+             real Klipy key in .env. Tests that need the GIF browser enabled set
+             services.klipy.key themselves. -->
+        <env name="KLIPY_API_KEY" value=""/>
     </php>
 </phpunit>
