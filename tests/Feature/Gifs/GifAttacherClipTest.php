@@ -5,7 +5,6 @@ use App\Models\Workspace;
 use App\Services\Gifs\GifAttacher;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\Process\ExecutableFinder;
 
 function clipVariant(string $url, int $bytes): array
 {
@@ -48,8 +47,7 @@ test('rejects a clip with no derivable duration', function () {
         $workspace->id, 'clip', 'Mystery',
         [clipVariant('https://static.klipy.com/clip.mp4', 900_000)], [], null,
     ))->toThrow(RuntimeException::class, 'duration');
-})->skip(fn (): bool => (new ExecutableFinder)->find('ffprobe') !== null,
-    'ffprobe is installed, so the duration is derivable');
+});
 
 test('rejects a clip when media is already attached', function () {
     $workspace = Workspace::factory()->create();

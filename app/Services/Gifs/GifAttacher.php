@@ -11,6 +11,8 @@ use App\Support\FileStorage;
 use App\Support\SafeVideoFetcher;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
@@ -181,16 +183,24 @@ class GifAttacher
     ): PostMedia {
         $clip = $this->video->fetch($variant['url']);
 
-        $temp = tempnam(sys_get_temp_dir(), 'klipy');
-
-        if ($temp === false) {
-            throw new RuntimeException('Could not attach that clip.');
-        }
-
-        file_put_contents($temp, $clip['bytes']);
+        // A temp file is only needed to run ffprobe, so skip writing the clip to
+        // disk twice when Klipy already supplied a duration — the common case.
+        $temp = null;
 
         try {
-            $duration = $durationSeconds ?? $this->probeDuration($temp);
+            $duration = $durationSeconds;
+
+            if ($duration === null) {
+                $temp = tempnam(sys_get_temp_dir(), 'klipy');
+
+                if ($temp === false) {
+                    throw new RuntimeException('Could not attach that clip.');
+                }
+
+                file_put_contents($temp, $clip['bytes']);
+
+                $duration = $this->probeDuration($temp);
+            }
 
             if ($duration === null || $duration < 1) {
                 throw new RuntimeException('That clip has no readable duration, so it cannot be attached.');
@@ -215,7 +225,9 @@ class GifAttacher
                 'position' => 0,
             ]);
         } finally {
-            @unlink($temp);
+            if ($temp !== null) {
+                @unlink($temp);
+            }
         }
     }
 
@@ -237,7 +249,12 @@ class GifAttacher
             '-of', 'default=noprint_wrappers=1:nokey=1', $path,
         ]);
         $process->setTimeout(15);
-        $process->run();
+
+        try {
+            $process->run();
+        } catch (ProcessFailedException|ProcessTimedOutException) {
+            return null;
+        }
 
         if (! $process->isSuccessful()) {
             return null;
