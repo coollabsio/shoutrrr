@@ -1,8 +1,9 @@
-import { Link, useHttp } from '@inertiajs/react';
+import { Link, useHttp, usePage } from '@inertiajs/react';
 import { Eye, Pin, Plug, TriangleAlert } from 'lucide-react';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import PostGifController from '@/actions/App/Http/Controllers/Gifs/PostGifController';
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import { useConfirm } from '@/components/common/confirm-dialog';
 import { useAutosave } from '@/hooks/compose/use-autosave';
@@ -50,12 +51,14 @@ import {
     type Account,
     type AccountSet,
     type Destination,
+    type MediaView,
     type MentionPlaceholder,
     type PlatformLimits,
     type PlatformName,
     type PostView,
     type WorkspaceMention,
 } from '@/types/compose';
+import type { GifItem } from '@/types/gifs';
 
 import CharCounter from './char-counter';
 import { ComposerToolbar } from './composer-toolbar';
@@ -178,6 +181,7 @@ export default function Composer({
 }: ComposerProps) {
     const schedulingTz = useSchedulingTimezone();
     const confirm = useConfirm();
+    const { shell } = usePage().props;
     const saveMentionHttp = useHttp<
         Record<string, never>,
         { mention: WorkspaceMention }
@@ -275,6 +279,53 @@ export default function Composer({
     function insertEmoji(emoji: string) {
         editorRef.current?.insertText(emoji);
         emojiPrefs.addRecent(emoji);
+    }
+
+    // The server downloads and re-hosts the chosen GIF, so this is a chip +
+    // fetch rather than the local upload flow the other media handlers use.
+    async function attachGif(item: GifItem) {
+        const post = await ensurePost();
+
+        await mediaUploads.trackPending(
+            {
+                kind: item.catalog === 'clip' ? 'video' : 'image',
+                previewUrl: item.preview.url,
+            },
+            async () => {
+                const response = await fetch(
+                    PostGifController.store.url({ post }),
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json',
+                            'X-XSRF-TOKEN': decodeURIComponent(
+                                document.cookie.match(
+                                    /XSRF-TOKEN=([^;]+)/,
+                                )?.[1] ?? '',
+                            ),
+                        },
+                        body: JSON.stringify({
+                            catalog: item.catalog,
+                            slug: item.slug,
+                            title: item.title,
+                            variants: item.variants,
+                        }),
+                    },
+                );
+
+                if (!response.ok) {
+                    const body = (await response.json().catch(() => ({}))) as {
+                        message?: string;
+                    };
+                    throw new Error(
+                        body.message ?? 'That GIF could not be attached.',
+                    );
+                }
+
+                return ((await response.json()) as { media: MediaView }).media;
+            },
+        );
     }
 
     // The editor opens automatically when image(s) are added and when an attached
@@ -1029,6 +1080,7 @@ export default function Composer({
                         emojiRecents={emojiPrefs.recents}
                         emojiSkinTone={emojiPrefs.skinTone}
                         onEmojiSkinToneChange={emojiPrefs.setSkinTone}
+                        onAttachGif={shell.gifs_enabled ? attachGif : undefined}
                         activePlatform={activeAccount?.platform}
                         autoSplit={
                             activeAccount

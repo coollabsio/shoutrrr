@@ -1,10 +1,17 @@
-import { Image as ImageIcon, Shuffle, Smile, Split } from 'lucide-react';
+import {
+    FileImage,
+    Image as ImageIcon,
+    Shuffle,
+    Smile,
+    Split,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 
 import type { BoostValue } from '@/components/compose/boost-popover';
 import { BoostPopover } from '@/components/compose/boost-popover';
 import { EmojiPopover } from '@/components/compose/emoji-popover';
+import { GifPopover } from '@/components/compose/gif-popover';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { cn } from '@/lib/utils';
 import type {
@@ -14,6 +21,7 @@ import type {
     PlatformName,
     PostFormat,
 } from '@/types/compose';
+import type { GifItem } from '@/types/gifs';
 
 import { MediaChips } from './media-chips';
 
@@ -63,6 +71,8 @@ type Props = {
     emojiRecents: string[];
     emojiSkinTone: EmojiSkinTone;
     onEmojiSkinToneChange: (tone: EmojiSkinTone) => void;
+    /** Attach a chosen GIF. Absent hides the GIF button (read-only, or disabled). */
+    onAttachGif?: (item: GifItem) => void;
 };
 
 export function ComposerToolbar({
@@ -91,6 +101,7 @@ export function ComposerToolbar({
     emojiRecents,
     emojiSkinTone,
     onEmojiSkinToneChange,
+    onAttachGif,
 }: Props) {
     const input = useRef<HTMLInputElement | null>(null);
 
@@ -157,6 +168,28 @@ export function ComposerToolbar({
                     <Smile className="size-3.5" aria-hidden="true" />
                     <span>Emoji</span>
                 </EmojiPopover>
+            )}
+
+            {!readOnly && onAttachGif !== undefined && (
+                <GifPopover
+                    onSelect={onAttachGif}
+                    align="start"
+                    trigger={(open) => (
+                        <button
+                            type="button"
+                            title="GIF"
+                            data-active={open}
+                            className={cn(
+                                'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
+                                'hover:border-border hover:bg-background hover:text-foreground',
+                                'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
+                            )}
+                        />
+                    )}
+                >
+                    <FileImage className="size-3.5" aria-hidden="true" />
+                    <span>GIF</span>
+                </GifPopover>
             )}
 
             {!readOnly && (

@@ -55,3 +55,19 @@ describe('ComposerToolbar format picker', () => {
         ).not.toBeInTheDocument();
     });
 });
+
+describe('ComposerToolbar GIF button', () => {
+    it('shows the GIF button when an attach handler is supplied', () => {
+        render(<ComposerToolbar {...base} onAttachGif={vi.fn()} />);
+        expect(
+            screen.getByRole('button', { name: /gif/i }),
+        ).toBeInTheDocument();
+    });
+
+    it('hides the GIF button without an attach handler', () => {
+        render(<ComposerToolbar {...base} onAttachGif={undefined} />);
+        expect(
+            screen.queryByRole('button', { name: /gif/i }),
+        ).not.toBeInTheDocument();
+    });
+});

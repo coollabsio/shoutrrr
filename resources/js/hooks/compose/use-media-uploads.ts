@@ -45,6 +45,15 @@ type MediaUploads = {
      * compression, or storage PUT, whichever is running, and removes the chip.
      */
     cancelPending: (tempId: string) => void;
+    /**
+     * Show a pending chip while a non-file attach (a remote GIF the server
+     * downloads) is in flight, then add the resolved media. Lets the GIF picker
+     * feel instant without duplicating chip state on every surface.
+     */
+    trackPending: (
+        chip: { kind: 'image' | 'video'; previewUrl?: string },
+        work: () => Promise<MediaView>,
+    ) => Promise<void>;
 };
 
 /**
@@ -126,13 +135,18 @@ export function useMediaUploads({
 
     // --- Pending-chip lifecycle (shared by both upload flows) ---------------
 
+    function newTempId(): string {
+        tempSeq.current += 1;
+
+        return `up_${tempSeq.current}`;
+    }
+
     function beginUpload(
         file: File,
         kind: PendingUpload['kind'],
         status: PendingUpload['status'] = 'uploading',
     ): { tempId: string; previewUrl?: string } {
-        tempSeq.current += 1;
-        const tempId = `up_${tempSeq.current}`;
+        const tempId = newTempId();
         const previewUrl = mintPreview(file);
         setPending((cur) => [...cur, { tempId, kind, previewUrl, status }]);
 
@@ -178,6 +192,39 @@ export function useMediaUploads({
 
             return cur.filter((p) => p.tempId !== tempId);
         });
+    }
+
+    /**
+     * Show a pending chip while a non-file attach (a remote GIF the server
+     * downloads) is in flight, then add the resolved media. Lets the GIF picker
+     * feel instant without duplicating chip state on every surface.
+     */
+    async function trackPending(
+        chip: { kind: 'image' | 'video'; previewUrl?: string },
+        work: () => Promise<MediaView>,
+    ): Promise<void> {
+        const tempId = newTempId();
+        setPending((current) => [
+            ...current,
+            {
+                tempId,
+                kind: chip.kind,
+                previewUrl: chip.previewUrl,
+                status: 'uploading',
+            },
+        ]);
+
+        try {
+            onAddMedia(await work());
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : 'That GIF could not be attached.',
+            );
+        } finally {
+            dismissPending(tempId);
+        }
     }
 
     function cancelPending(tempId: string): void {
@@ -447,5 +494,12 @@ export function useMediaUploads({
         }
     }
 
-    return { pending, isUploading, handleFiles, dismissPending, cancelPending };
+    return {
+        pending,
+        isUploading,
+        handleFiles,
+        dismissPending,
+        cancelPending,
+        trackPending,
+    };
 }
