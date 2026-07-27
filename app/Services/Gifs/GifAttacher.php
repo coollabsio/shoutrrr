@@ -53,7 +53,10 @@ class GifAttacher
         iterable $existingMedia,
         ?int $durationSeconds = null,
     ): PostMedia {
-        $existing = is_array($existingMedia) ? $existingMedia : iterator_to_array($existingMedia);
+        // array_values() guarantees a list: $existingMedia may already be an
+        // array with non-sequential keys, and iterator_to_array() preserves the
+        // iterator's own keys — either way guardMediaRules() requires a list.
+        $existing = array_values(is_array($existingMedia) ? $existingMedia : iterator_to_array($existingMedia));
 
         // Variant selection happens first so the guard can see the chosen
         // variant's mime — the mixing rule is about mime (a sticker can
@@ -194,6 +197,12 @@ class GifAttacher
                 $temp = tempnam(sys_get_temp_dir(), 'klipy');
 
                 if ($temp === false) {
+                    // Reset to null (rather than leaving the failed false value)
+                    // so the finally block below — whose $temp !== null check is
+                    // the only thing guarding the unlink() call — doesn't try to
+                    // unlink a nonexistent path.
+                    $temp = null;
+
                     throw new RuntimeException('Could not attach that clip.');
                 }
 

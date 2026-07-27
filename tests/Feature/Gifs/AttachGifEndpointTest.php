@@ -5,6 +5,7 @@ use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -176,5 +177,38 @@ test('attaching a reply gif with no media_ids still succeeds', function () {
 
     $this->actingAs($user)
         ->postJson("/engagement/{$reply->id}/gifs", attachPayload())
+        ->assertCreated();
+});
+
+test('attaching a reply gif with an explicit empty media_ids array still succeeds', function () {
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    $reply = PostTargetReply::factory()
+        ->for(PostTarget::factory()->for($post), 'target')
+        ->create(['workspace_id' => $user->current_workspace_id]);
+
+    $this->actingAs($user)
+        ->postJson("/engagement/{$reply->id}/gifs", attachPayload(['media_ids' => []]))
+        ->assertCreated();
+});
+
+test('a foreign-workspace media_id is silently dropped, not treated as existing media', function () {
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    $reply = PostTargetReply::factory()
+        ->for(PostTarget::factory()->for($post), 'target')
+        ->create(['workspace_id' => $user->current_workspace_id]);
+    // Belongs to a different workspace — an unscoped whereIn() lookup would
+    // find it and wrongly trip the "already has an image" mixing guard.
+    $foreignImage = PostMedia::factory()->create([
+        'workspace_id' => Workspace::factory()->create()->id,
+        'kind' => 'image',
+        'mime' => 'image/png',
+    ]);
+
+    $this->actingAs($user)
+        ->postJson("/engagement/{$reply->id}/gifs", attachPayload([
+            'media_ids' => [$foreignImage->id],
+        ]))
         ->assertCreated();
 });
