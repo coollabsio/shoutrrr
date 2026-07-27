@@ -38,6 +38,7 @@ import {
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
 import { precheckAccount, precheckDestinations } from '@/lib/compose/precheck';
 import { readVideoMetadata, videoLimitsForTargets } from '@/lib/compose/video';
+import { xsrfHeader } from '@/lib/csrf';
 import {
     defaultSettings,
     normalizeSettings,
@@ -285,6 +286,9 @@ export default function Composer({
     // fetch rather than the local upload flow the other media handlers use.
     async function attachGif(item: GifItem) {
         const post = await ensurePost();
+        if (!post) {
+            return;
+        }
 
         await mediaUploads.trackPending(
             {
@@ -299,11 +303,7 @@ export default function Composer({
                         headers: {
                             'Content-Type': 'application/json',
                             Accept: 'application/json',
-                            'X-XSRF-TOKEN': decodeURIComponent(
-                                document.cookie.match(
-                                    /XSRF-TOKEN=([^;]+)/,
-                                )?.[1] ?? '',
-                            ),
+                            ...xsrfHeader(),
                         },
                         body: JSON.stringify({
                             catalog: item.catalog,
