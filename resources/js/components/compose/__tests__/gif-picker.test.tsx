@@ -31,7 +31,34 @@ function createMemoryStorage(): Storage {
     };
 }
 
-function payload(slugs: string[]) {
+/**
+ * A controllable stand-in for the browser's IntersectionObserver. Records
+ * every instance created (there's one per GifPicker mount, observing the
+ * scroll sentinel) so a test can drive `trigger()` to simulate the sentinel
+ * entering/leaving the viewport, independent of real layout in jsdom.
+ */
+class MockIntersectionObserver {
+    static instances: MockIntersectionObserver[] = [];
+    callback: IntersectionObserverCallback;
+    disconnect = vi.fn();
+
+    constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback;
+        MockIntersectionObserver.instances.push(this);
+    }
+
+    observe() {}
+    unobserve() {}
+
+    trigger(isIntersecting: boolean) {
+        this.callback(
+            [{ isIntersecting } as IntersectionObserverEntry],
+            this as unknown as IntersectionObserver,
+        );
+    }
+}
+
+function payload(slugs: string[], hasNext = false) {
     return {
         items: slugs.map((slug) => ({
             id: slug,
@@ -55,11 +82,16 @@ function payload(slugs: string[]) {
                 },
             ],
         })),
-        has_next: false,
+        has_next: hasNext,
     };
 }
 
+function pageParam(url: string): string | null {
+    return new URL(url, 'http://localhost').searchParams.get('page');
+}
+
 beforeEach(() => {
+    MockIntersectionObserver.instances = [];
     vi.stubGlobal('localStorage', createMemoryStorage());
     vi.stubGlobal(
         'fetch',
@@ -67,14 +99,7 @@ beforeEach(() => {
             async () => new Response(JSON.stringify(payload(['yay', 'wow']))),
         ),
     );
-    vi.stubGlobal(
-        'IntersectionObserver',
-        class {
-            observe() {}
-            unobserve() {}
-            disconnect() {}
-        },
-    );
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -160,42 +185,137 @@ describe('GifPicker', () => {
         );
     });
 
-    it('renders a favourite with junk dimensions without breaking layout', async () => {
-        const junkItem = {
-            id: 'junk',
-            slug: 'junk',
-            catalog: 'gif',
-            title: 'junk',
-            preview: {
-                url: 'https://cdn.klipy.com/junk.gif',
-                mime: 'image/gif',
-                width: 'not-a-number',
-                height: 90,
-                bytes: 1000,
-            },
-            variants: [
-                {
-                    url: 'https://cdn.klipy.com/junk.gif',
-                    mime: 'image/gif',
-                    width: 320,
-                    height: 240,
-                    bytes: 40000,
-                },
-            ],
-        };
-        localStorage.setItem(
-            'shoutrrr:gifs:favorites',
-            JSON.stringify([junkItem]),
+    it('continues to the next page automatically when a settled page does not fill the viewport', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string) => {
+                const page = pageParam(url);
+
+                if (page === '2') {
+                    return new Response(
+                        JSON.stringify(payload(['c', 'd'], true)),
+                    );
+                }
+                if (page === '3') {
+                    return new Response(JSON.stringify(payload([], false)));
+                }
+
+                return new Response(JSON.stringify(payload(['a', 'b'], true)));
+            }),
         );
 
         render(<GifPicker onSelect={vi.fn()} />);
+        await screen.findAllByRole('button', { name: /insert/i });
 
-        const insertButton = await screen.findByRole('button', {
-            name: /insert junk/i,
+        // Simulate the sentinel being visible from the start (a short first
+        // page that doesn't overflow the 420px scroll area) — this is the one
+        // crossing event the observer ever sees; everything after page 1 must
+        // come from the settle-effect noticing continued room, not from a
+        // second crossing.
+        MockIntersectionObserver.instances[0]?.trigger(true);
+
+        // `isLoading` flips back to `false` in its own render, one tick after
+        // the render that applies the new items — so the page-3 request the
+        // settle-effect fires can land after the DOM already shows 4 tiles.
+        // Poll on the fetch calls themselves rather than only on tile count.
+        await waitFor(() => {
+            const pagesRequested = (
+                globalThis.fetch as ReturnType<typeof vi.fn>
+            ).mock.calls.map(([url]) => pageParam(String(url)));
+            expect(pagesRequested).toEqual(['1', '2', '3']);
         });
 
-        expect(insertButton.style.aspectRatio).not.toBe('NaN');
-        expect(insertButton.style.aspectRatio).not.toBe('Infinity');
-        expect(insertButton.style.aspectRatio).not.toBe('');
+        expect(screen.getAllByRole('button', { name: /insert/i })).toHaveLength(
+            4,
+        );
     });
+
+    it('does not loop forever when a page reports has_next but returns no items', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string) => {
+                const page = pageParam(url);
+
+                if (page === '2') {
+                    // A misbehaving API: claims more pages exist, but this one is empty.
+                    return new Response(JSON.stringify(payload([], true)));
+                }
+
+                return new Response(JSON.stringify(payload(['a', 'b'], true)));
+            }),
+        );
+
+        render(<GifPicker onSelect={vi.fn()} />);
+        await screen.findAllByRole('button', { name: /insert/i });
+
+        MockIntersectionObserver.instances[0]?.trigger(true);
+
+        await waitFor(() =>
+            expect(
+                (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls
+                    .length,
+            ).toBe(2),
+        );
+
+        // Give a runaway effect loop a chance to fire before asserting it didn't.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(
+            (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length,
+        ).toBe(2);
+    });
+
+    const junkDimensionCases: {
+        label: string;
+        preview: Record<string, unknown>;
+    }[] = [
+        {
+            label: 'non-numeric width',
+            preview: { width: 'not-a-number', height: 90 },
+        },
+        { label: 'missing width', preview: { height: 90 } },
+        { label: 'zero width', preview: { width: 0, height: 90 } },
+        { label: 'negative height', preview: { width: 120, height: -10 } },
+    ];
+
+    it.each(junkDimensionCases)(
+        'renders a favourite with $label without breaking layout',
+        async ({ preview }) => {
+            const junkItem = {
+                id: 'junk',
+                slug: 'junk',
+                catalog: 'gif',
+                title: 'junk',
+                preview: {
+                    url: 'https://cdn.klipy.com/junk.gif',
+                    mime: 'image/gif',
+                    bytes: 1000,
+                    ...preview,
+                },
+                variants: [
+                    {
+                        url: 'https://cdn.klipy.com/junk.gif',
+                        mime: 'image/gif',
+                        width: 320,
+                        height: 240,
+                        bytes: 40000,
+                    },
+                ],
+            };
+            localStorage.setItem(
+                'shoutrrr:gifs:favorites',
+                JSON.stringify([junkItem]),
+            );
+
+            render(<GifPicker onSelect={vi.fn()} />);
+
+            const insertButton = await screen.findByRole('button', {
+                name: /insert junk/i,
+            });
+
+            expect(insertButton.style.aspectRatio).not.toBe('NaN');
+            expect(insertButton.style.aspectRatio).not.toBe('Infinity');
+            expect(insertButton.style.aspectRatio).not.toBe('');
+        },
+    );
 });

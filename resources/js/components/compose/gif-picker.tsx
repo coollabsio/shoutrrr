@@ -40,6 +40,16 @@ export function GifPicker({ onSelect }: Props) {
     const loadMoreRef = useRef(search.loadMore);
     loadMoreRef.current = search.loadMore;
 
+    // Whether the sentinel is currently intersecting, per the observer's most
+    // recent report. Read by the settle-effect below to decide whether a
+    // just-finished page should be followed by another.
+    const intersectingRef = useRef(false);
+
+    // How many items were on screen the last time we checked. Only used to
+    // detect real progress (see the settle-effect below) — never to gate the
+    // observer callback itself.
+    const settledItemCountRef = useRef(0);
+
     useEffect(() => {
         setFavorites(parseFavorites(localStorage.getItem(FAVORITES_KEY)));
     }, []);
@@ -52,7 +62,9 @@ export function GifPicker({ onSelect }: Props) {
         }
 
         const observer = new IntersectionObserver((entries) => {
-            if (entries[0]?.isIntersecting) {
+            intersectingRef.current = entries[0]?.isIntersecting ?? false;
+
+            if (intersectingRef.current) {
                 loadMoreRef.current();
             }
         });
@@ -60,6 +72,39 @@ export function GifPicker({ onSelect }: Props) {
 
         return () => observer.disconnect();
     }, []);
+
+    // A short page (fewer results than it takes to overflow the 420px scroll
+    // area) never produces a fresh intersection crossing — the sentinel was
+    // already visible and stays visible, so the observer callback above never
+    // fires again and pagination would otherwise silently stall even with
+    // `hasNext: true`. Re-check once each page settles instead.
+    //
+    // Guarded against looping forever on a misbehaving API that reports
+    // `has_next: true` alongside an empty page: only request another page
+    // when the previous one actually added items, so a run of empty "next"
+    // pages stops after the first one rather than hammering the endpoint.
+    useEffect(() => {
+        if (search.isLoading) {
+            return;
+        }
+
+        // A catalog/query change resets `items` to a shorter (or empty)
+        // array; resync the baseline instead of reading that as "no
+        // progress" for the rest of the new search.
+        if (search.items.length < settledItemCountRef.current) {
+            settledItemCountRef.current = search.items.length;
+        }
+
+        if (!intersectingRef.current || !search.hasNext) {
+            settledItemCountRef.current = search.items.length;
+            return;
+        }
+
+        if (search.items.length > settledItemCountRef.current) {
+            settledItemCountRef.current = search.items.length;
+            loadMoreRef.current();
+        }
+    }, [search.items, search.isLoading, search.hasNext]);
 
     function handleToggleFavorite(item: GifItem) {
         const next = toggleFavorite(favorites, item);

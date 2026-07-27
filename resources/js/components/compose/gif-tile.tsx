@@ -1,4 +1,5 @@
 import { Heart } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 import { cn } from '@/lib/utils';
 import type { GifItem } from '@/types/gifs';
@@ -49,6 +50,39 @@ export function GifTile({
     onToggleFavorite,
 }: Props) {
     const ratio = aspectRatioOf(item);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+
+    // Masonry keeps every loaded tile mounted as the user scrolls, so a plain
+    // `autoPlay` would have every off-screen clip downloading and decoding at
+    // once. Instead: no `preload`/`autoPlay` hint at all, and an observer
+    // scoped to this one tile plays it only while it's actually visible in
+    // the 420px popover, pausing it the moment it scrolls out.
+    useEffect(() => {
+        if (item.catalog !== 'clip') {
+            return;
+        }
+
+        const node = videoRef.current;
+
+        if (!node) {
+            return;
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0]?.isIntersecting) {
+                // play() returns a promise that rejects if the element is
+                // paused or removed before playback actually starts (e.g.
+                // fast scrolling past a tile) — that's expected, not a real
+                // failure, so it must never surface as an unhandled rejection.
+                node.play()?.catch(() => {});
+            } else {
+                node.pause();
+            }
+        });
+        observer.observe(node);
+
+        return () => observer.disconnect();
+    }, [item.catalog]);
 
     return (
         <div className="group relative">
@@ -62,8 +96,9 @@ export function GifTile({
                 {item.catalog === 'clip' ? (
                     <div className="relative size-full">
                         <video
+                            ref={videoRef}
                             src={item.preview.url}
-                            autoPlay
+                            preload="none"
                             loop
                             muted
                             playsInline
