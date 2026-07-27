@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import ReplyImageEditController from '@/actions/App/Http/Controllers/Engagement/ReplyImageEditController';
 import ReplyMediaController from '@/actions/App/Http/Controllers/Engagement/ReplyMediaController';
 import ReplyVideoUploadController from '@/actions/App/Http/Controllers/Engagement/ReplyVideoUploadController';
+import ReplyGifController from '@/actions/App/Http/Controllers/Gifs/ReplyGifController';
 import { ImageEditor } from '@/components/compose/image-editor';
 import { MediaChips } from '@/components/compose/media-chips';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
@@ -12,12 +13,14 @@ import {
     wouldMixVideoAndImages,
     wouldViolateBlueskyGif,
 } from '@/lib/compose/media-rules';
+import { xsrfHeader } from '@/lib/csrf';
 import {
     defaultSettings,
     type EditSettings,
     normalizeSettings,
 } from '@/lib/image-editor/settings';
 import type { MediaView, PlatformName } from '@/types/compose';
+import type { GifItem } from '@/types/gifs';
 
 /** What the image editor is currently working on. */
 type Editing =
@@ -67,6 +70,8 @@ type ReplyMedia = {
      * paste-to-upload passes its clipboard FileList straight in.
      */
     handleAddedFiles: (files: FileList | File[]) => Promise<void>;
+    /** Attach a chosen GIF/sticker/clip; the server downloads and re-hosts it. */
+    attachGif: (item: GifItem) => Promise<void>;
 };
 
 function blobToFile(blob: Blob, baseName: string): File {
@@ -117,18 +122,67 @@ export function useReplyMedia({
 
     // --- useMediaUploads ---------------------------------------------------
 
-    const { pending, isUploading, handleFiles, dismissPending, cancelPending } =
-        useMediaUploads({
-            media,
-            videoLimits,
-            onEnsurePost: async () => replyId,
-            onAddMedia: (m) => onChange([...media, m]),
-            endpoints: {
-                imageStore: (id) => ReplyMediaController.store(id).url,
-                videoSign: (id) => ReplyVideoUploadController.url(id).url,
-                videoStore: (id) => ReplyVideoUploadController.store(id).url,
+    const {
+        pending,
+        isUploading,
+        handleFiles,
+        dismissPending,
+        cancelPending,
+        trackPending,
+    } = useMediaUploads({
+        media,
+        videoLimits,
+        onEnsurePost: async () => replyId,
+        onAddMedia: (m) => onChange([...media, m]),
+        endpoints: {
+            imageStore: (id) => ReplyMediaController.store(id).url,
+            videoSign: (id) => ReplyVideoUploadController.url(id).url,
+            videoStore: (id) => ReplyVideoUploadController.store(id).url,
+        },
+    });
+
+    // The server downloads and re-hosts the chosen GIF, so this is a chip +
+    // fetch rather than the local upload flow the other media handlers use.
+    // Unlike the composer, replyId is always available (no ensure-post step
+    // that can fail), so there is no early-bail guard here.
+    async function attachGif(item: GifItem): Promise<void> {
+        await trackPending(
+            {
+                kind: item.catalog === 'clip' ? 'video' : 'image',
+                previewUrl: item.preview.url,
             },
-        });
+            async () => {
+                const response = await fetch(
+                    ReplyGifController.store.url({ reply: replyId }),
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json',
+                            ...xsrfHeader(),
+                        },
+                        body: JSON.stringify({
+                            catalog: item.catalog,
+                            slug: item.slug,
+                            title: item.title,
+                            variants: item.variants,
+                        }),
+                    },
+                );
+
+                if (!response.ok) {
+                    const body = (await response.json().catch(() => ({}))) as {
+                        message?: string;
+                    };
+                    throw new Error(
+                        body.message ?? 'That GIF could not be attached.',
+                    );
+                }
+
+                return ((await response.json()) as { media: MediaView }).media;
+            },
+        );
+    }
 
     // --- Image-editor HTTP (inline, mirrors use-image-editor.ts) ----------
 
@@ -394,5 +448,6 @@ export function useReplyMedia({
             },
         },
         handleAddedFiles,
+        attachGif,
     };
 }
