@@ -29,8 +29,13 @@ class GifAttacher
      * Only these hosts may be downloaded from. The client sends a variant URL,
      * so without this an attacker could point the attach endpoint anywhere the
      * SSRF guard still permits (any public host).
+     *
+     * Evidence-based as of the 2026-07-27 live-API probe (Task 0): all 117
+     * media URLs captured across gifs, stickers, and clips resolved to
+     * `static.klipy.com`. `klipy.co` never appeared in any response and there
+     * is no evidence Klipy owns that domain, so it is not allow-listed.
      */
-    public const array ALLOWED_HOST_SUFFIXES = ['klipy.com', 'klipy.co'];
+    public const array ALLOWED_HOST_SUFFIXES = ['klipy.com'];
 
     /** Matches SafeImageFetcher's own cap; checked up front to avoid a doomed download. */
     private const int MAX_IMAGE_BYTES = 8 * 1024 * 1024;

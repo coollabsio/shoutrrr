@@ -125,15 +125,54 @@ class KlipyClient
     }
 
     /**
-     * Flatten Klipy's `file[size][format]` map into an ordered variant list.
-     * Returns null for an item with no usable variant rather than failing the
-     * whole page.
+     * Flatten Klipy's variant map into an ordered variant list. Returns null for
+     * an item with no usable variant rather than failing the whole page.
+     *
+     * Klipy uses two different shapes here, confirmed against the live API on
+     * 2026-07-27:
+     *
+     *   gifs, stickers  file[tier][format] = {url, width, height, size}
+     *   clips           file[format]       = "https://…"   (a bare URL string)
+     *                   file_meta[format]  = {width, height, size}
      *
      * @param  array<string, mixed>  $raw
      */
     private function normalizeItem(string $catalog, array $raw): ?GifItem
     {
         $wanted = $catalog === 'clip' ? ['mp4'] : ['gif', 'webp'];
+
+        $variants = $catalog === 'clip'
+            ? $this->clipVariants($raw, $wanted)
+            : $this->tieredVariants($raw, $wanted);
+
+        if ($variants === []) {
+            return null;
+        }
+
+        // Largest first: the attacher walks down until one fits its cap, and the
+        // smallest doubles as the grid preview.
+        usort($variants, fn (GifVariant $a, GifVariant $b): int => ($b->bytes ?? PHP_INT_MAX) <=> ($a->bytes ?? PHP_INT_MAX));
+
+        return new GifItem(
+            id: (string) ($raw['id'] ?? $raw['slug'] ?? ''),
+            slug: (string) ($raw['slug'] ?? ''),
+            catalog: $catalog,
+            title: (string) ($raw['title'] ?? ''),
+            preview: $variants[count($variants) - 1],
+            variants: $variants,
+        );
+    }
+
+    /**
+     * Walk `file[tier][format]`, keeping formats in `$wanted`. This is the shape
+     * gifs and stickers use.
+     *
+     * @param  array<string, mixed>  $raw
+     * @param  list<string>  $wanted
+     * @return list<GifVariant>
+     */
+    private function tieredVariants(array $raw, array $wanted): array
+    {
         $variants = [];
 
         foreach ((array) ($raw['file'] ?? []) as $formats) {
@@ -152,22 +191,42 @@ class KlipyClient
             }
         }
 
-        if ($variants === []) {
-            return null;
+        return $variants;
+    }
+
+    /**
+     * Walk `file[format]`, where each value is a bare URL string rather than a
+     * nested object. Dimensions and size live in the sibling `file_meta[format]`
+     * instead of alongside the URL. This is the shape clips use; a missing
+     * `file_meta` entry for a wanted format defaults to zeroed dimensions and a
+     * null size rather than being dropped.
+     *
+     * @param  array<string, mixed>  $raw
+     * @param  list<string>  $wanted
+     * @return list<GifVariant>
+     */
+    private function clipVariants(array $raw, array $wanted): array
+    {
+        $variants = [];
+        $meta = (array) ($raw['file_meta'] ?? []);
+
+        foreach ((array) ($raw['file'] ?? []) as $format => $url) {
+            if (! in_array($format, $wanted, true) || ! is_string($url) || $url === '') {
+                continue;
+            }
+
+            $fileMeta = is_array($meta[$format] ?? null) ? $meta[$format] : [];
+
+            $variants[] = new GifVariant(
+                url: $url,
+                mime: self::MIMES[$format],
+                width: (int) ($fileMeta['width'] ?? 0),
+                height: (int) ($fileMeta['height'] ?? 0),
+                bytes: isset($fileMeta['size']) ? (int) $fileMeta['size'] : null,
+            );
         }
 
-        // Largest first: the attacher walks down until one fits its cap, and the
-        // smallest doubles as the grid preview.
-        usort($variants, fn (GifVariant $a, GifVariant $b): int => ($b->bytes ?? PHP_INT_MAX) <=> ($a->bytes ?? PHP_INT_MAX));
-
-        return new GifItem(
-            id: (string) ($raw['id'] ?? $raw['slug'] ?? ''),
-            slug: (string) ($raw['slug'] ?? ''),
-            catalog: $catalog,
-            title: (string) ($raw['title'] ?? ''),
-            preview: $variants[count($variants) - 1],
-            variants: $variants,
-        );
+        return $variants;
     }
 
     private function pathFor(string $catalog): string
