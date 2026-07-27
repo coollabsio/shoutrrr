@@ -17,6 +17,18 @@ export type UseGifSearch = {
 };
 
 /**
+ * The three values that must always change together: a page number is only
+ * meaningful paired with the catalog/query it was fetched for. Kept as one
+ * state object so a query (or catalog) change and the page-1 reset it
+ * requires can never be observed separately by the fetch effect below.
+ */
+type ActiveRequest = {
+    catalog: GifCatalog;
+    query: string;
+    page: number;
+};
+
+/**
  * Owns one catalog's browse state: debounced query, accumulated pages, and the
  * loading/error flags the picker renders. Fetching is inert while `enabled` is
  * false, so a closed popover costs nothing.
@@ -26,9 +38,12 @@ export function useGifSearch(
     enabled: boolean,
 ): UseGifSearch {
     const [query, setQuery] = useState('');
-    const [debounced, setDebounced] = useState('');
+    const [request, setRequest] = useState<ActiveRequest>({
+        catalog,
+        query: '',
+        page: 1,
+    });
     const [items, setItems] = useState<GifItem[]>([]);
-    const [page, setPage] = useState(1);
     const [hasNext, setHasNext] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -37,20 +52,28 @@ export function useGifSearch(
     // Ignore a resolved response whose request has been superseded.
     const requestId = useRef(0);
 
+    // `catalog` is a prop, not state. Resync it into `request` synchronously
+    // during render (not a second effect) so the fetch effect below never
+    // fires with a page left over from the previous catalog paired with the
+    // new one.
+    const [syncedCatalog, setSyncedCatalog] = useState(catalog);
+    if (catalog !== syncedCatalog) {
+        setSyncedCatalog(catalog);
+        setRequest((current) => ({ ...current, catalog, page: 1 }));
+        setItems([]);
+    }
+
+    // Debounce the raw query into `request` as a single atomic update: the
+    // query and its page-1 reset land in one setState call, so they can
+    // never be split across two commits the way separate `debounced`/`page`
+    // states were.
     useEffect(() => {
-        const handle = window.setTimeout(
-            () => setDebounced(query),
-            DEBOUNCE_MS,
-        );
+        const handle = window.setTimeout(() => {
+            setRequest((current) => ({ ...current, query, page: 1 }));
+        }, DEBOUNCE_MS);
 
         return () => window.clearTimeout(handle);
     }, [query]);
-
-    // A new query (or catalog) starts a fresh result set at page 1.
-    useEffect(() => {
-        setPage(1);
-        setItems([]);
-    }, [debounced, catalog]);
 
     useEffect(() => {
         if (!enabled) {
@@ -58,16 +81,25 @@ export function useGifSearch(
         }
 
         const id = ++requestId.current;
+        const controller = new AbortController();
         setIsLoading(true);
         setError(null);
 
-        const trimmed = debounced.trim();
+        const trimmed = request.query.trim();
         const url = gifs.browse.url(
-            { catalog },
-            { query: { page, q: trimmed === '' ? undefined : trimmed } },
+            { catalog: request.catalog },
+            {
+                query: {
+                    page: request.page,
+                    q: trimmed === '' ? undefined : trimmed,
+                },
+            },
         );
 
-        fetch(url, { headers: { Accept: 'application/json' } })
+        fetch(url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        })
             .then((response) => {
                 if (!response.ok) {
                     throw new Error(String(response.status));
@@ -80,21 +112,35 @@ export function useGifSearch(
                     return;
                 }
                 setItems((current) =>
-                    page === 1 ? data.items : [...current, ...data.items],
+                    request.page === 1
+                        ? data.items
+                        : [...current, ...data.items],
                 );
                 setHasNext(data.has_next);
             })
             .catch(() => {
+                // An aborted request (cleanup below) rejects too; it's not a
+                // real failure, so it must never surface as an error banner.
+                if (controller.signal.aborted) {
+                    return;
+                }
                 if (id === requestId.current) {
                     setError("GIFs aren't loading right now.");
                 }
             })
             .finally(() => {
+                if (controller.signal.aborted) {
+                    return;
+                }
                 if (id === requestId.current) {
                     setIsLoading(false);
                 }
             });
-    }, [catalog, debounced, page, enabled, attempt]);
+
+        return () => {
+            controller.abort();
+        };
+    }, [request, enabled, attempt]);
 
     return {
         query,
@@ -105,7 +151,10 @@ export function useGifSearch(
         hasNext,
         loadMore: () => {
             if (!isLoading && hasNext) {
-                setPage((current) => current + 1);
+                setRequest((current) => ({
+                    ...current,
+                    page: current.page + 1,
+                }));
             }
         },
         retry: () => setAttempt((current) => current + 1),

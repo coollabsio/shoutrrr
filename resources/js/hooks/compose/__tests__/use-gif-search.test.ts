@@ -3,6 +3,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { GifCatalog } from '@/types/gifs';
+
 import { useGifSearch } from '../use-gif-search';
 
 function page(slugs: string[], hasNext = false) {
@@ -162,5 +164,108 @@ describe('useGifSearch', () => {
         });
 
         expect(result.current.items.map((item) => item.slug)).toEqual(['b']);
+    });
+
+    it('never mixes a stale page with a new query after loadMore', async () => {
+        const calls: string[] = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                calls.push(url);
+
+                return Promise.resolve(
+                    new Response(JSON.stringify(page(['x'], true))),
+                );
+            }),
+        );
+
+        const { result } = renderHook(() => useGifSearch('gif', true));
+        await waitFor(() => expect(calls).toHaveLength(1));
+
+        act(() => result.current.loadMore());
+        await waitFor(() => expect(calls).toHaveLength(2));
+
+        act(() => result.current.setQuery('dogs'));
+        await act(async () => {
+            vi.advanceTimersByTime(300);
+        });
+        await waitFor(() => expect(calls.length).toBeGreaterThanOrEqual(3));
+
+        // The pre-reset page (2) must never be requested alongside the new query.
+        const badCall = calls.some((url) => {
+            const params = new URL(url, 'http://example.test').searchParams;
+
+            return params.get('page') === '2' && params.get('q') === 'dogs';
+        });
+        expect(badCall).toBe(false);
+
+        const last = new URL(calls[calls.length - 1], 'http://example.test');
+        expect(last.searchParams.get('page')).toBe('1');
+        expect(last.searchParams.get('q')).toBe('dogs');
+    });
+
+    it('never mixes a stale page with a new catalog after loadMore', async () => {
+        const calls: string[] = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                calls.push(url);
+
+                return Promise.resolve(
+                    new Response(JSON.stringify(page(['x'], true))),
+                );
+            }),
+        );
+
+        const { result, rerender } = renderHook(
+            ({ catalog }) => useGifSearch(catalog, true),
+            { initialProps: { catalog: 'gif' as GifCatalog } },
+        );
+        await waitFor(() => expect(calls).toHaveLength(1));
+
+        act(() => result.current.loadMore());
+        await waitFor(() => expect(calls).toHaveLength(2));
+
+        rerender({ catalog: 'sticker' });
+        await waitFor(() => expect(calls.length).toBeGreaterThanOrEqual(3));
+
+        // The old catalog's page-2 request must never be replayed for the new
+        // catalog.
+        const badCall = calls.some((url) => {
+            const parsed = new URL(url, 'http://example.test');
+
+            return (
+                parsed.pathname.includes('/sticker') &&
+                parsed.searchParams.get('page') === '2'
+            );
+        });
+        expect(badCall).toBe(false);
+
+        const last = new URL(calls[calls.length - 1], 'http://example.test');
+        expect(last.pathname).toContain('/sticker');
+        expect(last.searchParams.get('page')).toBe('1');
+    });
+
+    it('aborts the in-flight request on unmount', async () => {
+        let capturedSignal: AbortSignal | undefined;
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((_url: string, init?: RequestInit) => {
+                capturedSignal = init?.signal ?? undefined;
+
+                // Never resolves — the assertion only holds if the request is
+                // cancelled rather than left dangling.
+                return new Promise<Response>(() => {});
+            }),
+        );
+
+        const { unmount } = renderHook(() => useGifSearch('gif', true));
+
+        await waitFor(() => expect(capturedSignal).toBeDefined());
+        expect(capturedSignal?.aborted).toBe(false);
+
+        unmount();
+
+        expect(capturedSignal?.aborted).toBe(true);
     });
 });
