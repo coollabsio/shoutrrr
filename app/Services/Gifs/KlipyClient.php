@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Gifs;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use InvalidArgumentException;
 use RuntimeException;
@@ -68,14 +69,21 @@ class KlipyClient
 
     /**
      * Report a share back to Klipy. Best-effort: never throws into the caller's
-     * request, since the user's attach has already succeeded by this point.
+     * request, since the user's attach has already succeeded by this point. A
+     * connection-level failure (DNS, refused, timeout) is swallowed rather than
+     * rethrown, since Guzzle embeds the full request URI — API key included — in
+     * that exception's message.
      */
     public function share(string $catalog, string $slug, string $customerId): void
     {
-        $this->http->timeout(5)->post($this->url($this->pathFor($catalog).'/share'), [
-            'slug' => $slug,
-            'customer_id' => $customerId,
-        ]);
+        try {
+            $this->http->timeout(5)->post($this->url($this->pathFor($catalog).'/share'), [
+                'slug' => $slug,
+                'customer_id' => $customerId,
+            ]);
+        } catch (ConnectionException) {
+            // Best-effort: nothing to do, nothing to report to the caller.
+        }
     }
 
     /**
@@ -84,7 +92,13 @@ class KlipyClient
      */
     private function get(string $catalog, string $path, array $params): array
     {
-        $response = $this->http->timeout(10)->connectTimeout(5)->get($this->url($path), $params);
+        try {
+            $response = $this->http->timeout(10)->connectTimeout(5)->get($this->url($path), $params);
+        } catch (ConnectionException) {
+            // Deliberately excludes the original exception/message — Guzzle embeds
+            // the full request URI, which contains the API key, in its message.
+            throw new RuntimeException('Klipy request failed (connection error).');
+        }
 
         if (! $response->successful()) {
             // Deliberately excludes the URL — it contains the API key.

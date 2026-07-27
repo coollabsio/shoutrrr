@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\Gifs\KlipyClient;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 function klipyPayload(bool $hasNext = false): array
@@ -103,3 +104,20 @@ test('rejects an unknown catalog', function () {
     expect(fn () => app(KlipyClient::class)->browse('memes', null, 1))
         ->toThrow(InvalidArgumentException::class);
 });
+
+test('throws without leaking the api key when the connection itself fails', function () {
+    Http::fake(fn () => throw new ConnectionException(
+        'cURL error 6: Could not resolve host: api.klipy.com (see https://api.klipy.com/api/v1/test-key/gifs/trending)'
+    ));
+
+    expect(fn () => app(KlipyClient::class)->browse('gif', null, 1))
+        ->toThrow(fn (RuntimeException $e) => expect($e->getMessage())->not->toContain('test-key'));
+});
+
+test('swallows a connection failure when sharing', function () {
+    Http::fake(fn () => throw new ConnectionException(
+        'cURL error 6: Could not resolve host: api.klipy.com (see https://api.klipy.com/api/v1/test-key/gifs/share)'
+    ));
+
+    app(KlipyClient::class)->share('gif', 'happy-dance-991', 'cust-abc');
+})->throwsNoExceptions();
