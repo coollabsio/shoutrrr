@@ -69,7 +69,15 @@ export function useGifSearch(
     // states were.
     useEffect(() => {
         const handle = window.setTimeout(() => {
-            setRequest((current) => ({ ...current, query, page: 1 }));
+            setRequest((current) =>
+                // Bail out when nothing actually changed. `request` is compared
+                // by identity in the fetch effect below, so returning a fresh
+                // object with identical values would fire a second, byte-for-byte
+                // identical page-1 request every time the picker opens.
+                current.query === query && current.page === 1
+                    ? current
+                    : { ...current, query, page: 1 },
+            );
         }, DEBOUNCE_MS);
 
         return () => window.clearTimeout(handle);

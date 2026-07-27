@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Services\Gifs\GifAttacher;
 use App\Support\FileStorage;
 use Closure;
 use Illuminate\Http\Request;
@@ -160,7 +161,22 @@ class SecurityHeaders
     {
         $key = config('services.klipy.key');
 
-        return is_string($key) && $key !== '' ? ['https://*.klipy.com'] : [];
+        if (! is_string($key) || $key === '') {
+            return [];
+        }
+
+        // Derived from GifAttacher's fetch allow-list so the two cannot drift:
+        // a host we will download from must also be a host the browser may
+        // render. CSP wildcards do not match the apex, so each suffix needs
+        // both forms.
+        $origins = [];
+
+        foreach (GifAttacher::ALLOWED_HOST_SUFFIXES as $suffix) {
+            $origins[] = 'https://'.$suffix;
+            $origins[] = 'https://*.'.$suffix;
+        }
+
+        return $origins;
     }
 
     /**

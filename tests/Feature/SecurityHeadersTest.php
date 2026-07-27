@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Gifs\GifAttacher;
 use Illuminate\Support\Facades\Vite;
 
 test('responses carry the static security headers', function () {
@@ -99,6 +100,23 @@ test('allows the klipy cdn in media-src when gifs are configured', function () {
 
     expect($csp)->toContain('media-src')
         ->and($csp)->toMatch('/media-src[^;]*https:\/\/\*\.klipy\.com/');
+});
+
+test('media-src covers every host gif attach will download from', function () {
+    config()->set('services.klipy.key', 'test-key');
+
+    $csp = $this->get('/login')->headers->get('Content-Security-Policy');
+
+    preg_match('/media-src([^;]*)/', (string) $csp, $matches);
+    $mediaSrc = $matches[1] ?? '';
+
+    // A host GifAttacher will fetch from must also be one the browser may
+    // render, or clip previews break. CSP wildcards do not match the apex,
+    // so both forms are required for each suffix.
+    foreach (GifAttacher::ALLOWED_HOST_SUFFIXES as $suffix) {
+        expect($mediaSrc)->toContain('https://'.$suffix)
+            ->and($mediaSrc)->toContain('https://*.'.$suffix);
+    }
 });
 
 test('omits the klipy cdn when gifs are not configured', function () {

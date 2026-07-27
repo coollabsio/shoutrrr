@@ -56,10 +56,23 @@ class SafeVideoFetcher
             throw new RuntimeException('Could not download the clip (HTTP '.$response->status().').');
         }
 
-        $bytes = $response->body();
-
         $ceiling = (int) config('media.max_video_bytes', Platform::maxVideoBytesCeiling());
 
+        // Check the advertised length BEFORE materialising the body. body()
+        // buffers the whole response into a PHP string, so a clip larger than
+        // memory_limit would raise a fatal allocation error — which is not a
+        // RuntimeException, so the controllers' catch would miss it and the
+        // caller would get a bare 500 instead of a clean message.
+        $advertised = $response->header('Content-Length');
+
+        if ($advertised !== '' && (int) $advertised > $ceiling) {
+            throw new RuntimeException('Clip exceeds the maximum allowed video size.');
+        }
+
+        $bytes = $response->body();
+
+        // Still check the real length: Content-Length is optional, and a
+        // chunked response can omit or understate it.
         if (strlen($bytes) > $ceiling) {
             throw new RuntimeException('Clip exceeds the maximum allowed video size.');
         }

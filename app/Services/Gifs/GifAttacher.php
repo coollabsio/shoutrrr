@@ -12,6 +12,7 @@ use App\Support\SafeVideoFetcher;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
@@ -186,8 +187,11 @@ class GifAttacher
     ): PostMedia {
         $clip = $this->video->fetch($variant['url']);
 
-        // A temp file is only needed to run ffprobe, so skip writing the clip to
-        // disk twice when Klipy already supplied a duration — the common case.
+        // A temp file is only needed to run ffprobe, so it is skipped when a
+        // duration was supplied. Today nothing supplies one: Klipy's browse
+        // response carries no duration field, so $durationSeconds is always
+        // null and every clip attach shells out to ffprobe. That makes ffmpeg
+        // a hard requirement for the Clips catalog — see attach()'s guard.
         $temp = null;
 
         try {
@@ -261,7 +265,11 @@ class GifAttacher
 
         try {
             $process->run();
-        } catch (ProcessFailedException|ProcessTimedOutException) {
+        } catch (ProcessFailedException|ProcessSignaledException|ProcessTimedOutException) {
+            // Signalled covers the OOM killer and cgroup limits. This is the
+            // only duration source we have (Klipy sends none), so an uncaught
+            // one here would escape the callers' RuntimeException catch and
+            // surface as a 500 with a raw process message instead of a 422.
             return null;
         }
 

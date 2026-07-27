@@ -166,6 +166,13 @@ export function useReplyMedia({
                             slug: item.slug,
                             title: item.title,
                             variants: item.variants,
+                            // Unlike PostGifController (which queries the post's
+                            // real media() relation server-side), a reply has no
+                            // reply_id column on post_media — the server has no
+                            // way to know what's already attached, so we tell it.
+                            // See AttachGifRequest::rules() and
+                            // ReplyGifController::store()'s $existing query.
+                            media_ids: media.map((m) => m.id),
                         }),
                     },
                 );
