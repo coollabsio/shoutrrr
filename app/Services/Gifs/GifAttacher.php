@@ -43,11 +43,16 @@ class GifAttacher
     ): PostMedia {
         $existing = is_array($existingMedia) ? $existingMedia : iterator_to_array($existingMedia);
 
-        $this->guardMediaRules($catalog, $existing);
+        // Variant selection happens first so the guard can see the chosen
+        // variant's mime — the mixing rule is about mime (a sticker can
+        // legitimately be image/gif), not about the catalog it came from.
+        // pickVariant() still enforces the host allow-list on every variant
+        // before anything else happens, and before any fetch is attempted.
+        $variant = $this->pickVariant($variants, self::MAX_IMAGE_BYTES);
 
-        $url = $this->pickVariantUrl($variants, self::MAX_IMAGE_BYTES);
+        $this->guardMediaRules($catalog, $variant['mime'], $existing);
 
-        return $this->media->storeFromUrl($workspaceId, $url, $title !== '' ? $title : null);
+        return $this->media->storeFromUrl($workspaceId, $variant['url'], $title !== '' ? $title : null);
     }
 
     /**
@@ -55,8 +60,9 @@ class GifAttacher
      * size are tried too — the fetcher's own cap is the real gate.
      *
      * @param  list<array<string, mixed>>  $variants
+     * @return array{url: string, mime: string}
      */
-    private function pickVariantUrl(array $variants, int $maxBytes): string
+    private function pickVariant(array $variants, int $maxBytes): array
     {
         $usable = [];
 
@@ -68,9 +74,10 @@ class GifAttacher
             }
 
             $bytes = isset($variant['bytes']) ? (int) $variant['bytes'] : null;
+            $mime = is_string($variant['mime'] ?? null) ? $variant['mime'] : 'image/gif';
 
             if ($bytes === null || $bytes <= $maxBytes) {
-                $usable[] = ['url' => $url, 'bytes' => $bytes ?? 0];
+                $usable[] = ['url' => $url, 'mime' => $mime, 'bytes' => $bytes ?? 0];
             }
         }
 
@@ -80,7 +87,7 @@ class GifAttacher
 
         usort($usable, fn (array $a, array $b): int => $b['bytes'] <=> $a['bytes']);
 
-        return $usable[0]['url'];
+        return ['url' => $usable[0]['url'], 'mime' => $usable[0]['mime']];
     }
 
     private function isAllowedHost(string $url): bool
@@ -97,13 +104,18 @@ class GifAttacher
     }
 
     /**
-     * Server-side mirror of the composer's client-side rules. An animated GIF
-     * must be the only attachment (Bluesky's rule, applied uniformly), and a
-     * clip is a video, so it cannot join images.
+     * Server-side mirror of the composer's client-side rules
+     * (resources/js/lib/compose/media-rules.ts, wouldViolateBlueskyGif). The
+     * rule is about mime, not catalog — a sticker can legitimately resolve to
+     * an image/gif variant (KlipyClient::normalizeItem() builds stickers from
+     * both 'gif' and 'webp' formats), so an animated GIF must be the only
+     * attachment regardless of which catalog it was browsed from. Applied
+     * uniformly since the server doesn't know the post's target platforms at
+     * attach time. A clip is a video, so it cannot join images either.
      *
      * @param  list<PostMedia>  $existing
      */
-    private function guardMediaRules(string $catalog, array $existing): void
+    private function guardMediaRules(string $catalog, string $mime, array $existing): void
     {
         if ($catalog === 'clip') {
             if ($existing !== []) {
@@ -113,17 +125,17 @@ class GifAttacher
             return;
         }
 
-        if ($catalog === 'gif' && $existing !== []) {
+        if ($mime === 'image/gif' && $existing !== []) {
             throw new RuntimeException('An animated GIF has to go on its own.');
         }
 
         foreach ($existing as $media) {
-            if ($media->kind === 'video') {
-                throw new RuntimeException('You cannot mix images and video on one post.');
-            }
-
             if ($media->mime === 'image/gif') {
                 throw new RuntimeException('An animated GIF has to go on its own.');
+            }
+
+            if ($media->kind === 'video') {
+                throw new RuntimeException('You cannot mix images and video on one post.');
             }
         }
     }

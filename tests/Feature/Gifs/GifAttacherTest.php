@@ -88,14 +88,41 @@ test('rejects a gif when other media is already attached', function () {
     ))->toThrow(RuntimeException::class, 'on its own');
 });
 
-test('allows a sticker alongside other images', function () {
+test('allows a webp sticker alongside other images', function () {
     $workspace = Workspace::factory()->create();
     $existing = PostMedia::factory()->create(['workspace_id' => $workspace->id, 'kind' => 'image', 'mime' => 'image/png']);
 
     $media = app(GifAttacher::class)->attach(
         $workspace->id, 'sticker', 'Star',
-        [gifVariant('https://static.klipy.com/ok.gif', 40_000, 'image/gif')], [$existing],
+        [gifVariant('https://static.klipy.com/ok.gif', 40_000, 'image/webp')], [$existing],
     );
 
     expect($media->kind)->toBe('image');
 });
+
+test('rejects a gif-mime sticker alongside other images', function () {
+    $workspace = Workspace::factory()->create();
+    $existing = PostMedia::factory()->create(['workspace_id' => $workspace->id, 'kind' => 'image', 'mime' => 'image/png']);
+
+    // A sticker can legitimately resolve to an image/gif variant
+    // (KlipyClient::normalizeItem() builds stickers from both 'gif' and
+    // 'webp' formats). The mixing rule is about mime, not catalog, so this
+    // must be rejected the same way a 'gif' catalog item would be.
+    expect(fn () => app(GifAttacher::class)->attach(
+        $workspace->id, 'sticker', 'Star',
+        [gifVariant('https://static.klipy.com/ok.gif', 40_000, 'image/gif')], [$existing],
+    ))->toThrow(RuntimeException::class, 'on its own');
+});
+
+test('rejects url host-suffix bypass attempts', function (string $url) {
+    $workspace = Workspace::factory()->create();
+
+    expect(fn () => app(GifAttacher::class)->attach(
+        $workspace->id, 'gif', 'Evil',
+        [gifVariant($url, 40_000)], [],
+    ))->toThrow(RuntimeException::class, 'not a supported GIF source');
+})->with([
+    'suffix without a dot boundary' => ['https://evilklipy.com/x.gif'],
+    'klipy.com as a subdomain label of an attacker domain' => ['https://klipy.com.attacker.net/x.gif'],
+    'klipy.com stuffed into userinfo, real host is the attacker' => ['https://klipy.com@attacker.net/x.gif'],
+]);
