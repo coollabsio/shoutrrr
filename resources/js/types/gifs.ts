@@ -1,4 +1,7 @@
-export type GifCatalog = 'gif' | 'sticker' | 'clip';
+/** Kept in sync with `KlipyClient::CATALOGS` on the backend. */
+export const GIF_CATALOGS = ['gif', 'sticker', 'clip'] as const;
+
+export type GifCatalog = (typeof GIF_CATALOGS)[number];
 
 /** One downloadable representation of an item; `bytes` is null when unreported. */
 export type GifVariant = {

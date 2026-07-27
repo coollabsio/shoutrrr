@@ -81,4 +81,61 @@ describe('parseFavorites', () => {
     it('drops entries missing required fields', () => {
         expect(parseFavorites('[{"slug":"a"},null,3]')).toEqual([]);
     });
+
+    it('drops entries missing id or title', () => {
+        const { id: _id, ...withoutId } = item('a');
+        const { title: _title, ...withoutTitle } = item('a');
+        expect(
+            parseFavorites(JSON.stringify([withoutId, withoutTitle])),
+        ).toEqual([]);
+    });
+
+    it('drops entries with an unrecognised catalog', () => {
+        expect(
+            parseFavorites(
+                JSON.stringify([{ ...item('a'), catalog: 'video' }]),
+            ),
+        ).toEqual([]);
+    });
+
+    it('drops entries where preview is a string, not an object', () => {
+        expect(
+            parseFavorites(
+                JSON.stringify([{ ...item('a'), preview: 'not-an-object' }]),
+            ),
+        ).toEqual([]);
+    });
+
+    it('drops entries where preview is an object missing url', () => {
+        const { url: _url, ...previewWithoutUrl } = item('a').preview;
+        expect(
+            parseFavorites(
+                JSON.stringify([{ ...item('a'), preview: previewWithoutUrl }]),
+            ),
+        ).toEqual([]);
+    });
+
+    it('drops entries whose variants array contains junk entries', () => {
+        expect(
+            parseFavorites(
+                JSON.stringify([
+                    { ...item('a'), variants: [null, 'junk', 42] },
+                ]),
+            ),
+        ).toEqual([]);
+        expect(
+            parseFavorites(
+                JSON.stringify([
+                    {
+                        ...item('a'),
+                        variants: [item('a').preview, { url: 'x' }],
+                    },
+                ]),
+            ),
+        ).toEqual([]);
+    });
+
+    it('falls back to [] when the top-level value is an object, not an array', () => {
+        expect(parseFavorites(JSON.stringify({ a: item('a') }))).toEqual([]);
+    });
 });
