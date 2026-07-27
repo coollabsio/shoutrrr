@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\Platform;
 use App\Support\SafeVideoFetcher;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 /** Minimal ISO-BMFF header: 4-byte size, then 'ftyp'. */
@@ -42,21 +42,26 @@ test('rejects bytes that are not an mp4', function () {
 });
 
 test('rejects an oversize body', function () {
-    // The brief's original 600 MiB fixture does not exceed the real ceiling:
-    // Platform::maxVideoBytesCeiling() is 1 GiB (Facebook/Instagram/Threads),
-    // not the 8 MiB SafeImageFetcher cap this class' sibling test suite might
-    // suggest. Build a body exactly 1 byte over the actual ceiling, and raise
-    // the memory limit only for this test since the default 512M test limit
-    // (tests/Pest.php) can't hold multiple ~1 GiB copies of the fixture.
-    $previousLimit = ini_set('memory_limit', '3072M');
+    // Platform::maxVideoBytesCeiling() is 1 GiB in production, which would
+    // require an ~1 GiB fixture (and multiple in-memory copies of it via
+    // Http::fake()/Response::body()) to exercise honestly — too heavy for
+    // CI regardless of PHP's memory_limit. Override the ceiling via config
+    // for this test only, matching StorePostMediaRequest::withinPixelCeiling()'s
+    // `config('media.max_image_pixels', ...)` convention, so a small fixture
+    // can deterministically exceed it on any machine.
+    config()->set('media.max_video_bytes', 2048);
 
-    try {
-        $oversizePadding = Platform::maxVideoBytesCeiling() - 12 + 1;
-        Http::fake(['https://example.com/*' => Http::response(fakeMp4Bytes($oversizePadding))]);
+    Http::fake(['https://example.com/*' => Http::response(fakeMp4Bytes(4096))]);
 
-        expect(fn () => app(SafeVideoFetcher::class)->fetch('https://example.com/huge.mp4'))
-            ->toThrow(RuntimeException::class);
-    } finally {
-        ini_set('memory_limit', $previousLimit);
-    }
+    expect(fn () => app(SafeVideoFetcher::class)->fetch('https://example.com/huge.mp4'))
+        ->toThrow(RuntimeException::class);
+});
+
+test('rejects when the connection fails, without leaking the raw cURL message', function () {
+    Http::fake(function () {
+        throw new ConnectionException('cURL error 6: Could not resolve host: example.com');
+    });
+
+    expect(fn () => app(SafeVideoFetcher::class)->fetch('https://example.com/clip.mp4'))
+        ->toThrow(RuntimeException::class, 'Could not connect to the video host.');
 });

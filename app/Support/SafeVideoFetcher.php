@@ -58,7 +58,9 @@ class SafeVideoFetcher
 
         $bytes = $response->body();
 
-        if (strlen($bytes) > Platform::maxVideoBytesCeiling()) {
+        $ceiling = (int) config('media.max_video_bytes', Platform::maxVideoBytesCeiling());
+
+        if (strlen($bytes) > $ceiling) {
             throw new RuntimeException('Clip exceeds the maximum allowed video size.');
         }
 
