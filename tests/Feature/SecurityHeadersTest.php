@@ -92,6 +92,23 @@ test('connect-src omits Sentry when no frontend DSN is configured', function () 
     expect($csp)->toContain("connect-src 'self' blob:;");
 });
 
+test('allows the klipy cdn in media-src when gifs are configured', function () {
+    config()->set('services.klipy.key', 'test-key');
+
+    $csp = $this->get('/login')->headers->get('Content-Security-Policy');
+
+    expect($csp)->toContain('media-src')
+        ->and($csp)->toMatch('/media-src[^;]*https:\/\/\*\.klipy\.com/');
+});
+
+test('omits the klipy cdn when gifs are not configured', function () {
+    config()->set('services.klipy.key', null);
+
+    $csp = $this->get('/login')->headers->get('Content-Security-Policy');
+
+    expect($csp)->not->toContain('klipy.com');
+});
+
 test('the csp nonce is exposed to vite and differs per request', function () {
     $this->get('/login');
     $first = Vite::cspNonce();
