@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CommandSearchController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Gifs\GifBrowserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PublicShareController;
 use App\Http\Controllers\WorkspaceMentionController;
@@ -21,6 +22,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('workspace-mentions', [WorkspaceMentionController::class, 'store'])->name('workspace-mentions.store');
     Route::delete('workspace-mentions/{workspaceMention}', [WorkspaceMentionController::class, 'destroy'])->name('workspace-mentions.destroy');
+
+    // Browsing is a proxied third-party read; throttle it like the media routes.
+    Route::middleware(['gifs.enabled', 'throttle:120,1'])->group(function (): void {
+        Route::get('gifs/{catalog}/recent', [GifBrowserController::class, 'recent'])->name('gifs.recent');
+        Route::get('gifs/{catalog}', [GifBrowserController::class, 'index'])->name('gifs.browse');
+    });
 });
 
 Route::middleware('auth')->group(function () {
