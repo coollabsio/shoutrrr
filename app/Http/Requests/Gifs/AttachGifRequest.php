@@ -10,9 +10,21 @@ use Illuminate\Validation\Rule;
 
 class AttachGifRequest extends FormRequest
 {
+    /**
+     * Mirrors the two upload requests this endpoint pair replaces:
+     * StorePostMediaRequest checks `can('update', post)`, StoreReplyMediaRequest
+     * treats a resolved {reply} binding as sufficient (it is already scoped to
+     * the authed user's workspace, 404ing otherwise). Same route, same request
+     * class, so branch on whichever binding is present.
+     */
     public function authorize(): bool
     {
-        return true;
+        $post = $this->route('post');
+        if ($post !== null) {
+            return $this->user()->can('update', $post);
+        }
+
+        return $this->route('reply') !== null;
     }
 
     /**
@@ -31,6 +43,13 @@ class AttachGifRequest extends FormRequest
             'variants.*.height' => ['required', 'integer', 'min:1', 'max:10000'],
             'variants.*.bytes' => ['nullable', 'integer', 'min:0'],
             'duration_seconds' => ['nullable', 'integer', 'min:1', 'max:3600'],
+            // Reply media has no server-side association until the reply is sent
+            // (post_media has no reply_id column), so the client tells us which
+            // of its own already-uploaded media ids to treat as "existing" for
+            // GifAttacher's mixing-rule guard. Posts don't need this — they have
+            // a real media() relation queried directly by PostGifController.
+            'media_ids' => ['nullable', 'array', 'max:10'],
+            'media_ids.*' => ['string'],
         ];
     }
 }

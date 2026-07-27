@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Post;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Models\User;
@@ -110,4 +111,70 @@ test('cannot attach to another workspace reply', function () {
     $this->actingAs($user)
         ->postJson("/engagement/{$foreignReply->id}/gifs", attachPayload())
         ->assertNotFound();
+});
+
+test('404s on the reply route when gifs are not configured', function () {
+    config()->set('services.klipy.key', null);
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    $reply = PostTargetReply::factory()
+        ->for(PostTarget::factory()->for($post), 'target')
+        ->create(['workspace_id' => $user->current_workspace_id]);
+
+    $this->actingAs($user)
+        ->postJson("/engagement/{$reply->id}/gifs", attachPayload())
+        ->assertNotFound();
+});
+
+test('a client-declared existing clip blocks a second reply attachment with a 422', function () {
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    $reply = PostTargetReply::factory()
+        ->for(PostTarget::factory()->for($post), 'target')
+        ->create(['workspace_id' => $user->current_workspace_id]);
+    $existingImage = PostMedia::factory()->create([
+        'workspace_id' => $user->current_workspace_id,
+        'kind' => 'image',
+        'mime' => 'image/png',
+    ]);
+
+    $this->actingAs($user)
+        ->postJson("/engagement/{$reply->id}/gifs", attachPayload([
+            'catalog' => 'clip',
+            'variants' => [['url' => 'https://static.klipy.com/ok.mp4', 'mime' => 'video/mp4', 'width' => 320, 'height' => 240, 'bytes' => 40000]],
+            'duration_seconds' => 5,
+            'media_ids' => [$existingImage->id],
+        ]))
+        ->assertStatus(422);
+});
+
+test('a client-declared existing image blocks a gif reply attachment with a 422', function () {
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    $reply = PostTargetReply::factory()
+        ->for(PostTarget::factory()->for($post), 'target')
+        ->create(['workspace_id' => $user->current_workspace_id]);
+    $existingImage = PostMedia::factory()->create([
+        'workspace_id' => $user->current_workspace_id,
+        'kind' => 'image',
+        'mime' => 'image/png',
+    ]);
+
+    $this->actingAs($user)
+        ->postJson("/engagement/{$reply->id}/gifs", attachPayload([
+            'media_ids' => [$existingImage->id],
+        ]))
+        ->assertStatus(422);
+});
+
+test('attaching a reply gif with no media_ids still succeeds', function () {
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    $reply = PostTargetReply::factory()
+        ->for(PostTarget::factory()->for($post), 'target')
+        ->create(['workspace_id' => $user->current_workspace_id]);
+
+    $this->actingAs($user)
+        ->postJson("/engagement/{$reply->id}/gifs", attachPayload())
+        ->assertCreated();
 });
