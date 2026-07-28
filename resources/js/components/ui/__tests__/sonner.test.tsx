@@ -25,6 +25,7 @@ const INTENTS = [
     { fire: toast.error, message: 'Publish failed', type: 'error', icon: 'lucide-octagon-x' },
     { fire: toast.warning, message: 'Nearly out of room', type: 'warning', icon: 'lucide-triangle-alert' },
     { fire: toast.info, message: 'Draft autosaved', type: 'info', icon: 'lucide-info' },
+    { fire: toast.loading, message: 'Publishing', type: 'loading', icon: 'lucide-loader-circle' },
 ] as const;
 
 async function toastElement(message: string): Promise<HTMLElement> {
