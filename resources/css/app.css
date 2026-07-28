@@ -92,6 +92,9 @@
     --accent-foreground: oklch(0.205 0 0);
     --destructive: oklch(0.577 0.245 27.325);
     --destructive-foreground: oklch(0.577 0.245 27.325);
+    --success: oklch(0.55 0.14 155);
+    --warning: oklch(0.6 0.15 70);
+    --info: oklch(0.55 0.16 255);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
@@ -138,6 +141,9 @@
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
     --destructive-foreground: oklch(0.637 0.237 25.331);
+    --success: oklch(0.75 0.15 155);
+    --warning: oklch(0.78 0.14 70);
+    --info: oklch(0.72 0.14 255);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
@@ -248,22 +254,13 @@
     border-radius: 50%;
     background: color-mix(in oklch, var(--muted-foreground) 50%, transparent);
 }
-/* Warn severity: amber stand-in (no shadcn --warning token in this project). */
 .ProseMirror .section-marker[data-state='warn'] .sm-chip {
-    border-color: color-mix(
-        in oklch,
-        oklch(0.769 0.188 70.08) 40%,
-        var(--border)
-    );
-    background: color-mix(
-        in oklch,
-        oklch(0.769 0.188 70.08) 12%,
-        var(--background)
-    );
-    color: oklch(0.555 0.163 70.08);
+    border-color: color-mix(in oklch, var(--warning) 40%, var(--border));
+    background: color-mix(in oklch, var(--warning) 12%, var(--background));
+    color: var(--warning);
 }
 .ProseMirror .section-marker[data-state='warn'] .sm-num {
-    color: oklch(0.47 0.15 70.08);
+    color: color-mix(in oklch, var(--warning) 80%, black);
 }
 .ProseMirror .section-marker[data-state='over'] .sm-chip {
     border-color: color-mix(in oklch, var(--destructive) 35%, var(--border));
@@ -272,6 +269,40 @@
 }
 .ProseMirror .section-marker[data-state='over'] .sm-num {
     color: var(--destructive);
+}
+
+/* Toast intent color. Three things the code can't tell you: sonner owns
+   ::before and ::after on the toast (swipe hit-area, stack gap-fill), so the
+   rail is a border; the long selector is what outranks sonner's own
+   `border: 1px`; and the transparent default must stay on a weaker selector
+   than the per-intent rules, or it wins and every rail goes invisible. */
+.cn-toast {
+    --toast-accent: transparent;
+}
+
+.cn-toast[data-type='success'] {
+    --toast-accent: var(--success);
+}
+.cn-toast[data-type='error'] {
+    --toast-accent: var(--destructive);
+}
+.cn-toast[data-type='warning'] {
+    --toast-accent: var(--warning);
+}
+.cn-toast[data-type='info'] {
+    --toast-accent: var(--info);
+}
+.cn-toast[data-type='loading'] {
+    --toast-accent: var(--muted-foreground);
+}
+
+[data-sonner-toast][data-styled='true'].cn-toast {
+    border-inline-start-width: 3px;
+    border-inline-start-color: var(--toast-accent);
+}
+
+[data-sonner-toast][data-styled='true'].cn-toast [data-icon] {
+    color: var(--toast-accent);
 }
 
 @theme inline {
@@ -294,6 +325,9 @@
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
+    --color-success: var(--success);
+    --color-warning: var(--warning);
+    --color-info: var(--info);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
