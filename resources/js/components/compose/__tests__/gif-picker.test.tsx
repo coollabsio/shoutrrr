@@ -185,6 +185,64 @@ describe('GifPicker', () => {
         );
     });
 
+    it('carries the typed query over to the newly selected catalog', async () => {
+        render(<GifPicker onSelect={vi.fn()} />);
+        await screen.findAllByRole('button', { name: /insert/i });
+
+        fireEvent.change(screen.getByRole('searchbox'), {
+            target: { value: 'cat' },
+        });
+        await waitFor(() =>
+            expect(
+                (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+                    ([url]) =>
+                        String(url).includes('gif') &&
+                        String(url).includes('q=cat'),
+                ),
+            ).toBe(true),
+        );
+
+        fireEvent.click(screen.getByRole('tab', { name: /clips/i }));
+
+        await waitFor(() =>
+            expect(
+                (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+                    ([url]) =>
+                        String(url).includes('clip') &&
+                        String(url).includes('q=cat'),
+                ),
+            ).toBe(true),
+        );
+    });
+
+    it('labels the search box and empty state after the active catalog', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(
+                async () =>
+                    new Response(
+                        JSON.stringify({ items: [], has_next: false }),
+                    ),
+            ),
+        );
+
+        render(<GifPicker onSelect={vi.fn()} />);
+
+        expect(
+            screen.getByRole('searchbox', { name: 'Search GIFs' }),
+        ).toBeInTheDocument();
+        expect(await screen.findByText('No GIFs found.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('tab', { name: /stickers/i }));
+
+        expect(
+            screen.getByRole('searchbox', { name: 'Search stickers' }),
+        ).toBeInTheDocument();
+        expect(
+            await screen.findByText('No stickers found.'),
+        ).toBeInTheDocument();
+    });
+
     it('continues to the next page automatically when a settled page does not fill the viewport', async () => {
         vi.stubGlobal(
             'fetch',

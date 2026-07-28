@@ -10,7 +10,7 @@ import {
     toggleFavorite,
 } from '@/lib/compose/gifs/favorites';
 import { cn } from '@/lib/utils';
-import { GIF_CATALOGS } from '@/types/gifs';
+import { CATALOG_NOUNS, GIF_CATALOGS } from '@/types/gifs';
 import type { GifCatalog, GifItem } from '@/types/gifs';
 
 type Props = {
@@ -113,6 +113,10 @@ export function GifPicker({ onSelect }: Props) {
         localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
     }
 
+    // Every piece of copy follows the active tab, since that's the catalog the
+    // search box actually queries.
+    const noun = CATALOG_NOUNS[catalog];
+
     const showFavorites =
         search.query.trim() === '' &&
         favorites.filter((item) => item.catalog === catalog).length > 0;
@@ -124,7 +128,8 @@ export function GifPicker({ onSelect }: Props) {
                     type="search"
                     value={search.query}
                     onChange={(event) => search.setQuery(event.target.value)}
-                    placeholder="Search GIFs…"
+                    aria-label={`Search ${noun}`}
+                    placeholder={`Search ${noun}…`}
                     className="h-8 w-full appearance-none rounded-md bg-muted px-2.5 text-sm outline-none placeholder:text-muted-foreground"
                 />
             </div>
@@ -183,7 +188,7 @@ export function GifPicker({ onSelect }: Props) {
                     </div>
                 ) : search.items.length === 0 && !search.isLoading ? (
                     <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                        No GIFs found.
+                        No {noun} found.
                     </div>
                 ) : (
                     <div className="columns-2 gap-2 [&>*]:mb-2">
@@ -215,7 +220,7 @@ export function GifPicker({ onSelect }: Props) {
                 {search.isLoading && search.items.length > 0 && (
                     <div
                         role="status"
-                        aria-label="Loading more GIFs"
+                        aria-label={`Loading more ${noun}`}
                         className="flex items-center justify-center py-3"
                     >
                         <Loader2

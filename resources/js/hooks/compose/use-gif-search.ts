@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import gifs from '@/routes/gifs';
+import { CATALOG_NOUNS } from '@/types/gifs';
 import type { GifCatalog, GifItem, GifPage } from '@/types/gifs';
 
 const DEBOUNCE_MS = 300;
@@ -133,7 +134,9 @@ export function useGifSearch(
                     return;
                 }
                 if (id === requestId.current) {
-                    setError("GIFs aren't loading right now.");
+                    setError(
+                        `Couldn't load ${CATALOG_NOUNS[request.catalog]} right now.`,
+                    );
                 }
             })
             .finally(() => {
