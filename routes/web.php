@@ -7,6 +7,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PublicShareController;
 use App\Http\Controllers\WorkspaceMentionController;
 use App\Http\Middleware\NoIndex;
+use App\Services\Gifs\KlipyClient;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -25,8 +26,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Browsing is a proxied third-party read; throttle it like the media routes.
     Route::middleware(['gifs.enabled', 'throttle:120,1'])->group(function (): void {
-        Route::get('gifs/{catalog}/recent', [GifBrowserController::class, 'recent'])->name('gifs.recent');
-        Route::get('gifs/{catalog}', [GifBrowserController::class, 'index'])->name('gifs.browse');
+        Route::get('gifs/{catalog}/recent', [GifBrowserController::class, 'recent'])
+            ->name('gifs.recent')
+            ->whereIn('catalog', KlipyClient::CATALOGS);
+        Route::get('gifs/{catalog}', [GifBrowserController::class, 'index'])
+            ->name('gifs.browse')
+            ->whereIn('catalog', KlipyClient::CATALOGS);
     });
 });
 

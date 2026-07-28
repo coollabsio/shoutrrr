@@ -11,9 +11,11 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureGifsEnabled
 {
+    public function __construct(private readonly KlipyClient $klipy) {}
+
     public function handle(Request $request, Closure $next): Response
     {
-        abort_unless(app(KlipyClient::class)->configured(), 404);
+        abort_unless($this->klipy->configured(), 404);
 
         return $next($request);
     }

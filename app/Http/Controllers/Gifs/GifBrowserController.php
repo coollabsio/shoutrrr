@@ -19,8 +19,6 @@ class GifBrowserController extends Controller
 
     public function index(Request $request, string $catalog): JsonResponse
     {
-        abort_unless(in_array($catalog, KlipyClient::CATALOGS, true), 404);
-
         $query = $request->string('q')->trim()->limit(100, '')->toString();
         $page = max(1, min(50, $request->integer('page', 1)));
         $rating = (string) config('services.klipy.rating', 'pg-13');
@@ -42,8 +40,6 @@ class GifBrowserController extends Controller
 
     public function recent(Request $request, string $catalog): JsonResponse
     {
-        abort_unless(in_array($catalog, KlipyClient::CATALOGS, true), 404);
-
         /** @var User $user */
         $user = $request->user();
 
