@@ -11,6 +11,7 @@ use App\Models\Conversation;
 use App\Models\PostTargetReply;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
+use App\Services\Gifs\KlipyClient;
 use App\Support\CommunityStats;
 use App\Support\FeedbackConfig;
 use App\Support\InstanceSettings;
@@ -102,12 +103,19 @@ class HandleInertiaRequests extends Middleware
      * Shell data needed by the sidebar, composer, and command palette on nearly
      * every page. Kept lightweight so it is cheap to resolve per request.
      *
-     * @return array{accounts: array<int, array<string, mixed>>, sets: array<int, array<string, mixed>>, limits: mixed, unreadReplies: int, unreadMessages: int}
+     * @return array{accounts: array<int, array<string, mixed>>, sets: array<int, array<string, mixed>>, limits: mixed, unreadReplies: int, unreadMessages: int, gifs_enabled: bool}
      */
     private function shellData(?User $user): array
     {
         if (! $user || ! $user->current_workspace_id) {
-            return ['accounts' => [], 'sets' => [], 'limits' => Platform::allLimits(), 'unreadReplies' => 0, 'unreadMessages' => 0];
+            return [
+                'accounts' => [],
+                'sets' => [],
+                'limits' => Platform::allLimits(),
+                'unreadReplies' => 0,
+                'unreadMessages' => 0,
+                'gifs_enabled' => app(KlipyClient::class)->configured(),
+            ];
         }
 
         // Scope explicitly to the current workspace. The HasWorkspaceScope global
@@ -165,6 +173,7 @@ class HandleInertiaRequests extends Middleware
                     ->whereNull('archived_at')
                     ->sum('unread_count')
                 : 0,
+            'gifs_enabled' => app(KlipyClient::class)->configured(),
         ];
     }
 
