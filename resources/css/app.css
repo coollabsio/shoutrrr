@@ -280,6 +280,50 @@
     color: var(--destructive);
 }
 
+/* Toast intent color. Sonner emits class="cn-toast" and data-type on every
+   toast; we map data-type onto a single accent used by the leading rail and
+   the icon. The surface stays neutral (--popover) — only the rail and icon
+   carry intent, so a success toast never becomes a green surface competing
+   with the brand --primary.
+
+   The rail is a border, not a pseudo-element: sonner already uses ::before
+   (swipe hit-area, removal gap-fill) and ::after (stack gap-fill) on the
+   toast, and overriding either breaks swipe-to-dismiss and hover-to-expand.
+
+   The three specificity tiers below are deliberate. Sonner ships unlayered
+   CSS with a 0,3,0 rule setting `border: 1px solid`. The transparent default
+   sits at 0,1,0 so per-type rules at 0,2,0 win; the border declarations sit
+   at 0,3,0 so they beat sonner. Moving the default up a tier silently makes
+   every rail transparent. */
+.cn-toast {
+    --toast-accent: transparent;
+}
+
+.cn-toast[data-type='success'] {
+    --toast-accent: var(--success);
+}
+.cn-toast[data-type='error'] {
+    --toast-accent: var(--destructive);
+}
+.cn-toast[data-type='warning'] {
+    --toast-accent: var(--warning);
+}
+.cn-toast[data-type='info'] {
+    --toast-accent: var(--info);
+}
+.cn-toast[data-type='loading'] {
+    --toast-accent: var(--muted-foreground);
+}
+
+[data-sonner-toast][data-styled='true'].cn-toast {
+    border-inline-start-width: 3px;
+    border-inline-start-color: var(--toast-accent);
+}
+
+[data-sonner-toast][data-styled='true'].cn-toast [data-icon] {
+    color: var(--toast-accent);
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Noto Sans Variable', sans-serif;
