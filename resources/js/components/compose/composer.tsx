@@ -25,6 +25,7 @@ import {
     describeFormatNotice,
     precheckNotices,
 } from '@/lib/compose/format-notices';
+import { postGifAttachment } from '@/lib/compose/gifs/attach';
 import {
     wouldMixVideoAndImages,
     wouldViolateBlueskyGif,
@@ -38,7 +39,6 @@ import {
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
 import { precheckAccount, precheckDestinations } from '@/lib/compose/precheck';
 import { readVideoMetadata, videoLimitsForTargets } from '@/lib/compose/video';
-import { xsrfHeader } from '@/lib/csrf';
 import {
     defaultSettings,
     normalizeSettings,
@@ -52,7 +52,6 @@ import {
     type Account,
     type AccountSet,
     type Destination,
-    type MediaView,
     type MentionPlaceholder,
     type PlatformLimits,
     type PlatformName,
@@ -285,8 +284,8 @@ export default function Composer({
     // The server downloads and re-hosts the chosen GIF, so this is a chip +
     // fetch rather than the local upload flow the other media handlers use.
     async function attachGif(item: GifItem) {
-        const post = await ensurePost();
-        if (!post) {
+        const postId = await ensurePost();
+        if (!postId) {
             return;
         }
 
@@ -295,36 +294,16 @@ export default function Composer({
                 kind: item.catalog === 'clip' ? 'video' : 'image',
                 previewUrl: item.preview.url,
             },
-            async () => {
-                const response = await fetch(
-                    PostGifController.store.url({ post }),
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Accept: 'application/json',
-                            ...xsrfHeader(),
-                        },
-                        body: JSON.stringify({
-                            catalog: item.catalog,
-                            slug: item.slug,
-                            title: item.title,
-                            variants: item.variants,
-                        }),
-                    },
-                );
-
-                if (!response.ok) {
-                    const body = (await response.json().catch(() => ({}))) as {
-                        message?: string;
-                    };
-                    throw new Error(
-                        body.message ?? 'That GIF could not be attached.',
-                    );
-                }
-
-                return ((await response.json()) as { media: MediaView }).media;
-            },
+            () =>
+                postGifAttachment(
+                    PostGifController.store.url({ post: postId }),
+                    item,
+                    // Draft media rows stay orphaned (`post_id` null) until the
+                    // next save, so the post's media() relation cannot see what
+                    // the composer already holds. Declare it, the way the reply
+                    // box does, or the mixing-rule guard has nothing to check.
+                    state.media.map((m) => m.id),
+                ),
         );
     }
 

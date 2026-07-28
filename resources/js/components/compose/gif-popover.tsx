@@ -3,11 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { useState } from 'react';
 
 import { GifPicker } from '@/components/compose/gif-picker';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { PopoverTriggerWithTooltip } from '@/components/compose/popover-trigger-with-tooltip';
 import { cn } from '@/lib/utils';
 import type { GifItem } from '@/types/gifs';
 
@@ -38,27 +34,16 @@ export function GifPopover({
 }: Props) {
     const [open, setOpen] = useState(false);
 
-    // The tooltip is disabled while the popover is open, so hovering the
-    // trigger to close the picker doesn't pop a label over it.
-    const triggerNode =
-        tooltip === undefined ? (
-            <PopoverPrimitive.Trigger render={trigger(open)}>
-                {children}
-            </PopoverPrimitive.Trigger>
-        ) : (
-            <Tooltip disabled={open}>
-                <PopoverPrimitive.Trigger
-                    render={<TooltipTrigger render={trigger(open)} />}
-                >
-                    {children}
-                </PopoverPrimitive.Trigger>
-                <TooltipContent side={side}>{tooltip}</TooltipContent>
-            </Tooltip>
-        );
-
     return (
         <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-            {triggerNode}
+            <PopoverTriggerWithTooltip
+                render={trigger(open)}
+                tooltip={tooltip}
+                open={open}
+                side={side}
+            >
+                {children}
+            </PopoverTriggerWithTooltip>
             <PopoverPrimitive.Portal>
                 <PopoverPrimitive.Positioner
                     align={align}

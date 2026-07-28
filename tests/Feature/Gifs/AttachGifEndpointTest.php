@@ -217,3 +217,39 @@ test('ignores media ids from another workspace', function () {
         ]))
         ->assertCreated();
 });
+
+test('rejects a post gif when the composer declares a draft video it holds', function () {
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    // Draft media rows stay orphaned (post_id null) until the next save, so the
+    // post's media() relation cannot see this — only the client-declared id can.
+    $draftVideo = PostMedia::factory()->create([
+        'workspace_id' => $user->current_workspace_id,
+        'post_id' => null,
+        'kind' => 'video',
+        'mime' => 'video/mp4',
+    ]);
+
+    $this->actingAs($user)
+        ->postJson("/posts/{$post->id}/gifs", attachPayload([
+            'media_ids' => [$draftVideo->id],
+        ]))
+        ->assertStatus(422);
+});
+
+test('ignores post media ids from another workspace', function () {
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    $foreignVideo = PostMedia::factory()->create([
+        'workspace_id' => Workspace::factory()->create()->id,
+        'post_id' => null,
+        'kind' => 'video',
+        'mime' => 'video/mp4',
+    ]);
+
+    $this->actingAs($user)
+        ->postJson("/posts/{$post->id}/gifs", attachPayload([
+            'media_ids' => [$foreignVideo->id],
+        ]))
+        ->assertCreated();
+});

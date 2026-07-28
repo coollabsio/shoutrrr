@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MockIntersectionObserver } from '@/test-utils/mock-intersection-observer';
+
 import { GifPicker } from '../gif-picker';
 
 /**
@@ -29,33 +31,6 @@ function createMemoryStorage(): Storage {
         },
         key: (index: number) => Array.from(store.keys())[index] ?? null,
     };
-}
-
-/**
- * A controllable stand-in for the browser's IntersectionObserver. Records
- * every instance created (there's one per GifPicker mount, observing the
- * scroll sentinel) so a test can drive `trigger()` to simulate the sentinel
- * entering/leaving the viewport, independent of real layout in jsdom.
- */
-class MockIntersectionObserver {
-    static instances: MockIntersectionObserver[] = [];
-    callback: IntersectionObserverCallback;
-    disconnect = vi.fn();
-
-    constructor(callback: IntersectionObserverCallback) {
-        this.callback = callback;
-        MockIntersectionObserver.instances.push(this);
-    }
-
-    observe() {}
-    unobserve() {}
-
-    trigger(isIntersecting: boolean) {
-        this.callback(
-            [{ isIntersecting } as IntersectionObserverEntry],
-            this as unknown as IntersectionObserver,
-        );
-    }
 }
 
 function payload(slugs: string[], hasNext = false) {

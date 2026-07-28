@@ -3,6 +3,7 @@
 import { useHttp } from '@inertiajs/react';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MediaView } from '@/types/compose';
@@ -65,6 +66,10 @@ vi.mock('@/components/compose/image-editor', () => ({
 
 vi.mock('@/components/compose/media-chips', () => ({
     MediaChips: () => null,
+}));
+
+vi.mock('sonner', () => ({
+    toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 const transform = vi.fn();
@@ -176,6 +181,55 @@ describe('useReplyMedia attachGif', () => {
             media_ids: string[];
         };
         expect(body.media_ids).toEqual(['m1', 'm2']);
+    });
+
+    it("surfaces the server's message when the attach fails", async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(
+                async () =>
+                    new Response(
+                        JSON.stringify({
+                            message:
+                                'You cannot mix images and video on one post.',
+                        }),
+                        { status: 422 },
+                    ),
+            ),
+        );
+
+        act(() => {
+            root?.render(createElement(Harness, { media: [] }));
+        });
+
+        await act(async () => {
+            await attachGifRef?.(gifItem());
+        });
+
+        // trackPending swallows the rejection into a toast + error chip, so the
+        // failure surfaces through the toast rather than a thrown error here.
+        expect(toast.error).toHaveBeenCalledWith(
+            'You cannot mix images and video on one post.',
+        );
+    });
+
+    it('falls back to shared copy when the failure carries no message', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => new Response('nope', { status: 500 })),
+        );
+
+        act(() => {
+            root?.render(createElement(Harness, { media: [] }));
+        });
+
+        await act(async () => {
+            await attachGifRef?.(gifItem());
+        });
+
+        expect(toast.error).toHaveBeenCalledWith(
+            'That GIF could not be attached.',
+        );
     });
 
     it('sends an empty media_ids array when the reply has no media yet', async () => {

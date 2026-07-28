@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Gifs\AttachGifRequest;
 use App\Jobs\TriggerKlipyShare;
 use App\Models\Post;
+use App\Models\PostMedia;
 use App\Models\User;
 use App\Services\Gifs\GifAttacher;
 use Illuminate\Http\JsonResponse;
@@ -23,13 +24,28 @@ class PostGifController extends Controller
 
         $validated = $request->validated();
 
+        // Composer media rows stay orphaned (`post_id` null) until
+        // DraftService::attachMedia() associates them on the next draft save,
+        // so media()->get() is empty for an unsaved draft and the mixing-rule
+        // guard below would have nothing to check. The composer therefore
+        // declares the media ids it currently holds, exactly as the reply box
+        // does — re-resolved here scoped to the post's workspace, so the ids
+        // cannot reach media the caller has no access to. Merged with the
+        // saved relation and de-duplicated, since a saved draft has both.
+        $declared = PostMedia::query()
+            ->where('workspace_id', $post->workspace_id)
+            ->whereIn('id', $validated['media_ids'] ?? [])
+            ->get();
+
+        $existing = $post->media()->get()->concat($declared)->unique('id');
+
         try {
             $media = $this->attacher->attach(
                 $post->workspace_id,
                 $validated['catalog'],
                 (string) ($validated['title'] ?? ''),
                 $validated['variants'],
-                $post->media()->get(),
+                $existing,
                 isset($validated['duration_seconds']) ? (int) $validated['duration_seconds'] : null,
             );
         } catch (RuntimeException $e) {

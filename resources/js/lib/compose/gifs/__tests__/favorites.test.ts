@@ -41,7 +41,7 @@ describe('toggleFavorite', () => {
         ).toEqual(['b']);
     });
 
-    it('dedupes by slug across catalogs', () => {
+    it('keeps the same slug separately per catalog', () => {
         const sticker = { ...item('a'), catalog: 'sticker' as const };
         expect(toggleFavorite([item('a')], sticker)).toHaveLength(2);
     });

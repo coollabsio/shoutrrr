@@ -43,11 +43,12 @@ class AttachGifRequest extends FormRequest
             'variants.*.height' => ['required', 'integer', 'min:1', 'max:10000'],
             'variants.*.bytes' => ['nullable', 'integer', 'min:0'],
             'duration_seconds' => ['nullable', 'integer', 'min:1', 'max:3600'],
-            // Reply media has no server-side association until the reply is sent
-            // (post_media has no reply_id column), so the client tells us which
-            // of its own already-uploaded media ids to treat as "existing" for
-            // GifAttacher's mixing-rule guard. Posts don't need this — they have
-            // a real media() relation queried directly by PostGifController.
+            // What the client currently holds attached, used as the "existing
+            // media" set for GifAttacher's mixing-rule guard. Both surfaces need
+            // it: a reply has no reply_id column on post_media at all, and a
+            // post's media rows stay orphaned until the draft is next saved.
+            // Both controllers re-resolve these ids workspace-scoped, so they
+            // grant no access the caller doesn't already have.
             'media_ids' => ['nullable', 'array', 'max:10'],
             'media_ids.*' => ['string'],
         ];

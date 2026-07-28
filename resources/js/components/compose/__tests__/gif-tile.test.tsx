@@ -1,35 +1,10 @@
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MockIntersectionObserver } from '@/test-utils/mock-intersection-observer';
 import type { GifItem } from '@/types/gifs';
 
 import { GifTile } from '../gif-tile';
-
-/**
- * A controllable stand-in for the browser's IntersectionObserver, scoped to
- * one clip tile's own `<video>`. Lets a test drive `trigger()` to simulate
- * the tile entering/leaving the popover's viewport.
- */
-class MockIntersectionObserver {
-    static instances: MockIntersectionObserver[] = [];
-    callback: IntersectionObserverCallback;
-    disconnect = vi.fn();
-
-    constructor(callback: IntersectionObserverCallback) {
-        this.callback = callback;
-        MockIntersectionObserver.instances.push(this);
-    }
-
-    observe() {}
-    unobserve() {}
-
-    trigger(isIntersecting: boolean) {
-        this.callback(
-            [{ isIntersecting } as IntersectionObserverEntry],
-            this as unknown as IntersectionObserver,
-        );
-    }
-}
 
 function clipItem(overrides: Partial<GifItem> = {}): GifItem {
     return {

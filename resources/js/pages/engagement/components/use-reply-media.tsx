@@ -9,11 +9,11 @@ import ReplyGifController from '@/actions/App/Http/Controllers/Gifs/ReplyGifCont
 import { ImageEditor } from '@/components/compose/image-editor';
 import { MediaChips } from '@/components/compose/media-chips';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
+import { postGifAttachment } from '@/lib/compose/gifs/attach';
 import {
     wouldMixVideoAndImages,
     wouldViolateBlueskyGif,
 } from '@/lib/compose/media-rules';
-import { xsrfHeader } from '@/lib/csrf';
 import {
     defaultSettings,
     type EditSettings,
@@ -151,43 +151,16 @@ export function useReplyMedia({
                 kind: item.catalog === 'clip' ? 'video' : 'image',
                 previewUrl: item.preview.url,
             },
-            async () => {
-                const response = await fetch(
+            () =>
+                postGifAttachment(
                     ReplyGifController.store.url({ reply: replyId }),
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Accept: 'application/json',
-                            ...xsrfHeader(),
-                        },
-                        body: JSON.stringify({
-                            catalog: item.catalog,
-                            slug: item.slug,
-                            title: item.title,
-                            variants: item.variants,
-                            // Unlike PostGifController (which queries the post's
-                            // real media() relation server-side), a reply has no
-                            // reply_id column on post_media — the server has no
-                            // way to know what's already attached, so we tell it.
-                            // See AttachGifRequest::rules() and
-                            // ReplyGifController::store()'s $existing query.
-                            media_ids: media.map((m) => m.id),
-                        }),
-                    },
-                );
-
-                if (!response.ok) {
-                    const body = (await response.json().catch(() => ({}))) as {
-                        message?: string;
-                    };
-                    throw new Error(
-                        body.message ?? 'That GIF could not be attached.',
-                    );
-                }
-
-                return ((await response.json()) as { media: MediaView }).media;
-            },
+                    item,
+                    // post_media has no reply_id column, so the server has no
+                    // way to know what this reply already holds — we tell it.
+                    // See AttachGifRequest::rules() and ReplyGifController's
+                    // $existing query.
+                    media.map((m) => m.id),
+                ),
         );
     }
 
