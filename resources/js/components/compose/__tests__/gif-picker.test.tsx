@@ -90,6 +90,21 @@ function pageParam(url: string): string | null {
     return new URL(url, 'http://localhost').searchParams.get('page');
 }
 
+/**
+ * The route is `/gifs/{catalog}`, so the literal substring "gif" appears in
+ * every URL regardless of catalog (it's the resource prefix) — check the
+ * other two catalogs first and fall back to "gif".
+ */
+function catalogParam(url: string): 'gif' | 'sticker' | 'clip' {
+    if (url.includes('sticker')) {
+        return 'sticker';
+    }
+    if (url.includes('clip')) {
+        return 'clip';
+    }
+    return 'gif';
+}
+
 beforeEach(() => {
     MockIntersectionObserver.instances = [];
     vi.stubGlobal('localStorage', createMemoryStorage());
@@ -141,6 +156,28 @@ describe('GifPicker', () => {
         );
     });
 
+    it('still toggles the favourite in the UI when localStorage.setItem throws', async () => {
+        vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+            // Safari private mode / quota-exceeded: throws instead of storing.
+            throw new Error('QuotaExceededError');
+        });
+        const onSelect = vi.fn();
+        render(<GifPicker onSelect={onSelect} />);
+
+        const hearts = await screen.findAllByRole('button', {
+            name: /favourite/i,
+        });
+
+        expect(() => fireEvent.click(hearts[0])).not.toThrow();
+
+        expect(
+            await screen.findAllByRole('button', {
+                name: /remove yay from favourites/i,
+            }),
+        ).not.toHaveLength(0);
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
     it('shows an empty state when there are no results', async () => {
         vi.stubGlobal(
             'fetch',
@@ -174,7 +211,7 @@ describe('GifPicker', () => {
         render(<GifPicker onSelect={vi.fn()} />);
         await screen.findAllByRole('button', { name: /insert/i });
 
-        fireEvent.click(screen.getByRole('tab', { name: /stickers/i }));
+        fireEvent.click(screen.getByRole('button', { name: /stickers/i }));
 
         await waitFor(() =>
             expect(
@@ -202,7 +239,7 @@ describe('GifPicker', () => {
             ).toBe(true),
         );
 
-        fireEvent.click(screen.getByRole('tab', { name: /clips/i }));
+        fireEvent.click(screen.getByRole('button', { name: /clips/i }));
 
         await waitFor(() =>
             expect(
@@ -233,7 +270,7 @@ describe('GifPicker', () => {
         ).toBeInTheDocument();
         expect(await screen.findByText('No GIFs found.')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('tab', { name: /stickers/i }));
+        fireEvent.click(screen.getByRole('button', { name: /stickers/i }));
 
         expect(
             screen.getByRole('searchbox', { name: 'Search stickers' }),
@@ -374,6 +411,80 @@ describe('GifPicker', () => {
         expect(
             (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length,
         ).toBe(2);
+    });
+
+    it('keeps paginating on the new catalog after switching tabs mid-flight, even when the new page is smaller', async () => {
+        let releaseGifPageTwo!: () => void;
+        const gifPageTwoGate = new Promise<void>((resolve) => {
+            releaseGifPageTwo = resolve;
+        });
+
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string) => {
+                const catalog = catalogParam(url);
+                const page = pageParam(url);
+
+                if (catalog === 'gif' && page === '2') {
+                    // Held open so it's still in flight when the tab switch happens.
+                    await gifPageTwoGate;
+
+                    return new Response(
+                        JSON.stringify(payload(['c', 'd'], true)),
+                    );
+                }
+                if (catalog === 'gif') {
+                    return new Response(
+                        JSON.stringify(payload(['a', 'b'], true)),
+                    );
+                }
+                if (catalog === 'sticker' && page === '1') {
+                    // Fewer items than the settled gif baseline (2) — the shrink
+                    // case the settle-effect must resync from, not stall on.
+                    return new Response(JSON.stringify(payload(['s1'], true)));
+                }
+
+                return new Response(JSON.stringify(payload(['s2'], false)));
+            }),
+        );
+
+        render(<GifPicker onSelect={vi.fn()} />);
+        await waitFor(() =>
+            expect(
+                screen.getAllByRole('button', { name: /insert/i }),
+            ).toHaveLength(2),
+        );
+
+        // Sentinel visible from the start: flips `intersectingRef` to true and
+        // (via the observer callback) requests gif page 2, which we hold open.
+        MockIntersectionObserver.instances[0]?.trigger(true);
+
+        await waitFor(() =>
+            expect(
+                (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+                    ([url]) =>
+                        catalogParam(String(url)) === 'gif' &&
+                        pageParam(String(url)) === '2',
+                ),
+            ).toBe(true),
+        );
+
+        // Switch catalogs while that gif page-2 request is still in flight.
+        fireEvent.click(screen.getByRole('button', { name: /stickers/i }));
+
+        // The stale gif page-2 response lands after the switch; it must be
+        // discarded as superseded, not applied to the sticker search.
+        releaseGifPageTwo();
+
+        await waitFor(() =>
+            expect(
+                (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+                    ([url]) =>
+                        catalogParam(String(url)) === 'sticker' &&
+                        pageParam(String(url)) === '2',
+                ),
+            ).toBe(true),
+        );
     });
 
     const junkDimensionCases: {

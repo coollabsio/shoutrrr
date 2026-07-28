@@ -38,8 +38,16 @@ export function GifPicker({ onSelect }: Props) {
     // depending on it directly would tear down and recreate the observer on
     // every render. Stash the latest `loadMore` in a ref instead, and set up
     // the observer once — the callback always reads the current closure.
+    //
+    // Written from an effect (no dependency array, so it runs after every
+    // commit) rather than during render: the observer callback only ever
+    // fires after a commit anyway, so it always sees the value this effect
+    // just wrote, and writing refs during render is a React anti-pattern
+    // (breaks React Compiler memoization).
     const loadMoreRef = useRef(search.loadMore);
-    loadMoreRef.current = search.loadMore;
+    useEffect(() => {
+        loadMoreRef.current = search.loadMore;
+    });
 
     // Whether the sentinel is currently intersecting, per the observer's most
     // recent report. Read by the settle-effect below to decide whether a
@@ -90,10 +98,16 @@ export function GifPicker({ onSelect }: Props) {
         }
 
         // A catalog/query change resets `items` to a shorter (or empty)
-        // array; resync the baseline instead of reading that as "no
-        // progress" for the rest of the new search.
+        // array; resync the baseline to 0 instead of reading the shrink as
+        // "no progress" for the rest of the new search. Resetting to 0 (not
+        // to the new item count) makes the whole new first page count as
+        // progress below — the commit where `items` actually reset to `[]`
+        // was skipped by the `isLoading` guard above (still mid-flight for
+        // the old catalog/query), so this is the first chance to resync.
+        // `intersectingRef` still guards against a spurious fetch when the
+        // new page does overflow the scroll area.
         if (search.items.length < settledItemCountRef.current) {
-            settledItemCountRef.current = search.items.length;
+            settledItemCountRef.current = 0;
         }
 
         if (!intersectingRef.current || !search.hasNext) {
@@ -110,7 +124,17 @@ export function GifPicker({ onSelect }: Props) {
     function handleToggleFavorite(item: GifItem) {
         const next = toggleFavorite(favorites, item);
         setFavorites(next);
-        localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+
+        // Safari private mode and quota-exceeded both throw here; the
+        // in-memory toggle above must still take effect even when the
+        // write-through to storage fails, so the picker doesn't crash
+        // mid-interaction (the read path, `parseFavorites`, is already
+        // defensive the same way).
+        try {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+        } catch {
+            // Best-effort persistence only; nothing to recover here.
+        }
     }
 
     // Every piece of copy follows the active tab, since that's the catalog the
@@ -134,13 +158,16 @@ export function GifPicker({ onSelect }: Props) {
                 />
             </div>
 
-            <div role="tablist" className="flex gap-1 px-2 pt-2">
+            <div
+                role="group"
+                aria-label="Catalog"
+                className="flex gap-1 px-2 pt-2"
+            >
                 {GIF_CATALOGS.map((entry) => (
                     <button
                         key={entry}
                         type="button"
-                        role="tab"
-                        aria-selected={catalog === entry}
+                        aria-pressed={catalog === entry}
                         onClick={() => setCatalog(entry)}
                         className={cn(
                             'h-7 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors',
