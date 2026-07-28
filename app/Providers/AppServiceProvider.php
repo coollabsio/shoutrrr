@@ -96,6 +96,15 @@ class AppServiceProvider extends ServiceProvider
             RateLimiter::for("engagement-{$platform->value}", fn (): Limit => Limit::perMinute(10));
         }
 
+        // Per-platform throttle for outbound DM sends, mirroring the
+        // engagement limiter above so a burst of replies can't trip the
+        // platforms' own DM rate limits.
+        foreach (Platform::cases() as $platform) {
+            if ($platform->supportsDirectMessages()) {
+                RateLimiter::for("messages-{$platform->value}", fn (): Limit => Limit::perMinute(10));
+            }
+        }
+
         Gate::before(function (User $user, string $ability): ?bool {
             if (! str_starts_with($ability, 'workspace.')) {
                 return null;

@@ -89,6 +89,22 @@ class InstanceSettings
         return $this->boolean('engagement_enabled', (bool) config('engagement.enabled'));
     }
 
+    /** Instance-wide messages master switch. Defaults to `messages.enabled` (env) until overridden here. */
+    public function messagesEnabled(): bool
+    {
+        return $this->boolean('messages_enabled', (bool) config('messages.enabled'));
+    }
+
+    /**
+     * Instance-level opt-in that DM OAuth scopes may be requested at
+     * connect/re-auth. Defaults to `messages.direct_messages_enabled` (env)
+     * until overridden here.
+     */
+    public function directMessagesEnabled(): bool
+    {
+        return $this->boolean('direct_messages_enabled', (bool) config('messages.direct_messages_enabled'));
+    }
+
     public function platformAvailable(?Platform $platform = null): bool
     {
         return $this->platformEnabled('platforms_enabled', $platform);
@@ -151,7 +167,9 @@ class InstanceSettings
      *     post_metrics: array<string, array<string, bool>|int>,
      *     account_metrics: array<string, array<string, bool>|int>,
      *     metrics_enabled: bool,
-     *     engagement_enabled: bool
+     *     engagement_enabled: bool,
+     *     messages_enabled: bool,
+     *     direct_messages_enabled: bool
      * }
      */
     public function polling(): array
@@ -173,6 +191,8 @@ class InstanceSettings
             // (nothing polls regardless of their per-platform settings).
             'metrics_enabled' => $this->metricsEnabled(),
             'engagement_enabled' => $this->engagementEnabled(),
+            'messages_enabled' => $this->messagesEnabled(),
+            'direct_messages_enabled' => $this->directMessagesEnabled(),
         ];
     }
 

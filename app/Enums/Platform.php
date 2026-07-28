@@ -110,6 +110,20 @@ enum Platform: string
     }
 
     /**
+     * Whether this platform has a DM API this app can poll/send through.
+     * Threads, LinkedIn, and Discord have no direct-message API available to
+     * this app (Threads has no DM API, LinkedIn's messaging API is partner-gated,
+     * and a Discord webhook is write-only with no inbox to read).
+     */
+    public function supportsDirectMessages(): bool
+    {
+        return match ($this) {
+            self::X, self::Bluesky, self::Instagram, self::Facebook => true,
+            default => false,
+        };
+    }
+
+    /**
      * Whether this platform's metrics connector returns real post-level metrics.
      * Every launched platform, including LinkedIn (Page/Organization accounts
      * via the Community Management API), returns real post metrics; personal

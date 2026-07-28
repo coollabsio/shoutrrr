@@ -57,4 +57,5 @@ require __DIR__.'/settings.php';
 require __DIR__.'/accounts.php';
 require __DIR__.'/posts.php';
 require __DIR__.'/engagement.php';
+require __DIR__.'/messaging.php';
 require __DIR__.'/feedback.php';

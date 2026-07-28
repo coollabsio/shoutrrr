@@ -23,6 +23,9 @@ class ConnectBlueskyRequest extends FormRequest
             'identifier' => ['required', 'string', 'max:255'],
             'app_password' => ['required', 'string', 'max:255'],
             'pds_url' => ['nullable', 'url', 'max:255'],
+            // "This app password has DM access" — Bluesky has no OAuth scopes to
+            // inspect, so the operator self-declares it at connect time instead.
+            'dm_access' => ['sometimes', 'boolean'],
         ];
     }
 }

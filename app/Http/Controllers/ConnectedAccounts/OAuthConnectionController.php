@@ -97,6 +97,18 @@ class OAuthConnectionController extends Controller
             }
         }
 
+        if ($resolved->supportsDirectMessages()) {
+            // Record whether the provider actually granted the DM scope(s) this
+            // app requested, so the Messages inbox only polls/sends through
+            // accounts that can reach the DM API (others are silently excluded
+            // rather than 403ing at poll time).
+            $granted = array_values((array) $oauthUser->approvedScopes);
+            $required = $this->directMessageScopeDeltas($resolved);
+            $dmGranted = $required !== [] && array_intersect($required, $granted) !== [];
+
+            $data = $data->withCapabilities([...($data->capabilities ?? []), 'dm_enabled' => $dmGranted]);
+        }
+
         $linkedInGrantedScopes = [];
 
         if ($resolved === Platform::LinkedIn) {
@@ -254,7 +266,29 @@ class OAuthConnectionController extends Controller
             ];
         }
 
-        return $scopes;
+        if ($platform->supportsDirectMessages() && $this->settings->directMessagesEnabled()) {
+            $scopes = [...$scopes, ...$this->directMessageScopeDeltas($platform)];
+        }
+
+        return array_values(array_unique($scopes));
+    }
+
+    /**
+     * OAuth scopes required to reach a platform's DM API, requested only when
+     * the instance has opted into Messages DM scopes (see `scopesFor()`).
+     * Bluesky has no OAuth scopes (app-password auth); LinkedIn/Threads/Discord
+     * have no DM API at all, so both fall through to the empty default.
+     *
+     * @return list<string>
+     */
+    private function directMessageScopeDeltas(Platform $platform): array
+    {
+        return match ($platform) {
+            Platform::X => ['dm.read', 'dm.write'],
+            Platform::Instagram => ['instagram_business_manage_messages'],
+            Platform::Facebook => ['pages_messaging'],
+            default => [],
+        };
     }
 
     private function resolveOAuthPlatform(string $platform): Platform

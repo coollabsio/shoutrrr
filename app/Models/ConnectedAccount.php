@@ -40,6 +40,7 @@ use Override;
  * @property CarbonImmutable|null $metrics_captured_at
  * @property MetricsStatus|null $metrics_status
  * @property CarbonImmutable|null $engagement_rate_limited_until
+ * @property CarbonImmutable|null $messaging_rate_limited_until
  */
 #[Fillable([
     'workspace_id',
@@ -60,6 +61,7 @@ use Override;
     'metrics_captured_at',
     'metrics_status',
     'engagement_rate_limited_until',
+    'messaging_rate_limited_until',
 ])]
 class ConnectedAccount extends Model
 {
@@ -91,6 +93,7 @@ class ConnectedAccount extends Model
             'metrics_captured_at' => 'immutable_datetime',
             'metrics_status' => MetricsStatus::class,
             'engagement_rate_limited_until' => 'immutable_datetime',
+            'messaging_rate_limited_until' => 'immutable_datetime',
         ];
     }
 
@@ -188,6 +191,17 @@ class ConnectedAccount extends Model
         }
 
         return (bool) ($this->capabilities['linkedin_engagement'] ?? false);
+    }
+
+    /**
+     * Whether this account can receive direct messages in the unified inbox.
+     * Gated on both platform support and a per-account capability recorded at
+     * connect time (a DM-scoped grant, mirroring the LinkedIn engagement gate).
+     */
+    public function canReceiveDirectMessages(): bool
+    {
+        return $this->platform->supportsDirectMessages()
+            && (bool) ($this->capabilities['dm_enabled'] ?? false);
     }
 
     /**

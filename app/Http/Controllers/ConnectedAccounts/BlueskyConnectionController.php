@@ -30,6 +30,14 @@ class BlueskyConnectionController extends Controller
             return back()->with('error', $exception->getMessage());
         }
 
+        // Bluesky has no OAuth scopes to inspect, so `dm_enabled` is set from the
+        // operator's self-declaration that the app password has DM access, made
+        // at connect time via the "This app password has DM access" checkbox.
+        $data = $data->withCapabilities([
+            ...($data->capabilities ?? []),
+            'dm_enabled' => $request->boolean('dm_access'),
+        ]);
+
         $this->connections->store($data, $request->user());
 
         return redirect()->route('accounts.index')->with('success', 'Bluesky account connected.');

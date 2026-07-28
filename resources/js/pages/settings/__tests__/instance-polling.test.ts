@@ -12,6 +12,8 @@ import {
 const settings: PollingSettings = {
     metrics_enabled: true,
     engagement_enabled: true,
+    messages_enabled: true,
+    direct_messages_enabled: true,
     engagement: {
         x: 15,
         bluesky: 30,
@@ -170,8 +172,14 @@ describe('instance polling section rendering', () => {
 
         expect(source).toContain('id="engagement_enabled"');
         expect(source).toContain('id="metrics_enabled"');
+        expect(source).toContain('id="messages_enabled"');
+        expect(source).toContain('id="direct_messages_enabled"');
         expect(source).toMatch(/setData\(\s*'engagement_enabled'/);
         expect(source).toMatch(/setData\(\s*'metrics_enabled'/);
+        expect(source).toMatch(/setData\(\s*'messages_enabled'/);
+        expect(source).toMatch(/setData\(\s*'direct_messages_enabled'/);
+        // The DM-scope opt-in is meaningless while messages are off.
+        expect(source).toContain('disabled={!data.messages_enabled}');
         // The metrics master switch disables both metrics cards; engagement's disables its own.
         expect(source).toContain('disabled={!data.engagement_enabled}');
         expect(source).toMatch(

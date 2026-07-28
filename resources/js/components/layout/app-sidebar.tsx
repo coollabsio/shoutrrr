@@ -8,6 +8,7 @@ import {
     KeyRound,
     ListChecks,
     MessageCircle,
+    MessageSquare,
     Pencil,
     RefreshCw,
     Settings,
@@ -62,6 +63,7 @@ import { index as accountsRoute } from '@/routes/accounts';
 import { index as analyticsRoute } from '@/routes/analytics';
 import { index as calendarRoute } from '@/routes/calendar';
 import { index as engagementRoute } from '@/routes/engagement';
+import { index as messagesRoute } from '@/routes/messages';
 import { index as postsRoute } from '@/routes/posts';
 
 type NavItem = {
@@ -101,6 +103,7 @@ const postsNavItems: NavItem[] = [
     },
     { title: 'Accounts', href: accountsRoute(), icon: Share2 },
     { title: 'Engagement', href: engagementRoute(), icon: MessageCircle },
+    { title: 'Messages', href: messagesRoute(), icon: MessageSquare },
 ];
 
 export function AppSidebar() {
@@ -114,6 +117,7 @@ export function AppSidebar() {
         latestReleaseUrl,
     } = usePage().props;
     const unreadReplies = shell?.unreadReplies ?? 0;
+    const unreadMessages = shell?.unreadMessages ?? 0;
     const { isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
     const { state, setOpenMobile } = useSidebar();
     const collapsed = state === 'collapsed';
@@ -245,8 +249,10 @@ export function AppSidebar() {
                             {postsNavItems
                                 .filter(
                                     (item) =>
-                                        item.title !== 'Engagement' ||
-                                        features?.engagement,
+                                        (item.title !== 'Engagement' ||
+                                            features?.engagement) &&
+                                        (item.title !== 'Messages' ||
+                                            features?.messages),
                                 )
                                 .map((item) => (
                                     <SidebarMenuItem key={item.title}>
@@ -263,6 +269,14 @@ export function AppSidebar() {
                                                     {unreadReplies > 99
                                                         ? '99+'
                                                         : unreadReplies}
+                                                </span>
+                                            ) : null}
+                                            {item.title === 'Messages' &&
+                                            unreadMessages > 0 ? (
+                                                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                    {unreadMessages > 99
+                                                        ? '99+'
+                                                        : unreadMessages}
                                                 </span>
                                             ) : null}
                                         </SidebarMenuButton>
