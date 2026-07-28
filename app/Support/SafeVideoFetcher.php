@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Enums\Platform;
+use App\Support\Concerns\PinsCurlResolution;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use RuntimeException;
@@ -17,6 +18,8 @@ use RuntimeException;
  */
 class SafeVideoFetcher
 {
+    use PinsCurlResolution;
+
     public function __construct(private readonly HttpFactory $http) {}
 
     /**
@@ -86,7 +89,8 @@ class SafeVideoFetcher
         return ['bytes' => $bytes, 'mime' => 'video/mp4'];
     }
 
-    // --- SSRF helpers: copied verbatim from SafeImageFetcher ----------------
+    // --- SSRF helpers: copied verbatim from SafeImageFetcher, except
+    // pinnedResolution(), shared via the PinsCurlResolution trait -----------
 
     /**
      * Resolve a hostname (or accept an IP literal) and reject if any resolved
@@ -119,25 +123,6 @@ class SafeVideoFetcher
         }
 
         return $ips;
-    }
-
-    /**
-     * Build the curl option that pins the connection to a pre-validated IP. No
-     * pinning is needed when the host is already an IP literal (no name resolution
-     * happens at connect time, so there is no rebinding window).
-     *
-     * @param  non-empty-list<string>  $ips
-     * @return array<int, list<string>>
-     */
-    protected function pinnedResolution(string $host, string $scheme, string $url, array $ips): array
-    {
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
-            return [];
-        }
-
-        $port = parse_url($url, PHP_URL_PORT) ?: ($scheme === 'https' ? 443 : 80);
-
-        return [CURLOPT_RESOLVE => [sprintf('%s:%d:%s', $host, $port, $ips[0])]];
     }
 
     /**

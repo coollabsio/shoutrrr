@@ -2,6 +2,7 @@
 
 use App\Support\SafeVideoFetcher;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Http;
 
 /** Minimal ISO-BMFF header: 4-byte size, then 'ftyp'. */
@@ -64,4 +65,49 @@ test('rejects when the connection fails, without leaking the raw cURL message', 
 
     expect(fn () => app(SafeVideoFetcher::class)->fetch('https://example.com/clip.mp4'))
         ->toThrow(RuntimeException::class, 'Could not connect to the video host.');
+});
+
+test('pins curl resolution to the validated ip for hostnames (DNS-rebinding defense)', function (): void {
+    $fetcher = new class(app(HttpFactory::class)) extends SafeVideoFetcher
+    {
+        /**
+         * @param  non-empty-list<string>  $ips
+         * @return array<int, list<string>>
+         */
+        public function exposePin(string $host, string $scheme, string $url, array $ips): array
+        {
+            return $this->pinnedResolution($host, $scheme, $url, $ips);
+        }
+    };
+
+    // Hostname → pin to the validated IP at the scheme's default port.
+    expect($fetcher->exposePin('cdn.example.com', 'https', 'https://cdn.example.com/clip.mp4', ['1.2.3.4']))
+        ->toBe([CURLOPT_RESOLVE => ['cdn.example.com:443:1.2.3.4']]);
+
+    // IP-literal host needs no pinning (no name resolution at connect time).
+    expect($fetcher->exposePin('1.2.3.4', 'http', 'http://1.2.3.4/clip.mp4', ['1.2.3.4']))->toBe([]);
+});
+
+test('brackets IPv6 addresses in the curl resolution pin', function (): void {
+    $fetcher = new class(app(HttpFactory::class)) extends SafeVideoFetcher
+    {
+        /**
+         * @param  non-empty-list<string>  $ips
+         * @return array<int, list<string>>
+         */
+        public function exposePin(string $host, string $scheme, string $url, array $ips): array
+        {
+            return $this->pinnedResolution($host, $scheme, $url, $ips);
+        }
+    };
+
+    // resolveAaaa() collects real AAAA records, so an IPv6 address genuinely can
+    // reach $ips[0]. Unbracketed, the CURLOPT_RESOLVE entry is unparseable and
+    // curl silently falls back to its own DNS resolution.
+    expect($fetcher->exposePin('cdn.example.com', 'https', 'https://cdn.example.com/clip.mp4', ['2606:4700::1111']))
+        ->toBe([CURLOPT_RESOLVE => ['cdn.example.com:443:[2606:4700::1111]']]);
+
+    // IPv4 addresses stay unbracketed.
+    expect($fetcher->exposePin('cdn.example.com', 'https', 'https://cdn.example.com/clip.mp4', ['1.2.3.4']))
+        ->toBe([CURLOPT_RESOLVE => ['cdn.example.com:443:1.2.3.4']]);
 });
