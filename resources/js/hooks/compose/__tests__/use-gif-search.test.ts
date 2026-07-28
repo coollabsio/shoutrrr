@@ -246,6 +246,24 @@ describe('useGifSearch', () => {
         expect(last.searchParams.get('page')).toBe('1');
     });
 
+    it('clears isLoading when disabled while a request is in flight', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(() => new Promise<Response>(() => {})),
+        );
+
+        const { result, rerender } = renderHook(
+            ({ enabled }) => useGifSearch('gif', enabled),
+            { initialProps: { enabled: true } },
+        );
+
+        await waitFor(() => expect(result.current.isLoading).toBe(true));
+
+        rerender({ enabled: false });
+
+        expect(result.current.isLoading).toBe(false);
+    });
+
     it('aborts the in-flight request on unmount', async () => {
         let capturedSignal: AbortSignal | undefined;
         vi.stubGlobal(

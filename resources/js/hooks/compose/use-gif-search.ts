@@ -86,6 +86,11 @@ export function useGifSearch(
 
     useEffect(() => {
         if (!enabled) {
+            // Disabling mid-flight aborts the previous run's request (its
+            // cleanup below) before this body runs, so that request's
+            // `.finally()` bails out on `signal.aborted` and can never flip
+            // `isLoading` back on after this clears it.
+            setIsLoading(false);
             return;
         }
 
