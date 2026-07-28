@@ -60,6 +60,10 @@ test('rejects an unknown catalog on the recent route', function () {
         ->assertNotFound();
 });
 
+test('rejects an unknown catalog for a guest', function () {
+    $this->getJson('/gifs/memes')->assertNotFound();
+});
+
 test('caches repeat queries so klipy is hit once', function () {
     Http::fake(['https://api.klipy.com/*' => Http::response(gifPayload())]);
     $user = User::factory()->withWorkspace()->create();

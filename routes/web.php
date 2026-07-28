@@ -25,6 +25,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('workspace-mentions/{workspaceMention}', [WorkspaceMentionController::class, 'destroy'])->name('workspace-mentions.destroy');
 
     // Browsing is a proxied third-party read; throttle it like the media routes.
+    // whereIn('catalog', ...) below is a route constraint, so Laravel evaluates it during
+    // route matching, before the `auth` middleware above ever runs. An unknown catalog
+    // therefore 404s even for a guest (rather than the 401 an authenticated-only guard would
+    // produce). That's acceptable: the catalog list is already public (it ships in the client
+    // bundle as GIF_CATALOGS), so the 404-vs-401 distinction doesn't leak anything new.
     Route::middleware(['gifs.enabled', 'throttle:120,1'])->group(function (): void {
         Route::get('gifs/{catalog}/recent', [GifBrowserController::class, 'recent'])
             ->name('gifs.recent')
