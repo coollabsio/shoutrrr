@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GifItem } from '@/types/gifs';
@@ -180,4 +180,50 @@ describe('GifTile — aspect-ratio guard branches', () => {
             expect(insertButton.style.aspectRatio).not.toBe('');
         },
     );
+});
+
+describe('GifTile — still image reveal', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('reveals an image that is already complete on mount (cache hit)', () => {
+        // jsdom images default `complete` to false, matching a real browser
+        // mid-fetch — this stubs the cache-hit case, where `complete` is
+        // already true before React ever attaches the `onLoad` listener.
+        vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(
+            true,
+        );
+
+        const { getByAltText } = render(
+            <GifTile
+                item={gifItem({})}
+                isFavorite={false}
+                onSelect={vi.fn()}
+                onToggleFavorite={vi.fn()}
+            />,
+        );
+
+        const image = getByAltText('junk');
+
+        expect(image.className).not.toContain('opacity-0');
+    });
+
+    it('still reveals a non-cached image once it fires onLoad', () => {
+        const { getByAltText } = render(
+            <GifTile
+                item={gifItem({})}
+                isFavorite={false}
+                onSelect={vi.fn()}
+                onToggleFavorite={vi.fn()}
+            />,
+        );
+
+        const image = getByAltText('junk');
+        expect(image.className).toContain('opacity-0');
+
+        fireEvent.load(image);
+
+        expect(image.className).not.toContain('opacity-0');
+    });
 });

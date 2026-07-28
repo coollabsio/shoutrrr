@@ -110,6 +110,16 @@ export function GifTile({
                     </div>
                 ) : (
                     <img
+                        ref={(node) => {
+                            // The favourites shelf re-renders the exact same
+                            // CDN URLs, so the browser usually serves them
+                            // from cache — `load` can then fire before React
+                            // attaches `onLoad`, leaving the tile
+                            // transparent forever. Catch that case here too.
+                            if (node?.complete) {
+                                node.classList.remove('opacity-0');
+                            }
+                        }}
                         src={item.preview.url}
                         alt={item.title}
                         loading="lazy"
