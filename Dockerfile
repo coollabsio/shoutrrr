@@ -181,6 +181,7 @@ ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
     APP_BASE_DIR=/var/www/html \
     SSL_MODE=${SSL_MODE} \
     OCTANE_SERVER=frankenphp \
+    HEALTHCHECK_PATH=/up \
     QUEUE_WORKER_COUNT=${QUEUE_WORKER_COUNT}
 
 # Supervisor supervises the web/worker/scheduler/ssr processes
