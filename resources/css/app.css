@@ -254,22 +254,13 @@
     border-radius: 50%;
     background: color-mix(in oklch, var(--muted-foreground) 50%, transparent);
 }
-/* Warn severity: amber stand-in (no shadcn --warning token in this project). */
 .ProseMirror .section-marker[data-state='warn'] .sm-chip {
-    border-color: color-mix(
-        in oklch,
-        oklch(0.769 0.188 70.08) 40%,
-        var(--border)
-    );
-    background: color-mix(
-        in oklch,
-        oklch(0.769 0.188 70.08) 12%,
-        var(--background)
-    );
-    color: oklch(0.555 0.163 70.08);
+    border-color: color-mix(in oklch, var(--warning) 40%, var(--border));
+    background: color-mix(in oklch, var(--warning) 12%, var(--background));
+    color: var(--warning);
 }
 .ProseMirror .section-marker[data-state='warn'] .sm-num {
-    color: oklch(0.47 0.15 70.08);
+    color: color-mix(in oklch, var(--warning) 80%, black);
 }
 .ProseMirror .section-marker[data-state='over'] .sm-chip {
     border-color: color-mix(in oklch, var(--destructive) 35%, var(--border));
