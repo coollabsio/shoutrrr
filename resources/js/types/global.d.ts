@@ -24,6 +24,7 @@ declare module '@inertiajs/core' {
                 sets: AccountSet[];
                 limits: PlatformLimits[];
                 unreadReplies: number;
+                gifs_enabled: boolean;
             };
             notifications: NotificationsData;
             features?: {

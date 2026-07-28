@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
 import EmojiPicker from '@/components/compose/emoji-picker';
+import { PopoverTriggerWithTooltip } from '@/components/compose/popover-trigger-with-tooltip';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +24,8 @@ type Props = {
     trigger: (open: boolean) => ReactElement;
     /** Content of the trigger (icon, label). */
     children: ReactNode;
+    /** Hover/focus label for the trigger. Omit for a trigger that labels itself. */
+    tooltip?: ReactNode;
     side?: 'top' | 'bottom';
     align?: 'start' | 'end';
 };
@@ -38,6 +41,7 @@ export function EmojiPopover({
     onSelect,
     trigger,
     children,
+    tooltip,
     side = 'top',
     align = 'end',
 }: Props) {
@@ -74,9 +78,14 @@ export function EmojiPopover({
 
     return (
         <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-            <PopoverPrimitive.Trigger render={trigger(open)}>
+            <PopoverTriggerWithTooltip
+                render={trigger(open)}
+                tooltip={tooltip}
+                open={open}
+                side={side}
+            >
                 {children}
-            </PopoverPrimitive.Trigger>
+            </PopoverTriggerWithTooltip>
             {mounted && (
                 <PopoverPrimitive.Portal keepMounted>
                     <PopoverPrimitive.Positioner

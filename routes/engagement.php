@@ -6,6 +6,7 @@ use App\Http\Controllers\Engagement\EngagementController;
 use App\Http\Controllers\Engagement\ReplyImageEditController;
 use App\Http\Controllers\Engagement\ReplyMediaController;
 use App\Http\Controllers\Engagement\ReplyVideoUploadController;
+use App\Http\Controllers\Gifs\ReplyGifController;
 use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
@@ -55,5 +56,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::post('engagement/{reply}/media/video', [ReplyVideoUploadController::class, 'store'])->name('engagement.media.video');
         Route::post('engagement/{reply}/image-edit', [ReplyImageEditController::class, 'store'])->name('engagement.image-edit.store');
         Route::put('engagement/{reply}/image-edit/{media}', [ReplyImageEditController::class, 'update'])->name('engagement.image-edit.update');
+        Route::post('engagement/{reply}/gifs', [ReplyGifController::class, 'store'])
+            ->middleware('gifs.enabled')->name('engagement.gifs.store');
     });
 });

@@ -4,6 +4,7 @@ use App\Http\Controllers\Uploads\StreamedUploadController;
 use App\Http\Middleware\CaptureMcpWorkspaceSelection;
 use App\Http\Middleware\EnsureEngagementEnabled;
 use App\Http\Middleware\EnsureFeedbackEnabled;
+use App\Http\Middleware\EnsureGifsEnabled;
 use App\Http\Middleware\EnsureMetricsEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -41,6 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'engagement.enabled' => EnsureEngagementEnabled::class,
             'metrics.enabled' => EnsureMetricsEnabled::class,
             'feedback.enabled' => EnsureFeedbackEnabled::class,
+            'gifs.enabled' => EnsureGifsEnabled::class,
         ]);
 
         $middleware->web(append: [

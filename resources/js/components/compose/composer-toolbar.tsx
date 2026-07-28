@@ -1,10 +1,17 @@
-import { Image as ImageIcon, Shuffle, Smile, Split } from 'lucide-react';
+import { ImagePlay, Paperclip, Shuffle, Smile, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 
 import type { BoostValue } from '@/components/compose/boost-popover';
 import { BoostPopover } from '@/components/compose/boost-popover';
 import { EmojiPopover } from '@/components/compose/emoji-popover';
+import { GifPopover } from '@/components/compose/gif-popover';
+import { Kbd } from '@/components/ui/kbd';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { cn } from '@/lib/utils';
 import type {
@@ -14,6 +21,7 @@ import type {
     PlatformName,
     PostFormat,
 } from '@/types/compose';
+import type { GifItem } from '@/types/gifs';
 
 import { MediaChips } from './media-chips';
 
@@ -63,6 +71,8 @@ type Props = {
     emojiRecents: string[];
     emojiSkinTone: EmojiSkinTone;
     onEmojiSkinToneChange: (tone: EmojiSkinTone) => void;
+    /** Attach a chosen GIF. Absent hides the GIF button (read-only, or disabled). */
+    onAttachGif?: (item: GifItem) => void;
 };
 
 export function ComposerToolbar({
@@ -91,6 +101,7 @@ export function ComposerToolbar({
     emojiRecents,
     emojiSkinTone,
     onEmojiSkinToneChange,
+    onAttachGif,
 }: Props) {
     const input = useRef<HTMLInputElement | null>(null);
 
@@ -141,22 +152,44 @@ export function ComposerToolbar({
                     onSkinToneChange={onEmojiSkinToneChange}
                     onSelect={onInsertEmoji}
                     align="start"
+                    tooltip="Emoji"
                     trigger={(open) => (
                         <button
                             type="button"
-                            title="Emoji"
+                            aria-label="Emoji"
                             data-active={open}
                             className={cn(
-                                'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
+                                'inline-flex size-8 items-center justify-center rounded-md border border-transparent bg-transparent text-muted-foreground transition-colors sm:size-7',
                                 'hover:border-border hover:bg-background hover:text-foreground',
                                 'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
                             )}
                         />
                     )}
                 >
-                    <Smile className="size-3.5" aria-hidden="true" />
-                    <span>Emoji</span>
+                    <Smile className="size-4" aria-hidden="true" />
                 </EmojiPopover>
+            )}
+
+            {!readOnly && onAttachGif !== undefined && (
+                <GifPopover
+                    onSelect={onAttachGif}
+                    align="start"
+                    tooltip="GIFs, stickers & clips"
+                    trigger={(open) => (
+                        <button
+                            type="button"
+                            aria-label="GIFs, stickers and clips"
+                            data-active={open}
+                            className={cn(
+                                'inline-flex size-8 items-center justify-center rounded-md border border-transparent bg-transparent text-muted-foreground transition-colors sm:size-7',
+                                'hover:border-border hover:bg-background hover:text-foreground',
+                                'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
+                            )}
+                        />
+                    )}
+                >
+                    <ImagePlay className="size-4" aria-hidden="true" />
+                </GifPopover>
             )}
 
             {!readOnly && (
@@ -175,13 +208,18 @@ export function ComposerToolbar({
                     />
 
                     <EToolButton
-                        title="Add media (⌘⇧M)"
+                        iconOnly
+                        label="Add media"
+                        tooltip={
+                            <>
+                                Add media <Kbd>⌘⇧M</Kbd>
+                            </>
+                        }
                         onClick={() => input.current?.click()}
                     >
-                        <ImageIcon className="size-3.5" aria-hidden="true" />
-                        <span>Media</span>
+                        <Paperclip className="size-4" aria-hidden="true" />
                         {mediaCount > 0 && (
-                            <span className="rounded-full bg-foreground px-1.5 py-0.5 font-mono text-[10px] leading-none font-medium text-background tabular-nums">
+                            <span className="absolute -top-1 -right-1 min-w-4 rounded-full bg-foreground px-1 py-0.5 font-mono text-[10px] leading-none font-medium text-background tabular-nums">
                                 {mediaCount}
                             </span>
                         )}
@@ -273,26 +311,49 @@ function EToolButton({
     children,
     active = false,
     title,
+    /** Accessible name; required once the button is icon-only. */
+    label,
+    /** Rich hover label. Replaces the native `title` when supplied. */
+    tooltip,
+    iconOnly = false,
     onClick,
 }: {
     children: ReactNode;
     active?: boolean;
     title?: string;
+    label?: string;
+    tooltip?: ReactNode;
+    iconOnly?: boolean;
     onClick?: () => void;
 }) {
-    return (
+    const button = (
         <button
             type="button"
-            title={title}
+            title={tooltip === undefined ? title : undefined}
+            aria-label={label}
             onClick={onClick}
             data-active={active}
             className={cn(
-                'inline-flex h-8 items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-7',
+                'relative inline-flex items-center rounded-md border border-transparent bg-transparent text-[12px] text-muted-foreground transition-colors',
+                iconOnly
+                    ? 'size-8 justify-center sm:size-7'
+                    : 'h-8 gap-1.5 px-2.5 sm:h-7',
                 'hover:border-border hover:bg-background hover:text-foreground',
                 'data-[active=true]:border-border data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
             )}
         >
             {children}
         </button>
+    );
+
+    if (tooltip === undefined) {
+        return button;
+    }
+
+    return (
+        <Tooltip>
+            <TooltipTrigger render={button} />
+            <TooltipContent side="top">{tooltip}</TooltipContent>
+        </Tooltip>
     );
 }

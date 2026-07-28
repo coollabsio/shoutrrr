@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\CommandSearchController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Gifs\GifBrowserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PublicShareController;
 use App\Http\Controllers\WorkspaceMentionController;
 use App\Http\Middleware\NoIndex;
+use App\Services\Gifs\KlipyClient;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -21,6 +23,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('workspace-mentions', [WorkspaceMentionController::class, 'store'])->name('workspace-mentions.store');
     Route::delete('workspace-mentions/{workspaceMention}', [WorkspaceMentionController::class, 'destroy'])->name('workspace-mentions.destroy');
+
+    // Browsing is a proxied third-party read; throttle it like the media routes.
+    // whereIn('catalog', ...) below is a route constraint, so Laravel evaluates it during
+    // route matching, before the `auth` middleware above ever runs. An unknown catalog
+    // therefore 404s even for a guest (rather than the 401 an authenticated-only guard would
+    // produce). That's acceptable: the catalog list is already public (it ships in the client
+    // bundle as GIF_CATALOGS), so the 404-vs-401 distinction doesn't leak anything new.
+    Route::middleware(['gifs.enabled', 'throttle:120,1'])->group(function (): void {
+        Route::get('gifs/{catalog}/recent', [GifBrowserController::class, 'recent'])
+            ->name('gifs.recent')
+            ->whereIn('catalog', KlipyClient::CATALOGS);
+        Route::get('gifs/{catalog}', [GifBrowserController::class, 'index'])
+            ->name('gifs.browse')
+            ->whereIn('catalog', KlipyClient::CATALOGS);
+    });
 });
 
 Route::middleware('auth')->group(function () {

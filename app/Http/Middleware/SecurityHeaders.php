@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Services\Gifs\GifAttacher;
 use App\Support\FileStorage;
 use Closure;
 use Illuminate\Http\Request;
@@ -73,6 +74,11 @@ class SecurityHeaders
         $storage = $this->storageOrigins();
         $connect = trim("'self' blob: ".implode(' ', array_merge($storage, $this->sentryOrigins())));
         $media = trim("'self' blob: ".implode(' ', $storage));
+
+        // Klipy's CDN serves clip previews into a <video> element; without it they
+        // fall through to default-src 'self' and are blocked. Only added when the
+        // GIF browser is actually configured, keeping the policy tight otherwise.
+        $media = trim($media.' '.implode(' ', $this->klipyOrigins()));
         $directives = [
             "default-src 'self'",
             "script-src 'self' 'nonce-{$nonce}' 'strict-dynamic'",
@@ -139,6 +145,38 @@ class SecurityHeaders
         $origin = $this->originOf((string) config('sentry-browser.dsn'));
 
         return $origin === null ? [] : [$origin];
+    }
+
+    /**
+     * CSP source origins for Klipy's media CDN. Empty unless a Klipy API key is
+     * configured, so deployments without the GIF browser keep the tightest policy.
+     *
+     * The exact CDN host was never confirmed against a live Klipy API key (the
+     * probe in Task 0 was skipped for lack of one); this wildcard is the best
+     * available guess and may need narrowing once a real key is available.
+     *
+     * @return list<string>
+     */
+    private function klipyOrigins(): array
+    {
+        $key = config('services.klipy.key');
+
+        if (! is_string($key) || $key === '') {
+            return [];
+        }
+
+        // Derived from GifAttacher's fetch allow-list so the two cannot drift:
+        // a host we will download from must also be a host the browser may
+        // render. CSP wildcards do not match the apex, so each suffix needs
+        // both forms.
+        $origins = [];
+
+        foreach (GifAttacher::ALLOWED_HOST_SUFFIXES as $suffix) {
+            $origins[] = 'https://'.$suffix;
+            $origins[] = 'https://*.'.$suffix;
+        }
+
+        return $origins;
     }
 
     /**

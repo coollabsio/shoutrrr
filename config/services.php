@@ -70,4 +70,10 @@ return [
         'redirect' => env('THREADS_REDIRECT_URI'),
     ],
 
+    'klipy' => [
+        'key' => env('KLIPY_API_KEY'),
+        'share_trigger' => env('KLIPY_SHARE_TRIGGER', true),
+        'rating' => env('KLIPY_RATING', 'pg-13'),
+    ],
+
 ];
