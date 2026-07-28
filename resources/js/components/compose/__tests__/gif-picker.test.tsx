@@ -227,6 +227,26 @@ describe('GifPicker', () => {
         );
     });
 
+    it('scrolls back to the top when the query or catalog changes', async () => {
+        const { container } = render(<GifPicker onSelect={vi.fn()} />);
+        await screen.findAllByRole('button', { name: /insert/i });
+
+        const scrollArea = container.querySelector('.overflow-y-auto');
+        if (!(scrollArea instanceof HTMLElement)) {
+            throw new Error('scroll area not found');
+        }
+
+        scrollArea.scrollTop = 240;
+        fireEvent.change(screen.getByRole('searchbox'), {
+            target: { value: 'cat' },
+        });
+        expect(scrollArea.scrollTop).toBe(0);
+
+        scrollArea.scrollTop = 180;
+        fireEvent.click(screen.getByRole('button', { name: /stickers/i }));
+        expect(scrollArea.scrollTop).toBe(0);
+    });
+
     it('labels the search box and empty state after the active catalog', async () => {
         vi.stubGlobal(
             'fetch',

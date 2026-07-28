@@ -33,6 +33,16 @@ export function GifPicker({ onSelect }: Props) {
     const [favorites, setFavorites] = useState<GifItem[]>([]);
     const search = useGifSearch(catalog, true);
     const sentinel = useRef<HTMLDivElement | null>(null);
+    const scrollArea = useRef<HTMLDivElement | null>(null);
+
+    // A new query or catalog replaces the whole grid, so return to the top of
+    // the fresh results rather than leaving the user stranded at the scroll
+    // depth they'd reached in the previous ones.
+    useEffect(() => {
+        if (scrollArea.current !== null) {
+            scrollArea.current.scrollTop = 0;
+        }
+    }, [catalog, search.query]);
 
     // `search` is a fresh object every render (see use-gif-search.ts), so
     // depending on it directly would tear down and recreate the observer on
@@ -180,7 +190,10 @@ export function GifPicker({ onSelect }: Props) {
                 ))}
             </div>
 
-            <div className="mt-2 flex-1 overflow-y-auto px-2 pb-2">
+            <div
+                ref={scrollArea}
+                className="mt-2 flex-1 overflow-y-auto px-2 pb-2"
+            >
                 {showFavorites && (
                     <>
                         <div className="px-0.5 pb-1 text-xs font-medium text-muted-foreground">
