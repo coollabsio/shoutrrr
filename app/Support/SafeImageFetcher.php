@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Support\Concerns\PinsCurlResolution;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use RuntimeException;
 
@@ -24,6 +25,8 @@ use RuntimeException;
  */
 class SafeImageFetcher
 {
+    use PinsCurlResolution;
+
     private const int MAX_BYTES = 8 * 1024 * 1024; // 8 MiB
 
     private const array ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -109,25 +112,6 @@ class SafeImageFetcher
         }
 
         return $ips;
-    }
-
-    /**
-     * Build the curl option that pins the connection to a pre-validated IP. No
-     * pinning is needed when the host is already an IP literal (no name resolution
-     * happens at connect time, so there is no rebinding window).
-     *
-     * @param  non-empty-list<string>  $ips
-     * @return array<int, list<string>>
-     */
-    protected function pinnedResolution(string $host, string $scheme, string $url, array $ips): array
-    {
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
-            return [];
-        }
-
-        $port = parse_url($url, PHP_URL_PORT) ?: ($scheme === 'https' ? 443 : 80);
-
-        return [CURLOPT_RESOLVE => [sprintf('%s:%d:%s', $host, $port, $ips[0])]];
     }
 
     /**

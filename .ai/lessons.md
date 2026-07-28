@@ -17,3 +17,25 @@ investigation.
 
 **Rule:** A user's bug report is about *their* environment. Reproduce against the code
 path and the vendor API contract, not against local suite health.
+
+## Scale the process to the work, not to the skill's ceremony
+
+**Pattern:** Asked to apply ~15 small, well-understood code-review fixes, I ran the
+subagent-driven-development skill by the book: ten task briefs, an implementer subagent
+and a reviewer subagent each, review packages between them. Each subagent rebuilt context
+from scratch and re-ran the full 700-test suite plus tsc/lint. Six tasks took ~45 minutes
+for changes I could have written directly in a few minutes each. The user was rightly
+annoyed.
+
+**Rule:** Subagents pay off when a task needs context I don't already hold, or when work
+is genuinely parallel. For a list of small fixes in files I have already read this
+session, doing them inline is both faster and better — I already know why the code is
+shaped the way it is. Batch the whole list, run the gate once at the end.
+
+**Rule:** A skill describes a maximum-rigour path, not a mandatory one. Before invoking a
+per-task implementer/reviewer loop, ask what each dispatch buys over an inline edit. If
+the answer is "a second opinion on a three-line change," skip it. Reserve the full loop
+for tasks with real design risk — and say up front which tasks get it and why.
+
+**Rule:** Watch wall-clock, not just correctness. If a mechanical task is heading past
+~10 minutes of tool time, stop and ask whether the process is the bottleneck.

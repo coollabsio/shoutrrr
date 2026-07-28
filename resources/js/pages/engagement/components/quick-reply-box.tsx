@@ -1,5 +1,5 @@
-import { useHttp } from '@inertiajs/react';
-import { Paperclip, Smile } from 'lucide-react';
+import { useHttp, usePage } from '@inertiajs/react';
+import { ImagePlay, Paperclip, Smile } from 'lucide-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
@@ -7,6 +7,7 @@ import EditorBody, {
     type EditorBodyHandle,
 } from '@/components/compose/editor-body';
 import { EmojiPopover } from '@/components/compose/emoji-popover';
+import { GifPopover } from '@/components/compose/gif-popover';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import {
@@ -60,6 +61,7 @@ export function QuickReplyBox({
     savedMentions: initialSavedMentions = EMPTY_SAVED_MENTIONS,
     onSend,
 }: Props) {
+    const { shell } = usePage().props;
     const [text, setText] = useState('');
     const [sending, setSending] = useState(false);
     const [media, setMedia] = useState<MediaView[]>([]);
@@ -239,11 +241,11 @@ export function QuickReplyBox({
                     onSelect={insertEmoji}
                     side="top"
                     align="start"
+                    tooltip="Emoji"
                     trigger={(open) => (
                         <button
                             type="button"
                             aria-label="Insert emoji"
-                            title="Insert emoji"
                             disabled={disabled || sending}
                             data-active={open}
                             className={cn(
@@ -257,6 +259,31 @@ export function QuickReplyBox({
                 >
                     <Smile className="size-4" aria-hidden="true" />
                 </EmojiPopover>
+
+                {shell.gifs_enabled && (
+                    <GifPopover
+                        onSelect={(item) => void rm.attachGif(item)}
+                        side="top"
+                        align="start"
+                        tooltip="GIFs, stickers & clips"
+                        trigger={(open) => (
+                            <button
+                                type="button"
+                                aria-label="Insert a GIF, sticker or clip"
+                                disabled={disabled || sending}
+                                data-active={open}
+                                className={cn(
+                                    'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors',
+                                    'hover:bg-accent hover:text-foreground',
+                                    'data-[active=true]:bg-accent data-[active=true]:text-foreground',
+                                    'disabled:pointer-events-none disabled:opacity-50',
+                                )}
+                            />
+                        )}
+                    >
+                        <ImagePlay className="size-4" aria-hidden="true" />
+                    </GifPopover>
+                )}
 
                 {rm.isUploading ? (
                     <span className="text-[11px] text-muted-foreground">

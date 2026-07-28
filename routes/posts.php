@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\PostStatus;
 use App\Http\Controllers\AccountSets\AccountSetController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\Gifs\PostGifController;
 use App\Http\Controllers\Posts\CalendarController;
 use App\Http\Controllers\Posts\ComposerController;
 use App\Http\Controllers\Posts\NextSlotController;
@@ -88,6 +89,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::post('posts/{post}/media/video', [PostVideoUploadController::class, 'store'])->name('posts.media.video');
         Route::post('posts/{post}/image-edit', [PostImageEditController::class, 'store'])->name('posts.image-edit.store');
         Route::put('posts/{post}/image-edit/{media}', [PostImageEditController::class, 'update'])->name('posts.image-edit.update');
+        Route::post('posts/{post}/gifs', [PostGifController::class, 'store'])
+            ->middleware('gifs.enabled')->name('posts.gifs.store');
     });
     Route::delete('posts/{post}/media/{media}', [PostMediaController::class, 'destroy'])->name('posts.media.destroy');
 

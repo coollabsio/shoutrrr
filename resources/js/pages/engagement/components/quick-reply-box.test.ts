@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import type * as InertiaReact from '@inertiajs/react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -16,8 +17,34 @@ vi.mock('./use-reply-media', () => ({
         handleAddedFiles: vi.fn(),
         isUploading: false,
         openFilePicker: vi.fn(),
+        attachGif: vi.fn(),
     }),
 }));
+
+const shellProps = vi.hoisted(() => ({ gifs_enabled: false }));
+
+vi.mock('@inertiajs/react', async (importOriginal) => {
+    const actual = await importOriginal<typeof InertiaReact>();
+
+    return {
+        ...actual,
+        usePage: () => ({ props: { shell: shellProps } }),
+    };
+});
+
+function renderReplyBox(
+    overrides: { shell?: { gifs_enabled?: boolean } } = {},
+) {
+    Object.assign(shellProps, { gifs_enabled: false }, overrides.shell);
+
+    return renderToStaticMarkup(
+        createElement(QuickReplyBox, {
+            replyId: 'reply-1',
+            platform: 'bluesky',
+            onSend: async () => {},
+        }),
+    );
+}
 
 describe('QUICK_REPLY_SEND_SHORTCUT', () => {
     it('shows both supported send shortcuts', () => {
@@ -25,18 +52,28 @@ describe('QUICK_REPLY_SEND_SHORTCUT', () => {
     });
 
     it('renders the shortcut on the reply button', () => {
-        const html = renderToStaticMarkup(
-            createElement(QuickReplyBox, {
-                replyId: 'reply-1',
-                platform: 'bluesky',
-                onSend: async () => {},
-            }),
-        );
+        const html = renderReplyBox();
 
         expect(html).not.toContain('to send');
         expect(html).toContain(QUICK_REPLY_SEND_SHORTCUT);
         expect(html).toContain('data-slot="kbd"');
         expect(html).toContain('sm:inline-flex');
+    });
+});
+
+describe('QuickReplyBox GIF button', () => {
+    it('shows the GIF button when gifs are enabled', () => {
+        const html = renderReplyBox({ shell: { gifs_enabled: true } });
+
+        expect(html).toContain('aria-label="Insert a GIF, sticker or clip"');
+    });
+
+    it('hides the GIF button when gifs are disabled', () => {
+        const html = renderReplyBox({ shell: { gifs_enabled: false } });
+
+        expect(html).not.toContain(
+            'aria-label="Insert a GIF, sticker or clip"',
+        );
     });
 });
 

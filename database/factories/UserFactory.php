@@ -3,7 +3,10 @@
 namespace Database\Factories;
 
 use App\Enums\InstanceRole;
+use App\Enums\WorkspaceRole;
 use App\Models\User;
+use App\Models\Workspace;
+use App\Models\WorkspaceMembership;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -64,5 +67,26 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'instance_role' => InstanceRole::Owner,
         ]);
+    }
+
+    /**
+     * Create the user as the owner of a fresh workspace, with a membership row
+     * and `current_workspace_id` set. Mirrors the pattern used throughout the
+     * Feature suite (see `ownerActingIn()` in tests/Pest.php) as a reusable
+     * factory state.
+     */
+    public function withWorkspace(): static
+    {
+        return $this->afterCreating(function (User $user): void {
+            $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+
+            WorkspaceMembership::factory()->create([
+                'workspace_id' => $workspace->id,
+                'user_id' => $user->id,
+                'role' => WorkspaceRole::Owner,
+            ]);
+
+            $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+        });
     }
 }
