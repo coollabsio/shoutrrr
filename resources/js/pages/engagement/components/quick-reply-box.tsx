@@ -1,5 +1,5 @@
 import { useHttp, usePage } from '@inertiajs/react';
-import { FileImage, Paperclip, Smile } from 'lucide-react';
+import { ImagePlay, Paperclip, Smile } from 'lucide-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
@@ -241,11 +241,11 @@ export function QuickReplyBox({
                     onSelect={insertEmoji}
                     side="top"
                     align="start"
+                    tooltip="Emoji"
                     trigger={(open) => (
                         <button
                             type="button"
                             aria-label="Insert emoji"
-                            title="Insert emoji"
                             disabled={disabled || sending}
                             data-active={open}
                             className={cn(
@@ -265,11 +265,11 @@ export function QuickReplyBox({
                         onSelect={(item) => void rm.attachGif(item)}
                         side="top"
                         align="start"
+                        tooltip="GIFs, stickers & clips"
                         trigger={(open) => (
                             <button
                                 type="button"
-                                aria-label="Insert GIF"
-                                title="Insert GIF"
+                                aria-label="Insert a GIF, sticker or clip"
                                 disabled={disabled || sending}
                                 data-active={open}
                                 className={cn(
@@ -281,7 +281,7 @@ export function QuickReplyBox({
                             />
                         )}
                     >
-                        <FileImage className="size-4" aria-hidden="true" />
+                        <ImagePlay className="size-4" aria-hidden="true" />
                     </GifPopover>
                 )}
 

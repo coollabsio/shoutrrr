@@ -230,6 +230,59 @@ describe('GifPicker', () => {
         );
     });
 
+    it('shows a spinner beside the existing grid while the next page loads', async () => {
+        let releasePageTwo!: () => void;
+        const pageTwoGate = new Promise<void>((resolve) => {
+            releasePageTwo = resolve;
+        });
+
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string) => {
+                if (pageParam(url) === '2') {
+                    await pageTwoGate;
+
+                    return new Response(
+                        JSON.stringify(payload(['c', 'd'], false)),
+                    );
+                }
+
+                return new Response(JSON.stringify(payload(['a', 'b'], true)));
+            }),
+        );
+
+        render(<GifPicker onSelect={vi.fn()} />);
+        await screen.findAllByRole('button', { name: /insert/i });
+
+        // The first page never shows the spinner — it renders the skeleton.
+        expect(
+            screen.queryByRole('status', { name: /loading more/i }),
+        ).not.toBeInTheDocument();
+
+        MockIntersectionObserver.instances[0]?.trigger(true);
+
+        // Page 2 is in flight and page 1's tiles are still on screen.
+        expect(
+            await screen.findByRole('status', { name: /loading more/i }),
+        ).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: /insert/i })).toHaveLength(
+            2,
+        );
+
+        releasePageTwo();
+
+        await waitFor(() =>
+            expect(
+                screen.getAllByRole('button', { name: /insert/i }),
+            ).toHaveLength(4),
+        );
+        await waitFor(() =>
+            expect(
+                screen.queryByRole('status', { name: /loading more/i }),
+            ).not.toBeInTheDocument(),
+        );
+    });
+
     it('does not loop forever when a page reports has_next but returns no items', async () => {
         vi.stubGlobal(
             'fetch',

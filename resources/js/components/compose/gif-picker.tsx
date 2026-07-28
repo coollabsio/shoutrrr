@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { GifTile } from '@/components/compose/gif-tile';
@@ -206,6 +207,21 @@ export function GifPicker({ onSelect }: Props) {
                                 className="h-24 animate-pulse rounded-lg bg-muted"
                             />
                         ))}
+                    </div>
+                )}
+
+                {/* Next-page spinner: only while appending to an existing grid — the
+                    first page renders the skeleton above instead. */}
+                {search.isLoading && search.items.length > 0 && (
+                    <div
+                        role="status"
+                        aria-label="Loading more GIFs"
+                        className="flex items-center justify-center py-3"
+                    >
+                        <Loader2
+                            className="size-4 animate-spin text-muted-foreground"
+                            aria-hidden="true"
+                        />
                     </div>
                 )}
 

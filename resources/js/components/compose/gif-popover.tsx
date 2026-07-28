@@ -3,6 +3,11 @@ import type { ReactElement, ReactNode } from 'react';
 import { useState } from 'react';
 
 import { GifPicker } from '@/components/compose/gif-picker';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { GifItem } from '@/types/gifs';
 
@@ -12,6 +17,8 @@ type Props = {
     /** Trigger element, supplied by the caller so each surface owns its shape. */
     trigger: (open: boolean) => ReactElement;
     children: ReactNode;
+    /** Hover/focus label for the trigger. Omit for a trigger that labels itself. */
+    tooltip?: ReactNode;
     side?: 'top' | 'bottom';
     align?: 'start' | 'end';
 };
@@ -25,16 +32,33 @@ export function GifPopover({
     onSelect,
     trigger,
     children,
+    tooltip,
     side = 'top',
     align = 'start',
 }: Props) {
     const [open, setOpen] = useState(false);
 
-    return (
-        <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+    // The tooltip is disabled while the popover is open, so hovering the
+    // trigger to close the picker doesn't pop a label over it.
+    const triggerNode =
+        tooltip === undefined ? (
             <PopoverPrimitive.Trigger render={trigger(open)}>
                 {children}
             </PopoverPrimitive.Trigger>
+        ) : (
+            <Tooltip disabled={open}>
+                <PopoverPrimitive.Trigger
+                    render={<TooltipTrigger render={trigger(open)} />}
+                >
+                    {children}
+                </PopoverPrimitive.Trigger>
+                <TooltipContent side={side}>{tooltip}</TooltipContent>
+            </Tooltip>
+        );
+
+    return (
+        <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+            {triggerNode}
             <PopoverPrimitive.Portal>
                 <PopoverPrimitive.Positioner
                     align={align}

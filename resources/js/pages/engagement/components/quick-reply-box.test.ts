@@ -65,13 +65,15 @@ describe('QuickReplyBox GIF button', () => {
     it('shows the GIF button when gifs are enabled', () => {
         const html = renderReplyBox({ shell: { gifs_enabled: true } });
 
-        expect(html).toContain('aria-label="Insert GIF"');
+        expect(html).toContain('aria-label="Insert a GIF, sticker or clip"');
     });
 
     it('hides the GIF button when gifs are disabled', () => {
         const html = renderReplyBox({ shell: { gifs_enabled: false } });
 
-        expect(html).not.toContain('aria-label="Insert GIF"');
+        expect(html).not.toContain(
+            'aria-label="Insert a GIF, sticker or clip"',
+        );
     });
 });
 
