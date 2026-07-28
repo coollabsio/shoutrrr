@@ -271,32 +271,11 @@
     color: var(--destructive);
 }
 
-/* Toast intent color. Sonner emits class="cn-toast" and data-type on every
-   toast; we map data-type onto a single accent used by the leading rail and
-   the icon. The surface stays neutral (--popover) — only the rail and icon
-   carry intent, so a success toast never becomes a green surface competing
-   with the brand --primary.
-
-   The rail is a border, not a pseudo-element: sonner already uses ::before
-   (swipe hit-area, removal gap-fill) and ::after (stack gap-fill) on the
-   toast, and overriding either breaks swipe-to-dismiss and hover-to-expand.
-
-   The three specificity tiers below are deliberate:
-
-     .cn-toast                                    (0,1,0)  accent default
-     .cn-toast[data-type='…']                     (0,2,0)  per-intent accent
-     [data-sonner-toast][data-styled='true']
-       .cn-toast                                  (0,3,0)  border + icon color
-
-   The default must stay at 0,1,0 so the per-intent rules outrank it. Hoisting
-   it to the 0,3,0 selector would beat every intent rule and silently render
-   all rails transparent.
-
-   The 0,3,0 tier exists because sonner's own base rule
-   `[data-sonner-toast][data-styled='true']` (0,2,0) sets `border: 1px solid`.
-   Sonner injects its CSS at runtime, so its <style> lands after this
-   stylesheet in source order — winning on specificity rather than order is
-   what makes the 3px rail survive. */
+/* Toast intent color. Three things the code can't tell you: sonner owns
+   ::before and ::after on the toast (swipe hit-area, stack gap-fill), so the
+   rail is a border; the long selector is what outranks sonner's own
+   `border: 1px`; and the transparent default must stay on a weaker selector
+   than the per-intent rules, or it wins and every rail goes invisible. */
 .cn-toast {
     --toast-accent: transparent;
 }
