@@ -215,15 +215,16 @@ export function useMediaUploads({
         ]);
 
         try {
-            onAddMedia(await work());
+            const result = await work();
+            onAddMedia(result);
+            dismissPending(tempId);
         } catch (error) {
             toast.error(
                 error instanceof Error
                     ? error.message
                     : 'That GIF could not be attached.',
             );
-        } finally {
-            dismissPending(tempId);
+            failUpload(tempId);
         }
     }
 
