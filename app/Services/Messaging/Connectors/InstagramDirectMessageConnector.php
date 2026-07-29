@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Messaging\Connectors;
 
+use App\Dto\Messaging\ConversationFetchResult;
+use App\Dto\Messaging\FetchedConversation;
+use App\Dto\Messaging\FetchedMessage;
+use App\Dto\Messaging\MessageSendResult;
 use App\Enums\MessageDirection;
 use App\Enums\Platform;
 use App\Enums\UsageCategory;
@@ -13,10 +17,6 @@ use App\Models\PostMedia;
 use App\Services\Media\PublicMediaUrl;
 use App\Services\Messaging\Connectors\Concerns\InteractsWithMetaGraph;
 use App\Services\Messaging\Contracts\DirectMessageConnector;
-use App\Services\Messaging\Data\ConversationFetchResult;
-use App\Services\Messaging\Data\FetchedConversation;
-use App\Services\Messaging\Data\FetchedMessage;
-use App\Services\Messaging\Data\MessageSendResult;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
@@ -65,7 +65,7 @@ class InstagramDirectMessageConnector implements DirectMessageConnector
             $conversations[] = $this->mapConversation($convo, $ourId);
         }
 
-        return ConversationFetchResult::ok($conversations, data_get($response->json(), 'paging.cursors.after'));
+        return ConversationFetchResult::ok($conversations);
     }
 
     /** @param array<string, mixed> $convo */

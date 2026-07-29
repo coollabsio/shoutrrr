@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace App\Services\Messaging\Connectors;
 
+use App\Dto\Messaging\ConversationFetchResult;
+use App\Dto\Messaging\FetchedConversation;
+use App\Dto\Messaging\FetchedMessage;
+use App\Dto\Messaging\MessageSendResult;
 use App\Enums\MessageDirection;
 use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\PostMedia;
-use App\Services\Engagement\RetryAfter;
 use App\Services\Messaging\Contracts\DirectMessageConnector;
-use App\Services\Messaging\Data\ConversationFetchResult;
-use App\Services\Messaging\Data\FetchedConversation;
-use App\Services\Messaging\Data\FetchedMessage;
-use App\Services\Messaging\Data\MessageSendResult;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -124,7 +124,7 @@ class XDirectMessageConnector implements DirectMessageConnector
             );
         }
 
-        return ConversationFetchResult::ok($conversations, $response->json('meta.next_token'));
+        return ConversationFetchResult::ok($conversations);
     }
 
     /**

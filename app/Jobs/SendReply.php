@@ -93,7 +93,10 @@ class SendReply implements ShouldQueue
         $result = $registry->for($parent->platform)->postReply($account, $parent, $this->text, $credentials, $media);
 
         if (! $result->isOk()) {
-            $this->failRow($ourRow);
+            // The connector's own words — e.g. "LinkedIn comments cannot include
+            // attachments." Without this the user only ever sees a generic
+            // failure and cannot tell what to change.
+            $this->failRow($ourRow, $result->message);
 
             return;
         }
@@ -126,7 +129,7 @@ class SendReply implements ShouldQueue
         }
     }
 
-    private function failRow(PostTargetReply $ourRow): void
+    private function failRow(PostTargetReply $ourRow, ?string $reason = null): void
     {
         $ourRow->forceFill(['send_status' => SendStatus::Failed->value])->save();
 
@@ -134,7 +137,7 @@ class SendReply implements ShouldQueue
         $parent = PostTargetReply::withoutGlobalScopes()->find($this->parentReplyId);
 
         if ($author !== null && $parent !== null) {
-            $author->notify(new ReplyFailedNotification($parent));
+            $author->notify(new ReplyFailedNotification($parent, $reason));
         }
     }
 }

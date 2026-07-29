@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Gifs;
 
+use App\Dto\Gifs\GifItem;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Services\Gifs\GifItem;
 use App\Services\Gifs\KlipyClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\Messaging;
 
+use App\Dto\Messaging\FetchedConversation;
 use App\Enums\MessageDirection;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\DirectMessage;
-use App\Services\Messaging\Data\FetchedConversation;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 
@@ -47,7 +47,6 @@ class MessagePersister
                     'counterpart_remote_id' => $fetched->counterpartRemoteId ?? $existing?->counterpart_remote_id,
                     'messaging_window_expires_at' => $fetched->messagingWindowExpiresAt,
                     'last_synced_at' => Date::now(),
-                    'sync_cursor' => $fetched->cursor,
                 ]
             );
 
@@ -62,9 +61,14 @@ class MessagePersister
                         'direction' => $message->direction,
                         'author_remote_id' => $message->authorRemoteId,
                         'text' => $message->text,
-                        'attachments' => $message->attachments,
                         'remote_created_at' => $message->remoteCreatedAt,
                         'is_ours' => $message->direction === MessageDirection::Outbound,
+                        // Only overwrite attachments when the fetch actually parsed
+                        // some. No connector does yet, so writing the empty list
+                        // unconditionally would wipe the attachments we recorded for
+                        // a message we sent ourselves — the next sync returns that
+                        // same remote id and matches this updateOrCreate.
+                        ...($message->attachments === [] ? [] : ['attachments' => $message->attachments]),
                     ]
                 );
 

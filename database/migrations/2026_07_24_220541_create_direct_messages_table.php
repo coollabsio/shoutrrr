@@ -29,6 +29,16 @@ return new class extends Migration
             $table->unique(['conversation_id', 'remote_message_id']);
             $table->index(['conversation_id', 'remote_created_at']);
         });
+
+        // Gives a sent DM's attachments an owner. Media uploaded for a message
+        // is created orphaned (`post_id` null), like reply media — harmless for
+        // a reply, since the platform owns the copy once posted, but a DM bubble
+        // renders our own file indefinitely and `media:prune-uploads` deletes
+        // orphaned rows after six hours.
+        Schema::table('post_media', function (Blueprint $table): void {
+            $table->foreignUuid('direct_message_id')->nullable()->after('post_id')
+                ->constrained('direct_messages')->nullOnDelete();
+        });
     }
 
     /**
@@ -36,6 +46,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('post_media', function (Blueprint $table): void {
+            $table->dropConstrainedForeignId('direct_message_id');
+        });
+
         Schema::dropIfExists('direct_messages');
     }
 };

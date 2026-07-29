@@ -6,6 +6,7 @@ use App\Enums\Platform;
 use App\Listeners\BindWorkspaceToAccessToken;
 use App\Listeners\SetCurrentWorkspaceOnLogin;
 use App\Listeners\SetSentryUserContext;
+use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Auth\Socialite\ThreadsProvider;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Inertia\ExceptionResponse;
@@ -52,6 +54,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureErrorPages();
+        $this->bindWorkspaceMedia();
         $this->configureTrustedProxies();
         $this->configureSignedUrls();
         $this->guardAgainstMisconfiguredStripe();
@@ -94,15 +97,6 @@ class AppServiceProvider extends ServiceProvider
         foreach (Platform::cases() as $platform) {
             RateLimiter::for("metrics-{$platform->value}", fn (): Limit => Limit::perMinute(30));
             RateLimiter::for("engagement-{$platform->value}", fn (): Limit => Limit::perMinute(10));
-        }
-
-        // Per-platform throttle for outbound DM sends, mirroring the
-        // engagement limiter above so a burst of replies can't trip the
-        // platforms' own DM rate limits.
-        foreach (Platform::cases() as $platform) {
-            if ($platform->supportsDirectMessages()) {
-                RateLimiter::for("messages-{$platform->value}", fn (): Limit => Limit::perMinute(10));
-            }
         }
 
         Gate::before(function (User $user, string $ability): ?bool {
@@ -238,6 +232,22 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Configure default behaviors for production-ready applications.
      */
+    /**
+     * `{media}` resolves the same way for posts, replies and conversations, so
+     * it is bound once here rather than restated in each route file.
+     *
+     * Route-model binding runs before WorkspaceMiddleware sets the Context, so
+     * the lookup scopes to the authed user's current workspace explicitly (a
+     * foreign id 404s) instead of relying on PostMedia's global scope.
+     */
+    private function bindWorkspaceMedia(): void
+    {
+        Route::bind('media', fn (string $value): PostMedia => PostMedia::query()
+            ->where('workspace_id', request()->user()?->current_workspace_id)
+            ->whereKey($value)
+            ->firstOrFail());
+    }
+
     protected function configureDefaults(): void
     {
         $this->guardAgainstProductionDebug();

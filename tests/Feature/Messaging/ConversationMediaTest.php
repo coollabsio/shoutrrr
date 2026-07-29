@@ -1,10 +1,12 @@
 <?php
 
 // tests/Feature/Messaging/ConversationMediaTest.php
+use App\Enums\MessageDirection;
 use App\Enums\Platform;
 use App\Enums\WorkspaceRole;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
+use App\Models\DirectMessage;
 use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
@@ -234,4 +236,42 @@ test('the gif route 404s when gifs are not configured', function () {
     $this->actingAs($this->user)
         ->postJson(route('messages.gifs.store', $this->conversation), conversationGifPayload())
         ->assertNotFound();
+});
+
+test('media claimed by a sent message survives the abandoned-upload prune', function (): void {
+    $conversation = Conversation::factory()->for(
+        ConnectedAccount::factory()->create([
+            'workspace_id' => $this->workspace->id,
+            'platform' => Platform::X,
+            'capabilities' => ['dm_enabled' => true],
+        ]),
+        'account'
+    )->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::X]);
+
+    $message = DirectMessage::withoutGlobalScopes()->create([
+        'workspace_id' => $this->workspace->id,
+        'conversation_id' => $conversation->id,
+        'remote_message_id' => 'evt-1',
+        'direction' => MessageDirection::Outbound,
+        'author_remote_id' => 'me',
+        'text' => 'look',
+        'attachments' => [],
+        'remote_created_at' => now(),
+        'is_ours' => true,
+    ]);
+
+    $claimed = PostMedia::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'direct_message_id' => $message->id,
+        'created_at' => now()->subDay(),
+    ]);
+    $abandoned = PostMedia::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'created_at' => now()->subDay(),
+    ]);
+
+    $this->artisan('media:prune-uploads')->assertSuccessful();
+
+    expect(PostMedia::withoutGlobalScopes()->find($claimed->id))->not->toBeNull();
+    expect(PostMedia::withoutGlobalScopes()->find($abandoned->id))->toBeNull();
 });

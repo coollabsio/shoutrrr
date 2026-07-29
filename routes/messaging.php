@@ -7,15 +7,12 @@ use App\Http\Controllers\Messaging\ConversationMediaController;
 use App\Http\Controllers\Messaging\ConversationVideoUploadController;
 use App\Http\Controllers\Messaging\MessagingController;
 use App\Models\Conversation;
-use App\Models\PostMedia;
 use Illuminate\Support\Facades\Route;
 
 // Route-model binding runs before WorkspaceMiddleware sets the Context, so scope
 // the lookup to the authed user's current workspace (a foreign id 404s).
-Route::bind('conversation', fn ($v) => Conversation::query()->withoutGlobalScopes()
-    ->where('workspace_id', request()->user()?->current_workspace_id)->whereKey($v)->firstOrFail());
-
-Route::bind('media', fn (string $value): PostMedia => PostMedia::query()
+Route::bind('conversation', fn (string $value): Conversation => Conversation::query()
+    ->withoutGlobalScopes()
     ->where('workspace_id', request()->user()?->current_workspace_id)
     ->whereKey($value)
     ->firstOrFail());

@@ -12,6 +12,7 @@ use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Support\MessageListItem;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -139,12 +140,16 @@ test('respond on x attaches media and stores a render record on the row', functi
 
     $row = DirectMessage::withoutGlobalScopes()->where('conversation_id', $convo->id)->where('is_ours', true)->sole();
 
-    // A render record, not a post_media foreign key.
-    expect($row->attachments)->toHaveCount(1);
-    expect($row->attachments[0]['kind'])->toBe('image');
-    expect($row->attachments[0]['mime'])->toBe('image/jpeg');
-    expect($row->attachments[0]['alt_text'])->toBe('a cat');
-    expect($row->attachments[0]['url'])->toBeString();
+    // The media is claimed by the message, so media:prune-uploads leaves it
+    // alone and the bubble keeps rendering it.
+    expect($media->refresh()->direct_message_id)->toBe($row->id);
+
+    $view = MessageListItem::make($row->load('media'));
+    expect($view['attachments'])->toHaveCount(1);
+    expect($view['attachments'][0]['kind'])->toBe('image');
+    expect($view['attachments'][0]['mime'])->toBe('image/jpeg');
+    expect($view['attachments'][0]['alt_text'])->toBe('a cat');
+    expect($view['attachments'][0]['url'])->toBeString();
 });
 
 test('respond accepts a media-only message with no text', function (): void {

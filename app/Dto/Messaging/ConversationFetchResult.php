@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Services\Messaging\Data;
+namespace App\Dto\Messaging;
 
 use App\Enums\EngagementStatus;
 
@@ -12,15 +12,14 @@ final readonly class ConversationFetchResult
     private function __construct(
         public EngagementStatus $status,
         public array $conversations = [],
-        public ?string $cursor = null,
         public ?int $retryAfterSeconds = null,
         public ?string $excerpt = null,
     ) {}
 
     /** @param list<FetchedConversation> $conversations */
-    public static function ok(array $conversations, ?string $cursor = null): self
+    public static function ok(array $conversations): self
     {
-        return new self(EngagementStatus::Ok, $conversations, $cursor);
+        return new self(EngagementStatus::Ok, $conversations);
     }
 
     public static function rateLimited(?string $excerpt, ?int $retryAfter): self

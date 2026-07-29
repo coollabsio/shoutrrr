@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Override;
 
 /**
@@ -54,6 +55,17 @@ class DirectMessage extends Model
             'is_ours' => 'boolean',
             'send_status' => SendStatus::class,
         ];
+    }
+
+    /**
+     * Attachments we delivered with this message. Empty for inbound messages —
+     * the fetch connectors do not parse the platform's own attachments yet.
+     *
+     * @return HasMany<PostMedia, $this>
+     */
+    public function media(): HasMany
+    {
+        return $this->hasMany(PostMedia::class)->orderBy('position');
     }
 
     /**

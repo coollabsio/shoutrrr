@@ -7,6 +7,7 @@ use App\Enums\WorkspaceRole;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Models\Post;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Models\User;
@@ -163,4 +164,22 @@ test('a failed post surfaces an error and does not mark responded', function ():
         ->assertJson(['status' => 'failed', 'message' => 'platform down']);
 
     expect($this->reply->fresh()->status)->toBe(ReplyStatus::Pending);
+});
+
+test('media is rejected on platforms whose comments cannot carry it', function (): void {
+    // LinkedIn comments are text-only; the connector rejects an attachment, so
+    // the request must too rather than letting SendReply fail asynchronously.
+    $this->reply->forceFill(['platform' => Platform::LinkedIn])->save();
+    $media = PostMedia::factory()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => 'hi', 'media' => [$media->id]])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('media');
+});
+
+test('media is still accepted on x, which does support reply media', function (): void {
+    $media = PostMedia::factory()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->postJson(route('engagement.respond', $this->reply), ['text' => 'hi', 'media' => [$media->id]])
+        ->assertCreated();
 });

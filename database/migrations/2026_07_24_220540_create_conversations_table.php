@@ -27,7 +27,6 @@ return new class extends Migration
             $table->timestamp('read_at')->nullable();
             $table->timestamp('archived_at')->nullable();
             $table->timestamp('messaging_window_expires_at')->nullable();
-            $table->string('sync_cursor')->nullable();
             $table->timestamp('last_synced_at')->nullable();
             $table->timestamps();
 

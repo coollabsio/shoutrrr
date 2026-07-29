@@ -196,3 +196,20 @@ test('facebook maps 190 error to auth expired', function () {
     $result = app(FacebookDirectMessageConnector::class)->fetchConversations($account, ['access_token' => 'page-tok'], null);
     expect($result->status)->toBe(EngagementStatus::AuthExpired);
 });
+
+test('a text failure after a delivered attachment says the attachment already landed', function (): void {
+    Http::fakeSequence()
+        ->push(['message_id' => 'm-att'], 200)
+        ->push(['error' => ['code' => 100, 'message' => 'bad text']], 400);
+
+    [$account, $convo] = facebookDmFixture();
+    $media = facebookDmMedia('media/ws/pic.jpg', 'image/jpeg');
+
+    $result = app(FacebookDirectMessageConnector::class)
+        ->sendMessage($account, $convo, 'caption', ['access_token' => 'tok'], [$media]);
+
+    expect($result->isOk())->toBeFalse();
+    // Meta cannot recall the delivered image, so a verbatim retry duplicates it.
+    expect($result->excerpt)->toContain('attachment was delivered');
+    expect($result->excerpt)->toContain('retrying will send the attachment again');
+});

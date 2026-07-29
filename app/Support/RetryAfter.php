@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Services\Engagement;
+namespace App\Support;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Date;

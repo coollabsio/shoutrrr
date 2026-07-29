@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Gifs;
 
+use App\Dto\Gifs\GifItem;
+use App\Dto\Gifs\GifVariant;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use InvalidArgumentException;

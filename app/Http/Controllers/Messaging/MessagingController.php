@@ -7,7 +7,8 @@ namespace App\Http\Controllers\Messaging;
 use App\Enums\EngagementStatus;
 use App\Enums\MessageDirection;
 use App\Enums\SendStatus;
-use App\Http\Requests\RespondToMessageRequest;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Messaging\RespondToMessageRequest;
 use App\Models\Conversation;
 use App\Models\DirectMessage;
 use App\Models\PostMedia;
@@ -22,7 +23,7 @@ use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
-class MessagingController
+class MessagingController extends Controller
 {
     public function index(Request $request): InertiaResponse
     {
@@ -44,6 +45,7 @@ class MessagingController
     public function thread(Conversation $conversation): JsonResponse
     {
         $messages = $conversation->messages()
+            ->with('media')
             ->orderBy('remote_created_at')
             ->get()
             ->map(fn (DirectMessage $m) => MessageListItem::make($m));
@@ -89,14 +91,37 @@ class MessagingController
             'direction' => MessageDirection::Outbound,
             'author_remote_id' => $account->remote_account_id,
             'text' => $text,
-            'attachments' => array_map($this->attachmentView(...), $media),
+            'attachments' => [],
             'remote_created_at' => now(),
             'is_ours' => true,
             'send_status' => SendStatus::Sent,
             'our_remote_id' => $result->remoteMessageId,
         ]);
 
+        $this->claimMedia($row, $media);
+
         return response()->json(['message' => MessageListItem::make($row)], 201);
+    }
+
+    /**
+     * Hand the delivered attachments to the message that carried them.
+     *
+     * Until now they were orphaned uploads, which `media:prune-uploads` deletes
+     * after six hours — and the bubble renders them for as long as the thread
+     * exists. Claiming them also fixes their order for `DirectMessage::media()`.
+     *
+     * @param  list<PostMedia>  $media
+     */
+    private function claimMedia(DirectMessage $message, array $media): void
+    {
+        foreach ($media as $position => $item) {
+            $item->forceFill([
+                'direct_message_id' => $message->id,
+                'position' => $position,
+            ])->save();
+        }
+
+        $message->setRelation('media', collect($media));
     }
 
     /**
@@ -124,21 +149,5 @@ class MessagingController
             fn (string $id): ?PostMedia => $rows->get($id),
             $ids,
         )));
-    }
-
-    /**
-     * A self-contained render record, not `PostMedia::toView()`: DM media rows
-     * are orphaned and prunable, but a sent message must keep rendering.
-     *
-     * @return array{kind: string, url: string, mime: string, alt_text: string|null}
-     */
-    private function attachmentView(PostMedia $media): array
-    {
-        return [
-            'kind' => $media->kind,
-            'url' => $media->url(),
-            'mime' => $media->mime,
-            'alt_text' => $media->alt_text,
-        ];
     }
 }

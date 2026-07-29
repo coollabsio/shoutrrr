@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\Messaging\Contracts;
 
+use App\Dto\Messaging\ConversationFetchResult;
+use App\Dto\Messaging\MessageSendResult;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\PostMedia;
-use App\Services\Messaging\Data\ConversationFetchResult;
-use App\Services\Messaging\Data\MessageSendResult;
 use Carbon\CarbonImmutable;
 
 interface DirectMessageConnector

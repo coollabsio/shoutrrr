@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Services\Messaging\Connectors\Concerns;
 
+use App\Dto\Messaging\ConversationFetchResult;
+use App\Dto\Messaging\MessageSendResult;
 use App\Enums\Platform;
 use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\PostMedia;
-use App\Services\Engagement\RetryAfter;
 use App\Services\Media\ImageConversionFailed;
-use App\Services\Messaging\Data\ConversationFetchResult;
-use App\Services\Messaging\Data\MessageSendResult;
+use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Response;
@@ -79,6 +79,7 @@ trait InteractsWithMetaGraph
         }
 
         $remoteMessageId = '';
+        $delivered = 0;
 
         foreach ($messages as $message) {
             $response = $this->http->acceptJson()->post($this->metaGraphBase()."/{$account->remote_account_id}/messages", [
@@ -91,13 +92,32 @@ trait InteractsWithMetaGraph
             $this->meter(UsageCategory::ExternalApi, UsageOperation::DM_SEND, $account, $response);
 
             if ($response->failed() || $response->json('error')) {
-                return $this->mapMetaSendFailure($response);
+                return $this->partialSendFailure($response, $delivered);
             }
 
+            $delivered++;
             $remoteMessageId = (string) $response->json('message_id');
         }
 
         return MessageSendResult::ok($remoteMessageId);
+    }
+
+    /**
+     * A send that failed partway is still a failure, but the user has to know
+     * the earlier part landed — Meta cannot recall it, so retrying verbatim
+     * delivers the attachment twice.
+     */
+    private function partialSendFailure(Response $response, int $delivered): MessageSendResult
+    {
+        $result = $this->mapMetaSendFailure($response);
+
+        if ($delivered === 0) {
+            return $result;
+        }
+
+        return $result->withExcerpt(
+            'The attachment was delivered but the message text could not be sent, so retrying will send the attachment again. '.($result->excerpt ?? '')
+        );
     }
 
     /**

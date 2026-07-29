@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Services\Gifs;
+namespace App\Dto\Gifs;
 
 /**
  * A vendor-free browse result. Everything the frontend sees comes from here, so

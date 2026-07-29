@@ -1,12 +1,14 @@
 <?php
 
+use App\Dto\Messaging\FetchedConversation;
+use App\Dto\Messaging\FetchedMessage;
 use App\Enums\MessageDirection;
+use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\DirectMessage;
-use App\Services\Messaging\Data\FetchedConversation;
-use App\Services\Messaging\Data\FetchedMessage;
 use App\Services\Messaging\MessagePersister;
+use Carbon\CarbonImmutable;
 
 function fetchedConvo(array $overrides = []): FetchedConversation
 {
@@ -24,7 +26,7 @@ function fetchedConvo(array $overrides = []): FetchedConversation
 }
 
 test('persist inserts conversation and messages and returns inbound count', function () {
-    $account = ConnectedAccount::factory()->create(['platform' => \App\Enums\Platform::Bluesky]);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky]);
 
     $inserted = app(MessagePersister::class)->persist($account, [fetchedConvo()]);
 
@@ -37,7 +39,7 @@ test('persist inserts conversation and messages and returns inbound count', func
 });
 
 test('persist is idempotent on remote_message_id', function () {
-    $account = ConnectedAccount::factory()->create(['platform' => \App\Enums\Platform::Bluesky]);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky]);
     $persister = app(MessagePersister::class);
 
     $persister->persist($account, [fetchedConvo()]);
@@ -48,7 +50,7 @@ test('persist is idempotent on remote_message_id', function () {
 });
 
 test('persist copies meta window and does not count outbound as unread', function () {
-    $account = ConnectedAccount::factory()->create(['platform' => \App\Enums\Platform::Instagram]);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Instagram]);
     $window = now()->addHours(24)->toImmutable();
 
     app(MessagePersister::class)->persist($account, [fetchedConvo([
@@ -65,7 +67,7 @@ test('persist copies meta window and does not count outbound as unread', functio
 });
 
 test('persist preserves counterpart fields when a re-poll returns them null', function () {
-    $account = ConnectedAccount::factory()->create(['platform' => \App\Enums\Platform::X]);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::X]);
     $persister = app(MessagePersister::class);
 
     $persister->persist($account, [fetchedConvo()]);
@@ -89,4 +91,47 @@ test('persist preserves counterpart fields when a re-poll returns them null', fu
     expect($convo->counterpart_handle)->toBe('@alice');
     expect($convo->counterpart_name)->toBe('Alice');
     expect($convo->counterpart_remote_id)->toBe('did:alice');
+});
+
+test('a resync does not wipe the attachments recorded for a message we sent', function (): void {
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::X]);
+    $conversation = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $account->workspace_id,
+        'platform' => Platform::X,
+        'remote_conversation_id' => 'c-1',
+    ]);
+
+    // What MessagingController::respond() wrote for an outbound message.
+    $ours = DirectMessage::withoutGlobalScopes()->create([
+        'workspace_id' => $account->workspace_id,
+        'conversation_id' => $conversation->id,
+        'remote_message_id' => 'evt-1',
+        'direction' => MessageDirection::Outbound,
+        'author_remote_id' => $account->remote_account_id,
+        'text' => 'look',
+        'attachments' => [['kind' => 'image', 'url' => '/x.jpg', 'mime' => 'image/jpeg', 'alt_text' => null]],
+        'remote_created_at' => now(),
+        'is_ours' => true,
+    ]);
+
+    // The next fetch returns the same event; no connector parses attachments,
+    // so it arrives with an empty list.
+    app(MessagePersister::class)->persist($account, [new FetchedConversation(
+        remoteConversationId: 'c-1',
+        counterpartHandle: '@them',
+        counterpartName: 'Them',
+        counterpartAvatarUrl: null,
+        counterpartRemoteId: 'them-1',
+        messagingWindowExpiresAt: null,
+        messages: [new FetchedMessage(
+            remoteMessageId: 'evt-1',
+            direction: MessageDirection::Outbound,
+            authorRemoteId: $account->remote_account_id,
+            text: 'look',
+            attachments: [],
+            remoteCreatedAt: CarbonImmutable::now(),
+        )],
+    )]);
+
+    expect($ours->refresh()->attachments)->toHaveCount(1);
 });
