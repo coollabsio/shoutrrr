@@ -4,9 +4,16 @@ declare(strict_types=1);
 
 namespace App\Services\Messaging\Connectors\Concerns;
 
+use App\Enums\Platform;
+use App\Enums\UsageCategory;
+use App\Models\ConnectedAccount;
+use App\Models\Conversation;
+use App\Models\PostMedia;
 use App\Services\Engagement\RetryAfter;
+use App\Services\Media\ImageConversionFailed;
 use App\Services\Messaging\Data\ConversationFetchResult;
 use App\Services\Messaging\Data\MessageSendResult;
+use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Str;
@@ -14,7 +21,11 @@ use Illuminate\Support\Str;
 /**
  * Shared Meta Graph API helpers for the Instagram and Facebook direct
  * message connectors: versioned base URL, 24-hour messaging window
- * computation, and error-code mapping to the connector result types.
+ * computation, the send flow (including attachments), and error-code
+ * mapping to the connector result types.
+ *
+ * Using classes must expose an `$http` client, a `$publicMediaUrl` resolver,
+ * and the TracksUsage trait.
  */
 trait InteractsWithMetaGraph
 {
@@ -26,6 +37,78 @@ trait InteractsWithMetaGraph
     private function metaWindowFrom(?CarbonImmutable $latestInbound): ?CarbonImmutable
     {
         return $latestInbound?->addHours((int) config('messages.meta_window_hours', 24));
+    }
+
+    /**
+     * A Meta `message` carries either `text` or `attachment`, never both, so a
+     * message with media becomes two POSTs — attachment first, so a failure
+     * there delivers nothing. Returns the id of the last call that succeeded.
+     *
+     * @param  list<PostMedia>  $media  Capped upstream by Platform::maxDirectMessageMedia().
+     * @param  array<string, mixed>  $basePayload  Extra top-level keys (Messenger's messaging_type).
+     */
+    private function sendMetaDirectMessage(
+        ConnectedAccount $account,
+        Conversation $conversation,
+        string $text,
+        string $token,
+        array $media,
+        Platform $platform,
+        array $basePayload = [],
+    ): MessageSendResult {
+        /** @var list<array<string, mixed>> $messages */
+        $messages = [];
+
+        foreach ($media as $item) {
+            try {
+                $messages[] = ['attachment' => [
+                    'type' => $item->isVideo() ? 'video' : 'image',
+                    'payload' => ['url' => $this->metaAttachmentUrl($item, $platform)],
+                ]];
+            } catch (ImageConversionFailed $e) {
+                return MessageSendResult::failed('Could not prepare the attachment for sending: '.$e->getMessage());
+            }
+        }
+
+        if ($text !== '') {
+            $messages[] = ['text' => $text];
+        }
+
+        if ($messages === []) {
+            return MessageSendResult::failed('The message has neither text nor an attachment to send.');
+        }
+
+        $remoteMessageId = '';
+
+        foreach ($messages as $message) {
+            $response = $this->http->acceptJson()->post($this->metaGraphBase()."/{$account->remote_account_id}/messages", [
+                ...$basePayload,
+                'recipient' => ['id' => $conversation->counterpart_remote_id],
+                'message' => $message,
+                'access_token' => $token,
+            ]);
+
+            $this->meter(UsageCategory::ExternalApi, UsageOperation::DM_SEND, $account, $response);
+
+            if ($response->failed() || $response->json('error')) {
+                return $this->mapMetaSendFailure($response);
+            }
+
+            $remoteMessageId = (string) $response->json('message_id');
+        }
+
+        return MessageSendResult::ok($remoteMessageId);
+    }
+
+    /**
+     * Meta fetches this URL server-side, so it must be absolute and public.
+     * A GIF passes no platform: the JPEG safety-net would flatten the animation.
+     *
+     * @throws ImageConversionFailed
+     */
+    private function metaAttachmentUrl(PostMedia $media, Platform $platform): string
+    {
+        return $this->publicMediaUrl->for($media, $media->mime === 'image/gif' ? null : $platform);
     }
 
     private function mapMetaFetchFailure(Response $response): ConversationFetchResult

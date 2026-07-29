@@ -15,12 +15,20 @@ export type ConversationItem = {
     account_handle: string | null;
 };
 
+/** Stored on the message row, not a live `post_media` reference. */
+export type MessageAttachment = {
+    kind: string;
+    url: string;
+    mime: string;
+    alt_text: string | null;
+};
+
 export type MessageItem = {
     id: string;
     remote_message_id: string;
     direction: 'inbound' | 'outbound';
     text: string | null;
-    attachments: unknown[];
+    attachments: MessageAttachment[];
     remote_created_at: string | null;
     is_ours: boolean;
     send_status: 'sending' | 'sent' | 'failed' | null;

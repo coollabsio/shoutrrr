@@ -26,6 +26,7 @@ import {
     respond as respondRoute,
     thread as threadRoute,
 } from '@/routes/messages';
+import type { MediaView } from '@/types/compose';
 
 import { MessageFilters } from './components/message-filters';
 import { MessageStream } from './components/message-stream';
@@ -155,9 +156,10 @@ function RightPane({
     const [loading, setLoading] = useState(false);
 
     const archiveHttp = useHttp<Record<string, never>, null>({});
-    const respondHttp = useHttp<{ text: string }, { message: MessageItem }>({
-        text: '',
-    });
+    const respondHttp = useHttp<
+        { text: string; media: string[] },
+        { message: MessageItem }
+    >({ text: '', media: [] });
 
     const selectedId = selected.id;
 
@@ -182,7 +184,7 @@ function RightPane({
         );
     }
 
-    async function send(text: string) {
+    async function send(text: string, media: MediaView[]) {
         const tempId = `temp-${Date.now()}`;
         const now = new Date().toISOString();
         setThread((prev) => [
@@ -192,13 +194,23 @@ function RightPane({
                 remote_message_id: tempId,
                 direction: 'outbound',
                 text,
-                attachments: [],
+                // Shaped like the stored record, so the real message swaps in
+                // without the picture changing.
+                attachments: media.map((m) => ({
+                    kind: m.kind,
+                    url: m.url,
+                    mime: m.mime,
+                    alt_text: m.alt_text,
+                })),
                 remote_created_at: now,
                 is_ours: true,
                 send_status: 'sending' as const,
             },
         ]);
-        respondHttp.transform(() => ({ text }));
+        respondHttp.transform(() => ({
+            text,
+            media: media.map((m) => m.id),
+        }));
         // Failures rethrow so QuickMessageBox's `await onSend(...)` still sees
         // them, but the box already reflects the sending/failed state above.
         await respondHttp.post(respondRoute(selected.id).url, {
@@ -206,7 +218,16 @@ function RightPane({
                 setThread((prev) =>
                     prev.map((m) => (m.id === tempId ? message : m)),
                 );
-                onResponded(selected.id, text, now);
+                // A media-only message has no text to preview.
+                onResponded(
+                    selected.id,
+                    text.trim() !== ''
+                        ? text
+                        : media[0]?.kind === 'video'
+                          ? 'Video'
+                          : 'Photo',
+                    now,
+                );
             },
             onError: () => setSendStatus(tempId, 'failed'),
             onHttpException: (r) => {
@@ -296,10 +317,12 @@ function RightPane({
             />
 
             {/* Key by conversation so switching conversations gives a fresh
-                draft: remounting clears the local text instead of carrying the
-                previous conversation's draft over. */}
+                draft: remounting clears the local text and any attached media
+                instead of carrying the previous conversation's draft over. */}
             <QuickMessageBox
                 key={selected.id}
+                conversationId={selected.id}
+                platform={selected.platform}
                 canReply={selected.can_reply}
                 replyingTo={atHandle(selected.counterpart_handle)}
                 editorRef={messageEditorRef}

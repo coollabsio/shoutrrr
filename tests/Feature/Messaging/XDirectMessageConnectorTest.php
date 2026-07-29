@@ -7,8 +7,11 @@ use App\Enums\MessageDirection;
 use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
+use App\Models\PostMedia;
 use App\Services\Messaging\Connectors\XDirectMessageConnector;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 test('x fetchConversations groups dm events by conversation', function () {
     Http::fake([
@@ -111,4 +114,181 @@ test('x sendMessage posts to the conversation endpoint', function () {
     $result = app(XDirectMessageConnector::class)->sendMessage($account, $convo, 'yo', ['access_token' => 'tok']);
     expect($result->isOk())->toBeTrue();
     expect($result->remoteMessageId)->toBe('sent-1');
+});
+
+/** @return array{0: ConnectedAccount, 1: Conversation} */
+function xDmSender(): array
+{
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::X]);
+    $convo = Conversation::factory()->for($account, 'account')->create(['remote_conversation_id' => 'c-1']);
+
+    return [$account, $convo];
+}
+
+function xDmImage(string $mime = 'image/jpeg', string $name = 'x.jpg'): PostMedia
+{
+    Storage::fake('public');
+    $path = Storage::disk('public')->putFileAs('media/ws', UploadedFile::fake()->image($name), $name);
+
+    return PostMedia::factory()->create(['disk' => 'public', 'path' => $path, 'kind' => 'image', 'mime' => $mime]);
+}
+
+/** The multipart upload body is not decoded by the HTTP fake, so match the raw part. */
+function xDmUploadCarried(string $field, string $value): callable
+{
+    return function ($request) use ($field, $value): bool {
+        if (! str_contains($request->url(), 'api.x.com/2/media/upload')) {
+            return false;
+        }
+
+        $body = $request->body();
+
+        return str_contains($body, 'name="'.$field.'"') && str_contains($body, $value);
+    };
+}
+
+test('x sendMessage uploads an image as a dm attachment and omits empty text', function () {
+    Http::fake([
+        'api.x.com/2/media/upload' => Http::response(['data' => ['id' => '111']]),
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'sent-img']], 201),
+    ]);
+
+    [$account, $convo] = xDmSender();
+
+    $result = app(XDirectMessageConnector::class)->sendMessage($account, $convo, '', ['access_token' => 'tok'], [xDmImage()]);
+
+    expect($result->isOk())->toBeTrue();
+    expect($result->remoteMessageId)->toBe('sent-img');
+
+    // Without both of these X rejects the send with "You are not permitted to
+    // attach this media to a DM event", even though the id posts fine as a tweet.
+    Http::assertSent(xDmUploadCarried('media_category', 'dm_image'));
+    Http::assertSent(xDmUploadCarried('shared', 'true'));
+
+    Http::assertSent(function ($request): bool {
+        if (! str_contains($request->url(), '/messages')) {
+            return false;
+        }
+
+        return ($request['attachments'][0]['media_id'] ?? null) === '111'
+            && ! array_key_exists('text', $request->data());
+    });
+});
+
+test('x sendMessage sends text alongside an attachment', function () {
+    Http::fake([
+        'api.x.com/2/media/upload' => Http::response(['data' => ['id' => '112']]),
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'sent-both']], 201),
+    ]);
+
+    [$account, $convo] = xDmSender();
+
+    $result = app(XDirectMessageConnector::class)->sendMessage($account, $convo, 'look at this', ['access_token' => 'tok'], [xDmImage()]);
+
+    expect($result->isOk())->toBeTrue();
+    Http::assertSent(fn ($request): bool => str_contains($request->url(), '/messages')
+        && $request['text'] === 'look at this'
+        && ($request['attachments'][0]['media_id'] ?? null) === '112');
+});
+
+test('x sendMessage categorises an animated gif as dm_gif', function () {
+    Http::fake([
+        'api.x.com/2/media/upload' => Http::response(['data' => ['id' => '113']]),
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'sent-gif']], 201),
+    ]);
+
+    [$account, $convo] = xDmSender();
+
+    $result = app(XDirectMessageConnector::class)->sendMessage($account, $convo, '', ['access_token' => 'tok'], [xDmImage('image/gif', 'x.gif')]);
+
+    expect($result->isOk())->toBeTrue();
+    Http::assertSent(xDmUploadCarried('media_category', 'dm_gif'));
+});
+
+test('x sendMessage uploads a video via chunked initialize/append/finalize as dm_video', function () {
+    Http::fake([
+        'api.x.com/2/media/upload/initialize' => Http::response(['data' => ['id' => '222']]),
+        'api.x.com/2/media/upload/222/append' => Http::response(null, 204),
+        'api.x.com/2/media/upload/222/finalize' => Http::response(['data' => ['id' => '222']]),
+        'api.x.com/2/media/upload*' => Http::response(['data' => ['processing_info' => ['state' => 'succeeded']]]),
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'sent-vid']], 201),
+    ]);
+
+    Storage::fake('public');
+    // Real bytes: UploadedFile::fake()->create() reports a size but writes nothing,
+    // so the append leg would never run.
+    $path = 'media/ws/v.mp4';
+    Storage::disk('public')->put($path, str_repeat('v', 2048));
+    $media = PostMedia::factory()->create(['disk' => 'public', 'path' => $path, 'kind' => 'video', 'mime' => 'video/mp4']);
+
+    [$account, $convo] = xDmSender();
+
+    $result = app(XDirectMessageConnector::class)->sendMessage($account, $convo, '', ['access_token' => 'tok'], [$media]);
+
+    expect($result->isOk())->toBeTrue();
+    expect($result->remoteMessageId)->toBe('sent-vid');
+
+    Http::assertSent(fn ($request): bool => str_contains($request->url(), '/media/upload/initialize')
+        && $request['media_category'] === 'dm_video'
+        && $request['shared'] === true);
+    Http::assertSent(fn ($request): bool => str_contains($request->url(), '/media/upload/222/append'));
+    Http::assertSent(fn ($request): bool => str_contains($request->url(), '/media/upload/222/finalize'));
+    Http::assertSent(fn ($request): bool => str_contains($request->url(), '/messages')
+        && ($request['attachments'][0]['media_id'] ?? null) === '222');
+});
+
+test('x sendMessage fails without sending when the media upload fails', function () {
+    Http::fake([
+        'api.x.com/2/media/upload' => Http::response('media too large', 400),
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'never']], 201),
+    ]);
+
+    [$account, $convo] = xDmSender();
+
+    $result = app(XDirectMessageConnector::class)->sendMessage($account, $convo, 'hi', ['access_token' => 'tok'], [xDmImage()]);
+
+    expect($result->isOk())->toBeFalse();
+    expect($result->status)->toBe(EngagementStatus::Failed);
+    expect($result->excerpt)->toContain('media too large');
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/messages'));
+});
+
+test('x sendMessage reports an unsupported media upload as unsupported', function () {
+    Http::fake([
+        'api.x.com/2/media/upload' => Http::response('not permitted', 403),
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'never']], 201),
+    ]);
+
+    [$account, $convo] = xDmSender();
+
+    $result = app(XDirectMessageConnector::class)->sendMessage($account, $convo, 'hi', ['access_token' => 'tok'], [xDmImage()]);
+
+    expect($result->status)->toBe(EngagementStatus::Unsupported);
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/messages'));
+});
+
+test('x sendMessage gives up rather than blocking the request on a slow transcode', function () {
+    Http::fake([
+        'api.x.com/2/media/upload/initialize' => Http::response(['data' => ['id' => '333']]),
+        'api.x.com/2/media/upload/333/append' => Http::response(null, 204),
+        'api.x.com/2/media/upload/333/finalize' => Http::response(['data' => ['id' => '333']]),
+        // Beyond the poll budget, so it bails without ever sleeping.
+        'api.x.com/2/media/upload*' => Http::response(['data' => ['processing_info' => [
+            'state' => 'in_progress',
+            'check_after_secs' => 600,
+        ]]]),
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'never']], 201),
+    ]);
+
+    Storage::fake('public');
+    $path = 'media/ws/slow.mp4';
+    Storage::disk('public')->put($path, str_repeat('v', 2048));
+    $media = PostMedia::factory()->create(['disk' => 'public', 'path' => $path, 'kind' => 'video', 'mime' => 'video/mp4']);
+
+    [$account, $convo] = xDmSender();
+
+    $result = app(XDirectMessageConnector::class)->sendMessage($account, $convo, '', ['access_token' => 'tok'], [$media]);
+
+    expect($result->isOk())->toBeFalse();
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'dm_conversations'));
 });

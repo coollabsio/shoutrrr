@@ -10,6 +10,7 @@ use App\Enums\SendStatus;
 use App\Http\Requests\RespondToMessageRequest;
 use App\Models\Conversation;
 use App\Models\DirectMessage;
+use App\Models\PostMedia;
 use App\Services\Messaging\MessageConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use App\Support\ConversationListItem;
@@ -70,9 +71,12 @@ class MessagingController
             return response()->json(['status' => EngagementStatus::Unsupported->value, 'message' => 'The 24-hour reply window has closed.'], EngagementStatus::Unsupported->httpStatus());
         }
 
+        $text = $request->string('text')->toString();
+        $media = $this->orderedMedia($request, $conversation);
+
         $account = $conversation->account;
         $credentials = $tokens->fresh($account);
-        $result = $registry->for($conversation->platform)->sendMessage($account, $conversation, $request->string('text')->toString(), $credentials);
+        $result = $registry->for($conversation->platform)->sendMessage($account, $conversation, $text, $credentials, $media);
 
         if (! $result->isOk()) {
             return response()->json(['status' => $result->status->value, 'message' => $result->excerpt], $result->status->httpStatus());
@@ -84,8 +88,8 @@ class MessagingController
             'remote_message_id' => $result->remoteMessageId ?? 'pending:'.Str::uuid(),
             'direction' => MessageDirection::Outbound,
             'author_remote_id' => $account->remote_account_id,
-            'text' => $request->string('text')->toString(),
-            'attachments' => [],
+            'text' => $text,
+            'attachments' => array_map($this->attachmentView(...), $media),
             'remote_created_at' => now(),
             'is_ours' => true,
             'send_status' => SendStatus::Sent,
@@ -93,5 +97,48 @@ class MessagingController
         ]);
 
         return response()->json(['message' => MessageListItem::make($row)], 201);
+    }
+
+    /**
+     * The picked attachments, resorted into the order the client listed them —
+     * `whereIn` returns database order.
+     *
+     * @return list<PostMedia>
+     */
+    private function orderedMedia(RespondToMessageRequest $request, Conversation $conversation): array
+    {
+        /** @var list<string> $ids */
+        $ids = $request->validated('media', []);
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $rows = PostMedia::query()
+            ->where('workspace_id', $conversation->workspace_id)
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        return array_values(array_filter(array_map(
+            fn (string $id): ?PostMedia => $rows->get($id),
+            $ids,
+        )));
+    }
+
+    /**
+     * A self-contained render record, not `PostMedia::toView()`: DM media rows
+     * are orphaned and prunable, but a sent message must keep rendering.
+     *
+     * @return array{kind: string, url: string, mime: string, alt_text: string|null}
+     */
+    private function attachmentView(PostMedia $media): array
+    {
+        return [
+            'kind' => $media->kind,
+            'url' => $media->url(),
+            'mime' => $media->mime,
+            'alt_text' => $media->alt_text,
+        ];
     }
 }

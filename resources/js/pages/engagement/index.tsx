@@ -577,7 +577,7 @@ function RightPane({
 
             {/* Key by conversation so switching replies gives a fresh draft:
                 remounting clears the editor text, mentions, and in-flight media
-                (all local state, incl. useReplyMedia's) instead of carrying the
+                (all local state, incl. useAttachments') instead of carrying the
                 previous conversation's reply over. */}
             <QuickReplyBox
                 key={selected.id}

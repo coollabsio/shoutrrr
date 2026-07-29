@@ -124,6 +124,39 @@ enum Platform: string
     }
 
     /**
+     * Bluesky's `chat.bsky.convo` messageInput lexicon allows only record and
+     * joinLink embeds, so its DMs have no slot for media at all.
+     */
+    public function supportsDirectMessageMedia(): bool
+    {
+        return match ($this) {
+            self::X, self::Instagram, self::Facebook => true,
+            default => false,
+        };
+    }
+
+    /**
+     * One: X caps a DM event at a single `media_id` and Messenger takes a
+     * singular `attachment`. Instagram would allow ten, deliberately unmodelled.
+     */
+    public function maxDirectMessageMedia(): int
+    {
+        return $this->supportsDirectMessageMedia() ? 1 : 0;
+    }
+
+    /**
+     * LinkedIn, Meta and Threads reject media on a comment/reply outright, so
+     * the reply box hides its attach buttons rather than failing at send time.
+     */
+    public function supportsReplyMedia(): bool
+    {
+        return match ($this) {
+            self::X, self::Bluesky => true,
+            default => false,
+        };
+    }
+
+    /**
      * Whether this platform's metrics connector returns real post-level metrics.
      * Every launched platform, including LinkedIn (Page/Organization accounts
      * via the Community Management API), returns real post metrics; personal

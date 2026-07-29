@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Services\Messaging\Connectors;
 
 use App\Enums\MessageDirection;
+use App\Enums\Platform;
 use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
+use App\Models\PostMedia;
+use App\Services\Media\PublicMediaUrl;
 use App\Services\Messaging\Connectors\Concerns\InteractsWithMetaGraph;
 use App\Services\Messaging\Contracts\DirectMessageConnector;
 use App\Services\Messaging\Data\ConversationFetchResult;
@@ -33,7 +36,10 @@ class InstagramDirectMessageConnector implements DirectMessageConnector
 
     private const string PLATFORM_PARAM = 'instagram';
 
-    public function __construct(private readonly HttpFactory $http) {}
+    public function __construct(
+        private readonly HttpFactory $http,
+        private readonly PublicMediaUrl $publicMediaUrl,
+    ) {}
 
     /** @param array<string, mixed> $credentials */
     public function fetchConversations(ConnectedAccount $account, array $credentials, ?CarbonImmutable $since): ConversationFetchResult
@@ -103,26 +109,23 @@ class InstagramDirectMessageConnector implements DirectMessageConnector
         );
     }
 
-    /** @param array<string, mixed> $credentials */
-    public function sendMessage(ConnectedAccount $account, Conversation $conversation, string $text, array $credentials): MessageSendResult
+    /**
+     * @param  array<string, mixed>  $credentials
+     * @param  list<PostMedia>  $media
+     */
+    public function sendMessage(ConnectedAccount $account, Conversation $conversation, string $text, array $credentials, array $media = []): MessageSendResult
     {
         if (! $conversation->canReplyNow()) {
             return MessageSendResult::unsupported('The 24-hour messaging window for this conversation has closed.');
         }
 
-        $token = (string) ($credentials['access_token'] ?? '');
-        $response = $this->http->acceptJson()->post($this->metaGraphBase()."/{$account->remote_account_id}/messages", [
-            'recipient' => ['id' => $conversation->counterpart_remote_id],
-            'message' => ['text' => $text],
-            'access_token' => $token,
-        ]);
-
-        $this->meter(UsageCategory::ExternalApi, UsageOperation::DM_SEND, $account, $response);
-
-        if ($response->failed() || $response->json('error')) {
-            return $this->mapMetaSendFailure($response);
-        }
-
-        return MessageSendResult::ok((string) $response->json('message_id'));
+        return $this->sendMetaDirectMessage(
+            account: $account,
+            conversation: $conversation,
+            text: $text,
+            token: (string) ($credentials['access_token'] ?? ''),
+            media: $media,
+            platform: Platform::Instagram,
+        );
     }
 }

@@ -8,6 +8,7 @@ use App\Enums\MessageDirection;
 use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
+use App\Models\PostMedia;
 use App\Services\Engagement\RetryAfter;
 use App\Services\Messaging\Contracts\DirectMessageConnector;
 use App\Services\Messaging\Data\ConversationFetchResult;
@@ -94,9 +95,17 @@ class BlueskyDirectMessageConnector implements DirectMessageConnector
         return ConversationFetchResult::ok($conversations, $list->json('cursor'));
     }
 
-    /** @param array<string, mixed> $credentials */
-    public function sendMessage(ConnectedAccount $account, Conversation $conversation, string $text, array $credentials): MessageSendResult
+    /**
+     * @param  array<string, mixed>  $credentials
+     * @param  list<PostMedia>  $media
+     */
+    public function sendMessage(ConnectedAccount $account, Conversation $conversation, string $text, array $credentials, array $media = []): MessageSendResult
     {
+        // Backstop: the composer and the request layer already block this.
+        if ($media !== []) {
+            return MessageSendResult::unsupported('Bluesky direct messages cannot carry attachments.');
+        }
+
         $session = $credentials['session'] ?? [];
         if (! isset($session['accessJwt']) || isset($session['dpop_private_jwk'])) {
             return MessageSendResult::unsupported('Bluesky DMs require an app-password session with DM scope.');

@@ -8,11 +8,13 @@ use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Models\Conversation;
 use App\Models\DirectMessage;
+use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function (): void {
@@ -100,4 +102,126 @@ test('respond blocked when meta window closed returns non-422 error', function (
 
     $this->actingAs($this->user)->postJson("/messages/{$convo->id}/reply", ['text' => 'late'])
         ->assertStatus(409); // Unsupported window; NEVER 422
+});
+
+test('respond on x attaches media and stores a render record on the row', function (): void {
+    Http::fake([
+        'api.x.com/2/media/upload' => Http::response(['data' => ['id' => 'media-99']], 200),
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'sent-2']], 201),
+    ]);
+
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'capabilities' => ['dm_enabled' => true],
+        'token_expires_at' => now()->addHour(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'tok',
+    ]);
+    $convo = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'remote_conversation_id' => 'c-1',
+    ]);
+
+    Storage::disk('public')->put('media/dm.jpg', 'bytes');
+    $media = PostMedia::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'path' => 'media/dm.jpg',
+        'alt_text' => 'a cat',
+    ]);
+
+    $this->actingAs($this->user)
+        ->postJson("/messages/{$convo->id}/reply", ['text' => 'look', 'media' => [$media->id]])
+        ->assertStatus(201);
+
+    $row = DirectMessage::withoutGlobalScopes()->where('conversation_id', $convo->id)->where('is_ours', true)->sole();
+
+    // A render record, not a post_media foreign key.
+    expect($row->attachments)->toHaveCount(1);
+    expect($row->attachments[0]['kind'])->toBe('image');
+    expect($row->attachments[0]['mime'])->toBe('image/jpeg');
+    expect($row->attachments[0]['alt_text'])->toBe('a cat');
+    expect($row->attachments[0]['url'])->toBeString();
+});
+
+test('respond accepts a media-only message with no text', function (): void {
+    Http::fake([
+        'api.x.com/2/media/upload' => Http::response(['data' => ['id' => 'media-99']], 200),
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'sent-3']], 201),
+    ]);
+
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'capabilities' => ['dm_enabled' => true],
+        'token_expires_at' => now()->addHour(),
+    ]);
+    ConnectedAccountSecret::factory()->create(['connected_account_id' => $account->id, 'access_token' => 'tok']);
+    $convo = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'remote_conversation_id' => 'c-1',
+    ]);
+
+    Storage::disk('public')->put('media/dm.jpg', 'bytes');
+    $media = PostMedia::factory()->create(['workspace_id' => $this->workspace->id, 'path' => 'media/dm.jpg']);
+
+    $this->actingAs($this->user)
+        ->postJson("/messages/{$convo->id}/reply", ['media' => [$media->id]])
+        ->assertStatus(201);
+});
+
+test('respond rejects a message with neither text nor media', function (): void {
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'capabilities' => ['dm_enabled' => true],
+    ]);
+    $convo = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+    ]);
+
+    $this->actingAs($this->user)->postJson("/messages/{$convo->id}/reply", [])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('text');
+});
+
+test('respond rejects media on bluesky, whose DM lexicon has no media embed', function (): void {
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::Bluesky,
+        'capabilities' => ['dm_enabled' => true],
+    ]);
+    $convo = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::Bluesky,
+    ]);
+    $media = PostMedia::factory()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->actingAs($this->user)
+        ->postJson("/messages/{$convo->id}/reply", ['text' => 'hi', 'media' => [$media->id]])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('media');
+});
+
+test('respond rejects media belonging to another workspace', function (): void {
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'capabilities' => ['dm_enabled' => true],
+    ]);
+    $convo = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+    ]);
+    $foreign = PostMedia::factory()->create(['workspace_id' => Workspace::factory()->create()->id]);
+
+    $this->actingAs($this->user)
+        ->postJson("/messages/{$convo->id}/reply", ['text' => 'hi', 'media' => [$foreign->id]])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('media.0');
 });

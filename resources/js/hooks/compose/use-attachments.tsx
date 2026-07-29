@@ -2,10 +2,6 @@ import { useHttp, usePage } from '@inertiajs/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import ReplyImageEditController from '@/actions/App/Http/Controllers/Engagement/ReplyImageEditController';
-import ReplyMediaController from '@/actions/App/Http/Controllers/Engagement/ReplyMediaController';
-import ReplyVideoUploadController from '@/actions/App/Http/Controllers/Engagement/ReplyVideoUploadController';
-import ReplyGifController from '@/actions/App/Http/Controllers/Gifs/ReplyGifController';
 import { ImageEditor } from '@/components/compose/image-editor';
 import { MediaChips } from '@/components/compose/media-chips';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
@@ -41,19 +37,36 @@ type Editing =
 /** Stable fallback so a closed editor doesn't reallocate settings each render. */
 const DEFAULT_EDIT_SETTINGS = defaultSettings();
 
+type Endpoints = {
+    imageStore: (id: string) => string;
+    videoSign: (id: string) => string;
+    videoStore: (id: string) => string;
+    gifStore: (id: string) => string;
+    /** Omitted, the image editor is off and picked images upload straight through. */
+    imageEdit?: {
+        store: (id: string) => string;
+        update: (args: { owner: string; media: string }) => string;
+    };
+};
+
 type Args = {
-    replyId: string;
+    /** Owning record id — a reply id or a conversation id; only used to build endpoint URLs. */
+    ownerId: string;
     platform: PlatformName;
     media: MediaView[];
     onChange: (media: MediaView[]) => void;
+    endpoints: Endpoints;
+    /** Wording for the one-video-or-images error toast: 'reply' | 'message'. Default 'reply'. */
+    subject?: string;
 };
 
 /**
- * The render-ready pieces the reply box composes into its own layout: a hidden
+ * The render-ready pieces the host box composes into its own layout: a hidden
  * file input, the attach trigger, the media-chips strip (null when empty), the
- * single image-editor instance, and the drag-drop handlers.
+ * single image-editor instance (null when editing is disabled), and the
+ * drag-drop handlers.
  */
-type ReplyMedia = {
+type Attachments = {
     isUploading: boolean;
     hasMedia: boolean;
     openFilePicker: () => void;
@@ -83,21 +96,25 @@ function blobToFile(blob: Blob, baseName: string): File {
 }
 
 /**
- * Owns the reply box's media lifecycle — upload, the crop/beautify editor, and
- * the attached-media strip — and hands back render-ready pieces so the reply box
- * can lay out the attach button, chips, and footer however it likes. All upload
- * logic is reused from the composer's `useMediaUploads`, `MediaChips`, and
- * `ImageEditor`; only the upload endpoints are reply-scoped.
+ * Owns a compose surface's media lifecycle and hands back render-ready pieces,
+ * so the host box lays out the attach button, chips and footer however it likes.
+ * Endpoints are caller-supplied, so this serves both the reply box and the DM
+ * composer; all upload logic is the composer's `useMediaUploads`.
  */
-export function useReplyMedia({
-    replyId,
+export function useAttachments({
+    ownerId,
     platform,
     media,
     onChange,
-}: Args): ReplyMedia {
+    endpoints,
+    subject = 'reply',
+}: Args): Attachments {
     const { shell } = usePage().props;
-    // Validate video against the reply's own platform limits, not every platform.
+    // Validate video against this surface's own platform limits, not every platform.
     const videoLimits = shell.limits.filter((l) => l.platform === platform);
+
+    const imageEdit = endpoints.imageEdit;
+    const canEditImages = imageEdit !== undefined;
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -132,18 +149,18 @@ export function useReplyMedia({
     } = useMediaUploads({
         media,
         videoLimits,
-        onEnsurePost: async () => replyId,
+        onEnsurePost: async () => ownerId,
         onAddMedia: (m) => onChange([...media, m]),
         endpoints: {
-            imageStore: (id) => ReplyMediaController.store(id).url,
-            videoSign: (id) => ReplyVideoUploadController.url(id).url,
-            videoStore: (id) => ReplyVideoUploadController.store(id).url,
+            imageStore: endpoints.imageStore,
+            videoSign: endpoints.videoSign,
+            videoStore: endpoints.videoStore,
         },
     });
 
     // The server downloads and re-hosts the chosen GIF, so this is a chip +
     // fetch rather than the local upload flow the other media handlers use.
-    // Unlike the composer, replyId is always available (no ensure-post step
+    // Unlike the composer, ownerId is always available (no ensure-post step
     // that can fail), so there is no early-bail guard here.
     async function attachGif(item: GifItem): Promise<void> {
         await trackPending(
@@ -153,12 +170,12 @@ export function useReplyMedia({
             },
             () =>
                 postGifAttachment(
-                    ReplyGifController.store.url({ reply: replyId }),
+                    endpoints.gifStore(ownerId),
                     item,
-                    // post_media has no reply_id column, so the server has no
-                    // way to know what this reply already holds — we tell it.
-                    // See AttachGifRequest::rules() and ReplyGifController's
-                    // $existing query.
+                    // post_media has no reply_id/conversation_id column, so the
+                    // server has no way to know what this surface already holds
+                    // — we tell it. See AttachGifRequest::rules() and the GIF
+                    // controller's $existing query.
                     media.map((m) => m.id),
                 ),
         );
@@ -176,7 +193,7 @@ export function useReplyMedia({
         settings: EditSettings,
         altText: string,
     ): Promise<void> {
-        if (!editing) {
+        if (!editing || !imageEdit) {
             return;
         }
         setIsSaving(true);
@@ -192,7 +209,7 @@ export function useReplyMedia({
                     alt_text: altText,
                 }));
                 const { media: result } = await editHttp.post(
-                    ReplyImageEditController.store(replyId).url,
+                    imageEdit.store(ownerId),
                     { onNetworkError: () => undefined },
                 );
                 onChange([...media, result]);
@@ -204,10 +221,10 @@ export function useReplyMedia({
                     _method: 'put',
                 }));
                 const { media: result } = await editHttp.post(
-                    ReplyImageEditController.update({
-                        reply: replyId,
+                    imageEdit.update({
+                        owner: ownerId,
                         media: editing.mediaId,
-                    }).url,
+                    }),
                     { onNetworkError: () => undefined },
                 );
                 onChange(
@@ -224,7 +241,7 @@ export function useReplyMedia({
                     alt_text: altText,
                 }));
                 const { media: result } = await editHttp.post(
-                    ReplyImageEditController.store(replyId).url,
+                    imageEdit.store(ownerId),
                     { onNetworkError: () => undefined },
                 );
                 onChange([
@@ -292,7 +309,9 @@ export function useReplyMedia({
         const images = all.filter((f) => f.type.startsWith('image/'));
 
         if (wouldMixVideoAndImages(media, all)) {
-            toast.error('A reply can contain one video or images, not both.');
+            toast.error(
+                `A ${subject} can contain one video or images, not both.`,
+            );
 
             return;
         }
@@ -303,6 +322,13 @@ export function useReplyMedia({
             return;
         }
         if (images.length === 0) {
+            return;
+        }
+        // Without an image-edit endpoint there is nothing to crop/beautify into,
+        // so images take the same straight-to-upload path videos do.
+        if (!canEditImages) {
+            void handleFiles(images);
+
             return;
         }
         setEditing({
@@ -392,11 +418,12 @@ export function useReplyMedia({
             onRemove={(id) => onChange(media.filter((m) => m.id !== id))}
             onDismissPending={dismissPending}
             onCancelPending={cancelPending}
-            onImageClick={openEditor}
+            // No editor to open when the caller supplied no image-edit endpoints.
+            onImageClick={canEditImages ? openEditor : undefined}
         />
     ) : null;
 
-    const editor = (
+    const editor = canEditImages ? (
         <ImageEditor
             open={editing !== null}
             sourceUrl={editorSourceUrl}
@@ -409,7 +436,7 @@ export function useReplyMedia({
             isSaving={isSaving}
             queue={editorQueue}
         />
-    );
+    ) : null;
 
     return {
         isUploading,
