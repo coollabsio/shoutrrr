@@ -9,11 +9,18 @@ import type { ReplyItem } from '../types';
 
 type Props = {
     replies: ReplyItem[];
+    /** Rows the reader just pulled in; only these animate on arrival. */
+    revealedIds?: string[];
     selectedId: string | null;
     onSelect: (reply: ReplyItem) => void;
 };
 
-export function ReplyStream({ replies, selectedId, onSelect }: Props) {
+export function ReplyStream({
+    replies,
+    revealedIds = [],
+    selectedId,
+    onSelect,
+}: Props) {
     return (
         <ul className="flex flex-col">
             {replies.map((reply) => {
@@ -21,7 +28,15 @@ export function ReplyStream({ replies, selectedId, onSelect }: Props) {
                 const unread = !reply.is_read;
 
                 return (
-                    <li key={reply.id}>
+                    <li
+                        key={reply.id}
+                        className={cn(
+                            // Short and fade-led: this bridges rows appearing at
+                            // the top, it isn't a flourish to sit through.
+                            revealedIds.includes(reply.id) &&
+                                'animate-in duration-200 ease-out fade-in-0 motion-safe:slide-in-from-top-2',
+                        )}
+                    >
                         <button
                             type="button"
                             id={`engagement-reply-${reply.id}`}

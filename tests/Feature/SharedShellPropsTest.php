@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\DB;
 
 test('shell props expose accounts, sets, and limits on every page', function () {
     $user = User::factory()->create();
@@ -34,4 +35,42 @@ test('shell props expose accounts, sets, and limits on every page', function () 
             ->has('shell.sets', 1)
             ->has('shell.limits')
         );
+});
+
+test('a partial reload of the unread badge skips the rest of the shell', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Member,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    ConnectedAccount::factory()->for($workspace)->create();
+    AccountSet::factory()->for($workspace)->create();
+
+    $response = $this->actingAs($user)->get(route('dashboard'));
+
+    // The badge poll runs every minute in every open tab, so the account and set
+    // queries must not run for it. Shell members are closures, and Inertia
+    // filters props against the partial request before resolving them. Listen
+    // from here so only the follow-up partial request is captured.
+    $queries = [];
+    DB::listen(function ($query) use (&$queries): void {
+        $queries[] = $query->sql;
+    });
+
+    $response->assertInertia(fn ($page) => $page
+        ->reloadOnly(['shell.unreadReplies', 'shell.unreadMessages'], fn ($reload) => $reload
+            ->missing('shell.accounts')
+            ->missing('shell.sets')
+            ->missing('shell.limits')
+            ->missing('notifications')
+        )
+    );
+
+    expect($queries)->each->not->toContain('from "connected_accounts"');
+    expect($queries)->each->not->toContain('from "account_sets"');
 });
