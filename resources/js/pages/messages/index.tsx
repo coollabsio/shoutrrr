@@ -476,7 +476,7 @@ export default function MessagesIndex({ conversations, filters }: PageProps) {
         // The sidebar's unread badge lives on the shared `shell` prop, which the
         // old redirect refreshed incidentally. `conversations` isn't in `only`,
         // so the list keeps its data instead of falling back to the skeleton.
-        router.reload({ only: ['shell'] });
+        router.reload({ only: ['shell.unreadMessages'] });
     }
 
     function handleRead(id: string) {
@@ -484,7 +484,7 @@ export default function MessagesIndex({ conversations, filters }: PageProps) {
             ...prev,
             [id]: { ...prev[id], unread_count: 0 },
         }));
-        router.reload({ only: ['shell'] });
+        router.reload({ only: ['shell.unreadMessages'] });
     }
 
     function handleResponded(id: string, preview: string, at: string) {

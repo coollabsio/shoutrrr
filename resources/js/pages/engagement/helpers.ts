@@ -176,3 +176,17 @@ export function nextAfterArchive(
 
     return null;
 }
+
+/**
+ * Ids present in the freshly polled list but not in the one on screen. The
+ * inbox holds these back behind a "show new replies" button rather than
+ * reshuffling rows the reader is in the middle of triaging.
+ */
+export function unseenIds(
+    onScreen: readonly { id: string }[],
+    incoming: readonly { id: string }[],
+): string[] {
+    const seen = new Set(onScreen.map((item) => item.id));
+
+    return incoming.filter((item) => !seen.has(item.id)).map((item) => item.id);
+}

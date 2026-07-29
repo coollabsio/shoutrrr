@@ -1,6 +1,7 @@
 import { Deferred, Head, Link, router, useHttp } from '@inertiajs/react';
 import {
     Archive,
+    ArrowUp,
     ChevronDown,
     Inbox,
     MessagesSquare,
@@ -36,6 +37,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useLiveProps } from '@/hooks/use-live-props';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
     disabledPlatformLabels,
@@ -66,6 +68,7 @@ import {
     engagementShortcut,
     initials,
     nextAfterArchive,
+    unseenIds,
 } from './helpers';
 import type {
     AccountFacet,
@@ -82,6 +85,13 @@ type PageProps = {
     linkedinCommunityManagementEnabled: boolean;
     savedMentions: WorkspaceMention[];
 };
+
+/**
+ * `replies` is an `Inertia::scroll()` prop, so a plain partial reload would
+ * append the refreshed page to the rows already on screen. Reset it to replace
+ * them instead — the inbox only ever renders the first page.
+ */
+const LIVE_REPLY_PROPS = ['replies'];
 
 function StreamSkeleton() {
     return (
@@ -116,6 +126,41 @@ function StreamEmpty({ filtered }: { filtered: boolean }) {
                 </EmptyDescription>
             </EmptyHeader>
         </Empty>
+    );
+}
+
+/**
+ * Twitter-style hand-off: replies that arrive while you read wait behind this
+ * button instead of shifting the list. It floats over the top of the stream so
+ * it is visible wherever the reader has scrolled to.
+ */
+function NewRepliesButton({
+    count,
+    onShow,
+}: {
+    count: number;
+    onShow: () => void;
+}) {
+    return (
+        // The live region is always mounted — a region that appears at the same
+        // moment as its content is not announced.
+        <div
+            aria-live="polite"
+            className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center"
+        >
+            {count > 0 ? (
+                <button
+                    type="button"
+                    onClick={onShow}
+                    className="pointer-events-auto flex animate-in items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg ring-1 ring-primary/20 transition-transform duration-150 ease-out fade-in-0 hover:bg-primary/90 active:scale-[0.97] motion-safe:slide-in-from-top-2"
+                >
+                    <ArrowUp className="size-3.5" />
+                    {count === 1
+                        ? 'Show 1 new reply'
+                        : `Show ${count} new replies`}
+                </button>
+            ) : null}
+        </div>
     );
 }
 
@@ -563,8 +608,20 @@ export default function EngagementIndex({
     savedMentions,
 }: PageProps) {
     const isMobile = useIsMobile();
+    // New replies land from background fetch jobs, so the open inbox refreshes
+    // itself instead of waiting for a navigation. It rides on the chrome's
+    // refresh cycle rather than opening a second one.
+    useLiveProps({ only: LIVE_REPLY_PROPS, reset: LIVE_REPLY_PROPS });
     const [selected, setSelected] = useState<ReplyItem | null>(null);
     const replyEditorRef = useRef<EditorBodyHandle>(null);
+    const streamRef = useRef<HTMLDivElement>(null);
+    // The list the reader is looking at. The poll keeps `replies` fresh in the
+    // background, but rows only move when the reader asks for them — nothing
+    // reshuffles under a cursor that is mid-triage.
+    const [onScreen, setOnScreen] = useState<ReplyItem[]>(replies?.data ?? []);
+    // Rows revealed by the last "show new replies" press, so only those animate
+    // in rather than the whole list flashing.
+    const [revealedIds, setRevealedIds] = useState<string[]>([]);
     // Client-side overlay over the deferred `replies` scroll prop: archiving or
     // responding must update the left list without a visit that would refetch
     // (and blank) it. Inertia still owns `replies` itself — we only derive.
@@ -592,15 +649,40 @@ export default function EngagementIndex({
     if (prevFilterKey.current !== filterKey) {
         prevFilterKey.current = filterKey;
         setOverrides({});
+        // A filter change is the reader asking for a different list, so adopt it
+        // outright instead of offering it behind the button.
+        setOnScreen(replies?.data ?? []);
+        setRevealedIds([]);
     }
 
-    const items = (replies?.data ?? [])
+    const incoming = replies?.data ?? [];
+    const unseen = unseenIds(onScreen, incoming);
+    const items = onScreen
         .filter((r) => overrides[r.id] !== 'archived')
         .map((r) =>
             overrides[r.id] === 'responded'
                 ? { ...r, status: 'responded' as const }
                 : r,
         );
+
+    // With an empty list there is no reading position to protect — the first
+    // paint, the deferred prop landing, or the reader having archived the lot.
+    // Take the fresh rows without making them ask.
+    if (items.length === 0 && unseen.length > 0) {
+        setOnScreen(incoming);
+    }
+
+    function showNewReplies() {
+        setRevealedIds(unseen);
+        setOnScreen(incoming);
+        streamRef.current?.scrollTo({
+            top: 0,
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
+                .matches
+                ? 'auto'
+                : 'smooth',
+        });
+    }
     const disabledPlatforms = disabledPlatformLabels(engagementEnabled);
     const allEngagementDisabled =
         disabledPlatforms.length === platformKeys(engagementEnabled).length;
@@ -749,7 +831,7 @@ export default function EngagementIndex({
         // The sidebar's unread badge lives on the shared `shell` prop, which the
         // old redirect refreshed incidentally. `replies` isn't in `only`, so the
         // list keeps its data instead of falling back to the skeleton.
-        router.reload({ only: ['shell'] });
+        router.reload({ only: ['shell.unreadReplies'] });
     }
 
     function handleResponded(id: string) {
@@ -777,20 +859,30 @@ export default function EngagementIndex({
                             posts={facets.posts}
                         />
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto">
-                        <Deferred data="replies" fallback={<StreamSkeleton />}>
-                            {allEngagementDisabled && items.length === 0 ? (
-                                <EngagementDisabledNotice />
-                            ) : items.length === 0 ? (
-                                <StreamEmpty filtered={filtered} />
-                            ) : (
-                                <ReplyStream
-                                    replies={items}
-                                    selectedId={selected?.id ?? null}
-                                    onSelect={setSelected}
-                                />
-                            )}
-                        </Deferred>
+                    <div className="relative min-h-0 flex-1">
+                        <NewRepliesButton
+                            count={unseen.length}
+                            onShow={showNewReplies}
+                        />
+                        <div ref={streamRef} className="h-full overflow-y-auto">
+                            <Deferred
+                                data="replies"
+                                fallback={<StreamSkeleton />}
+                            >
+                                {allEngagementDisabled && items.length === 0 ? (
+                                    <EngagementDisabledNotice />
+                                ) : items.length === 0 ? (
+                                    <StreamEmpty filtered={filtered} />
+                                ) : (
+                                    <ReplyStream
+                                        replies={items}
+                                        revealedIds={revealedIds}
+                                        selectedId={selected?.id ?? null}
+                                        onSelect={setSelected}
+                                    />
+                                )}
+                            </Deferred>
+                        </div>
                     </div>
                     {items.length > 0 ? (
                         <div className="hidden shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t px-3 py-2 md:flex">

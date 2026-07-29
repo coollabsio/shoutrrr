@@ -45,7 +45,17 @@ it('overlays archived and responded rows onto the deferred replies prop', () => 
     expect(source).toContain("overrides[r.id] !== 'archived'");
     expect(source).toContain("overrides[r.id] === 'responded'");
     // The unread badge rides on the shared `shell` prop; `replies` stays put.
-    expect(source).toContain("router.reload({ only: ['shell'] })");
+    expect(source).toContain(
+        "router.reload({ only: ['shell.unreadReplies'] })",
+    );
+});
+
+it('keeps the open inbox live without duplicating merged rows', () => {
+    // `replies` is a scroll prop: a partial reload appends unless it is reset.
+    // The page registers the prop instead of opening a second poll of its own.
+    expect(source).toContain(
+        'useLiveProps({ only: LIVE_REPLY_PROPS, reset: LIVE_REPLY_PROPS })',
+    );
 });
 
 it('uses shared disabled platform label helpers', () => {
@@ -91,4 +101,25 @@ it('consolidates open targets into an Open in dropdown', () => {
     expect(source).toContain('postOnPlatformUrl');
     expect(source).toContain('postInShoutrrrUrl');
     expect(source).not.toContain('>Post<');
+});
+
+it('holds polled replies behind a button instead of reshuffling the list', () => {
+    // Rows must never move under a reader mid-triage: the poll updates the
+    // `replies` prop, but the list on screen only changes on an explicit press.
+    expect(source).toContain('const [onScreen, setOnScreen]');
+    expect(source).toContain('unseenIds(onScreen, incoming)');
+    expect(source).toContain('NewRepliesButton');
+    expect(source).toContain('Show 1 new reply');
+    expect(source).toContain('Show ${count} new replies');
+    expect(source).toContain('function showNewReplies()');
+});
+
+it('adopts fresh replies outright when there is no reading position to protect', () => {
+    // Filter changes and the first paint after the deferred prop lands.
+    expect(source).toContain('setOnScreen(replies?.data ?? [])');
+    expect(source).toContain('items.length === 0 && unseen.length > 0');
+});
+
+it('respects reduced motion when jumping back to the top', () => {
+    expect(source).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
 });

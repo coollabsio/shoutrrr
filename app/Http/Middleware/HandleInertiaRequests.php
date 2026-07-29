@@ -70,7 +70,10 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
-            'workspaces' => $this->workspacesData($request->user()),
+            // Closures, not values: Inertia filters props against the partial
+            // request *before* resolving them, so a reload that asks only for
+            // `shell.unreadReplies` never runs the workspace or account queries.
+            'workspaces' => fn (): array => $this->workspacesData($request->user()),
             'shell' => $this->shellData($request->user()),
             'socialite' => [
                 'providers' => SocialProvider::enabledProviders(),
@@ -80,7 +83,7 @@ class HandleInertiaRequests extends Middleware
                 'error' => $request->hasSession() ? $request->session()->get('error') : null,
                 'plainTextApiKey' => $request->hasSession() ? $request->session()->get('flash.plainTextApiKey') : null,
             ],
-            'notifications' => $this->notificationsData($request->user()),
+            'notifications' => fn (): array => $this->notificationsData($request->user()),
             'features' => [
                 'analytics' => app(InstanceSettings::class)->metricsEnabled(),
                 'billing' => (bool) config('subscriptions.enabled'),
@@ -101,33 +104,65 @@ class HandleInertiaRequests extends Middleware
 
     /**
      * Shell data needed by the sidebar, composer, and command palette on nearly
-     * every page. Kept lightweight so it is cheap to resolve per request.
+     * every page. Every member is a closure so partial reloads pay only for what
+     * they ask for: the unread-badge poll requests `shell.unreadReplies` and
+     * `shell.unreadMessages` and never touches the account or set queries.
      *
-     * @return array{accounts: array<int, array<string, mixed>>, sets: array<int, array<string, mixed>>, limits: mixed, unreadReplies: int, unreadMessages: int, gifs_enabled: bool}
+     * @return array{
+     *     accounts: \Closure(): array<int, array<string, mixed>>,
+     *     sets: \Closure(): array<int, array<string, mixed>>,
+     *     limits: \Closure(): list<array<string, mixed>>,
+     *     unreadReplies: \Closure(): int,
+     *     unreadMessages: \Closure(): int,
+     *     gifs_enabled: \Closure(): bool,
+     * }
      */
     private function shellData(?User $user): array
     {
-        if (! $user || ! $user->current_workspace_id) {
-            return [
-                'accounts' => [],
-                'sets' => [],
-                'limits' => Platform::allLimits(),
-                'unreadReplies' => 0,
-                'unreadMessages' => 0,
-                'gifs_enabled' => app(KlipyClient::class)->configured(),
-            ];
-        }
-
         // Scope explicitly to the current workspace. The HasWorkspaceScope global
         // scope also covers this, but only once WorkspaceMiddleware has populated
         // the context — being explicit keeps shell data correct regardless of
         // middleware ordering and prevents cross-workspace leakage.
-        $workspaceId = $user->current_workspace_id;
-        $defaultAccountId = $user->currentWorkspace()->value('default_connected_account_id');
+        $workspaceId = $user?->current_workspace_id;
         $settings = app(InstanceSettings::class);
 
-        $accounts = ConnectedAccount::query()
-            ->where('workspace_id', $workspaceId)
+        return [
+            'accounts' => fn (): array => $user && $workspaceId
+                ? $this->shellAccounts($user, $settings)
+                : [],
+            'sets' => fn (): array => $workspaceId
+                ? $this->shellSets($workspaceId)
+                : [],
+            'limits' => fn (): array => Platform::allLimits(),
+            'unreadReplies' => fn (): int => $workspaceId
+                && $settings->engagementEnabled()
+                && $settings->engagementPollingEnabled()
+                    ? PostTargetReply::query()
+                        ->where('workspace_id', $workspaceId)
+                        ->where('is_ours', false)
+                        ->where('status', '!=', ReplyStatus::Archived->value)
+                        ->whereNull('read_at')
+                        ->count()
+                    : 0,
+            'unreadMessages' => fn (): int => $workspaceId && $settings->messagesEnabled()
+                ? (int) Conversation::query()
+                    ->where('workspace_id', $workspaceId)
+                    ->whereNull('archived_at')
+                    ->sum('unread_count')
+                : 0,
+            'gifs_enabled' => fn (): bool => app(KlipyClient::class)->configured(),
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function shellAccounts(User $user, InstanceSettings $settings): array
+    {
+        $defaultAccountId = $user->currentWorkspace()->value('default_connected_account_id');
+
+        return ConnectedAccount::query()
+            ->where('workspace_id', $user->current_workspace_id)
             ->enabled()
             ->get()
             ->filter(fn (ConnectedAccount $account): bool => $settings->platformAvailable($account->platform))
@@ -144,8 +179,14 @@ class HandleInertiaRequests extends Middleware
                 'x_premium' => $account->hasXPremium(),
                 'auto_repost_enabled' => $account->autoRepostEnabled(),
             ])->values()->all();
+    }
 
-        $sets = AccountSet::query()
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function shellSets(string $workspaceId): array
+    {
+        return AccountSet::query()
             ->where('workspace_id', $workspaceId)
             ->with('accounts:id')
             ->get()
@@ -154,27 +195,6 @@ class HandleInertiaRequests extends Middleware
                 'name' => $set->name,
                 'connected_account_ids' => $set->accounts->pluck('id')->all(),
             ])->values()->all();
-
-        return [
-            'accounts' => $accounts,
-            'sets' => $sets,
-            'limits' => Platform::allLimits(),
-            'unreadReplies' => $settings->engagementEnabled() && $settings->engagementPollingEnabled()
-                ? PostTargetReply::query()
-                    ->where('workspace_id', $workspaceId)
-                    ->where('is_ours', false)
-                    ->where('status', '!=', ReplyStatus::Archived->value)
-                    ->whereNull('read_at')
-                    ->count()
-                : 0,
-            'unreadMessages' => $settings->messagesEnabled()
-                ? (int) Conversation::query()
-                    ->where('workspace_id', $workspaceId)
-                    ->whereNull('archived_at')
-                    ->sum('unread_count')
-                : 0,
-            'gifs_enabled' => app(KlipyClient::class)->configured(),
-        ];
     }
 
     /**

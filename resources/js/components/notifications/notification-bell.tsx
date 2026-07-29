@@ -64,6 +64,7 @@ export function NotificationBell() {
     // Authoritative total from the server — `items` only holds loaded pages, so
     // deriving the count from it would undercount once more pages exist.
     const [unread, setUnread] = useState(initialNotifications.unreadCount);
+    const [open, setOpen] = useState(false);
     const { get, processing } = useHttp<
         Record<string, never>,
         NotificationsData
@@ -74,15 +75,21 @@ export function NotificationBell() {
     const loadingRef = useRef(false);
 
     // The shared prop refreshes on navigation and polling; re-seed the list,
-    // cursor, and count from the freshest first page when it changes.
+    // cursor, and count from the freshest first page when it changes. Not while
+    // the panel is open, though: rows must not reshuffle under the reader's
+    // cursor mid-click. The next close picks the fresh data up.
     useEffect(() => {
+        if (open) {
+            return;
+        }
+
         const locallySyncedNotifications =
             applyLocalNotificationState(notifications);
 
         setItems(locallySyncedNotifications.items);
         setCursor(locallySyncedNotifications.nextCursor);
         setUnread(locallySyncedNotifications.unreadCount);
-    }, [notifications]);
+    }, [notifications, open]);
 
     function loadMore() {
         if (cursor === null || loadingRef.current) {
@@ -185,7 +192,7 @@ export function NotificationBell() {
     }
 
     return (
-        <Popover>
+        <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger
                 render={
                     <Button

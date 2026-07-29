@@ -7,6 +7,7 @@ import {
     engagementShortcut,
     isTypingTarget,
     nextAfterArchive,
+    unseenIds,
 } from './helpers';
 
 describe('engagementShortcut', () => {
@@ -75,5 +76,17 @@ describe('nextAfterArchive', () => {
         expect(nextAfterArchive(['only'], 'only')).toBeNull();
         expect(nextAfterArchive([], 'missing')).toBeNull();
         expect(nextAfterArchive(['a', 'b'], 'missing')).toBe('a');
+    });
+});
+
+describe('unseenIds', () => {
+    it('reports only rows the reader has not seen yet', () => {
+        const onScreen = [{ id: 'a' }, { id: 'b' }];
+
+        expect(unseenIds(onScreen, [{ id: 'c' }, { id: 'a' }])).toEqual(['c']);
+        expect(unseenIds(onScreen, onScreen)).toEqual([]);
+        expect(unseenIds([], [{ id: 'a' }])).toEqual(['a']);
+        // A row disappearing (archived elsewhere) is not something to announce.
+        expect(unseenIds(onScreen, [{ id: 'a' }])).toEqual([]);
     });
 });
