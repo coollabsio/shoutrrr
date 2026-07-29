@@ -11,21 +11,23 @@ use App\Models\WorkspaceMembership;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\DB;
 
-test('shell props expose accounts, sets, and limits on every page', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+beforeEach(function () {
+    $this->user = User::factory()->create();
+    $this->workspace = Workspace::factory()->create(['owner_id' => $this->user->id]);
     WorkspaceMembership::factory()->create([
-        'workspace_id' => $workspace->id,
-        'user_id' => $user->id,
+        'workspace_id' => $this->workspace->id,
+        'user_id' => $this->user->id,
         'role' => WorkspaceRole::Member,
     ]);
-    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
-    Context::add('workspace_id', $workspace->id);
+    $this->user->forceFill(['current_workspace_id' => $this->workspace->id])->save();
+    Context::add('workspace_id', $this->workspace->id);
+});
 
-    ConnectedAccount::factory()->for($workspace)->needsAttention()->create();
-    AccountSet::factory()->for($workspace)->create();
+test('shell props expose accounts, sets, and limits on every page', function () {
+    ConnectedAccount::factory()->for($this->workspace)->needsAttention()->create();
+    AccountSet::factory()->for($this->workspace)->create();
 
-    $this->actingAs($user)
+    $this->actingAs($this->user)
         ->get(route('dashboard'))
         ->assertInertia(fn ($page) => $page
             ->has('shell.accounts', 1)
@@ -38,20 +40,10 @@ test('shell props expose accounts, sets, and limits on every page', function () 
 });
 
 test('a partial reload of the unread badge skips the rest of the shell', function () {
-    $user = User::factory()->create();
-    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
-    WorkspaceMembership::factory()->create([
-        'workspace_id' => $workspace->id,
-        'user_id' => $user->id,
-        'role' => WorkspaceRole::Member,
-    ]);
-    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
-    Context::add('workspace_id', $workspace->id);
+    ConnectedAccount::factory()->for($this->workspace)->create();
+    AccountSet::factory()->for($this->workspace)->create();
 
-    ConnectedAccount::factory()->for($workspace)->create();
-    AccountSet::factory()->for($workspace)->create();
-
-    $response = $this->actingAs($user)->get(route('dashboard'));
+    $response = $this->actingAs($this->user)->get(route('dashboard'));
 
     // The badge poll runs every minute in every open tab, so the account and set
     // queries must not run for it. Shell members are closures, and Inertia
