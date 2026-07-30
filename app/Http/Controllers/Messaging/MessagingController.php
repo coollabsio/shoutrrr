@@ -128,6 +128,11 @@ class MessagingController extends Controller
      * The picked attachments, resorted into the order the client listed them —
      * `whereIn` returns database order.
      *
+     * Only unclaimed orphan rows (no `post_id`, no `direct_message_id`) are
+     * eligible: the client sends ids of freshly uploaded DM attachments, so a
+     * claim must never reach into media already owned by a post or another sent
+     * DM and steal or reorder it.
+     *
      * @return list<PostMedia>
      */
     private function orderedMedia(RespondToMessageRequest $request, Conversation $conversation): array
@@ -141,6 +146,8 @@ class MessagingController extends Controller
 
         $rows = PostMedia::query()
             ->where('workspace_id', $conversation->workspace_id)
+            ->whereNull('post_id')
+            ->whereNull('direct_message_id')
             ->whereIn('id', $ids)
             ->get()
             ->keyBy('id');

@@ -8,6 +8,7 @@ use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Models\Conversation;
 use App\Models\DirectMessage;
+use App\Models\Post;
 use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
@@ -229,4 +230,47 @@ test('respond rejects media belonging to another workspace', function (): void {
         ->postJson("/messages/{$convo->id}/reply", ['text' => 'hi', 'media' => [$foreign->id]])
         ->assertStatus(422)
         ->assertJsonValidationErrors('media.0');
+});
+
+test('respond never claims media already owned by a post in the same workspace', function (): void {
+    Http::fake([
+        'api.twitter.com/2/dm_conversations/*/messages' => Http::response(['data' => ['dm_event_id' => 'sent-9']], 201),
+    ]);
+
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'capabilities' => ['dm_enabled' => true],
+        'token_expires_at' => now()->addHour(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'tok',
+    ]);
+    $convo = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'remote_conversation_id' => 'c-9',
+    ]);
+
+    // Media already belonging to a post: the client must not be able to hijack
+    // or reorder it by naming its id in a DM reply.
+    $owned = PostMedia::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'post_id' => Post::factory()->create(['workspace_id' => $this->workspace->id])->id,
+        'position' => 3,
+    ]);
+
+    $this->actingAs($this->user)
+        ->postJson("/messages/{$convo->id}/reply", ['text' => 'hi', 'media' => [$owned->id]])
+        ->assertStatus(201);
+
+    $row = DirectMessage::withoutGlobalScopes()->where('conversation_id', $convo->id)->where('is_ours', true)->sole();
+
+    // The owned media keeps its post ownership and position, and the sent DM
+    // claims nothing.
+    $owned->refresh();
+    expect($owned->direct_message_id)->toBeNull();
+    expect($owned->position)->toBe(3);
+    expect(PostMedia::withoutGlobalScopes()->where('direct_message_id', $row->id)->count())->toBe(0);
 });

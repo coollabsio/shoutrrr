@@ -267,7 +267,7 @@ test('x sendMessage reports an unsupported media upload as unsupported', functio
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/messages'));
 });
 
-test('x sendMessage gives up rather than blocking the request on a slow transcode', function () {
+test('x sendMessage reports a slow transcode as retriable rather than blocking the request', function () {
     Http::fake([
         'api.x.com/2/media/upload/initialize' => Http::response(['data' => ['id' => '333']]),
         'api.x.com/2/media/upload/333/append' => Http::response(null, 204),
@@ -290,5 +290,9 @@ test('x sendMessage gives up rather than blocking the request on a slow transcod
     $result = app(XDirectMessageConnector::class)->sendMessage($account, $convo, '', ['access_token' => 'tok'], [$media]);
 
     expect($result->isOk())->toBeFalse();
+    // Retriable "still processing", not a hard failure — carries X's retry hint.
+    expect($result->status)->toBe(EngagementStatus::RateLimited);
+    expect($result->retryAfterSeconds)->toBe(600);
+    expect($result->excerpt)->toContain('still being processed');
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'dm_conversations'));
 });

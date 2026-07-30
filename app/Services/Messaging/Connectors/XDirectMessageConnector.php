@@ -38,8 +38,12 @@ class XDirectMessageConnector implements DirectMessageConnector
     /**
      * A DM is sent inside the web request (unlike replies, which go through the
      * SendReply job), so cap the transcode wait rather than pin a PHP worker.
+     * Kept well under the 30s FPM/reverse-proxy request timeouts most
+     * deployments run — the chunked upload has already spent wall time before
+     * we get here — so a slow transcode ends in a "still processing" reply the
+     * user can retry, not a worker the gateway kills mid-send.
      */
-    private const int STATUS_POLL_BUDGET_SECONDS = 45;
+    private const int STATUS_POLL_BUDGET_SECONDS = 20;
 
     public function __construct(private readonly HttpFactory $http) {}
 
@@ -221,6 +225,14 @@ class XDirectMessageConnector implements DirectMessageConnector
                     self::BASE."/dm_conversations/{$conversation->remote_conversation_id}/messages",
                     $this->sendBody($text, $mediaId),
                 );
+        } catch (XDirectMessageMediaPending $e) {
+            // Not a failure: X just hasn't finished transcoding within the
+            // in-request budget. Report it as retriable so the client can
+            // resend once the video is ready, rather than as a hard error.
+            return MessageSendResult::rateLimited(
+                'The video is still being processed by X. Try sending again in a few seconds.',
+                $e->retryAfterSeconds,
+            );
         } catch (XDirectMessageMediaFailed $e) {
             return $e->response->status() === 403
                 ? MessageSendResult::unsupported($this->excerpt($e->response))
@@ -390,17 +402,17 @@ class XDirectMessageConnector implements DirectMessageConnector
             throw new XDirectMessageMediaFailed($finalize);
         }
 
-        return $this->awaitDirectMessageVideo($account, $mediaId, $token, $finalize);
+        return $this->awaitDirectMessageVideo($account, $mediaId, $token);
     }
 
     /**
      * A DM can only carry a fully transcoded video, so poll STATUS until ready.
      *
      * @throws XDirectMessageMediaFailed
+     * @throws XDirectMessageMediaPending
      */
-    private function awaitDirectMessageVideo(ConnectedAccount $account, string $mediaId, string $token, Response $finalize): string
+    private function awaitDirectMessageVideo(ConnectedAccount $account, string $mediaId, string $token): string
     {
-        $status = $finalize;
         $spentSeconds = 0;
 
         while (true) {
@@ -426,17 +438,18 @@ class XDirectMessageConnector implements DirectMessageConnector
             }
 
             // Sleep at the END, so a first-poll "succeeded" returns instantly.
-            $waitSeconds = max(1, (int) $status->json('data.processing_info.check_after_secs', 2));
+            $waitSeconds = max(1, (int) ($info['check_after_secs'] ?? 2));
 
             if ($spentSeconds + $waitSeconds > self::STATUS_POLL_BUDGET_SECONDS) {
-                break;
+                // Still transcoding when the in-request budget runs out: bail
+                // as retriable rather than pinning the worker past the gateway
+                // timeout, handing the client X's own retry hint.
+                throw new XDirectMessageMediaPending($waitSeconds);
             }
 
             usleep($waitSeconds * 1_000_000);
             $spentSeconds += $waitSeconds;
         }
-
-        throw new XDirectMessageMediaFailed($status);
     }
 }
 
@@ -452,5 +465,21 @@ final class XDirectMessageMediaFailed extends \RuntimeException
     public function __construct(public readonly Response $response)
     {
         parent::__construct('X direct message media upload failed.');
+    }
+}
+
+/**
+ * Internal signal that the video uploaded fine but X had not finished
+ * transcoding within the in-request poll budget. Distinct from a failure so
+ * the send is surfaced as retriable "still processing" rather than an error.
+ * Not part of the public connector surface.
+ *
+ * @internal
+ */
+final class XDirectMessageMediaPending extends \RuntimeException
+{
+    public function __construct(public readonly int $retryAfterSeconds)
+    {
+        parent::__construct('X direct message video is still processing.');
     }
 }
