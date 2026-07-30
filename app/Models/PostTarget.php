@@ -152,4 +152,10 @@ class PostTarget extends Model
     {
         return $this->hasMany(PostTargetReply::class, 'post_target_id');
     }
+
+    /** @return HasMany<PostMediaPlacement, $this> */
+    public function placements(): HasMany
+    {
+        return $this->hasMany(PostMediaPlacement::class, 'post_target_id')->orderBy('position');
+    }
 }
