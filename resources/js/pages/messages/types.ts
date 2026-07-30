@@ -17,7 +17,7 @@ export type ConversationItem = {
 
 /** Stored on the message row, not a live `post_media` reference. */
 export type MessageAttachment = {
-    kind: string;
+    kind: 'image' | 'video';
     url: string;
     mime: string;
     alt_text: string | null;

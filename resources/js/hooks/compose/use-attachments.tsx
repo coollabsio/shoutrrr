@@ -58,6 +58,13 @@ type Args = {
     endpoints: Endpoints;
     /** Wording for the one-video-or-images error toast: 'reply' | 'message'. Default 'reply'. */
     subject?: string;
+    /**
+     * Hard cap on how many attachments this surface accepts. Omitted, the surface
+     * is unlimited (the reply box). DM composers pass `1` so the hook — the only
+     * place that sees every file-selection, paste and drop — enforces the limit
+     * rather than trusting callers to hide the attach button in time.
+     */
+    maxMedia?: number;
 };
 
 /**
@@ -108,6 +115,7 @@ export function useAttachments({
     onChange,
     endpoints,
     subject = 'reply',
+    maxMedia,
 }: Args): Attachments {
     const { shell } = usePage().props;
     // Validate video against this surface's own platform limits, not every platform.
@@ -292,6 +300,22 @@ export function useAttachments({
     async function handleAddedFiles(files: FileList | File[]): Promise<void> {
         const all = Array.from(files);
 
+        // The native file dialog and drag-drop can both hand over more files than
+        // this surface allows in one go, so the cap lives here rather than in the
+        // caller's button-hiding. `undefined` (the reply box) means unlimited.
+        const remainingSlots =
+            maxMedia === undefined
+                ? Infinity
+                : Math.max(0, maxMedia - media.length);
+
+        if (remainingSlots === 0) {
+            toast.error(
+                `A ${subject} can only include ${maxMedia} attachment${maxMedia === 1 ? '' : 's'}.`,
+            );
+
+            return;
+        }
+
         // Bluesky publishes a GIF as video and allows only one, unmixed. Block it
         // up front (same as the one-video rule below) so it never reaches posting.
         if (platform === 'bluesky' && wouldViolateBlueskyGif(media, all)) {
@@ -317,23 +341,25 @@ export function useAttachments({
         }
 
         if (videos.length > 0) {
-            void handleFiles(videos);
+            void handleFiles(videos.slice(0, remainingSlots));
 
             return;
         }
         if (images.length === 0) {
             return;
         }
+        // Respect the surface's cap; `Infinity` (the reply box) keeps every image.
+        const acceptedImages = images.slice(0, remainingSlots);
         // Without an image-edit endpoint there is nothing to crop/beautify into,
         // so images take the same straight-to-upload path videos do.
         if (!canEditImages) {
-            void handleFiles(images);
+            void handleFiles(acceptedImages);
 
             return;
         }
         setEditing({
             kind: 'batch',
-            items: images.map((f) => ({
+            items: acceptedImages.map((f) => ({
                 file: f,
                 url: URL.createObjectURL(f),
             })),
@@ -392,7 +418,7 @@ export function useAttachments({
             ref={fileInputRef}
             type="file"
             accept={hasVideo ? 'image/*' : 'image/*,video/*'}
-            multiple
+            multiple={maxMedia !== 1}
             hidden
             onChange={(e) => {
                 if (e.target.files && e.target.files.length > 0) {

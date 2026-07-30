@@ -369,6 +369,10 @@ class XDirectMessageConnector implements DirectMessageConnector
 
         $stream = $disk->readStream($media->path);
 
+        if (! is_resource($stream)) {
+            throw new XDirectMessageMediaFailed($init);
+        }
+
         try {
             $segmentIndex = 0;
             while (! feof($stream)) {
@@ -417,7 +421,7 @@ class XDirectMessageConnector implements DirectMessageConnector
 
         while (true) {
             $status = $this->http->withToken($token)->acceptJson()
-                ->get(self::MEDIA_BASE, ['media_id' => $mediaId]);
+                ->get(self::MEDIA_BASE, ['command' => 'STATUS', 'media_id' => $mediaId]);
 
             $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $status);
 

@@ -230,9 +230,6 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Configure default behaviors for production-ready applications.
-     */
-    /**
      * `{media}` resolves the same way for posts, replies and conversations, so
      * it is bound once here rather than restated in each route file.
      *
@@ -248,6 +245,9 @@ class AppServiceProvider extends ServiceProvider
             ->firstOrFail());
     }
 
+    /**
+     * Configure default behaviors for production-ready applications.
+     */
     protected function configureDefaults(): void
     {
         $this->guardAgainstProductionDebug();

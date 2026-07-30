@@ -30,6 +30,7 @@ class ConversationMediaController extends Controller
     public function updateAlt(Conversation $conversation, PostMedia $media, Request $request): JsonResponse
     {
         abort_unless($media->workspace_id === $conversation->workspace_id, 404);
+        abort_unless($media->direct_message_id === null, 404);
 
         $validated = $request->validate([
             'alt_text' => ['nullable', 'string', 'max:1000'],
@@ -43,6 +44,7 @@ class ConversationMediaController extends Controller
     public function destroy(Conversation $conversation, PostMedia $media): JsonResponse
     {
         abort_unless($media->workspace_id === $conversation->workspace_id, 404);
+        abort_unless($media->direct_message_id === null, 404);
 
         $media->delete();
 

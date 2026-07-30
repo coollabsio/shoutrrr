@@ -21,6 +21,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function (): void {
     config()->set('messages.enabled', true);
+    Storage::fake('public');
 
     $this->workspace = Workspace::factory()->create();
     $this->user = User::factory()->create(['current_workspace_id' => $this->workspace->id]);

@@ -124,6 +124,38 @@ test('deleting conversation media removes the row', function () {
     expect(PostMedia::withoutGlobalScopes()->whereKey($media->id)->exists())->toBeFalse();
 });
 
+test('media already claimed by a sent message 404s on alt and delete', function () {
+    $message = DirectMessage::withoutGlobalScopes()->create([
+        'workspace_id' => $this->workspace->id,
+        'conversation_id' => $this->conversation->id,
+        'remote_message_id' => 'evt-1',
+        'direction' => MessageDirection::Outbound,
+        'author_remote_id' => 'me',
+        'text' => 'look',
+        'attachments' => [],
+        'remote_created_at' => now(),
+        'is_ours' => true,
+    ]);
+    $claimed = PostMedia::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'direct_message_id' => $message->id,
+        'alt_text' => 'original',
+    ]);
+
+    $this->actingAs($this->user)
+        ->patchJson(route('messages.media.alt', ['conversation' => $this->conversation, 'media' => $claimed]), [
+            'alt_text' => 'nope',
+        ])
+        ->assertNotFound();
+
+    $this->actingAs($this->user)
+        ->deleteJson(route('messages.media.destroy', ['conversation' => $this->conversation, 'media' => $claimed]))
+        ->assertNotFound();
+
+    expect($claimed->refresh()->alt_text)->toBe('original');
+    expect(PostMedia::withoutGlobalScopes()->whereKey($claimed->id)->exists())->toBeTrue();
+});
+
 test('presign returns a workspace-scoped mp4 key', function () {
     $res = $this->actingAs($this->user)
         ->postJson(route('messages.media.video-url', $this->conversation), ['content_type' => 'video/mp4'])

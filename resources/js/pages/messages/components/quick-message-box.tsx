@@ -62,6 +62,7 @@ export function QuickMessageBox({
         media,
         onChange: setMedia,
         subject: 'message',
+        maxMedia: MAX_MEDIA,
         endpoints: {
             imageStore: (id) => ConversationMediaController.store(id).url,
             videoSign: (id) => ConversationVideoUploadController.url(id).url,
@@ -119,7 +120,7 @@ export function QuickMessageBox({
     return (
         <div
             className="shrink-0 border-t bg-background p-3"
-            {...(canAttach ? attachments.dropHandlers : {})}
+            {...(canAttach && !mediaFull ? attachments.dropHandlers : {})}
         >
             {disabled ? (
                 <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
