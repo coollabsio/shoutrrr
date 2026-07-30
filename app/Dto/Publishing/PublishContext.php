@@ -14,6 +14,7 @@ final readonly class PublishContext
      * @param  list<string>  $segments
      * @param  list<PostMedia>  $media
      * @param  array<string, mixed>  $credentials
+     * @param  array<int, list<PostMedia>>  $mediaBySection
      */
     public function __construct(
         public PostTarget $target,
@@ -21,5 +22,12 @@ final readonly class PublishContext
         public array $media,
         public ConnectedAccount $account,
         public array $credentials,
+        public array $mediaBySection = [],
     ) {}
+
+    /** @return list<PostMedia> */
+    public function mediaForSection(int $index): array
+    {
+        return $this->mediaBySection[$index] ?? [];
+    }
 }
