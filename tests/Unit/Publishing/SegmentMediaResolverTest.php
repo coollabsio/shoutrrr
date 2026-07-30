@@ -70,6 +70,24 @@ test('media targeting a pruned authored segment walks back (through a gap) to th
     expect(array_map(fn (PostMedia $m): string => $m->id, $out[1]))->toBe(['m3']);
 });
 
+test('media targeting a pruned authored segment lands on the nearest earlier surviving section, not section 0', function (): void {
+    // Sections 0-1 belong to some unrelated authored segment (7); authored segment 0 has no
+    // surviving section; authored segment 1 (break "b1") survives at section index 2; authored
+    // segment 2 (break "c1") is pruned. A placement on "c1" must walk back and land on
+    // authored-1's section (2) — a `return 0;` stub for fallbackSection() would place it in
+    // section 0 instead and fail this assertion.
+    $out = app(SegmentMediaResolver::class)->resolve(
+        sections: ['x0', 'x1', 'b'], sectionSources: [7, 7, 1], segmentBreaks: ['b1', 'c1'],
+        placements: [
+            ['post_media_id' => 'm1', 'segment_ref' => 'c1', 'position' => 0],
+        ],
+        allMedia: [fakeMedia('m1')],
+    );
+
+    expect(array_map(fn (PostMedia $m): string => $m->id, $out[2]))->toBe(['m1']);
+    expect($out[0] ?? [])->toBe([]);
+});
+
 test('media targeting a pruned authored segment with no surviving earlier segment defaults to section 0', function (): void {
     // Only authored segment 5 survives (as section 0); a placement on authored segment 3
     // ("d1") has no earlier authored segment (0, 1, 2) present at all, so the walk-back
