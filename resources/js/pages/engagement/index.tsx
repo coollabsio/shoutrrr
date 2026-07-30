@@ -844,9 +844,13 @@ export default function EngagementIndex({
 
             {/*
               Fill the viewport below the sticky app header (h-16) so each
-              column owns its own scroll and the reply box stays pinned.
+              column owns its own scroll and the reply box stays pinned. On md+
+              the sidebar `variant="inset"` gives the <main> an `m-2` (1rem of
+              vertical margin), so the desk is `100svh - 4rem - 1rem`; without
+              that extra rem the desk overran its inset and spilled a window
+              scrollbar under the shortcut bar.
             */}
-            <div className="grid h-[calc(100svh-4rem)] min-h-0 grid-cols-1 overflow-hidden md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div className="grid h-[calc(100svh-4rem)] min-h-0 grid-cols-1 overflow-hidden md:h-[calc(100svh-5rem)] md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                 {/* Left: triage column */}
                 <div className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r">
                     <EngagementDisabledBanner

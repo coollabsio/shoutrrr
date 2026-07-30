@@ -55,8 +55,12 @@ it('reserves space for the mobile sheet close button beside the header actions',
     expect(source).toContain('reserveCloseButtonSpace');
 });
 
-it('pins the messages desk to the viewport and keeps the message box in-flow', () => {
+it('pins the messages desk to the viewport, allowing for the inset margin', () => {
+    // The sidebar `variant="inset"` gives the <main> an md+ `m-2` (1rem of
+    // vertical margin), so the desk subtracts an extra rem on md+ to avoid
+    // spilling a window scrollbar under the shortcut bar.
     expect(source).toContain('h-[calc(100svh-4rem)]');
+    expect(source).toContain('md:h-[calc(100svh-5rem)]');
     expect(source).toContain('overflow-hidden');
     expect(source).toContain('min-h-0 min-w-0 flex-col overflow-hidden');
     expect(source).toContain('messageEditorRef');

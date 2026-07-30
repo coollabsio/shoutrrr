@@ -175,21 +175,6 @@ export function QuickMessageBox({
             ) : null}
 
             <div className="mt-2 flex items-center gap-2">
-                {showAttachControls ? (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Attach photo or video"
-                        title="Attach photo or video"
-                        disabled={sending}
-                        onClick={attachments.openFilePicker}
-                        className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-                    >
-                        <Paperclip className="size-4" aria-hidden="true" />
-                    </Button>
-                ) : null}
-
                 <EmojiPopover
                     recents={emojiPrefs.recents}
                     skinTone={emojiPrefs.skinTone}
@@ -215,6 +200,21 @@ export function QuickMessageBox({
                 >
                     <Smile className="size-4" aria-hidden="true" />
                 </EmojiPopover>
+
+                {showAttachControls ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Attach photo or video"
+                        title="Attach photo or video"
+                        disabled={sending}
+                        onClick={attachments.openFilePicker}
+                        className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                        <Paperclip className="size-4" aria-hidden="true" />
+                    </Button>
+                ) : null}
 
                 {showAttachControls && shell.gifs_enabled ? (
                     <GifPopover
