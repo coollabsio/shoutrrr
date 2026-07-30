@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { useHttp } from '@inertiajs/react';
-import { act, createElement } from 'react';
+import { act, createElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,55 +9,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MediaView } from '@/types/compose';
 import type { GifItem } from '@/types/gifs';
 
-import { useReplyMedia } from './use-reply-media';
+import { useAttachments } from '../use-attachments';
 
-// The reply endpoint has no server-side "media already on this reply" query
-// (post_media has no reply_id column), so ReplyGifController relies entirely
-// on a client-declared media_ids array to run its mixing-rule guard. This test
-// pins that the request body actually carries it — see AttachGifRequest and
-// ReplyGifController::store()'s $existing query.
+// The GIF endpoints have no server-side "media already on this record" query
+// (post_media has no reply_id/conversation_id column), so the controller relies
+// entirely on a client-declared media_ids array to run its mixing-rule guard.
+// This test pins that the request body actually carries it — see
+// AttachGifRequest and ReplyGifController::store()'s $existing query.
 vi.mock('@inertiajs/react', () => ({
     useHttp: vi.fn(),
     usePage: vi.fn(() => ({ props: { shell: { limits: [] } } })),
-}));
-
-vi.mock(
-    '@/actions/App/Http/Controllers/Engagement/ReplyImageEditController',
-    () => ({
-        default: {
-            store: (id: string) => ({ url: `/engagement/${id}/image-edit` }),
-            update: ({ reply }: { reply: string; media: string }) => ({
-                url: `/engagement/${reply}/image-edit`,
-            }),
-        },
-    }),
-);
-
-vi.mock(
-    '@/actions/App/Http/Controllers/Engagement/ReplyMediaController',
-    () => ({
-        default: {
-            store: (id: string) => ({ url: `/engagement/${id}/media` }),
-        },
-    }),
-);
-
-vi.mock(
-    '@/actions/App/Http/Controllers/Engagement/ReplyVideoUploadController',
-    () => ({
-        default: {
-            url: (id: string) => ({ url: `/engagement/${id}/video/sign` }),
-            store: (id: string) => ({ url: `/engagement/${id}/video` }),
-        },
-    }),
-);
-
-vi.mock('@/actions/App/Http/Controllers/Gifs/ReplyGifController', () => ({
-    default: {
-        store: {
-            url: ({ reply }: { reply: string }) => `/engagement/${reply}/gifs`,
-        },
-    },
 }));
 
 vi.mock('@/components/compose/image-editor', () => ({
@@ -73,10 +34,26 @@ vi.mock('sonner', () => ({
 }));
 
 const transform = vi.fn();
+const post = vi.fn();
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 let attachGifRef: ((item: GifItem) => Promise<void>) | null = null;
+let addFilesRef: ((files: File[]) => Promise<void>) | null = null;
+let editorRef: ReactNode = null;
+let chipsRef: ReactNode = null;
+
+const endpoints = {
+    imageStore: (id: string) => `/engagement/${id}/media`,
+    videoSign: (id: string) => `/engagement/${id}/video/sign`,
+    videoStore: (id: string) => `/engagement/${id}/video`,
+    gifStore: (id: string) => `/engagement/${id}/gifs`,
+    imageEdit: {
+        store: (id: string) => `/engagement/${id}/image-edit`,
+        update: ({ owner }: { owner: string; media: string }) =>
+            `/engagement/${owner}/image-edit`,
+    },
+};
 
 function existingMedia(id: string): MediaView {
     return {
@@ -119,23 +96,36 @@ function gifItem(): GifItem {
     };
 }
 
-function Harness({ media }: { media: MediaView[] }) {
-    const rm = useReplyMedia({
-        replyId: 'reply-1',
+function Harness({
+    media,
+    withImageEdit = true,
+}: {
+    media: MediaView[];
+    withImageEdit?: boolean;
+}) {
+    const rm = useAttachments({
+        ownerId: 'reply-1',
         platform: 'bluesky',
         media,
         onChange: () => {},
+        endpoints: withImageEdit
+            ? endpoints
+            : { ...endpoints, imageEdit: undefined },
     });
     attachGifRef = rm.attachGif;
+    addFilesRef = rm.handleAddedFiles;
+    editorRef = rm.editor;
+    chipsRef = rm.chips;
 
     return null;
 }
 
 beforeEach(() => {
     transform.mockReset();
+    post.mockReset();
     vi.mocked(useHttp).mockReturnValue({
         transform,
-        post: vi.fn(),
+        post,
         processing: false,
     } as unknown as ReturnType<typeof useHttp>);
     vi.stubGlobal(
@@ -157,11 +147,14 @@ afterEach(() => {
     root = null;
     container = null;
     attachGifRef = null;
+    addFilesRef = null;
+    editorRef = null;
+    chipsRef = null;
     vi.unstubAllGlobals();
     vi.clearAllMocks();
 });
 
-describe('useReplyMedia attachGif', () => {
+describe('useAttachments attachGif', () => {
     it("sends media_ids populated from the reply's current media", async () => {
         act(() => {
             root?.render(
@@ -246,5 +239,76 @@ describe('useReplyMedia attachGif', () => {
             media_ids: string[];
         };
         expect(body.media_ids).toEqual([]);
+    });
+});
+
+/**
+ * The DM composer supplies no `imageEdit` endpoints — a DM is not a published
+ * post, so there is nothing to crop/beautify into.
+ */
+describe('useAttachments without imageEdit endpoints', () => {
+    function renderHarness(withImageEdit: boolean, media: MediaView[] = []) {
+        act(() => {
+            root?.render(createElement(Harness, { media, withImageEdit }));
+        });
+    }
+
+    it('renders no image editor', () => {
+        renderHarness(false);
+
+        expect(editorRef).toBeNull();
+    });
+
+    it('renders the image editor when the endpoints are supplied', () => {
+        renderHarness(true);
+
+        expect(editorRef).not.toBeNull();
+    });
+
+    it('leaves chips non-clickable so no editor can be opened', () => {
+        renderHarness(false, [existingMedia('m1')]);
+
+        expect(
+            (chipsRef as { props: Record<string, unknown> }).props.onImageClick,
+        ).toBeUndefined();
+    });
+
+    it('keeps chips clickable when the editor is available', () => {
+        renderHarness(true, [existingMedia('m1')]);
+
+        expect(
+            (chipsRef as { props: Record<string, unknown> }).props.onImageClick,
+        ).toBeInstanceOf(Function);
+    });
+
+    it('uploads a picked image straight through instead of queueing the editor', async () => {
+        renderHarness(false);
+
+        await act(async () => {
+            await addFilesRef?.([
+                new File(['x'], 'a.png', { type: 'image/png' }),
+            ]);
+        });
+
+        expect(post).toHaveBeenCalledWith(
+            '/engagement/reply-1/media',
+            expect.anything(),
+        );
+        expect(editorRef).toBeNull();
+    });
+
+    it('queues a picked image into the editor when the endpoints are supplied', async () => {
+        renderHarness(true);
+
+        await act(async () => {
+            await addFilesRef?.([
+                new File(['x'], 'a.png', { type: 'image/png' }),
+            ]);
+        });
+
+        expect(post).not.toHaveBeenCalled();
+        expect(
+            (editorRef as { props: Record<string, unknown> }).props.open,
+        ).toBe(true);
     });
 });

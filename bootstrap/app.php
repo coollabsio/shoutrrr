@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Uploads\StreamedUploadController;
 use App\Http\Middleware\CaptureMcpWorkspaceSelection;
+use App\Http\Middleware\EnsureConversationSupportsDirectMessageMedia;
 use App\Http\Middleware\EnsureEngagementEnabled;
 use App\Http\Middleware\EnsureFeedbackEnabled;
 use App\Http\Middleware\EnsureGifsEnabled;
@@ -45,6 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'metrics.enabled' => EnsureMetricsEnabled::class,
             'feedback.enabled' => EnsureFeedbackEnabled::class,
             'gifs.enabled' => EnsureGifsEnabled::class,
+            'conversation.supports-media' => EnsureConversationSupportsDirectMessageMedia::class,
         ]);
 
         $middleware->web(append: [

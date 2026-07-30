@@ -7,7 +7,6 @@ use App\Http\Controllers\Engagement\ReplyImageEditController;
 use App\Http\Controllers\Engagement\ReplyMediaController;
 use App\Http\Controllers\Engagement\ReplyVideoUploadController;
 use App\Http\Controllers\Gifs\ReplyGifController;
-use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use Illuminate\Support\Facades\Route;
@@ -23,11 +22,6 @@ Route::bind('reply', fn (string $value): PostTargetReply => PostTargetReply::que
 Route::bind('target', fn (string $value): PostTarget => PostTarget::query()
     ->whereKey($value)
     ->whereHas('post', fn ($q) => $q->where('workspace_id', request()->user()?->current_workspace_id))
-    ->firstOrFail());
-
-Route::bind('media', fn (string $value): PostMedia => PostMedia::query()
-    ->where('workspace_id', request()->user()?->current_workspace_id)
-    ->whereKey($value)
     ->firstOrFail());
 
 Route::middleware(['auth', 'verified'])->group(function (): void {

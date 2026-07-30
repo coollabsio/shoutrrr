@@ -2,13 +2,54 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { initials, relativeTime } from '../helpers';
-import type { ConversationItem, MessageItem } from '../types';
+import type {
+    ConversationItem,
+    MessageAttachment,
+    MessageItem,
+} from '../types';
 
 type Props = {
     conversation: ConversationItem;
     messages: MessageItem[];
     loading: boolean;
 };
+
+/** Only outbound messages carry attachments today; inbound is never parsed. */
+function Attachments({
+    attachments,
+    hasText,
+}: {
+    attachments: MessageAttachment[];
+    hasText: boolean;
+}) {
+    if (attachments.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className={hasText ? 'mt-2 space-y-1.5' : 'space-y-1.5'}>
+            {attachments.map((attachment) =>
+                attachment.kind === 'video' ? (
+                    <video
+                        key={attachment.url}
+                        src={attachment.url}
+                        controls
+                        playsInline
+                        className="max-h-64 w-full rounded-lg bg-black/5"
+                    />
+                ) : (
+                    <img
+                        key={attachment.url}
+                        src={attachment.url}
+                        alt={attachment.alt_text ?? ''}
+                        loading="lazy"
+                        className="max-h-64 w-full rounded-lg object-cover"
+                    />
+                ),
+            )}
+        </div>
+    );
+}
 
 export function MessageThread({ conversation, messages, loading }: Props) {
     if (loading) {
@@ -30,9 +71,15 @@ export function MessageThread({ conversation, messages, loading }: Props) {
                         className="flex min-w-0 flex-col items-end gap-1"
                     >
                         <div className="max-w-[min(85%,28rem)] min-w-0 rounded-2xl rounded-br-sm bg-primary px-3.5 py-2.5 text-primary-foreground">
-                            <p className="text-sm break-words whitespace-pre-wrap">
-                                {message.text}
-                            </p>
+                            {message.text ? (
+                                <p className="text-sm break-words whitespace-pre-wrap">
+                                    {message.text}
+                                </p>
+                            ) : null}
+                            <Attachments
+                                attachments={message.attachments}
+                                hasText={Boolean(message.text)}
+                            />
                             <div className="mt-1 text-right text-[11px] text-primary-foreground/70">
                                 {message.send_status === 'sending' ? (
                                     <span className="flex items-center justify-end gap-1">
@@ -69,9 +116,15 @@ export function MessageThread({ conversation, messages, loading }: Props) {
                         </Avatar>
                         <div className="min-w-0 flex-1">
                             <div className="max-w-[min(85%,28rem)] min-w-0 rounded-2xl rounded-bl-sm border bg-card px-3.5 py-2.5">
-                                <p className="text-sm break-words whitespace-pre-wrap">
-                                    {message.text}
-                                </p>
+                                {message.text ? (
+                                    <p className="text-sm break-words whitespace-pre-wrap">
+                                        {message.text}
+                                    </p>
+                                ) : null}
+                                <Attachments
+                                    attachments={message.attachments}
+                                    hasText={Boolean(message.text)}
+                                />
                             </div>
                             <div className="mt-1 pl-1 text-[11px] text-muted-foreground">
                                 {relativeTime(message.remote_created_at)}

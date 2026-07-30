@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\EngagementStatus;
 use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
@@ -47,5 +48,5 @@ test('bluesky returns unsupported for oauth dpop sessions', function () {
     $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky]);
     $creds = ['session' => ['accessJwt' => 'jwt', 'pds' => 'https://bsky.social', 'dpop_private_jwk' => ['kty' => 'EC']]];
     $result = app(BlueskyDirectMessageConnector::class)->fetchConversations($account, $creds, null);
-    expect($result->status)->toBe(\App\Enums\EngagementStatus::Unsupported);
+    expect($result->status)->toBe(EngagementStatus::Unsupported);
 });

@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $id
  * @property string $workspace_id
  * @property string|null $post_id
+ * @property string|null $direct_message_id
  * @property string $disk
  * @property string $path
  * @property string $mime
@@ -35,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'workspace_id',
     'post_id',
+    'direct_message_id',
     'disk',
     'path',
     'mime',

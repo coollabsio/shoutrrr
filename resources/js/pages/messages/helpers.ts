@@ -1,34 +1,19 @@
 import { dayjs } from '@/lib/datetime/dayjs';
+import {
+    initialsFrom,
+    isBareShortcut,
+    type ShortcutEvent,
+} from '@/lib/inbox/helpers';
 
 import type { ConversationItem } from './types';
 
-/** Compact relative time, e.g. "4m", "3h", "2d" — falls back to a short date. */
-export function relativeTime(iso: string | null): string {
-    if (!iso) {
-        return '';
-    }
-    const then = dayjs(iso);
-    if (!then.isValid()) {
-        return '';
-    }
-    const seconds = dayjs().diff(then, 'second');
-    if (seconds < 60) {
-        return 'now';
-    }
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) {
-        return `${minutes}m`;
-    }
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) {
-        return `${hours}h`;
-    }
-    const days = Math.floor(hours / 24);
-    if (days < 7) {
-        return `${days}d`;
-    }
-    return then.format('MMM D');
-}
+export {
+    actionErrorMessage,
+    adjacentIndex,
+    atHandle,
+    nextAfterArchive,
+    relativeTime,
+} from '@/lib/inbox/helpers';
 
 /** Up to two uppercase initials from a counterpart's display name or handle. */
 export function initials(
@@ -37,53 +22,10 @@ export function initials(
         'counterpart_name' | 'counterpart_handle'
     >,
 ): string {
-    const source = (
-        conversation.counterpart_name ??
-        conversation.counterpart_handle ??
-        ''
-    ).trim();
-    if (source === '') {
-        return '?';
-    }
-    const parts = source.replace(/^@/, '').split(/\s+/).filter(Boolean);
-    const letters =
-        parts.length >= 2
-            ? parts[0][0] + parts[1][0]
-            : source.replace(/^@/, '').slice(0, 2);
-    return letters.toUpperCase();
-}
-
-/**
- * Message for a failed message action, read from `useHttp`'s `onHttpException`
- * response. That response carries the **raw body string**, and a non-2xx can
- * come from anywhere in the stack — a proxy's HTML 502 page must not throw
- * inside an error handler, so parsing is guarded and falls back.
- */
-export function actionErrorMessage(
-    response: { data: string },
-    fallback: string,
-): string {
-    try {
-        const parsed: unknown = JSON.parse(response.data);
-        if (parsed !== null && typeof parsed === 'object') {
-            const { message } = parsed as { message?: unknown };
-            if (typeof message === 'string' && message.trim() !== '') {
-                return message;
-            }
-        }
-    } catch {
-        // Not JSON (e.g. a gateway HTML error page) — use the fallback.
-    }
-
-    return fallback;
-}
-
-/** Display handle with a leading @ when it isn't already a URL-style handle. */
-export function atHandle(handle: string | null): string {
-    if (!handle) {
-        return '';
-    }
-    return handle.startsWith('@') ? handle : `@${handle}`;
+    return initialsFrom(
+        conversation.counterpart_name,
+        conversation.counterpart_handle,
+    );
 }
 
 /**
@@ -109,21 +51,6 @@ export function windowLabel(windowExpiresAt: string | null): string | null {
     return `Reply window closes in ${hours}h`;
 }
 
-/** True when a keyboard event originated from an editable field. */
-export function isTypingTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) {
-        return false;
-    }
-
-    const tag = target.tagName;
-
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-        return true;
-    }
-
-    return Boolean(target.isContentEditable);
-}
-
 export type MessagesShortcut =
     | { type: 'next' }
     | { type: 'prev' }
@@ -135,16 +62,9 @@ export type MessagesShortcut =
  * Ignores modified keys and events from editable fields.
  */
 export function messagesShortcut(
-    event: Pick<KeyboardEvent, 'key'> &
-        Partial<
-            Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'target'>
-        >,
+    event: ShortcutEvent,
 ): MessagesShortcut | null {
-    if (event.metaKey || event.ctrlKey || event.altKey) {
-        return null;
-    }
-
-    if (event.target !== undefined && isTypingTarget(event.target)) {
+    if (!isBareShortcut(event)) {
         return null;
     }
 
@@ -162,46 +82,4 @@ export function messagesShortcut(
         default:
             return null;
     }
-}
-
-/** Index of the item that should become selected after moving by `delta`. */
-export function adjacentIndex(
-    length: number,
-    currentIndex: number,
-    delta: 1 | -1,
-): number {
-    if (length === 0) {
-        return -1;
-    }
-
-    if (currentIndex < 0) {
-        return delta === 1 ? 0 : length - 1;
-    }
-
-    return Math.min(length - 1, Math.max(0, currentIndex + delta));
-}
-
-/**
- * After archiving `currentId`, pick the next triage target: the item that
- * followed it, or the previous one if it was last. Returns null when empty.
- */
-export function nextAfterArchive(
-    ids: readonly string[],
-    currentId: string,
-): string | null {
-    const index = ids.indexOf(currentId);
-
-    if (index === -1) {
-        return ids[0] ?? null;
-    }
-
-    if (index + 1 < ids.length) {
-        return ids[index + 1] ?? null;
-    }
-
-    if (index - 1 >= 0) {
-        return ids[index - 1] ?? null;
-    }
-
-    return null;
 }

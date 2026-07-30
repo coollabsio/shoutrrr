@@ -11,10 +11,11 @@ use Illuminate\Validation\Rule;
 class AttachGifRequest extends FormRequest
 {
     /**
-     * Mirrors the two upload requests this endpoint pair replaces:
-     * StorePostMediaRequest checks `can('update', post)`, StoreReplyMediaRequest
-     * treats a resolved {reply} binding as sufficient (it is already scoped to
-     * the authed user's workspace, 404ing otherwise). Same route, same request
+     * Mirrors the upload requests this endpoint set replaces:
+     * StorePostMediaRequest checks `can('update', post)`, while
+     * StoreReplyMediaRequest / StoreConversationMediaRequest treat a resolved
+     * {reply} / {conversation} binding as sufficient (both are already scoped to
+     * the authed user's workspace, 404ing otherwise). Same payload, same request
      * class, so branch on whichever binding is present.
      */
     public function authorize(): bool
@@ -24,7 +25,7 @@ class AttachGifRequest extends FormRequest
             return $this->user()->can('update', $post);
         }
 
-        return $this->route('reply') !== null;
+        return $this->route('reply') !== null || $this->route('conversation') !== null;
     }
 
     /**

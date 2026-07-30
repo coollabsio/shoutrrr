@@ -41,3 +41,4 @@ frankenphp-worker.php
 
 # Per-task scratchpad, not tracked
 /.ai/todo.md
+/.ai/plans/

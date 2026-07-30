@@ -2,6 +2,10 @@ import { useHttp, usePage } from '@inertiajs/react';
 import { ImagePlay, Paperclip, Smile } from 'lucide-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
+import ReplyImageEditController from '@/actions/App/Http/Controllers/Engagement/ReplyImageEditController';
+import ReplyMediaController from '@/actions/App/Http/Controllers/Engagement/ReplyMediaController';
+import ReplyVideoUploadController from '@/actions/App/Http/Controllers/Engagement/ReplyVideoUploadController';
+import ReplyGifController from '@/actions/App/Http/Controllers/Gifs/ReplyGifController';
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import EditorBody, {
     type EditorBodyHandle,
@@ -15,6 +19,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useAttachments } from '@/hooks/compose/use-attachments';
 import { useEmojiPreferences } from '@/hooks/compose/use-emoji-preferences';
 import {
     replaceMentionLabel,
@@ -30,12 +35,16 @@ import type {
     WorkspaceMention,
 } from '@/types/compose';
 
-import { useReplyMedia } from './use-reply-media';
-
 const EMPTY_SAVED_MENTIONS: WorkspaceMention[] = [];
 
 const LIMITS: Record<string, number> = { x: 280, bluesky: 300, linkedin: 3000 };
 export const QUICK_REPLY_SEND_SHORTCUT = '⌘/Ctrl↵';
+
+/**
+ * Mirrors `Platform::supportsReplyMedia()` — LinkedIn, Meta and Threads reject
+ * attachments on a comment. Same approach as `lib/compose/platform-newlines.ts`.
+ */
+const REPLY_MEDIA_PLATFORMS: PlatformName[] = ['x', 'bluesky'];
 
 type Props = {
     replyId: string;
@@ -75,7 +84,29 @@ export function QuickReplyBox({
         { mention: WorkspaceMention }
     >({});
 
-    const rm = useReplyMedia({ replyId, platform, media, onChange: setMedia });
+    // Paste and drag/drop are unwired too, not just the buttons.
+    const canAttachMedia = REPLY_MEDIA_PLATFORMS.includes(platform);
+
+    const rm = useAttachments({
+        ownerId: replyId,
+        platform,
+        media,
+        onChange: setMedia,
+        endpoints: {
+            imageStore: (id) => ReplyMediaController.store(id).url,
+            videoSign: (id) => ReplyVideoUploadController.url(id).url,
+            videoStore: (id) => ReplyVideoUploadController.store(id).url,
+            gifStore: (id) => ReplyGifController.store.url({ reply: id }),
+            imageEdit: {
+                store: (id) => ReplyImageEditController.store(id).url,
+                update: ({ owner, media: mediaId }) =>
+                    ReplyImageEditController.update({
+                        reply: owner,
+                        media: mediaId,
+                    }).url,
+            },
+        },
+    });
 
     // The parent drives focus (the "r" triage shortcut) through this handle; when
     // it doesn't pass one we fall back to a local ref so emoji insertion still
@@ -165,9 +196,9 @@ export function QuickReplyBox({
     return (
         <div
             className="shrink-0 border-t bg-background p-3"
-            {...rm.dropHandlers}
+            {...(canAttachMedia ? rm.dropHandlers : {})}
         >
-            {rm.fileInput}
+            {canAttachMedia ? rm.fileInput : null}
 
             {/* The editor is styling-dumb, so the box owns the border/ring the
                 <Textarea> used to bring with it. */}
@@ -195,7 +226,9 @@ export function QuickReplyBox({
                     onChange={(segments) => handleText(segments[0] ?? '')}
                     editable={!disabled && !sending}
                     onSubmit={() => void send()}
-                    onPasteFiles={rm.handleAddedFiles}
+                    onPasteFiles={
+                        canAttachMedia ? rm.handleAddedFiles : undefined
+                    }
                     emojiSkinTone={emojiPrefs.skinTone}
                     onEmojiInsert={emojiPrefs.addRecent}
                     // The composer's @-mention picker, scoped to this reply's one
@@ -218,22 +251,11 @@ export function QuickReplyBox({
                 />
             </div>
 
-            {rm.chips ? <div className="mt-2">{rm.chips}</div> : null}
+            {canAttachMedia && rm.chips ? (
+                <div className="mt-2">{rm.chips}</div>
+            ) : null}
 
             <div className="mt-2 flex items-center gap-2">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Attach photo or video"
-                    title="Attach photo or video"
-                    disabled={disabled || sending}
-                    onClick={rm.openFilePicker}
-                    className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-                >
-                    <Paperclip className="size-4" aria-hidden="true" />
-                </Button>
-
                 <EmojiPopover
                     recents={emojiPrefs.recents}
                     skinTone={emojiPrefs.skinTone}
@@ -260,7 +282,22 @@ export function QuickReplyBox({
                     <Smile className="size-4" aria-hidden="true" />
                 </EmojiPopover>
 
-                {shell.gifs_enabled && (
+                {canAttachMedia && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Attach photo or video"
+                        title="Attach photo or video"
+                        disabled={disabled || sending}
+                        onClick={rm.openFilePicker}
+                        className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                        <Paperclip className="size-4" aria-hidden="true" />
+                    </Button>
+                )}
+
+                {canAttachMedia && shell.gifs_enabled && (
                     <GifPopover
                         onSelect={(item) => void rm.attachGif(item)}
                         side="top"
@@ -345,7 +382,7 @@ export function QuickReplyBox({
                 })()}
             </div>
 
-            {rm.editor}
+            {canAttachMedia ? rm.editor : null}
         </div>
     );
 }

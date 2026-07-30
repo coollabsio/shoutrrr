@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Services\Messaging\Data;
+namespace App\Dto\Messaging;
 
 use App\Enums\EngagementStatus;
 
@@ -38,6 +38,18 @@ final readonly class MessageSendResult
     public static function failed(?string $excerpt): self
     {
         return new self(EngagementStatus::Failed, excerpt: $excerpt);
+    }
+
+    /** Same outcome, restated for the user. */
+    public function withExcerpt(string $excerpt): self
+    {
+        return new self($this->status, $this->remoteMessageId, $this->retryAfterSeconds, $excerpt);
+    }
+
+    /** Same (failed) outcome, but a message landed remotely before the failure. */
+    public function withRemoteMessageId(string $remoteMessageId): self
+    {
+        return new self($this->status, $remoteMessageId, $this->retryAfterSeconds, $this->excerpt);
     }
 
     public function isOk(): bool

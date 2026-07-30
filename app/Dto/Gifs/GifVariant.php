@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Services\Gifs;
+namespace App\Dto\Gifs;
 
 /**
  * One downloadable representation of a Klipy item. `bytes` is null when Klipy

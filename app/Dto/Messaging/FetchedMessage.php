@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Services\Messaging\Data;
+namespace App\Dto\Messaging;
 
 use App\Enums\MessageDirection;
 use Carbon\CarbonImmutable;

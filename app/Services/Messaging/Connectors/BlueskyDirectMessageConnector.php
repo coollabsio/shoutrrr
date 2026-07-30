@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace App\Services\Messaging\Connectors;
 
+use App\Dto\Messaging\ConversationFetchResult;
+use App\Dto\Messaging\FetchedConversation;
+use App\Dto\Messaging\FetchedMessage;
+use App\Dto\Messaging\MessageSendResult;
 use App\Enums\MessageDirection;
 use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
-use App\Services\Engagement\RetryAfter;
+use App\Models\PostMedia;
 use App\Services\Messaging\Contracts\DirectMessageConnector;
-use App\Services\Messaging\Data\ConversationFetchResult;
-use App\Services\Messaging\Data\FetchedConversation;
-use App\Services\Messaging\Data\FetchedMessage;
-use App\Services\Messaging\Data\MessageSendResult;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -91,12 +92,20 @@ class BlueskyDirectMessageConnector implements DirectMessageConnector
             );
         }
 
-        return ConversationFetchResult::ok($conversations, $list->json('cursor'));
+        return ConversationFetchResult::ok($conversations);
     }
 
-    /** @param array<string, mixed> $credentials */
-    public function sendMessage(ConnectedAccount $account, Conversation $conversation, string $text, array $credentials): MessageSendResult
+    /**
+     * @param  array<string, mixed>  $credentials
+     * @param  list<PostMedia>  $media
+     */
+    public function sendMessage(ConnectedAccount $account, Conversation $conversation, string $text, array $credentials, array $media = []): MessageSendResult
     {
+        // Backstop: the composer and the request layer already block this.
+        if ($media !== []) {
+            return MessageSendResult::unsupported('Bluesky direct messages cannot carry attachments.');
+        }
+
         $session = $credentials['session'] ?? [];
         if (! isset($session['accessJwt']) || isset($session['dpop_private_jwk'])) {
             return MessageSendResult::unsupported('Bluesky DMs require an app-password session with DM scope.');

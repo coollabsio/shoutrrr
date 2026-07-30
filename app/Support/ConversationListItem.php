@@ -6,7 +6,7 @@ namespace App\Support;
 
 use App\Models\Conversation;
 
-class ConversationListItem
+final class ConversationListItem
 {
     /** @return array<string, mixed> */
     public static function make(Conversation $conversation): array

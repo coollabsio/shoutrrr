@@ -32,14 +32,13 @@ use Override;
  * @property CarbonImmutable|null $read_at
  * @property CarbonImmutable|null $archived_at
  * @property CarbonImmutable|null $messaging_window_expires_at
- * @property string|null $sync_cursor
  * @property CarbonImmutable|null $last_synced_at
  */
 #[Fillable([
     'workspace_id', 'connected_account_id', 'platform', 'remote_conversation_id',
     'counterpart_handle', 'counterpart_name', 'counterpart_avatar_url', 'counterpart_remote_id',
     'last_message_at', 'last_message_preview', 'unread_count', 'read_at', 'archived_at',
-    'messaging_window_expires_at', 'sync_cursor', 'last_synced_at',
+    'messaging_window_expires_at', 'last_synced_at',
 ])]
 class Conversation extends Model
 {

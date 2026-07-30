@@ -4,22 +4,25 @@ declare(strict_types=1);
 
 namespace App\Services\Messaging\Connectors;
 
+use App\Dto\Messaging\ConversationFetchResult;
+use App\Dto\Messaging\FetchedConversation;
+use App\Dto\Messaging\FetchedMessage;
+use App\Dto\Messaging\MessageSendResult;
 use App\Enums\MessageDirection;
 use App\Enums\UsageCategory;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
-use App\Services\Engagement\RetryAfter;
+use App\Models\PostMedia;
 use App\Services\Messaging\Contracts\DirectMessageConnector;
-use App\Services\Messaging\Data\ConversationFetchResult;
-use App\Services\Messaging\Data\FetchedConversation;
-use App\Services\Messaging\Data\FetchedMessage;
-use App\Services\Messaging\Data\MessageSendResult;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class XDirectMessageConnector implements DirectMessageConnector
@@ -27,6 +30,20 @@ class XDirectMessageConnector implements DirectMessageConnector
     use TracksUsage;
 
     private const string BASE = 'https://api.twitter.com/2';
+
+    private const string MEDIA_BASE = 'https://api.x.com/2/media/upload';
+
+    private const int APPEND_CHUNK = 4 * 1024 * 1024;
+
+    /**
+     * A DM is sent inside the web request (unlike replies, which go through the
+     * SendReply job), so cap the transcode wait rather than pin a PHP worker.
+     * Kept well under the 30s FPM/reverse-proxy request timeouts most
+     * deployments run — the chunked upload has already spent wall time before
+     * we get here — so a slow transcode ends in a "still processing" reply the
+     * user can retry, not a worker the gateway kills mid-send.
+     */
+    private const int STATUS_POLL_BUDGET_SECONDS = 20;
 
     public function __construct(private readonly HttpFactory $http) {}
 
@@ -111,7 +128,7 @@ class XDirectMessageConnector implements DirectMessageConnector
             );
         }
 
-        return ConversationFetchResult::ok($conversations, $response->json('meta.next_token'));
+        return ConversationFetchResult::ok($conversations);
     }
 
     /**
@@ -186,12 +203,43 @@ class XDirectMessageConnector implements DirectMessageConnector
         return $users;
     }
 
-    /** @param array<string, mixed> $credentials */
-    public function sendMessage(ConnectedAccount $account, Conversation $conversation, string $text, array $credentials): MessageSendResult
+    /**
+     * @param  array<string, mixed>  $credentials
+     * @param  list<PostMedia>  $media
+     */
+    public function sendMessage(ConnectedAccount $account, Conversation $conversation, string $text, array $credentials, array $media = []): MessageSendResult
     {
-        $response = $this->http->withToken((string) ($credentials['access_token'] ?? ''))
-            ->acceptJson()
-            ->post(self::BASE."/dm_conversations/{$conversation->remote_conversation_id}/messages", ['text' => $text]);
+        $token = (string) ($credentials['access_token'] ?? '');
+
+        try {
+            // X allows exactly one attachment per DM message; anything the
+            // caller sent beyond the platform cap is dropped rather than
+            // failing the send.
+            $mediaId = $media === []
+                ? null
+                : $this->uploadDirectMessageMedia($account, $media[0], $token);
+
+            $response = $this->http->withToken($token)
+                ->acceptJson()
+                ->post(
+                    self::BASE."/dm_conversations/{$conversation->remote_conversation_id}/messages",
+                    $this->sendBody($text, $mediaId),
+                );
+        } catch (XDirectMessageMediaPending $e) {
+            // Not a failure: X just hasn't finished transcoding within the
+            // in-request budget. Report it as retriable so the client can
+            // resend once the video is ready, rather than as a hard error.
+            return MessageSendResult::rateLimited(
+                'The video is still being processed by X. Try sending again in a few seconds.',
+                $e->retryAfterSeconds,
+            );
+        } catch (XDirectMessageMediaFailed $e) {
+            return $e->response->status() === 403
+                ? MessageSendResult::unsupported($this->excerpt($e->response))
+                : MessageSendResult::failed($this->excerpt($e->response));
+        } catch (ConnectionException $e) {
+            return MessageSendResult::failed($e->getMessage());
+        }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::DM_SEND, $account, $response);
 
@@ -207,6 +255,28 @@ class XDirectMessageConnector implements DirectMessageConnector
         return MessageSendResult::ok((string) $response->json('data.dm_event_id'));
     }
 
+    /**
+     * The send body is an anyOf: `text` is required only when there is no
+     * attachment, and X rejects an empty string, so an attachment-only message
+     * must omit the key entirely rather than send `""`.
+     *
+     * @return array<string, mixed>
+     */
+    private function sendBody(string $text, ?string $mediaId): array
+    {
+        $body = [];
+
+        if ($text !== '' || $mediaId === null) {
+            $body['text'] = $text;
+        }
+
+        if ($mediaId !== null) {
+            $body['attachments'] = [['media_id' => $mediaId]];
+        }
+
+        return $body;
+    }
+
     private function mapFetchFailure(Response $response): ConversationFetchResult
     {
         return match ($response->status()) {
@@ -220,5 +290,200 @@ class XDirectMessageConnector implements DirectMessageConnector
     private function excerpt(Response $response): string
     {
         return Str::limit($response->body(), 300);
+    }
+
+    /**
+     * DM attachments are not interchangeable with tweet attachments: X rejects
+     * the send with "You are not permitted to attach this media to a DM event"
+     * unless the upload declared a `dm_*` category AND `shared`, even though the
+     * same media id would post fine as a tweet.
+     *
+     * @throws XDirectMessageMediaFailed
+     */
+    private function uploadDirectMessageMedia(ConnectedAccount $account, PostMedia $media, string $token): string
+    {
+        return $media->isVideo()
+            ? $this->uploadDirectMessageVideoChunks($account, $media, $token)
+            : $this->uploadDirectMessageImage($account, $media, $token);
+    }
+
+    /** Keyed off mime, not our `kind`: an animated GIF stores as an image. */
+    private function directMessageMediaCategory(PostMedia $media): string
+    {
+        return match (true) {
+            $media->mime === 'image/gif' => 'dm_gif',
+            $media->isVideo() => 'dm_video',
+            default => 'dm_image',
+        };
+    }
+
+    /**
+     * @throws XDirectMessageMediaFailed
+     */
+    private function uploadDirectMessageImage(ConnectedAccount $account, PostMedia $media, string $token): string
+    {
+        $bytes = (string) Storage::disk($media->disk)->get($media->path);
+
+        $response = $this->http
+            ->withToken($token)
+            ->asMultipart()
+            ->attach('media', $bytes, 'upload')
+            ->post(self::MEDIA_BASE, [
+                'media_category' => $this->directMessageMediaCategory($media),
+                // String, not bool — a bool breaks Guzzle's multipart builder.
+                'shared' => 'true',
+            ]);
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $response);
+
+        if ($response->failed()) {
+            throw new XDirectMessageMediaFailed($response);
+        }
+
+        return (string) $response->json('data.id');
+    }
+
+    /**
+     * @throws XDirectMessageMediaFailed
+     */
+    private function uploadDirectMessageVideoChunks(ConnectedAccount $account, PostMedia $media, string $token): string
+    {
+        $disk = Storage::disk($media->disk);
+        $total = (int) $disk->size($media->path);
+
+        $init = $this->http->withToken($token)->acceptJson()
+            ->post(self::MEDIA_BASE.'/initialize', [
+                'media_type' => $media->mime,
+                'total_bytes' => $total,
+                'media_category' => $this->directMessageMediaCategory($media),
+                'shared' => true,
+            ]);
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $init);
+
+        if ($init->failed()) {
+            throw new XDirectMessageMediaFailed($init);
+        }
+
+        $mediaId = (string) $init->json('data.id');
+
+        $stream = $disk->readStream($media->path);
+
+        if (! is_resource($stream)) {
+            throw new XDirectMessageMediaFailed($init);
+        }
+
+        try {
+            $segmentIndex = 0;
+            while (! feof($stream)) {
+                $segment = fread($stream, self::APPEND_CHUNK);
+                if ($segment === false || $segment === '') {
+                    break;
+                }
+
+                $append = $this->http->withToken($token)->asMultipart()
+                    ->attach('media', $segment, 'chunk')
+                    ->post(self::MEDIA_BASE.'/'.$mediaId.'/append', ['segment_index' => $segmentIndex]);
+
+                $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $append);
+
+                if ($append->failed()) {
+                    throw new XDirectMessageMediaFailed($append);
+                }
+
+                $segmentIndex++;
+            }
+        } finally {
+            fclose($stream);
+        }
+
+        $finalize = $this->http->withToken($token)->acceptJson()
+            ->post(self::MEDIA_BASE.'/'.$mediaId.'/finalize');
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_UPLOAD, $account, $finalize);
+
+        if ($finalize->failed()) {
+            throw new XDirectMessageMediaFailed($finalize);
+        }
+
+        return $this->awaitDirectMessageVideo($account, $mediaId, $token);
+    }
+
+    /**
+     * A DM can only carry a fully transcoded video, so poll STATUS until ready.
+     *
+     * @throws XDirectMessageMediaFailed
+     * @throws XDirectMessageMediaPending
+     */
+    private function awaitDirectMessageVideo(ConnectedAccount $account, string $mediaId, string $token): string
+    {
+        $spentSeconds = 0;
+
+        while (true) {
+            $status = $this->http->withToken($token)->acceptJson()
+                ->get(self::MEDIA_BASE, ['command' => 'STATUS', 'media_id' => $mediaId]);
+
+            $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $status);
+
+            if ($status->failed()) {
+                throw new XDirectMessageMediaFailed($status);
+            }
+
+            /** @var array<string, mixed> $info */
+            $info = (array) $status->json('data.processing_info', []);
+            $state = (string) ($info['state'] ?? 'succeeded');
+
+            if ($state === 'succeeded') {
+                return $mediaId;
+            }
+
+            if ($state === 'failed') {
+                throw new XDirectMessageMediaFailed($status);
+            }
+
+            // Sleep at the END, so a first-poll "succeeded" returns instantly.
+            $waitSeconds = max(1, (int) ($info['check_after_secs'] ?? 2));
+
+            if ($spentSeconds + $waitSeconds > self::STATUS_POLL_BUDGET_SECONDS) {
+                // Still transcoding when the in-request budget runs out: bail
+                // as retriable rather than pinning the worker past the gateway
+                // timeout, handing the client X's own retry hint.
+                throw new XDirectMessageMediaPending($waitSeconds);
+            }
+
+            usleep($waitSeconds * 1_000_000);
+            $spentSeconds += $waitSeconds;
+        }
+    }
+}
+
+/**
+ * Internal signal so a failed DM media upload short-circuits to a
+ * MessageSendResult failure instead of sending a message with an empty
+ * attachment id. Not part of the public connector surface.
+ *
+ * @internal
+ */
+final class XDirectMessageMediaFailed extends \RuntimeException
+{
+    public function __construct(public readonly Response $response)
+    {
+        parent::__construct('X direct message media upload failed.');
+    }
+}
+
+/**
+ * Internal signal that the video uploaded fine but X had not finished
+ * transcoding within the in-request poll budget. Distinct from a failure so
+ * the send is surfaced as retriable "still processing" rather than an error.
+ * Not part of the public connector surface.
+ *
+ * @internal
+ */
+final class XDirectMessageMediaPending extends \RuntimeException
+{
+    public function __construct(public readonly int $retryAfterSeconds)
+    {
+        parent::__construct('X direct message video is still processing.');
     }
 }

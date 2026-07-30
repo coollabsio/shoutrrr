@@ -22,12 +22,13 @@ return [
                 UsageOperation::POST_WITH_URL => 'post_create_with_url',
                 // Reads — billed per object returned, deduped per day (see UsageReadDedup).
                 UsageOperation::REPLIES_FETCH => 'posts_read',
+                UsageOperation::DM_FETCH => 'posts_read',
                 UsageOperation::METRICS_FETCH_POST => 'owned_read',
                 UsageOperation::METRICS_FETCH_ACCOUNT => 'owned_read',
                 // Intentionally unmapped (X does not meter these): MEDIA_UPLOAD,
                 // MEDIA_STATUS_POLL, DELETE, REPLY_DELETE, REPLY_LIKE, REPLY_UNLIKE,
-                // REPLY_SEND, TOKEN_REFRESH. They are still recorded as usage events
-                // for observability but carry no cost weight.
+                // REPLY_SEND, DM_SEND, TOKEN_REFRESH. They are still recorded as
+                // usage events for observability but carry no cost weight.
             ],
         ],
     ],

@@ -17,7 +17,7 @@ class ReplyFailedNotification extends Notification implements ShouldQueue
     use GatedByPreferences;
     use Queueable;
 
-    public function __construct(private PostTargetReply $reply)
+    public function __construct(private PostTargetReply $reply, private ?string $reason = null)
     {
         $this->afterCommit();
     }
@@ -38,7 +38,7 @@ class ReplyFailedNotification extends Notification implements ShouldQueue
         return $this->databasePayload($this->reply->workspace_id, [
             'event' => NotificationType::ReplyFailed->value,
             'title' => 'Reply failed to send',
-            'body' => $this->reply->text,
+            'body' => $this->reason ?? $this->reply->text,
             'href' => '/engagement',
             'icon' => 'alert-triangle',
         ]);
@@ -49,6 +49,7 @@ class ReplyFailedNotification extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('Your reply failed to send')
             ->line('We could not post your reply on '.$this->reply->platform->label().'.')
+            ->when($this->reason !== null, fn (MailMessage $mail): MailMessage => $mail->line($this->reason))
             ->action('Open inbox', url('/engagement'));
     }
 }

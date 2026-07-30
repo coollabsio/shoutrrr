@@ -49,8 +49,11 @@ class PruneAbandonedUploads extends Command
 
         $this->info("Pruned {$deleted} abandoned upload file(s).");
 
+        // A DM attachment has no post but is not abandoned: its bubble keeps
+        // rendering the file after the message is sent.
         $orphans = PostMedia::query()->withoutGlobalScopes()
             ->whereNull('post_id')
+            ->whereNull('direct_message_id')
             ->where('created_at', '<', Carbon::now()->subHours(6))
             ->get();
 

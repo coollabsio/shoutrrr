@@ -25,10 +25,10 @@ class DispatchDueMessageFetches extends Command
             return self::SUCCESS;
         }
 
-        $supported = array_values(array_filter(
-            array_map(fn (Platform $p) => $p->value, Platform::cases()),
-            fn (string $value) => Platform::from($value)->supportsDirectMessages(),
-        ));
+        $supported = array_map(
+            fn (Platform $platform): string => $platform->value,
+            array_filter(Platform::cases(), fn (Platform $platform): bool => $platform->supportsDirectMessages()),
+        );
 
         $now = CarbonImmutable::now();
 

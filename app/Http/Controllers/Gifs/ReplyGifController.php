@@ -33,7 +33,7 @@ class ReplyGifController extends Controller
         // and populated by WorkspaceMiddleware before this controller runs. The
         // explicit where('workspace_id', ...) below is a redundant second layer
         // that keeps this query correct even if the context is ever unset —
-        // the same reason routes/engagement.php's Route::bind('media', ...)
+        // the same reason AppServiceProvider's Route::bind('media', ...)
         // filters explicitly rather than relying on the global scope alone.
         $existing = PostMedia::query()
             ->where('workspace_id', $reply->workspace_id)

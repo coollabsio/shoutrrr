@@ -23,7 +23,6 @@ use App\Http\Controllers\Posts\PostVideoUploadController;
 use App\Http\Controllers\Posts\PublishController;
 use App\Models\AccountSet;
 use App\Models\Post;
-use App\Models\PostMedia;
 use App\Models\PostShare;
 use App\Models\PostTarget;
 use Illuminate\Support\Facades\Route;
@@ -33,11 +32,6 @@ use Illuminate\Support\Facades\Route;
 Route::bind('post', fn (string $value): Post => Post::query()
     ->where('workspace_id', request()->user()?->current_workspace_id)
     ->where('status', '!=', PostStatus::Deleted->value)
-    ->whereKey($value)
-    ->firstOrFail());
-
-Route::bind('media', fn (string $value): PostMedia => PostMedia::query()
-    ->where('workspace_id', request()->user()?->current_workspace_id)
     ->whereKey($value)
     ->firstOrFail());
 

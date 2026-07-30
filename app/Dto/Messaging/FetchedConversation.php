@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Services\Messaging\Data;
+namespace App\Dto\Messaging;
 
 use Carbon\CarbonImmutable;
 
@@ -17,6 +17,5 @@ final readonly class FetchedConversation
         public ?string $counterpartRemoteId,
         public ?CarbonImmutable $messagingWindowExpiresAt,
         public array $messages,
-        public ?string $cursor = null,
     ) {}
 }
