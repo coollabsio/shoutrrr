@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Messaging;
 
+use App\Dto\Messaging\MessageSendResult;
 use App\Enums\EngagementStatus;
 use App\Enums\MessageDirection;
 use App\Enums\SendStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Messaging\RespondToMessageRequest;
+use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\DirectMessage;
 use App\Models\PostMedia;
@@ -81,6 +83,10 @@ class MessagingController extends Controller
         $result = $registry->for($conversation->platform)->sendMessage($account, $conversation, $text, $credentials, $media);
 
         if (! $result->isOk()) {
+            if ($result->remoteMessageId !== null) {
+                $this->persistPartialSend($conversation, $account, $media, $result);
+            }
+
             return response()->json(['status' => $result->status->value, 'message' => $result->excerpt], $result->status->httpStatus());
         }
 
@@ -101,6 +107,34 @@ class MessagingController extends Controller
         $this->claimMedia($row, $media);
 
         return response()->json(['message' => MessageListItem::make($row)], 201);
+    }
+
+    /**
+     * A Meta send can deliver the attachment and then fail on the text — the
+     * remote thread already carries it, so this row (media claimed, text
+     * empty since it never landed) keeps the local view honest and stops
+     * `media:prune-uploads` from deleting an attachment the recipient can
+     * already see, or the user from re-sending it as a duplicate.
+     *
+     * @param  list<PostMedia>  $media
+     */
+    private function persistPartialSend(Conversation $conversation, ConnectedAccount $account, array $media, MessageSendResult $result): void
+    {
+        $row = DirectMessage::create([
+            'workspace_id' => $conversation->workspace_id,
+            'conversation_id' => $conversation->id,
+            'remote_message_id' => $result->remoteMessageId,
+            'direction' => MessageDirection::Outbound,
+            'author_remote_id' => $account->remote_account_id,
+            'text' => '',
+            'attachments' => [],
+            'remote_created_at' => now(),
+            'is_ours' => true,
+            'send_status' => SendStatus::Sent,
+            'our_remote_id' => $result->remoteMessageId,
+        ]);
+
+        $this->claimMedia($row, $media);
     }
 
     /**

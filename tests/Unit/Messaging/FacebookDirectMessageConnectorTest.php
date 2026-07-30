@@ -212,4 +212,19 @@ test('a text failure after a delivered attachment says the attachment already la
     // Meta cannot recall the delivered image, so a verbatim retry duplicates it.
     expect($result->excerpt)->toContain('attachment was delivered');
     expect($result->excerpt)->toContain('retrying will send the attachment again');
+    // The caller needs this to persist the delivered part and claim its media.
+    expect($result->remoteMessageId)->toBe('m-att');
+});
+
+test('a failed attachment before any delivery carries no remote message id', function (): void {
+    Http::fakeSequence()->push(['error' => ['code' => 100, 'message' => 'bad attachment']], 400);
+
+    [$account, $convo] = facebookDmFixture();
+    $media = facebookDmMedia('media/ws/pic.jpg', 'image/jpeg');
+
+    $result = app(FacebookDirectMessageConnector::class)
+        ->sendMessage($account, $convo, 'caption', ['access_token' => 'tok'], [$media]);
+
+    expect($result->isOk())->toBeFalse();
+    expect($result->remoteMessageId)->toBeNull();
 });

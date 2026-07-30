@@ -46,6 +46,12 @@ final readonly class MessageSendResult
         return new self($this->status, $this->remoteMessageId, $this->retryAfterSeconds, $excerpt);
     }
 
+    /** Same (failed) outcome, but a message landed remotely before the failure. */
+    public function withRemoteMessageId(string $remoteMessageId): self
+    {
+        return new self($this->status, $remoteMessageId, $this->retryAfterSeconds, $this->excerpt);
+    }
+
     public function isOk(): bool
     {
         return $this->status->isOk();

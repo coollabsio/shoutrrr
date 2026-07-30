@@ -275,3 +275,63 @@ test('respond never claims media already owned by a post in the same workspace',
     expect($owned->position)->toBe(3);
     expect(PostMedia::withoutGlobalScopes()->where('direct_message_id', $row->id)->count())->toBe(0);
 });
+
+test('respond persists the delivered attachment and claims its media when the text half of a meta send fails', function (): void {
+    Http::fake(['graph.facebook.com/*/messages' => Http::sequence()
+        ->push(['message_id' => 'fb-attachment-1'])
+        ->push(['error' => ['code' => 100, 'message' => 'bad text']], 400)]);
+
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::Facebook,
+        'capabilities' => ['dm_enabled' => true],
+        'remote_account_id' => 'page-id',
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'page-tok',
+    ]);
+    $convo = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::Facebook,
+        'counterpart_remote_id' => 'psid-bob',
+    ]);
+
+    Storage::disk('public')->put('media/dm.jpg', 'bytes');
+    $media = PostMedia::factory()->create(['workspace_id' => $this->workspace->id, 'path' => 'media/dm.jpg']);
+
+    $this->actingAs($this->user)
+        ->postJson("/messages/{$convo->id}/reply", ['text' => 'caption', 'media' => [$media->id]])
+        ->assertStatus(502)
+        ->assertJsonPath('status', 'failed');
+
+    // Meta cannot recall the delivered attachment, so it must be persisted and
+    // claimed locally even though the overall request reports a failure —
+    // otherwise it sits orphaned until media:prune-uploads deletes it, or the
+    // user resends it as a duplicate.
+    $row = DirectMessage::withoutGlobalScopes()->where('conversation_id', $convo->id)->where('is_ours', true)->sole();
+    expect($row->remote_message_id)->toBe('fb-attachment-1');
+    expect($row->text)->toBe('');
+    expect($media->refresh()->direct_message_id)->toBe($row->id);
+});
+
+test('respond rejects media already claimed by another sent direct message', function (): void {
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+        'capabilities' => ['dm_enabled' => true],
+    ]);
+    $convo = Conversation::factory()->for($account, 'account')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::X,
+    ]);
+    $claimed = PostMedia::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'direct_message_id' => DirectMessage::factory()->for($convo)->create(['workspace_id' => $this->workspace->id])->id,
+    ]);
+
+    $this->actingAs($this->user)
+        ->postJson("/messages/{$convo->id}/reply", ['text' => 'hi', 'media' => [$claimed->id]])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('media.0');
+});

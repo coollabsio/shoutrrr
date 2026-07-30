@@ -27,7 +27,9 @@ class RespondToMessageRequest extends FormRequest
         return [
             'text' => ['required_without:media', 'nullable', 'string', 'max:1000'],
             'media' => ['sometimes', 'array', 'max:'.$maxMedia],
-            'media.*' => ['string', Rule::exists('post_media', 'id')->where('workspace_id', $conversation->workspace_id)],
+            'media.*' => ['string', Rule::exists('post_media', 'id')
+                ->where('workspace_id', $conversation->workspace_id)
+                ->whereNull('direct_message_id')],
         ];
     }
 }

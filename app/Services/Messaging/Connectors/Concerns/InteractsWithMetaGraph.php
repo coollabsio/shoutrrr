@@ -92,7 +92,7 @@ trait InteractsWithMetaGraph
             $this->meter(UsageCategory::ExternalApi, UsageOperation::DM_SEND, $account, $response);
 
             if ($response->failed() || $response->json('error')) {
-                return $this->partialSendFailure($response, $delivered);
+                return $this->partialSendFailure($response, $delivered, $remoteMessageId);
             }
 
             $delivered++;
@@ -105,9 +105,11 @@ trait InteractsWithMetaGraph
     /**
      * A send that failed partway is still a failure, but the user has to know
      * the earlier part landed — Meta cannot recall it, so retrying verbatim
-     * delivers the attachment twice.
+     * delivers the attachment twice. Carrying the delivered id through lets
+     * the caller persist that part and claim its media instead of leaving it
+     * orphaned for `media:prune-uploads`.
      */
-    private function partialSendFailure(Response $response, int $delivered): MessageSendResult
+    private function partialSendFailure(Response $response, int $delivered, string $remoteMessageId): MessageSendResult
     {
         $result = $this->mapMetaSendFailure($response);
 
@@ -115,9 +117,11 @@ trait InteractsWithMetaGraph
             return $result;
         }
 
-        return $result->withExcerpt(
-            'The attachment was delivered but the message text could not be sent, so retrying will send the attachment again. '.($result->excerpt ?? '')
-        );
+        return $result
+            ->withRemoteMessageId($remoteMessageId)
+            ->withExcerpt(
+                'The attachment was delivered but the message text could not be sent, so retrying will send the attachment again. '.($result->excerpt ?? '')
+            );
     }
 
     /**
