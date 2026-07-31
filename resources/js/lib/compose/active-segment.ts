@@ -2,22 +2,33 @@ import { segmentRefs, type DocNode } from '@/lib/compose/tiptap-doc';
 
 /**
  * ProseMirror-style node size, computed from the plain JSON doc (no live
- * editor): a text node's size is its character length, a leaf/atom node
- * (no `content` and no `text`, e.g. `sectionBreak`) is size 1, and any other
- * node's size is `2 + sum(child sizes)` — one position for its open token,
- * one for its close token.
+ * editor). Dispatches on `node.type`, NOT on whether `content` is present:
+ * PM's `toJSON()` omits `content` for any childless node, including an
+ * *empty* paragraph (a blank line) — which still occupies 2 positions (its
+ * open + close tokens), not 1. Only genuine leaf/atom node types collapse
+ * to size 1.
+ *
+ * - text node: size is its character length.
+ * - `sectionBreak` (atom, never has content): size 1.
+ * - everything else (`paragraph` and any other block node, empty or not):
+ *   `2 + sum(child sizes)` — one position for the open token, one for the
+ *   close.
  */
 function nodeSize(node: DocNode): number {
-    if (typeof node.text === 'string') {
-        return node.text.length;
+    if (node.type === 'text') {
+        return (node.text ?? '').length;
     }
 
-    if (!node.content) {
+    if (node.type === 'sectionBreak') {
         return 1;
     }
 
     return (
-        2 + node.content.reduce((total, child) => total + nodeSize(child), 0)
+        2 +
+        (node.content ?? []).reduce(
+            (total, child) => total + nodeSize(child),
+            0,
+        )
     );
 }
 
