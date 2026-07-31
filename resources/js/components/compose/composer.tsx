@@ -252,7 +252,10 @@ export default function Composer({
         media: state.media,
         videoLimits: selectedVideoLimits,
         onEnsurePost: ensurePost,
-        onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
+        onAddMedia: (m, segmentRef) =>
+            dispatch({ type: 'addMedia', media: m, segmentRef }),
+        activeSegmentRef: () =>
+            editorRef.current?.activeSegmentRef() ?? '__head__',
     });
 
     const imageEditor = useImageEditor({
@@ -284,6 +287,10 @@ export default function Composer({
     // The server downloads and re-hosts the chosen GIF, so this is a chip +
     // fetch rather than the local upload flow the other media handlers use.
     async function attachGif(item: GifItem) {
+        // Frozen before the `ensurePost` await, which can round-trip to the
+        // server, so the GIF lands where the caret was at selection time even
+        // if it moves while the draft post is being created.
+        const segmentRef = editorRef.current?.activeSegmentRef() ?? '__head__';
         const postId = await ensurePost();
         if (!postId) {
             return;
@@ -304,6 +311,7 @@ export default function Composer({
                     // box does, or the mixing-rule guard has nothing to check.
                     state.media.map((m) => m.id),
                 ),
+            segmentRef,
         );
     }
 

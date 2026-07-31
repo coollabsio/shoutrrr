@@ -159,6 +159,8 @@ export function useAttachments({
         videoLimits,
         onEnsurePost: async () => ownerId,
         onAddMedia: (m) => onChange([...media, m]),
+        // This surface (reply box / DM composer) has no thread segments.
+        activeSegmentRef: () => '__head__',
         endpoints: {
             imageStore: endpoints.imageStore,
             videoSign: endpoints.videoSign,

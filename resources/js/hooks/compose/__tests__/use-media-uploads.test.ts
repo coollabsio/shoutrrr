@@ -28,6 +28,7 @@ vi.mock(
 );
 
 const transform = vi.fn();
+const post = vi.fn();
 const onAddMedia = vi.fn();
 
 let root: Root | null = null;
@@ -36,8 +37,10 @@ let trackPendingRef:
     | ((
           chip: { kind: 'image' | 'video'; previewUrl?: string },
           work: () => Promise<MediaView>,
+          segmentRef?: string,
       ) => Promise<void>)
     | null = null;
+let handleFilesRef: ((files: FileList | File[]) => Promise<void>) | null = null;
 let pendingRef: PendingUpload[] = [];
 
 function mediaView(): MediaView {
@@ -56,25 +59,42 @@ function mediaView(): MediaView {
     };
 }
 
-function Harness() {
+function imageFile(): File {
+    return new File(['pixel'], 'photo.png', { type: 'image/png' });
+}
+
+function Harness({
+    activeSegmentRef = () => '__head__',
+}: {
+    activeSegmentRef?: () => string;
+}) {
     const uploads = useMediaUploads({
         media: [],
         videoLimits: [],
         onEnsurePost: async () => 'post-1',
         onAddMedia,
+        activeSegmentRef,
     });
     trackPendingRef = uploads.trackPending;
+    handleFilesRef = uploads.handleFiles;
     pendingRef = uploads.pending;
 
     return null;
 }
 
+function render(props: { activeSegmentRef?: () => string } = {}) {
+    act(() => {
+        root?.render(createElement(Harness, props));
+    });
+}
+
 beforeEach(() => {
     transform.mockReset();
+    post.mockReset();
     onAddMedia.mockReset();
     vi.mocked(useHttp).mockReturnValue({
         transform,
-        post: vi.fn(),
+        post,
         processing: false,
     } as unknown as ReturnType<typeof useHttp>);
     container = document.createElement('div');
@@ -86,15 +106,14 @@ afterEach(() => {
     root = null;
     container = null;
     trackPendingRef = null;
+    handleFilesRef = null;
     pendingRef = [];
     vi.clearAllMocks();
 });
 
 describe('useMediaUploads trackPending', () => {
     it('drops the chip once the work resolves', async () => {
-        act(() => {
-            root?.render(createElement(Harness));
-        });
+        render();
 
         const result = mediaView();
         await act(async () => {
@@ -102,13 +121,11 @@ describe('useMediaUploads trackPending', () => {
         });
 
         expect(pendingRef).toHaveLength(0);
-        expect(onAddMedia).toHaveBeenCalledWith(result);
+        expect(onAddMedia).toHaveBeenCalledWith(result, '__head__');
     });
 
     it('keeps the chip with an error status when the work rejects', async () => {
-        act(() => {
-            root?.render(createElement(Harness));
-        });
+        render();
 
         await act(async () => {
             await trackPendingRef?.({ kind: 'image' }, async () => {
@@ -119,5 +136,41 @@ describe('useMediaUploads trackPending', () => {
         expect(pendingRef).toHaveLength(1);
         expect(pendingRef[0].status).toBe('error');
         expect(onAddMedia).not.toHaveBeenCalled();
+    });
+
+    it('tags the added media with the segment ref captured at call time', async () => {
+        let active = 'b1';
+        render({ activeSegmentRef: () => active });
+
+        const result = mediaView();
+        await act(async () => {
+            const p = trackPendingRef?.({ kind: 'image' }, async () => result);
+            // Caret moves to another segment while the GIF fetch is in flight.
+            active = '__head__';
+            await p;
+        });
+
+        expect(onAddMedia).toHaveBeenCalledWith(result, 'b1');
+    });
+});
+
+describe('useMediaUploads handleFiles', () => {
+    it('attaches an uploaded file to the segment active when the upload began', async () => {
+        let active = 'b1';
+        render({ activeSegmentRef: () => active });
+        post.mockResolvedValue({ media: mediaView() });
+
+        await act(async () => {
+            const p = handleFilesRef?.([imageFile()]);
+            // The caret moves to another segment before the upload resolves;
+            // the media must still land on the segment active at call time.
+            active = '__head__';
+            await p;
+        });
+
+        expect(onAddMedia).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'gif-1' }),
+            'b1',
+        );
     });
 });
