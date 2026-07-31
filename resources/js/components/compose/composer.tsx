@@ -636,16 +636,30 @@ export default function Composer({
         activeAccount && state.overrideByAccount[activeAccount.id] !== undefined
             ? (state.overrideByAccount[activeAccount.id] as string[])
             : state.segments;
+    const activeHasOverride =
+        activeAccount !== null &&
+        state.overrideByAccount[activeAccount.id] !== undefined;
+
+    // Media-placement edits (move/remove/reorder) diverge onto the active
+    // account only when that account is being customized: it has an explicit
+    // content override, or already carries account-specific placements (e.g.
+    // hydrated from an already-diverged post). Otherwise edits stay canonical
+    // (shared across every account), mirroring how text overrides gate
+    // per-account text divergence. `undefined` = canonical scope.
+    const divergeAccountId =
+        activeAccount &&
+        (activeHasOverride ||
+            state.placementsByAccount[activeAccount.id] !== undefined)
+            ? activeAccount.id
+            : undefined;
 
     // Segment refs always track the canonical thread structure (see
-    // `handleSegments`); the active tab's placements diverge onto
-    // `placementsByAccount` only once it has actually drifted from
-    // canonical (drag/remove — Task 15's territory), so this is the "active
-    // scope" the per-segment media rows read from.
+    // `handleSegments`). The per-segment media rows read placements from the
+    // active scope: the diverging account's own copy, else canonical.
     const segmentRefs = segmentRefsFromBreaks(state.segmentBreaks);
     const activeScopePlacements =
-        activeAccount && state.placementsByAccount[activeAccount.id]
-            ? state.placementsByAccount[activeAccount.id]
+        divergeAccountId && state.placementsByAccount[divergeAccountId]
+            ? state.placementsByAccount[divergeAccountId]
             : state.placements;
 
     function mediaForSegment(segmentRef: string): MediaView[] {
@@ -1108,6 +1122,7 @@ export default function Composer({
                                             dispatch({
                                                 type: 'removeMediaFromSegments',
                                                 mediaId,
+                                                accountId: divergeAccountId,
                                             })
                                         }
                                         onReorder={(ids) =>
@@ -1115,6 +1130,15 @@ export default function Composer({
                                                 type: 'reorderSegmentMedia',
                                                 segmentRef: ref,
                                                 ids,
+                                                accountId: divergeAccountId,
+                                            })
+                                        }
+                                        onDropMedia={(mediaId, targetRef) =>
+                                            dispatch({
+                                                type: 'moveMediaToSegment',
+                                                mediaId,
+                                                segmentRef: targetRef,
+                                                accountId: divergeAccountId,
                                             })
                                         }
                                         onImageClick={openImage}

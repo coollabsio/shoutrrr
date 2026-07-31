@@ -1028,6 +1028,26 @@ describe('per-segment placements', () => {
         expect(s.placementsByAccount['acc-x'].b1 ?? []).toEqual([]);
     });
 
+    it('removeMediaFromSegments with an accountId only touches that account, leaving canonical and other diverged accounts untouched', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: { __head__: ['m1'] },
+            placementsByAccount: {
+                'acc-x': { b1: ['m1'] },
+                'acc-y': { b1: ['m1'] },
+            },
+        };
+        s = composerReducer(s, {
+            type: 'removeMediaFromSegments',
+            mediaId: 'm1',
+            accountId: 'acc-x',
+        });
+        expect(s.placements.__head__).toEqual(['m1']);
+        expect(s.placementsByAccount['acc-x'].b1 ?? []).toEqual([]);
+        expect(s.placementsByAccount['acc-y'].b1).toEqual(['m1']);
+    });
+
     it('reorderSegmentMedia sets the segment order in the given scope', () => {
         let s: ComposerState = {
             ...initialComposerState(),

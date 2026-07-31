@@ -1,5 +1,5 @@
 import { Paperclip, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { DragEvent, ReactNode } from 'react';
 import { useRef, useState } from 'react';
 
 import {
@@ -7,6 +7,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { getMediaDrag, setMediaDrag } from '@/lib/compose/media-dnd';
 import { cn } from '@/lib/utils';
 import type { MediaView, PendingUpload } from '@/types/compose';
 
@@ -96,6 +97,8 @@ type Props = {
     readOnly?: boolean;
     onRemove: (mediaId: string) => void;
     onReorder: (ids: string[]) => void;
+    /** Another segment's chip was dropped onto this row — reassign it here. */
+    onDropMedia?: (mediaId: string, segmentRef: string) => void;
     /** Click an image to (re)open it in the editor. */
     onImageClick?: (mediaId: string) => void;
     /** Click a video's Edit button to open the video editor. */
@@ -115,11 +118,13 @@ type Props = {
  * divergence now happens by dragging/removing media directly on that tab.
  */
 export function SegmentMediaRow({
+    segmentRef,
     media,
     pending = [],
     readOnly = false,
     onRemove,
     onReorder,
+    onDropMedia,
     onImageClick,
     onVideoClick,
     onAddClick,
@@ -167,8 +172,24 @@ export function SegmentMediaRow({
         onReorder(ids);
     }
 
+    // Cross-row drop: dropping a chip dragged from another segment's row
+    // reassigns it here via `onDropMedia`. A same-row reorder drop is handled
+    // per-thumbnail below and never reaches this id (it's already in `media`).
+    function handleRowDrop(e: DragEvent) {
+        const draggedId = getMediaDrag(e);
+        if (!draggedId || media.some((m) => m.id === draggedId)) {
+            return;
+        }
+        e.preventDefault();
+        onDropMedia?.(draggedId, segmentRef);
+    }
+
     return (
-        <div className="group/row flex min-h-7 items-center gap-2 py-0.5">
+        <div
+            className="group/row flex min-h-7 items-center gap-2 py-0.5"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleRowDrop}
+        >
             {media.map((m, idx) => {
                 const isGif = m.mime === 'image/gif';
                 // Videos open the trim editor; static images open the beautifier.
@@ -186,9 +207,10 @@ export function SegmentMediaRow({
                                 <div
                                     className="group/chip relative"
                                     draggable
-                                    onDragStart={() => {
+                                    onDragStart={(e) => {
                                         dragged.current = true;
                                         setDragIdx(idx);
+                                        setMediaDrag(e, m.id);
                                     }}
                                     onDragOver={(e) => e.preventDefault()}
                                     onDrop={(e) => {
