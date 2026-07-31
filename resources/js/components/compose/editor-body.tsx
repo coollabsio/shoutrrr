@@ -1,6 +1,6 @@
 import { EditorContent, useEditor } from '@tiptap/react';
 import { Split } from 'lucide-react';
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 import {
     forwardRef,
     useEffect,
@@ -8,6 +8,7 @@ import {
     useRef,
     useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import EmojiSuggestPopover from '@/components/compose/emoji-suggest-popover';
 import MentionPicker from '@/components/compose/mention-picker';
@@ -28,6 +29,7 @@ import {
     focusEditorAfterMentionLabel,
     removeMentionLabel,
 } from '@/lib/compose/tiptap/mention-focus';
+import type { SegmentAnchor } from '@/lib/compose/tiptap/segment-media-anchors';
 import { composerExtensions } from '@/lib/compose/tiptap/setup';
 import { cn } from '@/lib/utils';
 import type {
@@ -115,6 +117,13 @@ type EditorBodyProps = {
      * active-segment tracking (e.g. it only reads it on demand via the handle).
      */
     onActiveSegmentChange?: (segmentRef: string) => void;
+    /**
+     * Render the per-segment media row for a given segment ref, portaled INTO
+     * the editor just above that segment's division line (or below the last
+     * segment). Omit for the compact reply editor, which has no thread
+     * structure. Returning `null` leaves that segment's anchor empty.
+     */
+    renderSegmentMedia?: (segmentRef: string) => ReactNode;
 };
 
 export type EditorBodyHandle = {
@@ -185,9 +194,13 @@ function EditorBodyInner(
         emojiSkinTone = 'none',
         onEmojiInsert,
         onActiveSegmentChange,
+        renderSegmentMedia,
     }: EditorBodyProps,
     ref: Ref<EditorBodyHandle>,
 ) {
+    // Per-segment media-row anchors (DOM nodes the SegmentMediaAnchors plugin
+    // inserts into the editor flow); each hosts a portaled media row.
+    const [segmentAnchors, setSegmentAnchors] = useState<SegmentAnchor[]>([]);
     const [activeMentionId, setActiveMentionId] = useState<string | null>(null);
     const previousMentionCount = useRef(mentions.length);
     const pendingFocusLabel = useRef<string | null>(null);
@@ -218,6 +231,7 @@ function EditorBodyInner(
             placeholder,
             emojiOpenRef,
             compact,
+            onSegmentAnchorsChange: setSegmentAnchors,
         }),
         content: segmentsToDocWithBreaks(value, breakIds) as object,
         editable,
@@ -629,6 +643,17 @@ function EditorBodyInner(
                     )}
                 />
             </div>
+            {/* Per-segment media rows, portaled into anchor nodes the
+            SegmentMediaAnchors plugin places at each segment's end so they sit
+            just above that thread post's division line. */}
+            {renderSegmentMedia !== undefined &&
+                segmentAnchors.map((anchor) =>
+                    createPortal(
+                        renderSegmentMedia(anchor.ref),
+                        anchor.el,
+                        anchor.ref,
+                    ),
+                )}
         </div>
     );
 }

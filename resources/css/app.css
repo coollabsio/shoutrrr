@@ -201,6 +201,19 @@
 }
 
 /* Composer section-break widget decorations rendered by SectionMarkers extension. */
+/* Per-segment media row anchor: a block the SegmentMediaAnchors plugin drops at
+   each segment's end so its media row sits just above the division line. Hidden
+   when the portaled row renders nothing (e.g. a read-only segment with no
+   media). */
+.ProseMirror .segment-media-anchor {
+    display: block;
+    user-select: none;
+    margin-top: 0.25rem;
+}
+.ProseMirror .segment-media-anchor:empty {
+    display: none;
+    margin-top: 0;
+}
 .ProseMirror .section-marker {
     display: flex;
     align-items: center;

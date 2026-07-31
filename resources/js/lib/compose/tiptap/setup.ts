@@ -9,6 +9,10 @@ import { EmojiSuggest } from './emoji-suggest';
 import { MentionPlaceholders } from './mention-placeholders';
 import { SectionBreak } from './section-break';
 import { SectionMarkers } from './section-markers';
+import {
+    type SegmentAnchor,
+    SegmentMediaAnchors,
+} from './segment-media-anchors';
 
 /**
  * Build the composer's Tiptap extension list: a deliberately minimal plain-text
@@ -29,6 +33,8 @@ export function composerExtensions(
         placeholder?: string;
         emojiOpenRef?: { current: boolean } | null;
         compact?: boolean;
+        /** Notified with the per-segment media-row anchors (non-compact only). */
+        onSegmentAnchorsChange?: (anchors: SegmentAnchor[]) => void;
     } = {},
 ): Extensions {
     return [
@@ -48,5 +54,12 @@ export function composerExtensions(
         MentionPlaceholders,
         EmojiSuggest.configure({ openRef: opts.emojiOpenRef ?? null }),
         ...(opts.compact ? [] : [SectionMarkers]),
+        ...(opts.compact
+            ? []
+            : [
+                  SegmentMediaAnchors.configure({
+                      onAnchorsChange: opts.onSegmentAnchorsChange,
+                  }),
+              ]),
     ];
 }

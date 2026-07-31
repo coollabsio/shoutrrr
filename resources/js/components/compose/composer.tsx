@@ -18,7 +18,6 @@ import {
     composerReducer,
     initialComposerState,
     pickActiveAccount,
-    segmentRefsFromBreaks,
     shouldShowConnectAccountPrompt,
     type ComposerState,
 } from '@/lib/compose/composer-state';
@@ -653,10 +652,9 @@ export default function Composer({
             ? activeAccount.id
             : undefined;
 
-    // Segment refs always track the canonical thread structure (see
-    // `handleSegments`). The per-segment media rows read placements from the
-    // active scope: the diverging account's own copy, else canonical.
-    const segmentRefs = segmentRefsFromBreaks(state.segmentBreaks);
+    // The per-segment media rows (portaled into the editor by segment ref) read
+    // placements from the active scope: the diverging account's own copy, else
+    // canonical.
     const activeScopePlacements =
         divergeAccountId && state.placementsByAccount[divergeAccountId]
             ? state.placementsByAccount[divergeAccountId]
@@ -1056,6 +1054,68 @@ export default function Composer({
                     emojiSkinTone={emojiPrefs.skinTone}
                     onEmojiInsert={emojiPrefs.addRecent}
                     onActiveSegmentChange={setActiveSegRef}
+                    renderSegmentMedia={
+                        readOnly && state.media.length === 0
+                            ? undefined
+                            : (ref) => {
+                                  const segMedia = mediaForSegment(ref);
+                                  const segPending =
+                                      (explicitUploadSegmentRef.current ??
+                                          activeSegRef) === ref
+                                          ? mediaUploads.pending
+                                          : [];
+                                  if (
+                                      readOnly &&
+                                      segMedia.length === 0 &&
+                                      segPending.length === 0
+                                  ) {
+                                      return null;
+                                  }
+
+                                  return (
+                                      <SegmentMediaRow
+                                          segmentRef={ref}
+                                          media={segMedia}
+                                          pending={segPending}
+                                          readOnly={readOnly}
+                                          onRemove={(mediaId) =>
+                                              dispatch({
+                                                  type: 'removeMediaFromSegments',
+                                                  mediaId,
+                                                  accountId: divergeAccountId,
+                                              })
+                                          }
+                                          onReorder={(ids) =>
+                                              dispatch({
+                                                  type: 'reorderSegmentMedia',
+                                                  segmentRef: ref,
+                                                  ids,
+                                                  accountId: divergeAccountId,
+                                              })
+                                          }
+                                          onDropMedia={(mediaId, targetRef) =>
+                                              dispatch({
+                                                  type: 'moveMediaToSegment',
+                                                  mediaId,
+                                                  segmentRef: targetRef,
+                                                  accountId: divergeAccountId,
+                                              })
+                                          }
+                                          onImageClick={openImage}
+                                          onVideoClick={openVideo}
+                                          onAddClick={() =>
+                                              addMediaToSegment(ref)
+                                          }
+                                          onDismissPending={
+                                              mediaUploads.dismissPending
+                                          }
+                                          onCancelPending={
+                                              mediaUploads.cancelPending
+                                          }
+                                      />
+                                  );
+                              }
+                    }
                     markerState={
                         activeAccount
                             ? {
@@ -1075,83 +1135,6 @@ export default function Composer({
                             : undefined
                     }
                 />
-
-                {/* Per-segment media — one row per authored thread post, laid
-                out under the segment it belongs to rather than a single
-                strip for the whole thread. Uploads/GIFs/re-edits route
-                through the segment's own row. */}
-                {(!readOnly || state.media.length > 0) && (
-                    <div className="flex flex-col gap-0.5 px-4 pb-2.5 sm:px-[26px]">
-                        {segmentRefs.map((ref, index) => {
-                            const segMedia = mediaForSegment(ref);
-                            const segPending =
-                                (explicitUploadSegmentRef.current ??
-                                    activeSegRef) === ref
-                                    ? mediaUploads.pending
-                                    : [];
-                            if (
-                                readOnly &&
-                                segMedia.length === 0 &&
-                                segPending.length === 0
-                            ) {
-                                return null;
-                            }
-
-                            return (
-                                <div
-                                    key={ref}
-                                    className="flex items-start gap-2"
-                                >
-                                    {segmentRefs.length > 1 && (
-                                        <span className="mt-1.5 shrink-0 font-mono text-[10px] text-muted-foreground/60 tabular-nums">
-                                            {index + 1}/{segmentRefs.length}
-                                        </span>
-                                    )}
-                                    <SegmentMediaRow
-                                        segmentRef={ref}
-                                        media={segMedia}
-                                        pending={segPending}
-                                        readOnly={readOnly}
-                                        onRemove={(mediaId) =>
-                                            dispatch({
-                                                type: 'removeMediaFromSegments',
-                                                mediaId,
-                                                accountId: divergeAccountId,
-                                            })
-                                        }
-                                        onReorder={(ids) =>
-                                            dispatch({
-                                                type: 'reorderSegmentMedia',
-                                                segmentRef: ref,
-                                                ids,
-                                                accountId: divergeAccountId,
-                                            })
-                                        }
-                                        onDropMedia={(mediaId, targetRef) =>
-                                            dispatch({
-                                                type: 'moveMediaToSegment',
-                                                mediaId,
-                                                segmentRef: targetRef,
-                                                accountId: divergeAccountId,
-                                            })
-                                        }
-                                        onImageClick={openImage}
-                                        onVideoClick={openVideo}
-                                        onAddClick={() =>
-                                            addMediaToSegment(ref)
-                                        }
-                                        onDismissPending={
-                                            mediaUploads.dismissPending
-                                        }
-                                        onCancelPending={
-                                            mediaUploads.cancelPending
-                                        }
-                                    />
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
 
                 {!readOnly && (
                     <input
