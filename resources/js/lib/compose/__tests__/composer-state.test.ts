@@ -1092,6 +1092,74 @@ describe('per-segment placements', () => {
         expect(s.segmentBreaks).toEqual(['b1', 'b2']);
     });
 
+    it('deleting a break folds its media into the segment it merged into, not orphaned', () => {
+        // Two segments: __head__ has m1, the second (b1) has m2 — mirrors two
+        // threads each with their own attached image.
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1'), mediaFixture('m2')],
+            segmentBreaks: ['b1'],
+            placements: { __head__: ['m1'], b1: ['m2'] },
+        };
+        // Backspacing at the start of the second segment merges it into the
+        // first — the break disappears from the doc's breakIds.
+        s = composerReducer(s, { type: 'setSegmentBreaks', breakIds: [] });
+
+        expect(s.segmentBreaks).toEqual([]);
+        // Both media now live under the single surviving segment — neither is
+        // dropped, and the media pool (the "2" the badge counts) is untouched.
+        expect(s.placements.__head__ ?? []).toEqual(
+            expect.arrayContaining(['m1', 'm2']),
+        );
+        expect(s.placements.__head__).toHaveLength(2);
+        expect(s.placements.b1).toBeUndefined();
+        expect(s.media.map((m) => m.id)).toEqual(['m1', 'm2']);
+    });
+
+    it('deleting a middle break re-homes its media on the nearest surviving earlier segment', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            segmentBreaks: ['b1', 'b2'],
+            placements: { b1: ['m1'] },
+        };
+        // b1 is removed (its segment merged backward); b2 survives.
+        s = composerReducer(s, { type: 'setSegmentBreaks', breakIds: ['b2'] });
+
+        expect(s.placements.__head__).toEqual(['m1']);
+        expect(s.placements.b1).toBeUndefined();
+    });
+
+    it('deleting a break also re-homes per-account diverged placements', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            segmentBreaks: ['b1'],
+            placements: {},
+            placementsByAccount: { 'acc-x': { b1: ['m1'] } },
+        };
+        s = composerReducer(s, { type: 'setSegmentBreaks', breakIds: [] });
+
+        expect(s.placementsByAccount['acc-x'].__head__).toEqual(['m1']);
+        expect(s.placementsByAccount['acc-x'].b1).toBeUndefined();
+    });
+
+    it('adding a break (no removals) leaves existing placements untouched', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            segmentBreaks: [],
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'setSegmentBreaks',
+            breakIds: ['b1'],
+        });
+
+        expect(s.placements.__head__).toEqual(['m1']);
+        expect(s.placements.b1 ?? []).toEqual([]);
+    });
+
     it('removeMedia also drops the id from canonical and per-account placements', () => {
         let s: ComposerState = {
             ...initialComposerState(),

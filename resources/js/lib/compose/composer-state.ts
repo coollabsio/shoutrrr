@@ -251,6 +251,51 @@ function removeIdFromAllSegments(
 }
 
 /**
+ * Re-home a segmentRef -> ids map after the thread structure changes (a
+ * section break was inserted, deleted, or reordered). A ref that no longer
+ * exists (its break was deleted — segments merge into the previous one) has
+ * its media moved onto the nearest still-surviving EARLIER ref in the old
+ * order, falling back to `__head__` (which always survives) — so deleting a
+ * thread break folds that segment's media into the segment it merged into,
+ * instead of orphaning it. A no-op (same reference) when nothing was removed.
+ */
+function migratePlacementsAfterBreakChange(
+    map: Record<string, string[]>,
+    oldRefs: string[],
+    newRefs: string[],
+): Record<string, string[]> {
+    const survives = new Set(newRefs);
+    if (oldRefs.every((ref) => survives.has(ref))) {
+        return map;
+    }
+
+    function targetFor(ref: string): string {
+        if (survives.has(ref)) {
+            return ref;
+        }
+        const idx = oldRefs.indexOf(ref);
+        for (let i = idx - 1; i >= 0; i--) {
+            if (survives.has(oldRefs[i])) {
+                return oldRefs[i];
+            }
+        }
+
+        return HEAD_SEGMENT_REF;
+    }
+
+    const next: Record<string, string[]> = {};
+    for (const [ref, ids] of Object.entries(map)) {
+        if (ids.length === 0) {
+            continue;
+        }
+        const target = targetFor(ref);
+        next[target] = [...(next[target] ?? []), ...ids];
+    }
+
+    return next;
+}
+
+/**
  * Fold any media that has no placement (a legacy draft whose media predates
  * per-segment placements, or media attached before its placement persisted)
  * onto the first segment, so it renders in the composer instead of vanishing —
@@ -617,12 +662,37 @@ export function composerReducer(
             };
         }
 
-        case 'setSegmentBreaks':
+        case 'setSegmentBreaks': {
+            // A deleted break merges two segments — re-home any media that was
+            // placed on the now-gone ref onto the segment it merged into,
+            // rather than leaving it orphaned (still in the media pool, but
+            // owned by no surviving segment).
+            const oldRefs = segmentRefsFromBreaks(state.segmentBreaks);
+            const newRefs = segmentRefsFromBreaks(action.breakIds);
+
             return {
                 ...state,
                 segmentBreaks: action.breakIds,
+                placements: migratePlacementsAfterBreakChange(
+                    state.placements,
+                    oldRefs,
+                    newRefs,
+                ),
+                placementsByAccount: Object.fromEntries(
+                    Object.entries(state.placementsByAccount).map(
+                        ([accountId, map]) => [
+                            accountId,
+                            migratePlacementsAfterBreakChange(
+                                map,
+                                oldRefs,
+                                newRefs,
+                            ),
+                        ],
+                    ),
+                ),
                 saveState: 'dirty',
             };
+        }
 
         case 'reorderMedia': {
             // Reorder media to match the given id sequence. Ignore unknown ids
