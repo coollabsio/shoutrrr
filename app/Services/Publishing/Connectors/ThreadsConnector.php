@@ -30,8 +30,9 @@ use RuntimeException;
  * Threads post, chained to the previously published post via `reply_to_id`.
  *
  * Threads has no direct byte-upload API — image/video containers reference a
- * public HTTPS URL that Meta fetches server-side (see PublicMediaUrl). Post
- * media is only attached to the first segment; later segments are text replies.
+ * public HTTPS URL that Meta fetches server-side (see PublicMediaUrl). Each
+ * segment attaches only the media resolved to its section (PublishContext::
+ * mediaForSection); a segment with no resolved media is a plain text reply.
  */
 class ThreadsConnector implements PublishConnector
 {
@@ -81,7 +82,7 @@ class ThreadsConnector implements PublishConnector
                 }
 
                 $replyToId = $index > 0 ? ($remoteIds[$index - 1] ?? null) : null;
-                $media = $index === 0 ? $context->media : [];
+                $media = $context->mediaForSection($index);
 
                 $containerId = $this->resolveContainerId($context, $state, $threadsUserId, $index, $text, $media, $replyToId, $token);
 

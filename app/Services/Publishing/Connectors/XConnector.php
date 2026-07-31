@@ -61,20 +61,29 @@ class XConnector implements PublishConnector, RepostConnector
                 fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime === 'image/gif',
             ));
 
+            // Remote (X-assigned) media id keyed by our PostMedia->id, built once
+            // before the loop so each section can pull out only its own media.
+            $remoteMediaIdByMediaId = [];
+
             if ($videoMedia !== []) {
                 $ready = $this->ensureVideoReady($context, $videoMedia[0], $token);
                 if (! $ready->isSuccessful()) {
                     return $ready;
                 }
-                $mediaIds = [(string) $ready->remoteIds[0]];
+                $remoteMediaIdByMediaId[$videoMedia[0]->id] = (string) $ready->remoteIds[0];
             } elseif ($gifMedia !== []) {
                 $ready = $this->ensureGifReady($context, $gifMedia, $token);
                 if (! $ready->isSuccessful()) {
                     return $ready;
                 }
-                $mediaIds = [(string) $ready->remoteIds[0]];
+                $remoteMediaIdByMediaId[$gifMedia[0]->id] = (string) $ready->remoteIds[0];
             } else {
-                $mediaIds = $this->uploadMedia($context->media, $token, $context->account);
+                $uploadedIds = $this->uploadMedia($context->media, $token, $context->account);
+                foreach ($context->media as $i => $item) {
+                    if (isset($uploadedIds[$i])) {
+                        $remoteMediaIdByMediaId[$item->id] = $uploadedIds[$i];
+                    }
+                }
             }
 
             foreach ($context->segments as $index => $text) {
@@ -83,7 +92,13 @@ class XConnector implements PublishConnector, RepostConnector
                     continue;
                 }
 
-                $hasMedia = $index === 0 && $mediaIds !== [];
+                $sectionMedia = $context->mediaForSection($index);
+                $sectionMediaIds = array_values(array_filter(array_map(
+                    fn (PostMedia $m): ?string => $remoteMediaIdByMediaId[$m->id] ?? null,
+                    $sectionMedia,
+                )));
+                $mediaIds = $sectionMediaIds;
+                $hasMedia = $mediaIds !== [];
 
                 // Quote-posting is opt-in per instance (it needs X Enterprise API access),
                 // and quote_tweet_id is mutually exclusive with media on X — so only pull a

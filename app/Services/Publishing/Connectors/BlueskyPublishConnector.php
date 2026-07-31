@@ -64,28 +64,35 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
         $parentCid = null;
 
         try {
-            // Video takes precedence over images on the root post only.
+            // Video takes precedence over images, and only on the root post (a fresh
+            // publish attempt, never a resume).
             $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
             $gifMedia = array_values(array_filter(
                 $context->media,
                 fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime === 'image/gif',
             ));
 
+            // Remote embed data keyed by our PostMedia->id, built once before the loop
+            // so each section attaches only the embed for the media resolved to it.
+            $videoEmbedByMediaId = [];
+            $imageBlobsByMediaId = [];
+
             if ($rootUri === null && $videoMedia !== []) {
                 $ready = $this->ensureVideoReady($context, $videoMedia[0], $pds, $jwt, $did, $session);
                 if (! $ready->isSuccessful()) {
                     return $ready;
                 }
-                $embed = $this->videoEmbed($context, $videoMedia[0]);
+                $videoEmbedByMediaId[$videoMedia[0]->id] = $this->videoEmbed($context, $videoMedia[0]);
             } elseif ($rootUri === null && $gifMedia !== []) {
                 $ready = $this->ensureGifVideoReady($context, $gifMedia, $pds, $jwt, $did, $session);
                 if (! $ready->isSuccessful()) {
                     return $ready;
                 }
-                $embed = $this->videoEmbed($context, $gifMedia[0], 'gif');
-            } else {
-                // Media rides on the root post only; uploaded once, then embedded below.
-                $embed = $rootUri === null ? $this->uploadImages($context->media, $pds, $jwt, $session, $context->account) : null;
+                $videoEmbedByMediaId[$gifMedia[0]->id] = $this->videoEmbed($context, $gifMedia[0], 'gif');
+            } elseif ($rootUri === null) {
+                // Media rides on the root publish attempt only; uploaded once, then each
+                // section's post embeds just the blobs resolved to its index.
+                $imageBlobsByMediaId = $this->uploadImageBlobs($context->media, $pds, $jwt, $session, $context->account);
             }
 
             // Resume: remote_ids stores only AT-URIs, so recover the root and parent CIDs
@@ -109,7 +116,9 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
                     'langs' => ['en'],
                 ];
 
-                if ($index === 0 && $embed !== null) {
+                $embed = $this->resolveSectionEmbed($context->mediaForSection($index), $videoEmbedByMediaId, $imageBlobsByMediaId);
+
+                if ($embed !== null) {
                     $record['embed'] = $embed;
                 }
 
@@ -447,21 +456,19 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
     }
 
     /**
-     * Upload each media item as a blob and build an `app.bsky.embed.images` embed.
+     * Upload each media item as a blob (once, before the section loop), keyed by our
+     * PostMedia->id so each section can build its own `app.bsky.embed.images` from
+     * just the blobs resolved to it.
      *
      * @param  list<PostMedia>  $media
      * @param  array{dpop_private_jwk?: array{kty: string, crv: string, x: string, y: string, d: string}, dpop_nonce?: string|null}  $session
-     * @return array{'$type': string, images: list<array{alt: string, image: array<string, mixed>}>}|null
+     * @return array<string, array{alt: string, image: array<string, mixed>}>
      */
-    private function uploadImages(array $media, string $pds, string $jwt, array $session, ConnectedAccount $account): ?array
+    private function uploadImageBlobs(array $media, string $pds, string $jwt, array $session, ConnectedAccount $account): array
     {
         $media = array_slice($media, 0, Platform::Bluesky->maxMedia());
 
-        if ($media === []) {
-            return null;
-        }
-
-        $images = [];
+        $blobsByMediaId = [];
 
         foreach ($media as $item) {
             $bytes = (string) Storage::disk($item->disk)->get($item->path);
@@ -479,13 +486,41 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
                 throw new BlueskyRequestFailed($response);
             }
 
-            $images[] = [
+            $blobsByMediaId[$item->id] = [
                 'alt' => (string) ($item->alt_text ?? ''),
                 'image' => (array) $response->json('blob'),
             ];
         }
 
-        return ['$type' => 'app.bsky.embed.images', 'images' => $images];
+        return $blobsByMediaId;
+    }
+
+    /**
+     * Build the embed for one section from whichever pre-built video/gif embed or
+     * image blobs its resolved media maps to. Video/gif takes precedence (matching
+     * the pre-loop upload choice); at most one embed type applies per post.
+     *
+     * @param  list<PostMedia>  $sectionMedia
+     * @param  array<string, array{'$type': string, video: array<string, mixed>, alt?: string, presentation?: string}>  $videoEmbedByMediaId
+     * @param  array<string, array{alt: string, image: array<string, mixed>}>  $imageBlobsByMediaId
+     * @return array<string, mixed>|null
+     */
+    private function resolveSectionEmbed(array $sectionMedia, array $videoEmbedByMediaId, array $imageBlobsByMediaId): ?array
+    {
+        foreach ($sectionMedia as $item) {
+            if (isset($videoEmbedByMediaId[$item->id])) {
+                return $videoEmbedByMediaId[$item->id];
+            }
+        }
+
+        $images = [];
+        foreach ($sectionMedia as $item) {
+            if (isset($imageBlobsByMediaId[$item->id])) {
+                $images[] = $imageBlobsByMediaId[$item->id];
+            }
+        }
+
+        return $images === [] ? null : ['$type' => 'app.bsky.embed.images', 'images' => $images];
     }
 
     /**
