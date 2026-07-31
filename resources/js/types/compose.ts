@@ -127,6 +127,13 @@ export type PostStatus =
     | 'missed'
     | 'deleted';
 
+/** A single media placement: which segment (by ref) a media id sits in, and its order within that segment. */
+export type Placement = {
+    media_id: string;
+    segment_ref: string;
+    position: number;
+};
+
 export type TargetView = {
     id: string;
     connected_account_id: string;
@@ -144,6 +151,8 @@ export type TargetView = {
     error_message: string | null;
     attempts: number;
     remote_id: string | null;
+    segment_breaks?: string[];
+    placements?: Placement[];
 };
 
 export type PostView = {
@@ -159,6 +168,8 @@ export type PostView = {
     destination: { kind: string; id: string | null; ids?: string[] };
     targets: TargetView[];
     media: MediaView[];
+    segment_breaks?: string[];
+    placements?: Placement[];
 };
 
 export type ComposePageProps = {

@@ -4,9 +4,13 @@ import {
     type Destination,
     type MediaView,
     type MentionPlaceholder,
+    type Placement,
     type PostFormat,
     type PostView,
 } from '@/types/compose';
+
+/** Placement key used for media added before any explicit segment break exists. */
+const HEAD_SEGMENT_REF = '__head__';
 
 export type SaveState =
     | 'idle'
@@ -36,6 +40,12 @@ export type ComposerState = {
     overrideByAccount: Record<string, string[] | undefined>;
     mediaSubsetExcludes: Set<string>;
     media: MediaView[];
+    /** Ordered ids of tiptap segment breaks; segment refs are derived from these. */
+    segmentBreaks: string[];
+    /** Canonical segmentRef -> ordered media ids. */
+    placements: Record<string, string[]>;
+    /** Per-account placement overrides; only present for accounts that diverge from canonical. */
+    placementsByAccount: Record<string, Record<string, string[]>>;
     scheduleTray: ScheduleTray;
     conflict: PostView | null;
     autoRepost: boolean | null;
@@ -56,10 +66,24 @@ export type ComposerAction =
     | { type: 'setOverrideSegments'; accountId: string; segments: string[] }
     | { type: 'discardOverride'; accountId: string }
     | { type: 'toggleMediaExclude'; mediaId: string; accountId: string }
-    | { type: 'addMedia'; media: MediaView }
+    | { type: 'addMedia'; media: MediaView; segmentRef?: string }
     | { type: 'replaceMedia'; media: MediaView }
     | { type: 'removeMedia'; mediaId: string }
     | { type: 'reorderMedia'; ids: string[] }
+    | {
+          type: 'moveMediaToSegment';
+          mediaId: string;
+          segmentRef: string;
+          accountId?: string;
+      }
+    | { type: 'removeMediaFromSegments'; mediaId: string; accountId?: string }
+    | {
+          type: 'reorderSegmentMedia';
+          segmentRef: string;
+          ids: string[];
+          accountId?: string;
+      }
+    | { type: 'setSegmentBreaks'; breakIds: string[] }
     | { type: 'setScheduleTray'; tray: ScheduleTray }
     | { type: 'saveStarted' }
     | { type: 'saveSkippedEmpty' }
@@ -119,6 +143,9 @@ export function initialComposerState(
         overrideByAccount: {},
         mediaSubsetExcludes: new Set(),
         media: [],
+        segmentBreaks: [],
+        placements: {},
+        placementsByAccount: {},
         scheduleTray: scheduleAt
             ? { mode: 'pick', pickedAt: scheduleAt }
             : { mode: 'now', pickedAt: null },
@@ -152,11 +179,50 @@ export function parseDestinationParam(raw: string | null): Destination | null {
     return null;
 }
 
+/**
+ * Group a flat `Placement[]` (as received over the wire) into a canonical
+ * `segmentRef -> ordered media ids` map, ordering each segment's ids by
+ * `position`.
+ */
+function groupPlacements(
+    placements: Placement[] | undefined,
+): Record<string, string[]> {
+    const bySegment = new Map<string, Placement[]>();
+    for (const placement of placements ?? []) {
+        const list = bySegment.get(placement.segment_ref) ?? [];
+        list.push(placement);
+        bySegment.set(placement.segment_ref, list);
+    }
+
+    const grouped: Record<string, string[]> = {};
+    for (const [segmentRef, list] of bySegment) {
+        grouped[segmentRef] = [...list]
+            .sort((a, b) => a.position - b.position)
+            .map((p) => p.media_id);
+    }
+
+    return grouped;
+}
+
+/** Remove a media id from every segment array in a segmentRef -> ids map. */
+function removeIdFromAllSegments(
+    map: Record<string, string[]>,
+    mediaId: string,
+): Record<string, string[]> {
+    return Object.fromEntries(
+        Object.entries(map).map(([segmentRef, ids]) => [
+            segmentRef,
+            ids.filter((id) => id !== mediaId),
+        ]),
+    );
+}
+
 function hydrate(post: PostView): ComposerState {
     const autoSplitByAccount: Record<string, boolean> = {};
     const formatByAccount: Record<string, PostFormat> = {};
     const overrideByAccount: Record<string, string[] | undefined> = {};
     const mediaSubsetExcludes = new Set<string>();
+    const placementsByAccount: Record<string, Record<string, string[]>> = {};
 
     for (const target of post.targets) {
         autoSplitByAccount[target.connected_account_id] = target.auto_split;
@@ -164,6 +230,16 @@ function hydrate(post: PostView): ComposerState {
         const overrideSegments = target.content_override?.segments;
         if (overrideSegments !== undefined && overrideSegments !== null) {
             overrideByAccount[target.connected_account_id] = overrideSegments;
+        }
+        // Every target's placements are seeded into placementsByAccount, even
+        // when identical to canonical — buildPutBody diffing happens at
+        // action time, not at hydrate time; this is the simplest correct
+        // seeding (a harmless no-op divergence is cheap and self-heals the
+        // next time the account's placements are touched).
+        if (target.placements !== undefined) {
+            placementsByAccount[target.connected_account_id] = groupPlacements(
+                target.placements,
+            );
         }
     }
 
@@ -189,6 +265,9 @@ function hydrate(post: PostView): ComposerState {
         overrideByAccount,
         mediaSubsetExcludes,
         media: post.media,
+        segmentBreaks: post.segment_breaks ?? [],
+        placements: groupPlacements(post.placements),
+        placementsByAccount,
         scheduleTray: {
             mode: post.scheduled_at ? 'pick' : 'now',
             pickedAt: post.scheduled_at ?? null,
@@ -349,12 +428,20 @@ export function composerReducer(
             return { ...state, mediaSubsetExcludes: next, saveState: 'dirty' };
         }
 
-        case 'addMedia':
+        case 'addMedia': {
+            const segmentRef = action.segmentRef ?? HEAD_SEGMENT_REF;
+            const existing = state.placements[segmentRef] ?? [];
+
             return {
                 ...state,
                 media: [...state.media, action.media],
+                placements: {
+                    ...state.placements,
+                    [segmentRef]: [...existing, action.media.id],
+                },
                 saveState: 'dirty',
             };
+        }
 
         case 'replaceMedia':
             return {
@@ -369,6 +456,123 @@ export function composerReducer(
             return {
                 ...state,
                 media: state.media.filter((m) => m.id !== action.mediaId),
+                placements: removeIdFromAllSegments(
+                    state.placements,
+                    action.mediaId,
+                ),
+                placementsByAccount: Object.fromEntries(
+                    Object.entries(state.placementsByAccount).map(
+                        ([accountId, map]) => [
+                            accountId,
+                            removeIdFromAllSegments(map, action.mediaId),
+                        ],
+                    ),
+                ),
+                saveState: 'dirty',
+            };
+
+        case 'moveMediaToSegment': {
+            const scopeKey = action.accountId;
+            const currentScope: Record<string, string[]> = scopeKey
+                ? (state.placementsByAccount[scopeKey] ?? state.placements)
+                : state.placements;
+            const withoutId = removeIdFromAllSegments(
+                currentScope,
+                action.mediaId,
+            );
+            const nextScope: Record<string, string[]> = {
+                ...withoutId,
+                [action.segmentRef]: [
+                    ...(withoutId[action.segmentRef] ?? []),
+                    action.mediaId,
+                ],
+            };
+
+            if (scopeKey) {
+                return {
+                    ...state,
+                    placementsByAccount: {
+                        ...state.placementsByAccount,
+                        [scopeKey]: nextScope,
+                    },
+                    saveState: 'dirty',
+                };
+            }
+
+            return { ...state, placements: nextScope, saveState: 'dirty' };
+        }
+
+        case 'removeMediaFromSegments': {
+            const scopeKey = action.accountId;
+            if (scopeKey) {
+                const currentScope =
+                    state.placementsByAccount[scopeKey] ?? state.placements;
+
+                return {
+                    ...state,
+                    placementsByAccount: {
+                        ...state.placementsByAccount,
+                        [scopeKey]: removeIdFromAllSegments(
+                            currentScope,
+                            action.mediaId,
+                        ),
+                    },
+                    saveState: 'dirty',
+                };
+            }
+
+            return {
+                ...state,
+                media: state.media.filter((m) => m.id !== action.mediaId),
+                placements: removeIdFromAllSegments(
+                    state.placements,
+                    action.mediaId,
+                ),
+                placementsByAccount: Object.fromEntries(
+                    Object.entries(state.placementsByAccount).map(
+                        ([accountId, map]) => [
+                            accountId,
+                            removeIdFromAllSegments(map, action.mediaId),
+                        ],
+                    ),
+                ),
+                saveState: 'dirty',
+            };
+        }
+
+        case 'reorderSegmentMedia': {
+            const scopeKey = action.accountId;
+            if (scopeKey) {
+                const currentScope =
+                    state.placementsByAccount[scopeKey] ?? state.placements;
+
+                return {
+                    ...state,
+                    placementsByAccount: {
+                        ...state.placementsByAccount,
+                        [scopeKey]: {
+                            ...currentScope,
+                            [action.segmentRef]: action.ids,
+                        },
+                    },
+                    saveState: 'dirty',
+                };
+            }
+
+            return {
+                ...state,
+                placements: {
+                    ...state.placements,
+                    [action.segmentRef]: action.ids,
+                },
+                saveState: 'dirty',
+            };
+        }
+
+        case 'setSegmentBreaks':
+            return {
+                ...state,
+                segmentBreaks: action.breakIds,
                 saveState: 'dirty',
             };
 
@@ -464,6 +668,8 @@ export type PutTarget = {
     auto_split: boolean;
     format: PostFormat;
     content_override: { segments: string[]; media_ids: string[] } | null;
+    segment_breaks?: string[];
+    placements?: Placement[];
 };
 
 export type PutBody = {
@@ -474,13 +680,35 @@ export type PutBody = {
     mentions: MentionPlaceholder[];
     expected_updated_at: string | null;
     auto_repost: boolean | null;
+    segment_breaks: string[];
+    placements: Placement[];
 };
+
+/**
+ * Flatten a canonical/per-account `segmentRef -> ordered media ids` map into
+ * the wire `Placement[]` shape, deriving `position` from each segment's array
+ * index.
+ */
+export function flattenPlacements(map: Record<string, string[]>): Placement[] {
+    const flat: Placement[] = [];
+    for (const [segmentRef, ids] of Object.entries(map)) {
+        ids.forEach((mediaId, position) => {
+            flat.push({ media_id: mediaId, segment_ref: segmentRef, position });
+        });
+    }
+
+    return flat;
+}
 
 /**
  * Build the autosave PUT payload. Each target ALWAYS carries an explicit
  * content_override: the override shape when the account has a local override,
  * or `null` to explicitly clear any stored override server-side (a discard must
  * survive reload; omitting the key would let the old override silently persist).
+ *
+ * `segment_breaks`/`placements` are emitted at the top level (canonical) and,
+ * per target, only when that account has a diverged placements map — omitting
+ * them for non-diverged accounts tells the server to keep inheriting canonical.
  */
 export function buildPutBody(
     state: ComposerState,
@@ -503,11 +731,19 @@ export function buildPutBody(
                   }
                 : null;
 
+        const divergedPlacements = state.placementsByAccount[accountId];
+
         return {
             connected_account_id: accountId,
             auto_split: state.autoSplitByAccount[accountId] ?? true,
             format: state.formatByAccount[accountId] ?? 'feed',
             content_override,
+            ...(divergedPlacements !== undefined
+                ? {
+                      segment_breaks: state.segmentBreaks,
+                      placements: flattenPlacements(divergedPlacements),
+                  }
+                : {}),
         };
     });
 
@@ -519,6 +755,8 @@ export function buildPutBody(
         mentions: state.mentions,
         expected_updated_at: state.baselineUpdatedAt,
         auto_repost: state.autoRepost,
+        segment_breaks: state.segmentBreaks,
+        placements: flattenPlacements(state.placements),
     };
 }
 
@@ -551,6 +789,20 @@ export function contentMatchesServer(
         return false;
     }
 
+    if (
+        JSON.stringify(state.segmentBreaks) !==
+        JSON.stringify(post.segment_breaks ?? [])
+    ) {
+        return false;
+    }
+
+    if (
+        JSON.stringify(normalizePlacements(state.placements)) !==
+        JSON.stringify(normalizePlacements(groupPlacements(post.placements)))
+    ) {
+        return false;
+    }
+
     const localOverrides = normalizeOverrides(state.overrideByAccount);
     const serverOverrides: Record<string, string> = {};
     for (const target of post.targets) {
@@ -568,6 +820,24 @@ export function contentMatchesServer(
         localKeys.length === serverKeys.length &&
         localKeys.every((key) => localOverrides[key] === serverOverrides[key])
     );
+}
+
+/**
+ * Drop empty segment arrays from a placements map so a segment that was
+ * emptied out (e.g. its last media id moved elsewhere) compares equal to one
+ * that never had a key for that segment at all.
+ */
+function normalizePlacements(
+    map: Record<string, string[]>,
+): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    for (const [segmentRef, ids] of Object.entries(map)) {
+        if (ids.length > 0) {
+            out[segmentRef] = ids;
+        }
+    }
+
+    return out;
 }
 
 /**

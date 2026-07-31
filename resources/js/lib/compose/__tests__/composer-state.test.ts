@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { BASE_TAB, type Account, type PostView } from '@/types/compose';
+import {
+    BASE_TAB,
+    type Account,
+    type MediaView,
+    type PostView,
+} from '@/types/compose';
 
 import {
     buildPutBody,
+    type ComposerState,
     composerHasContent,
     composerReducer,
     firstLineTitle,
@@ -22,6 +28,22 @@ function account(id: string): Account {
         avatar_url: null,
         max_text_length: 280,
         x_premium: false,
+    };
+}
+
+function mediaFixture(id: string): MediaView {
+    return {
+        id,
+        url: `http://x/${id}.png`,
+        mime: 'image/png',
+        kind: 'image',
+        alt_text: null,
+        duration_seconds: null,
+        position: 0,
+        edit_settings: null,
+        source_url: null,
+        edit_url: 'http://x/raw',
+        source_edit_url: null,
     };
 }
 
@@ -895,6 +917,176 @@ describe('composer format state', () => {
             format: 'reels',
         });
         expect(body.targets[1].format).toBe('feed');
+    });
+});
+
+describe('per-segment placements', () => {
+    it('adds media to the active segment placement', () => {
+        let s = initialComposerState();
+        s = { ...s, segmentBreaks: ['b1'] };
+        s = composerReducer(s, {
+            type: 'addMedia',
+            media: mediaFixture('m1'),
+            segmentRef: 'b1',
+        });
+        expect(s.media.map((m) => m.id)).toEqual(['m1']);
+        expect(s.placements.b1).toEqual(['m1']);
+    });
+
+    it('addMedia without a segmentRef defaults to __head__', () => {
+        let s = initialComposerState();
+        s = composerReducer(s, { type: 'addMedia', media: mediaFixture('m1') });
+        expect(s.placements.__head__).toEqual(['m1']);
+    });
+
+    it('moving media on an account tab diverges only that account', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+            accountId: 'acc-x',
+        });
+        expect(s.placements.__head__).toEqual(['m1']); // canonical untouched
+        expect(s.placementsByAccount['acc-x'].b1).toEqual(['m1']);
+    });
+
+    it('moving media with no accountId updates the canonical placements', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+        });
+        expect(s.placements.__head__ ?? []).toEqual([]);
+        expect(s.placements.b1).toEqual(['m1']);
+    });
+
+    it('removeMediaFromSegments without an accountId drops the media entirely and un-places it everywhere', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: { __head__: ['m1'] },
+            placementsByAccount: { 'acc-x': { b1: ['m1'] } },
+        };
+        s = composerReducer(s, {
+            type: 'removeMediaFromSegments',
+            mediaId: 'm1',
+        });
+        expect(s.media).toEqual([]);
+        expect(s.placements.__head__ ?? []).toEqual([]);
+        expect(s.placementsByAccount['acc-x'].b1 ?? []).toEqual([]);
+    });
+
+    it('removeMediaFromSegments with an accountId only un-places for that account, keeping the file', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: { __head__: ['m1'] },
+            placementsByAccount: { 'acc-x': { b1: ['m1'] } },
+        };
+        s = composerReducer(s, {
+            type: 'removeMediaFromSegments',
+            mediaId: 'm1',
+            accountId: 'acc-x',
+        });
+        expect(s.media.map((m) => m.id)).toEqual(['m1']);
+        expect(s.placements.__head__).toEqual(['m1']);
+        expect(s.placementsByAccount['acc-x'].b1 ?? []).toEqual([]);
+    });
+
+    it('reorderSegmentMedia sets the segment order in the given scope', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1', 'm2'] },
+        };
+        s = composerReducer(s, {
+            type: 'reorderSegmentMedia',
+            segmentRef: '__head__',
+            ids: ['m2', 'm1'],
+        });
+        expect(s.placements.__head__).toEqual(['m2', 'm1']);
+    });
+
+    it('setSegmentBreaks replaces state.segmentBreaks', () => {
+        const s = composerReducer(initialComposerState(), {
+            type: 'setSegmentBreaks',
+            breakIds: ['b1', 'b2'],
+        });
+        expect(s.segmentBreaks).toEqual(['b1', 'b2']);
+    });
+
+    it('removeMedia also drops the id from canonical and per-account placements', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: { __head__: ['m1'] },
+            placementsByAccount: { 'acc-x': { b1: ['m1'] } },
+        };
+        s = composerReducer(s, { type: 'removeMedia', mediaId: 'm1' });
+        expect(s.media).toEqual([]);
+        expect(s.placements.__head__ ?? []).toEqual([]);
+        expect(s.placementsByAccount['acc-x'].b1 ?? []).toEqual([]);
+    });
+
+    it('buildPutBody flattens canonical placements', () => {
+        const s = {
+            ...initialComposerState(),
+            segmentBreaks: ['b1'],
+            placements: { __head__: ['m1'], b1: ['m2'] },
+            media: [mediaFixture('m1'), mediaFixture('m2')],
+        };
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.segment_breaks).toEqual(['b1']);
+        expect(body.placements).toContainEqual({
+            media_id: 'm1',
+            segment_ref: '__head__',
+            position: 0,
+        });
+        expect(body.placements).toContainEqual({
+            media_id: 'm2',
+            segment_ref: 'b1',
+            position: 0,
+        });
+    });
+
+    it('buildPutBody omits per-target placements for accounts that have not diverged', () => {
+        const s = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toBeUndefined();
+        expect(body.targets[0].segment_breaks).toBeUndefined();
+    });
+
+    it('buildPutBody includes per-target placements only for a diverged account', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            segmentBreaks: ['b1'],
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+            accountId: 'acc-x',
+        });
+        const body = buildPutBody(s, ['acc-x', 'acc-y']);
+        expect(body.targets[0].connected_account_id).toBe('acc-x');
+        expect(body.targets[0].segment_breaks).toEqual(['b1']);
+        expect(body.targets[0].placements).toContainEqual({
+            media_id: 'm1',
+            segment_ref: 'b1',
+            position: 0,
+        });
+        expect(body.targets[1].placements).toBeUndefined();
     });
 });
 
