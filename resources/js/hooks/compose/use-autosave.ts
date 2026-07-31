@@ -7,6 +7,7 @@ import {
     type ComposerAction,
     composerHasContent,
     type ComposerState,
+    flattenPlacements,
 } from '@/lib/compose/composer-state';
 import type { PostView } from '@/types/compose';
 
@@ -72,6 +73,12 @@ export function useAutosave({
             mentions: state.mentions,
             destination: state.destination,
             auto_repost: state.autoRepost,
+            // Persist the thread structure and per-segment placements on the
+            // very first save too, so a reload before the next autosave PUT
+            // sees a consistent post (stale break ids would otherwise degrade
+            // to positional fallbacks and misplace media onto the first post).
+            segment_breaks: state.segmentBreaks,
+            placements: flattenPlacements(state.placements),
         }));
         const created = await http.post(PostController.store().url, {
             onNetworkError: () => dispatch({ type: 'saveFailedOffline' }),

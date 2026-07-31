@@ -38,9 +38,9 @@ class DraftService
      * @param  list<string>  $segments
      * @param  list<array{id?: mixed, label?: mixed, handles?: array<string, mixed>}>  $mentions
      */
-    public function createDraft(string $workspaceId, User $author, array $destination, array $segments, array $mentions = [], ?bool $autoRepost = null): Post
+    public function createDraft(string $workspaceId, User $author, array $destination, array $segments, array $mentions = [], ?bool $autoRepost = null, ?DraftData $data = null): Post
     {
-        return DB::transaction(function () use ($workspaceId, $author, $destination, $segments, $mentions, $autoRepost): Post {
+        return DB::transaction(function () use ($workspaceId, $author, $destination, $segments, $mentions, $autoRepost, $data): Post {
             $post = Post::create([
                 'workspace_id' => $workspaceId,
                 'account_set_id' => $this->scopedAccountSetId($workspaceId, $destination),
@@ -53,7 +53,10 @@ class DraftService
             ]);
 
             $accountIds = $this->resolveDestinationAccountIds($workspaceId, $destination);
-            $this->syncTargets($post, $accountIds, $segments, [], [], $post->mentions ?? []);
+            // Pass the DraftData so the created targets carry the thread's
+            // segment_breaks from the first save (placements settle on the next
+            // PUT once their media is attached).
+            $this->syncTargets($post, $accountIds, $segments, [], [], $post->mentions ?? [], [], $data);
 
             return $post->load('targets');
         });

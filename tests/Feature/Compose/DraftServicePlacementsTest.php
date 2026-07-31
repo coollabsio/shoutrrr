@@ -47,3 +47,35 @@ test('saving a draft writes placement rows and target provenance', function (): 
         ->and($target->segment_breaks)->toBe(['b1'])
         ->and($target->section_sources)->not->toBeNull();
 });
+
+test('creating a draft persists segment breaks on its targets', function (): void {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::X->value,
+    ]);
+
+    $data = DraftData::fromArray([
+        'segments' => ['test', ''],
+        'destination' => ['kind' => 'all'],
+        'segment_breaks' => ['bk_1'],
+    ]);
+
+    $post = app(DraftService::class)->createDraft(
+        $workspace->id,
+        $user,
+        ['kind' => 'all'],
+        ['test', ''],
+        [],
+        null,
+        $data,
+    );
+
+    $target = $post->targets->firstWhere('connected_account_id', $account->id);
+
+    expect($target->segment_breaks)->toBe(['bk_1']);
+});
