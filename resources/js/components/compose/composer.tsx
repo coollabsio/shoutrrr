@@ -896,11 +896,17 @@ export default function Composer({
               mentions: state.mentions,
               media: state.media,
               // Per-account media divergence now lives in placements (Task 15),
-              // not a global exclude set; the preview shows the full post media.
+              // not a global exclude set.
               excludedMediaIds: new Set<string>(),
               limit: limitForAccount(previewAccount),
               autoSplit: state.autoSplitByAccount[previewAccount.id] ?? true,
               format: state.formatByAccount[previewAccount.id] ?? 'feed',
+              // Show each media under the thread post it's placed on, using the
+              // previewed account's scope (diverged copy, else canonical).
+              placements:
+                  state.placementsByAccount[previewAccount.id] ??
+                  state.placements,
+              segmentBreaks: state.segmentBreaks,
           })
         : buildPlatformPreview({
               account: PREVIEW_FALLBACK_ACCOUNT,
@@ -911,6 +917,8 @@ export default function Composer({
               limit: limitForPlatform('x'),
               autoSplit: true,
               format: 'feed',
+              placements: state.placements,
+              segmentBreaks: state.segmentBreaks,
           });
 
     const blockedAccounts = precheckDestinations({
