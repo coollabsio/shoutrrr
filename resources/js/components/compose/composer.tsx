@@ -16,8 +16,8 @@ import { useVideoEditor } from '@/hooks/compose/use-video-editor';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import {
     composerReducer,
+    hasMultipleThreads,
     initialComposerState,
-    isDraftBlank,
     pickActiveAccount,
     shouldShowConnectAccountPrompt,
     type ComposerState,
@@ -669,11 +669,10 @@ export default function Composer({
             .filter((m): m is MediaView => m !== undefined);
     }
 
-    // A brand-new, single-thread, still-blank draft has nothing to attach media
-    // to yet — the hover-reveal "Add media" row would just reserve dead space
-    // above an empty placeholder. It appears once there's something to attach
-    // to: typed text, a second thread, or media already on this segment.
-    const draftIsBlank = isDraftBlank(state);
+    // With a single thread, the global toolbar's "add media" button already
+    // attaches to it, so the per-segment hover-reveal row is redundant — it
+    // only earns its keep once there's more than one thread to choose between.
+    const singleThread = !hasMultipleThreads(state);
 
     function limitForPlatform(platform: PlatformName): number {
         return limits.find((l) => l.platform === platform)?.maxLength ?? 0;
@@ -1087,7 +1086,7 @@ export default function Composer({
                                       return null;
                                   }
                                   if (
-                                      draftIsBlank &&
+                                      singleThread &&
                                       segMedia.length === 0 &&
                                       segPending.length === 0
                                   ) {

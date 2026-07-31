@@ -992,13 +992,13 @@ export function composerHasContent(state: ComposerState): boolean {
 }
 
 /**
- * A brand-new, single-thread, still-blank draft: nothing typed, no second
- * thread, no media. The per-segment "add media" affordance stays hidden on a
- * draft in this state — it would just reserve dead space beside an empty
- * placeholder — and reappears the moment any of those becomes false.
+ * More than one thread post exists. With a single thread, the global
+ * toolbar's "add media" button already attaches to it — the per-segment
+ * affordance only earns its keep once there's more than one segment to
+ * choose between.
  */
-export function isDraftBlank(state: ComposerState): boolean {
-    return !composerHasContent(state) && state.segmentBreaks.length === 0;
+export function hasMultipleThreads(state: ComposerState): boolean {
+    return state.segmentBreaks.length > 0;
 }
 
 /**
