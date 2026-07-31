@@ -7,6 +7,7 @@ namespace App\Support;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostMedia;
+use App\Models\PostMediaPlacement;
 use App\Models\PostTarget;
 use App\Services\Posts\PostSplitter;
 
@@ -20,6 +21,9 @@ final class PostView
         $splitter = app(PostSplitter::class);
         $mediaCount = $post->media->count();
         $defaultAccountId = $post->workspace()->value('default_connected_account_id');
+        $defaultTarget = $post->targets
+            ->sortByDesc(fn (PostTarget $target): bool => $target->connected_account_id === $defaultAccountId)
+            ->first();
 
         return [
             'id' => $post->id,
@@ -42,6 +46,12 @@ final class PostView
                     'display_name' => $target->account?->display_name,
                     'avatar_url' => $target->account?->avatar_url,
                     'sections' => $target->sections,
+                    'segment_breaks' => $target->segment_breaks ?? [],
+                    'placements' => $target->placements->map(fn (PostMediaPlacement $placement): array => [
+                        'media_id' => $placement->post_media_id,
+                        'segment_ref' => $placement->segment_ref,
+                        'position' => $placement->position,
+                    ])->values()->all(),
                     'content_override' => $target->content_override,
                     'auto_split' => $target->auto_split,
                     'format' => $target->format->value,
@@ -58,6 +68,12 @@ final class PostView
                     ),
                 ])->values()->all(),
             'media' => $post->media->map(fn (PostMedia $media): array => $media->toView())->values()->all(),
+            'segment_breaks' => $defaultTarget?->segment_breaks ?? [], // @phpstan-ignore nullsafe.neverNull
+            'placements' => $defaultTarget?->placements->map(fn (PostMediaPlacement $placement): array => [
+                'media_id' => $placement->post_media_id,
+                'segment_ref' => $placement->segment_ref,
+                'position' => $placement->position,
+            ])->values()->all() ?? [],
         ];
     }
 
