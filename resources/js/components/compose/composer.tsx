@@ -300,11 +300,17 @@ export default function Composer({
 
     // The server downloads and re-hosts the chosen GIF, so this is a chip +
     // fetch rather than the local upload flow the other media handlers use.
-    async function attachGif(item: GifItem) {
+    // `targetSegmentRef` lets a segment row's own GIF button target that
+    // segment explicitly; the global toolbar button omits it and falls back
+    // to the caret's segment.
+    async function attachGif(item: GifItem, targetSegmentRef?: string) {
         // Frozen before the `ensurePost` await, which can round-trip to the
-        // server, so the GIF lands where the caret was at selection time even
-        // if it moves while the draft post is being created.
-        const segmentRef = editorRef.current?.activeSegmentRef() ?? '__head__';
+        // server, so the GIF lands where it was targeted at selection time
+        // even if the caret moves while the draft post is being created.
+        const segmentRef =
+            targetSegmentRef ??
+            editorRef.current?.activeSegmentRef() ??
+            '__head__';
         const postId = await ensurePost();
         if (!postId) {
             return;
@@ -1126,6 +1132,12 @@ export default function Composer({
                                           onVideoClick={openVideo}
                                           onAddClick={() =>
                                               addMediaToSegment(ref)
+                                          }
+                                          onAttachGif={
+                                              shell.gifs_enabled
+                                                  ? (item) =>
+                                                        attachGif(item, ref)
+                                                  : undefined
                                           }
                                           onDismissPending={
                                               mediaUploads.dismissPending

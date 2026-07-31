@@ -1,7 +1,8 @@
-import { Paperclip, X } from 'lucide-react';
+import { ImagePlay, Paperclip, X } from 'lucide-react';
 import type { DragEvent, ReactNode } from 'react';
 import { useRef, useState } from 'react';
 
+import { GifPopover } from '@/components/compose/gif-popover';
 import {
     Tooltip,
     TooltipContent,
@@ -10,6 +11,19 @@ import {
 import { getMediaDrag, setMediaDrag } from '@/lib/compose/media-dnd';
 import { cn } from '@/lib/utils';
 import type { MediaView, PendingUpload } from '@/types/compose';
+import type { GifItem } from '@/types/gifs';
+
+/** Shared look for the row's hover-reveal "add" affordances. */
+const addButtonClass = cn(
+    'inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border/70 text-muted-foreground',
+    'transition-[opacity,color,border-color] hover:border-border hover:text-foreground',
+    // Always visible on touch (no hover); reveal on hover/focus on pointer
+    // devices so an empty row doesn't sit bare.
+    'max-md:opacity-100 md:opacity-0 md:group-focus-within/row:opacity-100 md:group-hover/row:opacity-100',
+    // Stay visible while its own popover is open, even if the pointer has
+    // moved off the row onto the popup content.
+    'data-[active=true]:border-border data-[active=true]:text-foreground data-[active=true]:opacity-100',
+);
 
 function formatDuration(seconds: number | null): string | null {
     if (seconds === null || seconds <= 0) {
@@ -105,6 +119,11 @@ type Props = {
     onVideoClick?: (mediaId: string) => void;
     /** Attach media to this segment (opens the file picker targeting it). */
     onAddClick: () => void;
+    /**
+     * Attach a chosen GIF/sticker/clip to this segment. Absent hides the
+     * button (read-only, or GIFs disabled for the instance).
+     */
+    onAttachGif?: (item: GifItem) => void;
     /** Drop a failed/pending upload chip. */
     onDismissPending?: (tempId: string) => void;
     /** Abort an in-flight video conversion/upload and drop its chip. */
@@ -128,6 +147,7 @@ export function SegmentMediaRow({
     onImageClick,
     onVideoClick,
     onAddClick,
+    onAttachGif,
     onDismissPending,
     onCancelPending,
 }: Props) {
@@ -377,17 +397,29 @@ export function SegmentMediaRow({
                 );
             })}
 
+            {onAttachGif && (
+                <GifPopover
+                    onSelect={onAttachGif}
+                    align="start"
+                    tooltip="GIFs, stickers & clips"
+                    trigger={(open) => (
+                        <button
+                            type="button"
+                            aria-label="GIFs, stickers and clips"
+                            data-active={open}
+                            className={addButtonClass}
+                        />
+                    )}
+                >
+                    <ImagePlay className="size-3.5" aria-hidden="true" />
+                </GifPopover>
+            )}
+
             <button
                 type="button"
                 aria-label="Add media"
                 onClick={onAddClick}
-                className={cn(
-                    'inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border/70 text-muted-foreground',
-                    'transition-[opacity,color,border-color] hover:border-border hover:text-foreground',
-                    // Always visible on touch (no hover); reveal on hover/focus
-                    // on pointer devices so an empty row doesn't sit bare.
-                    'max-md:opacity-100 md:opacity-0 md:group-focus-within/row:opacity-100 md:group-hover/row:opacity-100',
-                )}
+                className={addButtonClass}
             >
                 <Paperclip className="size-3.5" aria-hidden="true" />
             </button>

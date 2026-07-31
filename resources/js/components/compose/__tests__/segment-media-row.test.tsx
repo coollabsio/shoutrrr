@@ -58,6 +58,44 @@ it('fires onAddClick from the hover paperclip', () => {
     expect(onAddClick).toHaveBeenCalledTimes(1);
 });
 
+it('shows the GIF/stickers/clips button next to Add media when an attach handler is supplied', () => {
+    render(
+        <SegmentMediaRow
+            segmentRef="__head__"
+            media={[img('m1')]}
+            pending={[]}
+            onRemove={() => {}}
+            onReorder={() => {}}
+            onAddClick={() => {}}
+            onAttachGif={vi.fn()}
+        />,
+    );
+
+    expect(
+        screen.getByRole('button', { name: /gifs, stickers and clips/i }),
+    ).toBeInTheDocument();
+    expect(
+        screen.getByRole('button', { name: /add media/i }),
+    ).toBeInTheDocument();
+});
+
+it('hides the GIF button without an attach handler', () => {
+    render(
+        <SegmentMediaRow
+            segmentRef="__head__"
+            media={[img('m1')]}
+            pending={[]}
+            onRemove={() => {}}
+            onReorder={() => {}}
+            onAddClick={() => {}}
+        />,
+    );
+
+    expect(
+        screen.queryByRole('button', { name: /gifs, stickers and clips/i }),
+    ).not.toBeInTheDocument();
+});
+
 it('renders nothing when empty, read-only, and not readOnly still exposes the add affordance', () => {
     const { container, rerender } = render(
         <SegmentMediaRow
