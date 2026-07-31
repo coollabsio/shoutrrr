@@ -13,10 +13,12 @@ import EmojiSuggestPopover from '@/components/compose/emoji-suggest-popover';
 import MentionPicker from '@/components/compose/mention-picker';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { useEmojiTypeahead } from '@/hooks/compose/use-emoji-typeahead';
+import { activeSegmentRef } from '@/lib/compose/active-segment';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { mentionInputValue, updateMentionName } from '@/lib/compose/mentions';
 import {
     docToSegments,
+    docToSegmentsWithBreaks,
     segmentsToDoc,
     type DocNode,
 } from '@/lib/compose/tiptap-doc';
@@ -91,6 +93,12 @@ type EditorBodyProps = {
     emojiSkinTone?: EmojiSkinTone;
     /** Record a chosen emoji as recently used. */
     onEmojiInsert?: (emoji: string) => void;
+    /**
+     * Fired whenever the caret/selection moves into a different segment
+     * (Tiptap `onSelectionUpdate`). Omit if the caller doesn't need live
+     * active-segment tracking (e.g. it only reads it on demand via the handle).
+     */
+    onActiveSegmentChange?: (segmentRef: string) => void;
 };
 
 export type EditorBodyHandle = {
@@ -100,6 +108,8 @@ export type EditorBodyHandle = {
     focus: () => void;
     /** Release focus from the editor. */
     blur: () => void;
+    /** Pull-based read of the segment ref the caret currently sits in. */
+    activeSegmentRef: () => string;
 };
 
 export function shouldFocusEditorOnMount(
@@ -157,6 +167,7 @@ function EditorBodyInner(
         editable = true,
         emojiSkinTone = 'none',
         onEmojiInsert,
+        onActiveSegmentChange,
     }: EditorBodyProps,
     ref: Ref<EditorBodyHandle>,
 ) {
@@ -216,6 +227,16 @@ function EditorBodyInner(
         },
         onUpdate: ({ editor }) =>
             onChange(docToSegments(editor.getJSON() as DocNode)),
+        onSelectionUpdate: ({ editor }) => {
+            if (!onActiveSegmentChange) {
+                return;
+            }
+            const doc = editor.getJSON() as DocNode;
+            const { breakIds } = docToSegmentsWithBreaks(doc);
+            onActiveSegmentChange(
+                activeSegmentRef(doc, editor.state.selection.from, breakIds),
+            );
+        },
         onBlur,
     });
 
@@ -239,6 +260,19 @@ function EditorBodyInner(
             },
             blur: () => {
                 editor?.commands.blur();
+            },
+            activeSegmentRef: () => {
+                if (!editor) {
+                    return '__head__';
+                }
+                const doc = editor.getJSON() as DocNode;
+                const { breakIds } = docToSegmentsWithBreaks(doc);
+
+                return activeSegmentRef(
+                    doc,
+                    editor.state.selection.from,
+                    breakIds,
+                );
             },
         }),
         [editor],
