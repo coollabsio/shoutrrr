@@ -5,6 +5,7 @@ import {
     type Account,
     type MediaView,
     type PostView,
+    type TargetView,
 } from '@/types/compose';
 
 import {
@@ -16,6 +17,7 @@ import {
     initialComposerState,
     parseDestinationParam,
     pickActiveAccount,
+    segmentRefsFromBreaks,
     shouldShowConnectAccountPrompt,
 } from '../composer-state';
 
@@ -44,6 +46,31 @@ function mediaFixture(id: string): MediaView {
         source_url: null,
         edit_url: 'http://x/raw',
         source_edit_url: null,
+    };
+}
+
+function targetFixture(
+    accountId: string,
+    overrides: Partial<TargetView> = {},
+): TargetView {
+    return {
+        id: `t-${accountId}`,
+        connected_account_id: accountId,
+        platform: 'x',
+        handle: `@${accountId}`,
+        display_name: null,
+        avatar_url: null,
+        sections: ['hello'],
+        content_override: null,
+        auto_split: true,
+        format: 'feed',
+        issues: [],
+        status: 'pending',
+        error_kind: null,
+        error_message: null,
+        attempts: 0,
+        remote_id: null,
+        ...overrides,
     };
 }
 
@@ -1087,6 +1114,79 @@ describe('per-segment placements', () => {
             position: 0,
         });
         expect(body.targets[1].placements).toBeUndefined();
+    });
+
+    it('hydrate does NOT create a placementsByAccount entry for a target whose placements match canonical, so a later canonical edit still propagates to it', () => {
+        const post: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            segments: ['hello'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            segment_breaks: [],
+            placements: [
+                { media_id: 'm1', segment_ref: '__head__', position: 0 },
+            ],
+            targets: [
+                targetFixture('a1', {
+                    placements: [
+                        {
+                            media_id: 'm1',
+                            segment_ref: '__head__',
+                            position: 0,
+                        },
+                    ],
+                }),
+                targetFixture('a2', {
+                    placements: [
+                        { media_id: 'm1', segment_ref: 'b1', position: 0 },
+                    ],
+                }),
+            ],
+            media: [mediaFixture('m1')],
+        };
+
+        let state = composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+
+        // a1 matches canonical exactly -> no entry; a2 genuinely diverges -> entry.
+        expect(state.placementsByAccount.a1).toBeUndefined();
+        expect(state.placementsByAccount.a2).toEqual({ b1: ['m1'] });
+
+        // A canonical-scope edit (no accountId) must still reach a1, since it
+        // has no stale per-account snapshot pinning it to the pre-edit state.
+        state = composerReducer(state, {
+            type: 'addMedia',
+            media: mediaFixture('m2'),
+        });
+        const body = buildPutBody(state, ['a1', 'a2']);
+        expect(body.targets[0].connected_account_id).toBe('a1');
+        expect(body.targets[0].placements).toBeUndefined(); // still inherits canonical
+        expect(body.placements).toContainEqual({
+            media_id: 'm2',
+            segment_ref: '__head__',
+            position: 1,
+        });
+    });
+});
+
+describe('segmentRefsFromBreaks', () => {
+    it('prefixes __head__ before the ordered break ids', () => {
+        expect(segmentRefsFromBreaks(['b1', 'b2'])).toEqual([
+            '__head__',
+            'b1',
+            'b2',
+        ]);
+    });
+
+    it('returns just __head__ for no breaks', () => {
+        expect(segmentRefsFromBreaks([])).toEqual(['__head__']);
     });
 });
 

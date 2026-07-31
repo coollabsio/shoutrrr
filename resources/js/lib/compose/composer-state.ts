@@ -1,3 +1,4 @@
+import { segmentRefs } from '@/lib/compose/tiptap-doc';
 import {
     type Account,
     BASE_TAB,
@@ -11,6 +12,16 @@ import {
 
 /** Placement key used for media added before any explicit segment break exists. */
 const HEAD_SEGMENT_REF = '__head__';
+
+/**
+ * The ordered segmentRefs for a post given its segment-break ids: `__head__`
+ * (the first segment, which has no opening break) followed by each break id
+ * in order. Thin re-export of `segmentRefs` from `tiptap-doc.ts` so
+ * placement-consuming code doesn't need a second import for the same concept.
+ */
+export function segmentRefsFromBreaks(breaks: string[]): string[] {
+    return segmentRefs(breaks);
+}
 
 export type SaveState =
     | 'idle'
@@ -204,6 +215,31 @@ function groupPlacements(
     return grouped;
 }
 
+/**
+ * Structural equality for two `segmentRef -> ordered media ids` maps: same
+ * set of segmentRefs, each with the same media ids in the same order. Used to
+ * decide whether a target's placements actually diverge from canonical (a
+ * non-divergent target must get NO `placementsByAccount` entry so it keeps
+ * inheriting canonical edits).
+ */
+function placementMapsEqual(
+    a: Record<string, string[]>,
+    b: Record<string, string[]>,
+): boolean {
+    const aKeys = Object.keys(a).filter((key) => a[key].length > 0);
+    const bKeys = Object.keys(b).filter((key) => b[key].length > 0);
+    if (aKeys.length !== bKeys.length) {
+        return false;
+    }
+
+    return aKeys.every(
+        (key) =>
+            b[key] !== undefined &&
+            a[key].length === b[key].length &&
+            a[key].every((id, i) => id === b[key][i]),
+    );
+}
+
 /** Remove a media id from every segment array in a segmentRef -> ids map. */
 function removeIdFromAllSegments(
     map: Record<string, string[]>,
@@ -223,6 +259,7 @@ function hydrate(post: PostView): ComposerState {
     const overrideByAccount: Record<string, string[] | undefined> = {};
     const mediaSubsetExcludes = new Set<string>();
     const placementsByAccount: Record<string, Record<string, string[]>> = {};
+    const canonicalPlacements = groupPlacements(post.placements);
 
     for (const target of post.targets) {
         autoSplitByAccount[target.connected_account_id] = target.auto_split;
@@ -231,15 +268,17 @@ function hydrate(post: PostView): ComposerState {
         if (overrideSegments !== undefined && overrideSegments !== null) {
             overrideByAccount[target.connected_account_id] = overrideSegments;
         }
-        // Every target's placements are seeded into placementsByAccount, even
-        // when identical to canonical — buildPutBody diffing happens at
-        // action time, not at hydrate time; this is the simplest correct
-        // seeding (a harmless no-op divergence is cheap and self-heals the
-        // next time the account's placements are touched).
+        // Only seed a placementsByAccount entry when the target's placements
+        // actually diverge from canonical. A non-divergent entry would freeze
+        // that account onto a stale snapshot: buildPutBody treats ANY entry
+        // here as "diverged" and stops emitting the account's per-target
+        // segment_breaks/placements from canonical, so a later canonical-scope
+        // edit (no accountId) would silently never reach that account.
         if (target.placements !== undefined) {
-            placementsByAccount[target.connected_account_id] = groupPlacements(
-                target.placements,
-            );
+            const grouped = groupPlacements(target.placements);
+            if (!placementMapsEqual(grouped, canonicalPlacements)) {
+                placementsByAccount[target.connected_account_id] = grouped;
+            }
         }
     }
 
@@ -266,7 +305,7 @@ function hydrate(post: PostView): ComposerState {
         mediaSubsetExcludes,
         media: post.media,
         segmentBreaks: post.segment_breaks ?? [],
-        placements: groupPlacements(post.placements),
+        placements: canonicalPlacements,
         placementsByAccount,
         scheduleTray: {
             mode: post.scheduled_at ? 'pick' : 'now',
