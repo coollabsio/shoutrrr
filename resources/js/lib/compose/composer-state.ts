@@ -250,12 +250,38 @@ function removeIdFromAllSegments(
     );
 }
 
+/**
+ * Fold any media that has no placement (a legacy draft whose media predates
+ * per-segment placements, or media attached before its placement persisted)
+ * onto the first segment, so it renders in the composer instead of vanishing —
+ * mirroring the server resolver's "no placements → all media on post 1"
+ * fallback. Returns the map unchanged when nothing is orphaned.
+ */
+function withOrphanMediaOnHead(
+    map: Record<string, string[]>,
+    media: MediaView[],
+): Record<string, string[]> {
+    const placed = new Set(Object.values(map).flat());
+    const orphans = media.map((m) => m.id).filter((id) => !placed.has(id));
+    if (orphans.length === 0) {
+        return map;
+    }
+
+    return { ...map, __head__: [...(map.__head__ ?? []), ...orphans] };
+}
+
 function hydrate(post: PostView): ComposerState {
     const autoSplitByAccount: Record<string, boolean> = {};
     const formatByAccount: Record<string, PostFormat> = {};
     const overrideByAccount: Record<string, string[] | undefined> = {};
     const placementsByAccount: Record<string, Record<string, string[]>> = {};
+    // Raw canonical grouping drives the per-account divergence check below;
+    // the display map additionally folds in any unplaced media.
     const canonicalPlacements = groupPlacements(post.placements);
+    const displayPlacements = withOrphanMediaOnHead(
+        canonicalPlacements,
+        post.media,
+    );
 
     for (const target of post.targets) {
         autoSplitByAccount[target.connected_account_id] = target.auto_split;
@@ -300,7 +326,7 @@ function hydrate(post: PostView): ComposerState {
         overrideByAccount,
         media: post.media,
         segmentBreaks: post.segment_breaks ?? [],
-        placements: canonicalPlacements,
+        placements: displayPlacements,
         placementsByAccount,
         scheduleTray: {
             mode: post.scheduled_at ? 'pick' : 'now',

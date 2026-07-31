@@ -966,6 +966,29 @@ describe('per-segment placements', () => {
         expect(s.placements.__head__).toEqual(['m1']);
     });
 
+    it('hydrate folds media that has no placement onto the first segment', () => {
+        const post: PostView = {
+            id: 'post-1',
+            base_text: 'test',
+            segments: ['test'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            // A media item with no placements array at all (legacy draft).
+            media: [mediaFixture('m1')],
+        };
+        const s = composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+        expect(s.media.map((m) => m.id)).toEqual(['m1']);
+        expect(s.placements.__head__).toEqual(['m1']);
+    });
+
     it('moving media on an account tab diverges only that account', () => {
         let s: ComposerState = {
             ...initialComposerState(),

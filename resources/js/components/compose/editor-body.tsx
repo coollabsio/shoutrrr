@@ -231,7 +231,6 @@ function EditorBodyInner(
             placeholder,
             emojiOpenRef,
             compact,
-            onSegmentAnchorsChange: setSegmentAnchors,
         }),
         content: segmentsToDocWithBreaks(value, breakIds) as object,
         editable,
@@ -329,6 +328,43 @@ function EditorBodyInner(
     useEffect(() => {
         editor?.setEditable(editable);
     }, [editor, editable]);
+
+    // Read the per-segment media anchors straight off the rendered DOM after
+    // each doc change, rather than having the plugin push them via a callback
+    // (which can fire mid-render and get dropped). The anchor nodes are stable
+    // (cached per ref by the plugin), so we only re-set state when the ref/el
+    // set actually changes.
+    useEffect(() => {
+        if (!editor || compact) {
+            return;
+        }
+        const read = () => {
+            const next = Array.from(
+                editor.view.dom.querySelectorAll<HTMLElement>(
+                    '.segment-media-anchor',
+                ),
+            ).map((el) => ({
+                ref: el.getAttribute('data-segment-ref') ?? '__head__',
+                el,
+            }));
+            setSegmentAnchors((prev) =>
+                prev.length === next.length &&
+                prev.every(
+                    (a, i) => a.ref === next[i].ref && a.el === next[i].el,
+                )
+                    ? prev
+                    : next,
+            );
+        };
+        read();
+        const frame = window.requestAnimationFrame(read);
+        editor.on('update', read);
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+            editor.off('update', read);
+        };
+    }, [editor, compact]);
 
     // Keep the editor in sync when the value is replaced externally (tab switch,
     // conflict resolution) without emitting an update.

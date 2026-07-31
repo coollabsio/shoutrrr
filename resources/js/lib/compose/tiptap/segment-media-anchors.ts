@@ -18,11 +18,6 @@ export const segmentMediaAnchorsKey = new PluginKey('segmentMediaAnchors');
 
 export type SegmentAnchor = { ref: string; el: HTMLElement };
 
-type Options = {
-    /** Fired (only on structural change) with the current ordered anchors. */
-    onAnchorsChange?: (anchors: SegmentAnchor[]) => void;
-};
-
 /**
  * The ordered segment refs for a doc's section breaks, mirroring
  * `docToSegmentsWithBreaks`/`segmentRefs`: `__head__` first, then each break's
@@ -57,20 +52,16 @@ function anchorPlan(doc: PMNode): { ref: string; pos: number }[] {
     return plan;
 }
 
-export const SegmentMediaAnchors = Extension.create<Options>({
+export const SegmentMediaAnchors = Extension.create({
     name: 'segmentMediaAnchors',
-
-    addOptions() {
-        return { onAnchorsChange: undefined };
-    },
 
     addProseMirrorPlugins() {
         // Cache anchor DOM nodes by ref so the same element is reused across
         // transactions — the portal target must stay stable or React tears the
-        // media row down and rebuilds it on every keystroke.
+        // media row down and rebuilds it on every keystroke. EditorBody reads
+        // these nodes off the DOM (by `data-segment-ref`) to portal each
+        // segment's media row into them.
         const cache = new Map<string, HTMLElement>();
-        const { onAnchorsChange } = this.options;
-        let lastKey = '';
 
         function anchorEl(ref: string): HTMLElement {
             let el = cache.get(ref);
@@ -85,38 +76,22 @@ export const SegmentMediaAnchors = Extension.create<Options>({
             return el;
         }
 
-        function plan(doc: PMNode): { ref: string; pos: number }[] {
-            const p = anchorPlan(doc);
-            const live = new Set(p.map((a) => a.ref));
-            for (const ref of [...cache.keys()]) {
-                if (!live.has(ref)) {
-                    cache.delete(ref);
-                }
-            }
-
-            return p;
-        }
-
-        function notify(doc: PMNode): void {
-            const p = anchorPlan(doc);
-            const key = p.map((a) => a.ref).join('|');
-            if (key === lastKey) {
-                return;
-            }
-            lastKey = key;
-            onAnchorsChange?.(
-                p.map((a) => ({ ref: a.ref, el: anchorEl(a.ref) })),
-            );
-        }
-
         return [
             new Plugin({
                 key: segmentMediaAnchorsKey,
                 props: {
-                    decorations: (state) =>
-                        DecorationSet.create(
+                    decorations: (state) => {
+                        const plan = anchorPlan(state.doc);
+                        const live = new Set(plan.map((a) => a.ref));
+                        for (const ref of [...cache.keys()]) {
+                            if (!live.has(ref)) {
+                                cache.delete(ref);
+                            }
+                        }
+
+                        return DecorationSet.create(
                             state.doc,
-                            plan(state.doc).map((a) =>
+                            plan.map((a) =>
                                 Decoration.widget(
                                     a.pos,
                                     () => anchorEl(a.ref),
@@ -127,14 +102,8 @@ export const SegmentMediaAnchors = Extension.create<Options>({
                                     },
                                 ),
                             ),
-                        ),
-                },
-                view: (view) => {
-                    notify(view.state.doc);
-
-                    return {
-                        update: (v) => notify(v.state.doc),
-                    };
+                        );
+                    },
                 },
             }),
         ];
