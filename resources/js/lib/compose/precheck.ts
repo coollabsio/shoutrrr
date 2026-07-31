@@ -134,13 +134,15 @@ type PrecheckDestinationsInput = {
 };
 
 /**
- * Every target is judged against the FULL post media set, not a per-account
- * subset. The publish path (PublishPostTarget::context) hands each connector the
- * global `$post->media`, so that is what actually publishes; per-account media
- * exclusions are not honored server-side. Filtering the count here would let the
- * composer greenlight a destination the connector would then botch (e.g. dropping
- * silently-mixed images), and disagree with the server PublishPrecheck. Keep this
- * global so the client, the server precheck, and the connectors all agree.
+ * Every target is judged against the FULL post media set (whole-post counts),
+ * not a per-segment breakdown. Per-segment media is placed per thread post
+ * (post_media_placements) and rides its segment's first sub-post, but the
+ * server's PublishPrecheck and the connectors still enforce media caps and the
+ * video/image rule per WHOLE post (each connector uploads and caps against the
+ * full `$post->media`). Counting per-segment here would let the composer
+ * greenlight a post the server then blocks or truncates. Keep this whole-post
+ * so the client, the server precheck, and the connectors all agree; per-segment
+ * limits move here only once the server enforces them per section.
  */
 export function precheckDestinations({
     accounts,

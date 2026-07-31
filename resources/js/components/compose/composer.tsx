@@ -693,9 +693,9 @@ export default function Composer({
             state.overrideByAccount[accountId] !== undefined
                 ? (state.overrideByAccount[accountId] as string[])
                 : state.segments;
-        // Global media count — the connector publishes the full post media set to
-        // every target (see precheckDestinations), so per-account exclusions must
-        // not change the severity a destination shows.
+        // Whole-post media count — the server precheck and connectors still
+        // enforce media caps per whole post (see precheckDestinations), so the
+        // severity a destination shows is judged against the full media set.
         const mediaCount = state.media.length;
         const hasVideo = state.media.some((item) => item.kind === 'video');
         const reasons = precheckAccount({
@@ -897,15 +897,9 @@ export default function Composer({
                   state.overrideByAccount[previewAccount.id] ?? state.segments,
               mentions: state.mentions,
               media: state.media,
-              excludedMediaIds: new Set(
-                  state.media
-                      .filter((media) =>
-                          state.mediaSubsetExcludes.has(
-                              `${media.id}:${previewAccount.id}`,
-                          ),
-                      )
-                      .map((media) => media.id),
-              ),
+              // Per-account media divergence now lives in placements (Task 15),
+              // not a global exclude set; the preview shows the full post media.
+              excludedMediaIds: new Set<string>(),
               limit: limitForAccount(previewAccount),
               autoSplit: state.autoSplitByAccount[previewAccount.id] ?? true,
               format: state.formatByAccount[previewAccount.id] ?? 'feed',

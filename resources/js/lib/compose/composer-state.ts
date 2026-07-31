@@ -49,7 +49,6 @@ export type ComposerState = {
     autoSplitByAccount: Record<string, boolean>;
     formatByAccount: Record<string, PostFormat>;
     overrideByAccount: Record<string, string[] | undefined>;
-    mediaSubsetExcludes: Set<string>;
     media: MediaView[];
     /** Ordered ids of tiptap segment breaks; segment refs are derived from these. */
     segmentBreaks: string[];
@@ -76,7 +75,6 @@ export type ComposerAction =
     | { type: 'disableAutoSplit'; accountIds: string[] }
     | { type: 'setOverrideSegments'; accountId: string; segments: string[] }
     | { type: 'discardOverride'; accountId: string }
-    | { type: 'toggleMediaExclude'; mediaId: string; accountId: string }
     | { type: 'addMedia'; media: MediaView; segmentRef?: string }
     | { type: 'replaceMedia'; media: MediaView }
     | { type: 'removeMedia'; mediaId: string }
@@ -152,7 +150,6 @@ export function initialComposerState(
         autoSplitByAccount: {},
         formatByAccount: {},
         overrideByAccount: {},
-        mediaSubsetExcludes: new Set(),
         media: [],
         segmentBreaks: [],
         placements: {},
@@ -257,7 +254,6 @@ function hydrate(post: PostView): ComposerState {
     const autoSplitByAccount: Record<string, boolean> = {};
     const formatByAccount: Record<string, PostFormat> = {};
     const overrideByAccount: Record<string, string[] | undefined> = {};
-    const mediaSubsetExcludes = new Set<string>();
     const placementsByAccount: Record<string, Record<string, string[]>> = {};
     const canonicalPlacements = groupPlacements(post.placements);
 
@@ -302,7 +298,6 @@ function hydrate(post: PostView): ComposerState {
         autoSplitByAccount,
         formatByAccount,
         overrideByAccount,
-        mediaSubsetExcludes,
         media: post.media,
         segmentBreaks: post.segment_breaks ?? [],
         placements: canonicalPlacements,
@@ -453,18 +448,6 @@ export function composerReducer(
             delete next[action.accountId];
 
             return { ...state, overrideByAccount: next, saveState: 'dirty' };
-        }
-
-        case 'toggleMediaExclude': {
-            const key = `${action.mediaId}:${action.accountId}`;
-            const next = new Set(state.mediaSubsetExcludes);
-            if (next.has(key)) {
-                next.delete(key);
-            } else {
-                next.add(key);
-            }
-
-            return { ...state, mediaSubsetExcludes: next, saveState: 'dirty' };
         }
 
         case 'addMedia': {
@@ -755,18 +738,15 @@ export function buildPutBody(
 ): PutBody {
     const targets: PutTarget[] = accountIds.map((accountId) => {
         const override = state.overrideByAccount[accountId];
+        // Per-account media now lives in per-target placements (see below), not
+        // in content_override.media_ids — the old per-account exclude mechanism
+        // is retired. media_ids here is the full set purely to satisfy the
+        // stored override shape; publishing reads placements, not this field.
         const content_override =
             override !== undefined
                 ? {
                       segments: override,
-                      media_ids: state.media
-                          .map((m) => m.id)
-                          .filter(
-                              (mediaId) =>
-                                  !state.mediaSubsetExcludes.has(
-                                      `${mediaId}:${accountId}`,
-                                  ),
-                          ),
+                      media_ids: state.media.map((m) => m.id),
                   }
                 : null;
 
