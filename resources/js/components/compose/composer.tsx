@@ -18,6 +18,7 @@ import {
     composerReducer,
     initialComposerState,
     pickActiveAccount,
+    segmentRefsFromBreaks,
     shouldShowConnectAccountPrompt,
     type ComposerState,
 } from '@/lib/compose/composer-state';
@@ -52,6 +53,7 @@ import {
     type Account,
     type AccountSet,
     type Destination,
+    type MediaView,
     type MentionPlaceholder,
     type PlatformLimits,
     type PlatformName,
@@ -70,6 +72,7 @@ import { PlatformPreviewPanel } from './platform-preview-panel';
 import PlatformTabs from './platform-tabs';
 import SaveIndicator from './save-indicator';
 import { ScheduleTray } from './schedule-tray';
+import { SegmentMediaRow } from './segment-media-row';
 import { SubmitBar } from './submit-bar';
 import { TargetStatusChips } from './target-status-chips';
 import { VideoEditor } from './video-editor';
@@ -245,6 +248,15 @@ export default function Composer({
     });
     const publishStatus = usePublishStatus({ pagePost: post });
 
+    // The segment ref the caret currently sits in, kept live via the editor's
+    // onSelectionUpdate so a per-segment media row can tell whether an
+    // in-flight upload (which carries no segment tag of its own) belongs to
+    // it. Clicking a specific segment's "add media" affordance overrides this
+    // for the batch that follows (see `addMediaToSegment`).
+    const [activeSegRef, setActiveSegRef] = useState('__head__');
+    const explicitUploadSegmentRef = useRef<string | null>(null);
+    const segmentFileInputRef = useRef<HTMLInputElement | null>(null);
+
     // Owns the media-upload pipeline (image/video validation + upload). Lifted
     // here so both the editor (⌘/Ctrl+V paste) and the toolbar (picker/drop)
     // feed the same handleFiles and share one in-flight `pending` list.
@@ -255,7 +267,9 @@ export default function Composer({
         onAddMedia: (m, segmentRef) =>
             dispatch({ type: 'addMedia', media: m, segmentRef }),
         activeSegmentRef: () =>
-            editorRef.current?.activeSegmentRef() ?? '__head__',
+            explicitUploadSegmentRef.current ??
+            editorRef.current?.activeSegmentRef() ??
+            '__head__',
     });
 
     const imageEditor = useImageEditor({
@@ -446,6 +460,24 @@ export default function Composer({
         });
     }
 
+    // A segment's "add media" affordance: target that segment for whatever
+    // gets picked next, then open the shared file picker. The override is
+    // cleared once the picked batch has been handled (or nothing was picked),
+    // so it never leaks into a later, unrelated upload.
+    function addMediaToSegment(segmentRef: string) {
+        explicitUploadSegmentRef.current = segmentRef;
+        segmentFileInputRef.current?.click();
+    }
+
+    function acceptSegmentFiles(files: FileList) {
+        void handleAddedFiles(files).finally(() => {
+            explicitUploadSegmentRef.current = null;
+            if (segmentFileInputRef.current) {
+                segmentFileInputRef.current.value = '';
+            }
+        });
+    }
+
     // Revoke the object URL for a video-new session and close the editor.
     function closeVideoEditing() {
         if (editing?.kind === 'video-new') {
@@ -604,6 +636,25 @@ export default function Composer({
         activeAccount && state.overrideByAccount[activeAccount.id] !== undefined
             ? (state.overrideByAccount[activeAccount.id] as string[])
             : state.segments;
+
+    // Segment refs always track the canonical thread structure (see
+    // `handleSegments`); the active tab's placements diverge onto
+    // `placementsByAccount` only once it has actually drifted from
+    // canonical (drag/remove — Task 15's territory), so this is the "active
+    // scope" the per-segment media rows read from.
+    const segmentRefs = segmentRefsFromBreaks(state.segmentBreaks);
+    const activeScopePlacements =
+        activeAccount && state.placementsByAccount[activeAccount.id]
+            ? state.placementsByAccount[activeAccount.id]
+            : state.placements;
+
+    function mediaForSegment(segmentRef: string): MediaView[] {
+        const ids = activeScopePlacements[segmentRef] ?? [];
+
+        return ids
+            .map((id) => state.media.find((m) => m.id === id))
+            .filter((m): m is MediaView => m !== undefined);
+    }
 
     function limitForPlatform(platform: PlatformName): number {
         return limits.find((l) => l.platform === platform)?.maxLength ?? 0;
@@ -773,7 +824,7 @@ export default function Composer({
         );
     }
 
-    function handleSegments(segments: string[]) {
+    function handleSegments(segments: string[], breakIds: string[]) {
         const manualSplit = segments.length > 1;
         if (
             activeAccount &&
@@ -799,6 +850,12 @@ export default function Composer({
             return;
         }
         dispatch({ type: 'updateSegments', segments });
+        // Overrides carry their own text but not their own thread structure —
+        // segment refs (and therefore per-segment media placement) always
+        // track the canonical break ids, so only update them here.
+        if (JSON.stringify(breakIds) !== JSON.stringify(state.segmentBreaks)) {
+            dispatch({ type: 'setSegmentBreaks', breakIds });
+        }
         if (manualSplit) {
             dispatch({
                 type: 'disableAutoSplit',
@@ -962,6 +1019,7 @@ export default function Composer({
                 <EditorBody
                     ref={editorRef}
                     value={activeSegments}
+                    breakIds={state.segmentBreaks}
                     onChange={handleSegments}
                     onBlur={flush}
                     editable={!readOnly}
@@ -989,6 +1047,7 @@ export default function Composer({
                     }
                     emojiSkinTone={emojiPrefs.skinTone}
                     onEmojiInsert={emojiPrefs.addRecent}
+                    onActiveSegmentChange={setActiveSegRef}
                     markerState={
                         activeAccount
                             ? {
@@ -1008,6 +1067,94 @@ export default function Composer({
                             : undefined
                     }
                 />
+
+                {/* Per-segment media — one row per authored thread post, laid
+                out under the segment it belongs to rather than a single
+                strip for the whole thread. Uploads/GIFs/re-edits route
+                through the segment's own row. */}
+                {(!readOnly || state.media.length > 0) && (
+                    <div className="flex flex-col gap-0.5 px-4 pb-2.5 sm:px-[26px]">
+                        {segmentRefs.map((ref, index) => {
+                            const segMedia = mediaForSegment(ref);
+                            const segPending =
+                                (explicitUploadSegmentRef.current ??
+                                    activeSegRef) === ref
+                                    ? mediaUploads.pending
+                                    : [];
+                            if (
+                                readOnly &&
+                                segMedia.length === 0 &&
+                                segPending.length === 0
+                            ) {
+                                return null;
+                            }
+
+                            return (
+                                <div
+                                    key={ref}
+                                    className="flex items-start gap-2"
+                                >
+                                    {segmentRefs.length > 1 && (
+                                        <span className="mt-1.5 shrink-0 font-mono text-[10px] text-muted-foreground/60 tabular-nums">
+                                            {index + 1}/{segmentRefs.length}
+                                        </span>
+                                    )}
+                                    <SegmentMediaRow
+                                        segmentRef={ref}
+                                        media={segMedia}
+                                        pending={segPending}
+                                        readOnly={readOnly}
+                                        onRemove={(mediaId) =>
+                                            dispatch({
+                                                type: 'removeMediaFromSegments',
+                                                mediaId,
+                                            })
+                                        }
+                                        onReorder={(ids) =>
+                                            dispatch({
+                                                type: 'reorderSegmentMedia',
+                                                segmentRef: ref,
+                                                ids,
+                                            })
+                                        }
+                                        onImageClick={openImage}
+                                        onVideoClick={openVideo}
+                                        onAddClick={() =>
+                                            addMediaToSegment(ref)
+                                        }
+                                        onDismissPending={
+                                            mediaUploads.dismissPending
+                                        }
+                                        onCancelPending={
+                                            mediaUploads.cancelPending
+                                        }
+                                    />
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {!readOnly && (
+                    <input
+                        ref={segmentFileInputRef}
+                        type="file"
+                        accept={
+                            state.media.some((m) => m.kind === 'video')
+                                ? 'image/*'
+                                : 'image/*,video/*'
+                        }
+                        multiple
+                        hidden
+                        onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                                acceptSegmentFiles(e.target.files);
+                            } else {
+                                explicitUploadSegmentRef.current = null;
+                            }
+                        }}
+                    />
+                )}
 
                 {/* Counter row — or the connect prompt when there are no accounts. */}
                 {activeAccount ? (
@@ -1107,12 +1254,6 @@ export default function Composer({
                                 : undefined
                         }
                         media={state.media}
-                        onRemove={(id) =>
-                            dispatch({ type: 'removeMedia', mediaId: id })
-                        }
-                        onReorder={(ids) =>
-                            dispatch({ type: 'reorderMedia', ids })
-                        }
                         onToggleAutoSplit={() =>
                             activeAccount &&
                             dispatch({
@@ -1140,27 +1281,8 @@ export default function Composer({
                                 });
                             }
                         }}
-                        isExcluded={(mediaId) =>
-                            activeAccount
-                                ? state.mediaSubsetExcludes.has(
-                                      `${mediaId}:${activeAccount.id}`,
-                                  )
-                                : false
-                        }
-                        onToggleExclude={(mediaId) =>
-                            activeAccount &&
-                            dispatch({
-                                type: 'toggleMediaExclude',
-                                mediaId,
-                                accountId: activeAccount.id,
-                            })
-                        }
                         pending={mediaUploads.pending}
                         handleFiles={handleAddedFiles}
-                        dismissPending={mediaUploads.dismissPending}
-                        cancelPending={mediaUploads.cancelPending}
-                        onImageClick={openImage}
-                        onVideoClick={openVideo}
                     />
                 )}
 

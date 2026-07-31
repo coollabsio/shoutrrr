@@ -19,7 +19,7 @@ import { mentionInputValue, updateMentionName } from '@/lib/compose/mentions';
 import {
     docToSegments,
     docToSegmentsWithBreaks,
-    segmentsToDoc,
+    segmentsToDocWithBreaks,
     type DocNode,
 } from '@/lib/compose/tiptap-doc';
 import {
@@ -38,7 +38,23 @@ import type {
 
 type EditorBodyProps = {
     value: string[];
-    onChange: (segments: string[]) => void;
+    /**
+     * Stable ids for the section breaks between `value`'s segments
+     * (`breakIds.length === value.length - 1`) — round-tripped back onto the
+     * rebuilt doc's `sectionBreak` nodes so a fresh mount or an external
+     * content reset doesn't mint new ids for breaks that already exist (which
+     * would orphan anything keyed to the old ones, e.g. per-segment media
+     * placements). Omit for callers with no thread structure to preserve.
+     */
+    breakIds?: string[];
+    /**
+     * Fires on every doc change with the segment texts and the stable break
+     * ids that separate them (`breakIds.length === segments.length - 1`) —
+     * see `docToSegmentsWithBreaks`. Callers that don't care about thread
+     * structure (e.g. the single-message reply box) can ignore the second
+     * argument.
+     */
+    onChange: (segments: string[], breakIds: string[]) => void;
     onBlur?: () => void;
     placeholder?: string;
     /** When false, the post is read-only (e.g. already published/scheduled). */
@@ -144,6 +160,7 @@ export function isSubmitShortcut(event: {
 function EditorBodyInner(
     {
         value,
+        breakIds = [],
         onChange,
         onBlur,
         placeholder,
@@ -202,7 +219,7 @@ function EditorBodyInner(
             emojiOpenRef,
             compact,
         }),
-        content: segmentsToDoc(value) as object,
+        content: segmentsToDocWithBreaks(value, breakIds) as object,
         editable,
         editorProps: {
             handlePaste: (_view, event) => {
@@ -225,8 +242,12 @@ function EditorBodyInner(
                 return true;
             },
         },
-        onUpdate: ({ editor }) =>
-            onChange(docToSegments(editor.getJSON() as DocNode)),
+        onUpdate: ({ editor }) => {
+            const { segments, breakIds } = docToSegmentsWithBreaks(
+                editor.getJSON() as DocNode,
+            );
+            onChange(segments, breakIds);
+        },
         onSelectionUpdate: ({ editor }) => {
             if (!onActiveSegmentChange) {
                 return;
@@ -303,9 +324,10 @@ function EditorBodyInner(
         }
         const current = docToSegments(editor.getJSON() as DocNode);
         if (JSON.stringify(current) !== JSON.stringify(value)) {
-            editor.commands.setContent(segmentsToDoc(value) as object, {
-                emitUpdate: false,
-            });
+            editor.commands.setContent(
+                segmentsToDocWithBreaks(value, breakIds) as object,
+                { emitUpdate: false },
+            );
         }
         // oxlint-disable-next-line react-hooks/exhaustive-deps
     }, [value, editor]);
