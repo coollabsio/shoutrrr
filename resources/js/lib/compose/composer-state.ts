@@ -911,9 +911,25 @@ export function contentMatchesServer(
         return false;
     }
 
+    // Compare through the same "fold unplaced media onto __head__" display
+    // semantics `hydrate` applies, not the raw server grouping — a legacy post
+    // with media but no placement rows groups to `{}` while the hydrated state
+    // folds that same media onto `__head__`; those are the same post and must
+    // not be flagged as diverged.
     if (
-        JSON.stringify(normalizePlacements(state.placements)) !==
-        JSON.stringify(normalizePlacements(groupPlacements(post.placements)))
+        JSON.stringify(
+            normalizePlacements(
+                withOrphanMediaOnHead(state.placements, state.media),
+            ),
+        ) !==
+        JSON.stringify(
+            normalizePlacements(
+                withOrphanMediaOnHead(
+                    groupPlacements(post.placements),
+                    post.media,
+                ),
+            ),
+        )
     ) {
         return false;
     }

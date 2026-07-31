@@ -89,9 +89,9 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
                     return $ready;
                 }
                 $videoEmbedByMediaId[$gifMedia[0]->id] = $this->videoEmbed($context, $gifMedia[0], 'gif');
-            } elseif ($rootUri === null) {
-                // Media rides on the root publish attempt only; uploaded once, then each
-                // section's post embeds just the blobs resolved to its index.
+            } elseif ($videoMedia === [] && $gifMedia === []) {
+                // Uploaded regardless of fresh vs. resumed publish, so a resumed job
+                // still populates blobs for any not-yet-posted section's images.
                 $imageBlobsByMediaId = $this->uploadImageBlobs($context->media, $pds, $jwt, $session, $context->account);
             }
 
@@ -466,8 +466,6 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
      */
     private function uploadImageBlobs(array $media, string $pds, string $jwt, array $session, ConnectedAccount $account): array
     {
-        $media = array_slice($media, 0, Platform::Bluesky->maxMedia());
-
         $blobsByMediaId = [];
 
         foreach ($media as $item) {
@@ -519,6 +517,8 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
                 $images[] = $imageBlobsByMediaId[$item->id];
             }
         }
+
+        $images = array_slice($images, 0, Platform::Bluesky->maxMedia());
 
         return $images === [] ? null : ['$type' => 'app.bsky.embed.images', 'images' => $images];
     }

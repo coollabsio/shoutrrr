@@ -1012,6 +1012,79 @@ describe('per-segment placements', () => {
         expect(s.placements.__head__).toEqual(['m1']);
     });
 
+    it('does not flag a legacy post (media but no placement rows) as diverged on a stale-write 409', () => {
+        // Regression: contentMatchesServer used to compare state.placements
+        // (folded onto __head__ by hydrate) against the RAW server grouping
+        // groupPlacements(post.placements), which is `{}` when a legacy post
+        // has no placement rows at all — an always-unequal, always-"diverged"
+        // comparison that popped the conflict dialog on every save.
+        const post: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            segments: ['hello'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            // Legacy post: media attached, but no placement rows (undefined).
+            media: [mediaFixture('m1')],
+        };
+        const state = composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+        expect(state.placements.__head__).toEqual(['m1']);
+
+        // Echoing the same post back (e.g. a stale-write 409) must silently
+        // re-baseline, not surface a false conflict dialog.
+        const next = composerReducer(state, {
+            type: 'saveFailedStale',
+            post,
+        });
+        expect(next.saveState).toBe('saved');
+        expect(next.conflict).toBeNull();
+    });
+
+    it('still opens the conflict dialog when placements genuinely diverge from the server', () => {
+        const post: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            segments: ['hello'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            segment_breaks: ['b1'],
+            placements: [{ media_id: 'm1', segment_ref: 'b1', position: 0 }],
+            targets: [],
+            media: [mediaFixture('m1')],
+        };
+        let state = composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+        expect(state.placements.b1).toEqual(['m1']);
+
+        // Local edit moves the media to a different segment (canonical scope).
+        state = composerReducer(state, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: '__head__',
+        });
+
+        // The server still reports the original placement — a real conflict.
+        const next = composerReducer(state, {
+            type: 'saveFailedStale',
+            post,
+        });
+        expect(next.saveState).toBe('conflict');
+    });
+
     it('moving media on an account tab diverges only that account', () => {
         let s: ComposerState = {
             ...initialComposerState(),

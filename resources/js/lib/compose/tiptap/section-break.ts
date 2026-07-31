@@ -74,10 +74,19 @@ declare module '@tiptap/core' {
 }
 
 // Stable id for each section break, so media can be keyed to the segment it
-// opens even as segments before it are edited/reordered. A monotonic counter
-// (not Math.random) keeps id generation deterministic for tests.
+// opens even as segments before it are edited/reordered. A draft reloaded
+// from the server already contains persisted break ids (restored via
+// `parseHTML`/`segmentsToDocWithBreaks`), so freshly generated ids must never
+// collide with those — a bare per-load counter starting at 0/1 would repeat
+// `bk_1`, `bk_2`, ... every page load and collide with the restored ones.
+// Namespacing with a random session token (minted once per module load)
+// keeps the counter itself monotonic/deterministic *within* a session while
+// making cross-session collisions practically impossible.
+// Exported (only) so tests can exercise the id scheme directly — it is not
+// part of the extension's public API.
+const sessionToken = Math.random().toString(36).slice(2, 10);
 let seq = 0;
-const nextBreakId = () => 'bk_' + ++seq;
+export const nextBreakId = () => `bk_${sessionToken}_${++seq}`;
 
 /**
  * Manual thread-break atom node. Renders as a non-editable `<div data-section-break>`

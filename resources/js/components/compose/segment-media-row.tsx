@@ -29,8 +29,9 @@ function formatDuration(seconds: number | null): string | null {
     if (seconds === null || seconds <= 0) {
         return null;
     }
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
+    const whole = Math.floor(seconds);
+    const m = Math.floor(whole / 60);
+    const s = whole % 60;
 
     return `${m}:${String(s).padStart(2, '0')}`;
 }

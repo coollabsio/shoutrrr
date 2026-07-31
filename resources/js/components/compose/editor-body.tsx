@@ -265,10 +265,43 @@ function EditorBodyInner(
             if (!onActiveSegmentChange) {
                 return;
             }
-            const doc = editor.getJSON() as DocNode;
-            const { breakIds } = docToSegmentsWithBreaks(doc);
+            // Avoid `editor.getJSON()` + `docToSegmentsWithBreaks` here — both
+            // walk and serialize the *entire* document (every paragraph's
+            // text/marks), which is wasteful on a handler that fires on every
+            // caret move, not just on content changes. `activeSegmentRef` only
+            // needs each top-level node's break id (if any) and size, both of
+            // which the live ProseMirror doc already exposes in O(1) per node.
+            const breakIds: string[] = [];
+            const content: DocNode[] = [];
+            editor.state.doc.forEach((node) => {
+                if (node.type.name === 'sectionBreak') {
+                    const breakId =
+                        (node.attrs.breakId as string | undefined) ??
+                        'b' + breakIds.length;
+                    breakIds.push(breakId);
+                    content.push({ type: 'sectionBreak' });
+
+                    return;
+                }
+                // A same-size stand-in so `activeSegmentRef`'s node-size math
+                // (which reads text length, not full JSON) lines up with the
+                // real document without re-serializing its actual content.
+                content.push({
+                    type: node.type.name,
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'x'.repeat(Math.max(node.nodeSize - 2, 0)),
+                        },
+                    ],
+                });
+            });
             onActiveSegmentChange(
-                activeSegmentRef(doc, editor.state.selection.from, breakIds),
+                activeSegmentRef(
+                    { type: 'doc', content },
+                    editor.state.selection.from,
+                    breakIds,
+                ),
             );
         },
         onBlur,

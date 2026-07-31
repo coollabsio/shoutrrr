@@ -257,6 +257,18 @@ export default function Composer({
     const explicitUploadSegmentRef = useRef<string | null>(null);
     const segmentFileInputRef = useRef<HTMLInputElement | null>(null);
 
+    // Resolves which segment a just-finished upload/edit should attach to: an
+    // explicit per-segment target (see `addMediaToSegment`), held for the
+    // *entire* upload+editor session — not just until the file picker's
+    // promise settles — else the caret's current segment, else the head.
+    function resolveTargetSegmentRef(): string {
+        return (
+            explicitUploadSegmentRef.current ??
+            editorRef.current?.activeSegmentRef() ??
+            '__head__'
+        );
+    }
+
     // Owns the media-upload pipeline (image/video validation + upload). Lifted
     // here so both the editor (⌘/Ctrl+V paste) and the toolbar (picker/drop)
     // feed the same handleFiles and share one in-flight `pending` list.
@@ -266,22 +278,28 @@ export default function Composer({
         onEnsurePost: ensurePost,
         onAddMedia: (m, segmentRef) =>
             dispatch({ type: 'addMedia', media: m, segmentRef }),
-        activeSegmentRef: () =>
-            explicitUploadSegmentRef.current ??
-            editorRef.current?.activeSegmentRef() ??
-            '__head__',
+        activeSegmentRef: resolveTargetSegmentRef,
     });
 
     const imageEditor = useImageEditor({
         onEnsurePost: ensurePost,
-        onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
+        onAddMedia: (m) =>
+            dispatch({
+                type: 'addMedia',
+                media: m,
+                segmentRef: resolveTargetSegmentRef(),
+            }),
         onReplaceMedia: (m) => dispatch({ type: 'replaceMedia', media: m }),
     });
 
     const videoEditor = useVideoEditor({
         onEnsurePost: ensurePost,
         onComplete: (oldMediaId, media) => {
-            dispatch({ type: 'addMedia', media });
+            dispatch({
+                type: 'addMedia',
+                media,
+                segmentRef: resolveTargetSegmentRef(),
+            });
             if (oldMediaId) {
                 dispatch({ type: 'removeMedia', mediaId: oldMediaId });
             }
@@ -388,12 +406,26 @@ export default function Composer({
                 URL.revokeObjectURL(it.url);
             }
         }
+        // The editing session (which may span several batch items) is over —
+        // only now is it safe to release the explicit per-segment target, since
+        // `imageEditor.onAddMedia` reads it for every apply along the way.
+        explicitUploadSegmentRef.current = null;
         setEditing(null);
     }
+
+    // Set synchronously in lockstep with every `setEditing(...)` call below
+    // that opens a genuine editing session for freshly-picked files. Reading
+    // `editing`/`editingRef` back from `acceptSegmentFiles`'s `.finally()`
+    // isn't reliable there — that ref only tracks the *rendered* state, and a
+    // promise microtask isn't guaranteed to run after React has re-rendered
+    // in response to the `setEditing` call in the same tick. This ref sidesteps
+    // that entirely by being written directly, independent of any render.
+    const openedEditorRef = useRef(false);
 
     // Split a picked/dropped/pasted batch: videos upload directly; images open
     // the editor as a batch (edited one at a time).
     async function handleAddedFiles(files: FileList | File[]): Promise<void> {
+        openedEditorRef.current = false;
         const all = Array.from(files);
 
         // Bluesky publishes a GIF as video and allows only one, unmixed. Block it
@@ -428,6 +460,7 @@ export default function Composer({
             const file = videos[0];
             try {
                 const meta = await readVideoMetadata(file);
+                openedEditorRef.current = true;
                 setEditing({
                     kind: 'video-new',
                     url: URL.createObjectURL(file),
@@ -456,6 +489,7 @@ export default function Composer({
         if (editable.length === 0) {
             return;
         }
+        openedEditorRef.current = true;
         setEditing({
             kind: 'batch',
             items: editable.map((f) => ({
@@ -467,9 +501,12 @@ export default function Composer({
     }
 
     // A segment's "add media" affordance: target that segment for whatever
-    // gets picked next, then open the shared file picker. The override is
-    // cleared once the picked batch has been handled (or nothing was picked),
-    // so it never leaks into a later, unrelated upload.
+    // gets picked next, then open the shared file picker. Images/videos don't
+    // attach immediately — they open the beautifier/trim editor first — so the
+    // override must survive that whole session; it's only released once the
+    // editor actually closes (see `endEditingStep` / `closeVideoEditing`), or
+    // right here if nothing ended up opening an editor (e.g. a GIF-only pick,
+    // a validation rejection, or an empty selection).
     function addMediaToSegment(segmentRef: string) {
         explicitUploadSegmentRef.current = segmentRef;
         segmentFileInputRef.current?.click();
@@ -477,9 +514,16 @@ export default function Composer({
 
     function acceptSegmentFiles(files: FileList) {
         void handleAddedFiles(files).finally(() => {
-            explicitUploadSegmentRef.current = null;
             if (segmentFileInputRef.current) {
                 segmentFileInputRef.current.value = '';
+            }
+            // If nothing opened an editor (a GIF-only pick, a validation
+            // rejection, or an empty selection), there's no later apply/cancel
+            // to release the target on — clear it now. Otherwise leave it for
+            // `endEditingStep`/`closeVideoEditing` to release once that
+            // session actually ends.
+            if (!openedEditorRef.current) {
+                explicitUploadSegmentRef.current = null;
             }
         });
     }
@@ -489,6 +533,7 @@ export default function Composer({
         if (editing?.kind === 'video-new') {
             URL.revokeObjectURL(editing.url);
         }
+        explicitUploadSegmentRef.current = null;
         setEditing(null);
     }
 
@@ -679,6 +724,19 @@ export default function Composer({
     // attaches to it, so the per-segment hover-reveal row is redundant — it
     // only earns its keep once there's more than one thread to choose between.
     const singleThread = !hasMultipleThreads(state);
+
+    // An account override can carry more thread posts than the canonical
+    // `segmentBreaks` structure tracks (its own manual splits diverge from the
+    // shared thread shape). Placements are always keyed by the *canonical*
+    // break refs, so a segment past that range has no ref the server's
+    // `mediaSegmentsFromPlacements` recognizes — media added there would
+    // silently fail to persist on save. Hide the per-segment "add media" row
+    // for the whole account in that case, the same coarse-grained way
+    // `singleThread` hides it above.
+    const overrideExceedsSegmentBreaks =
+        activeAccount !== null &&
+        (state.overrideByAccount[activeAccount.id]?.length ?? 0) >
+            state.segmentBreaks.length + 1;
 
     function limitForPlatform(platform: PlatformName): number {
         return limits.find((l) => l.platform === platform)?.maxLength ?? 0;
@@ -1092,7 +1150,8 @@ export default function Composer({
                                       return null;
                                   }
                                   if (
-                                      singleThread &&
+                                      (singleThread ||
+                                          overrideExceedsSegmentBreaks) &&
                                       segMedia.length === 0 &&
                                       segPending.length === 0
                                   ) {
