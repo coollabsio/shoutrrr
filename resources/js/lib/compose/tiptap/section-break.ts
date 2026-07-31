@@ -73,6 +73,12 @@ declare module '@tiptap/core' {
     }
 }
 
+// Stable id for each section break, so media can be keyed to the segment it
+// opens even as segments before it are edited/reordered. A monotonic counter
+// (not Math.random) keeps id generation deterministic for tests.
+let seq = 0;
+const nextBreakId = () => 'bk_' + ++seq;
+
 /**
  * Manual thread-break atom node. Renders as a non-editable `<div data-section-break>`
  * and marks a segment boundary — `docToSegments` ends the current segment here, so
@@ -83,6 +89,17 @@ export const SectionBreak = Node.create({
     group: 'block',
     atom: true,
     selectable: true,
+
+    addAttributes() {
+        return {
+            breakId: {
+                default: null,
+                parseHTML: (element) => element.getAttribute('data-break-id'),
+                renderHTML: (attrs) =>
+                    attrs.breakId ? { 'data-break-id': attrs.breakId } : {},
+            },
+        };
+    },
 
     parseHTML() {
         return [{ tag: 'div[data-section-break]' }];
@@ -165,7 +182,10 @@ export const SectionBreak = Node.create({
             insertSectionBreak:
                 () =>
                 ({ commands }) =>
-                    commands.insertContent({ type: this.name }),
+                    commands.insertContent({
+                        type: this.name,
+                        attrs: { breakId: nextBreakId() },
+                    }),
         };
     },
 
@@ -201,7 +221,10 @@ export const SectionBreak = Node.create({
                         from: $from.before($from.depth),
                         to: $from.after($from.depth),
                     })
-                    .insertContent([{ type: this.name }, { type: 'paragraph' }])
+                    .insertContent([
+                        { type: this.name, attrs: { breakId: nextBreakId() } },
+                        { type: 'paragraph' },
+                    ])
                     .focus()
                     .run();
             },
