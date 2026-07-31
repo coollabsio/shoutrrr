@@ -17,6 +17,7 @@ import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import {
     composerReducer,
     initialComposerState,
+    isDraftBlank,
     pickActiveAccount,
     shouldShowConnectAccountPrompt,
     type ComposerState,
@@ -668,6 +669,12 @@ export default function Composer({
             .filter((m): m is MediaView => m !== undefined);
     }
 
+    // A brand-new, single-thread, still-blank draft has nothing to attach media
+    // to yet — the hover-reveal "Add media" row would just reserve dead space
+    // above an empty placeholder. It appears once there's something to attach
+    // to: typed text, a second thread, or media already on this segment.
+    const draftIsBlank = isDraftBlank(state);
+
     function limitForPlatform(platform: PlatformName): number {
         return limits.find((l) => l.platform === platform)?.maxLength ?? 0;
     }
@@ -1074,6 +1081,13 @@ export default function Composer({
                                           : [];
                                   if (
                                       readOnly &&
+                                      segMedia.length === 0 &&
+                                      segPending.length === 0
+                                  ) {
+                                      return null;
+                                  }
+                                  if (
+                                      draftIsBlank &&
                                       segMedia.length === 0 &&
                                       segPending.length === 0
                                   ) {

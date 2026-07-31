@@ -15,6 +15,7 @@ import {
     composerReducer,
     firstLineTitle,
     initialComposerState,
+    isDraftBlank,
     parseDestinationParam,
     pickActiveAccount,
     segmentRefsFromBreaks,
@@ -876,6 +877,48 @@ describe('composerHasContent', () => {
             segments: ['   '],
         });
         expect(composerHasContent(state)).toBe(false);
+    });
+});
+
+describe('isDraftBlank', () => {
+    it('is true for a fresh composer with a single, empty thread', () => {
+        expect(isDraftBlank(initialComposerState())).toBe(true);
+    });
+
+    it('is false once text is typed', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'updateSegments',
+            segments: ['hi'],
+        });
+        expect(isDraftBlank(state)).toBe(false);
+    });
+
+    it('is false once a second thread exists, even with no text yet', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setSegmentBreaks',
+            breakIds: ['b1'],
+        });
+        expect(isDraftBlank(state)).toBe(false);
+    });
+
+    it('is false once media is attached', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'addMedia',
+            media: {
+                id: 'm1',
+                url: 'http://x/m1.png',
+                mime: 'image/png',
+                kind: 'image',
+                alt_text: null,
+                duration_seconds: null,
+                position: 0,
+                edit_settings: null,
+                source_url: null,
+                edit_url: 'http://x/raw',
+                source_edit_url: null,
+            },
+        });
+        expect(isDraftBlank(state)).toBe(false);
     });
 });
 

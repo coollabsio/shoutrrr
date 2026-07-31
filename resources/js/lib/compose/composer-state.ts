@@ -992,6 +992,16 @@ export function composerHasContent(state: ComposerState): boolean {
 }
 
 /**
+ * A brand-new, single-thread, still-blank draft: nothing typed, no second
+ * thread, no media. The per-segment "add media" affordance stays hidden on a
+ * draft in this state — it would just reserve dead space beside an empty
+ * placeholder — and reappears the moment any of those becomes false.
+ */
+export function isDraftBlank(state: ComposerState): boolean {
+    return !composerHasContent(state) && state.segmentBreaks.length === 0;
+}
+
+/**
  * Derive a draft title from segments: the first non-empty line across all
  * segments, trimmed, and truncated to 80 characters with an ellipsis. Returns
  * '' when the segments have no non-empty line.
