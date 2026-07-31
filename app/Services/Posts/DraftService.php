@@ -11,6 +11,7 @@ use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostMedia;
+use App\Models\PostMediaPlacement;
 use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
@@ -147,7 +148,7 @@ class DraftService
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
      * @param  array<string, string>  $formatByAccount
      */
-    public function syncTargets(Post $post, array $accountIds, array $segments, array $autoSplitByAccount, array $overrideByAccount, array $mentions = [], array $formatByAccount = []): void
+    public function syncTargets(Post $post, array $accountIds, array $segments, array $autoSplitByAccount, array $overrideByAccount, array $mentions = [], array $formatByAccount = [], ?DraftData $data = null): void
     {
         $accounts = ConnectedAccount::withoutGlobalScopes()
             ->whereIn('id', $accountIds)
@@ -184,23 +185,104 @@ class DraftService
                 fn (string $segment): string => $this->resolveMentionTokens($segment, $mentions, $account->platform->value),
                 $effectiveSegments,
             );
-            $sections = $this->splitter->split(
+
+            $breaks = $data?->segmentBreaksFor($accountId) ?? [];
+            $placements = $data?->placementsFor($accountId) ?? [];
+            $mediaSegments = $this->mediaSegmentsFromPlacements($placements, $breaks);
+
+            $split = $this->splitter->split(
                 $resolvedSegments,
                 $account->platform,
                 $autoSplit,
                 $account->maxTextLength(),
-            )->sections;
+                $mediaSegments,
+            );
 
-            PostTarget::updateOrCreate(
+            $target = PostTarget::updateOrCreate(
                 ['post_id' => $post->id, 'connected_account_id' => $accountId],
                 [
                     'platform' => $account->platform->value,
-                    'sections' => $sections,
+                    'sections' => $split->sections,
+                    'segment_breaks' => $breaks,
+                    'section_sources' => $split->sectionSources,
                     'content_override' => $override,
                     'auto_split' => $autoSplit,
                     'format' => $format,
                 ],
             );
+
+            $this->syncPlacements($post, $target, $placements);
+        }
+    }
+
+    /**
+     * Map each placement's segment_ref to the authored-segment index it targets
+     * (`'__head__'` is index 0; otherwise the ref's position in `$breaks` + 1),
+     * so media-only segments still yield a section from the splitter. Refs that
+     * don't match a known break are skipped.
+     *
+     * @param  list<array{media_id: string, segment_ref: string, position: int}>  $placements
+     * @param  list<string>  $breaks
+     * @return list<int>
+     */
+    private function mediaSegmentsFromPlacements(array $placements, array $breaks): array
+    {
+        $indices = [];
+
+        foreach ($placements as $placement) {
+            $ref = $placement['segment_ref'];
+            if ($ref === '__head__') {
+                $indices[] = 0;
+
+                continue;
+            }
+
+            $position = array_search($ref, $breaks, true);
+            if ($position === false) {
+                continue;
+            }
+
+            $indices[] = $position + 1;
+        }
+
+        return array_values(array_unique($indices));
+    }
+
+    /**
+     * Delete-and-reinsert this target's media placements, de-duped on
+     * `post_media_id` (the table's unique key) and guarded so a placement can
+     * never FK-violate on media that isn't (or is no longer) attached to the post.
+     *
+     * @param  list<array{media_id: string, segment_ref: string, position: int}>  $placements
+     */
+    private function syncPlacements(Post $post, PostTarget $target, array $placements): void
+    {
+        $target->placements()->delete();
+
+        if ($placements === []) {
+            return;
+        }
+
+        $attachedMediaIds = PostMedia::withoutGlobalScopes()
+            ->where('post_id', $post->id)
+            ->pluck('id')
+            ->all();
+        $attachedMediaIds = array_flip($attachedMediaIds);
+
+        $seen = [];
+        foreach ($placements as $placement) {
+            $mediaId = $placement['media_id'];
+            if (! isset($attachedMediaIds[$mediaId]) || isset($seen[$mediaId])) {
+                continue;
+            }
+            $seen[$mediaId] = true;
+
+            PostMediaPlacement::create([
+                'post_target_id' => $target->id,
+                'post_media_id' => $mediaId,
+                'segment_ref' => $placement['segment_ref'],
+                'position' => $placement['position'],
+            ]);
         }
     }
 
@@ -258,8 +340,12 @@ class DraftService
 
             $post->forceFill($attributes)->save();
 
-            $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount);
+            // Attach media BEFORE syncing targets: placement rows FK to post_media
+            // rows scoped to this post, and attachMedia is what sets post_id on
+            // them — syncing targets first would leave placements referencing
+            // still-orphaned media.
             $this->attachMedia($post, $data->mediaIds);
+            $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount, $data);
 
             $post->touch();
 
