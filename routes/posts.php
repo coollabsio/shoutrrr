@@ -66,6 +66,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::put('posts/{post}', [PostController::class, 'update'])->name('posts.update');
     Route::get('posts/{post}', [ComposerController::class, 'show'])->name('posts.show');
     Route::delete('posts/{post}', [PostController::class, 'destroy'])->name('posts.destroy');
+    Route::post('posts/{post}/duplicate', [PostController::class, 'duplicate'])->name('posts.duplicate');
     Route::put('posts/{post}/schedule', [PostScheduleController::class, 'update'])->name('posts.schedule');
     Route::post('posts/{post}/queue', [PostQueueController::class, 'store'])->name('posts.queue');
     Route::post('posts/{post}/publish', [PublishController::class, 'store'])->name('posts.publish');
