@@ -2,6 +2,7 @@ import { Link, router, useHttp, usePage } from '@inertiajs/react';
 import {
     CalendarClock,
     CalendarX,
+    Copy,
     MessageCircle,
     RotateCw,
     Share2,
@@ -72,6 +73,10 @@ export function PostPageActions({ post }: Props) {
         router.visit(ComposerController.show(post.id).url, {
             preserveScroll: true,
         });
+    }
+
+    function handleDuplicate() {
+        router.post(PostController.duplicate(post.id).url);
     }
 
     function openReschedule() {
@@ -234,6 +239,19 @@ export function PostPageActions({ post }: Props) {
                         >
                             <Share2 className="size-3.5" aria-hidden />
                             <span className="hidden sm:inline">Share</span>
+                        </Button>
+                    )}
+                    {caps.canDuplicate && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            aria-label="Copy as draft"
+                            onClick={handleDuplicate}
+                        >
+                            <Copy className="size-3.5" aria-hidden />
+                            <span className="hidden sm:inline">
+                                Copy as draft
+                            </span>
                         </Button>
                     )}
                     {caps.canDelete && (

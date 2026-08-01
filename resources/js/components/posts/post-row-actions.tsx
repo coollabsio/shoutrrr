@@ -72,6 +72,10 @@ export function PostRowActions({ post }: Props) {
         router.visit(ComposerController.show(post.id).url);
     }
 
+    function handleDuplicate() {
+        router.post(PostController.duplicate(post.id).url);
+    }
+
     function openSchedule() {
         setPickedAt(defaultPickedAt(tz));
         setMode('scheduling');
@@ -267,6 +271,11 @@ export function PostRowActions({ post }: Props) {
                     <DropdownMenuItem onClick={() => setShareOpen(true)}>
                         Share&hellip;
                     </DropdownMenuItem>
+                    {caps.canDuplicate && (
+                        <DropdownMenuItem onClick={handleDuplicate}>
+                            Copy as draft
+                        </DropdownMenuItem>
+                    )}
                     {caps.canDelete && (
                         <DropdownMenuItem
                             variant="destructive"
