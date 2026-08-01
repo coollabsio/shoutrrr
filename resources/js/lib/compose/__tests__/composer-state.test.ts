@@ -1428,6 +1428,124 @@ describe('per-segment placements', () => {
         });
         expect(s.placementsByAccount).toEqual({});
     });
+
+    it('moveMediaToSegment round-tripping an account back to canonical clears the stale placementsByAccount entry', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            segmentBreaks: ['b1'],
+            placements: { __head__: ['m1'] },
+        };
+        // Diverge acc-x: move m1 to b1 for that account only.
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+            accountId: 'acc-x',
+        });
+        expect(s.placementsByAccount['acc-x'].b1).toEqual(['m1']);
+
+        // Move it back to __head__ for the same account — now structurally
+        // identical to canonical again.
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: '__head__',
+            accountId: 'acc-x',
+        });
+
+        // The stale entry must be removed entirely, not left equal-but-present
+        // — an equal-but-present entry still freezes the account out of future
+        // canonical-scope edits (see buildPutBody).
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        // A subsequent canonical-scope edit must now reach acc-x again.
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+        });
+        expect(s.placements.b1).toEqual(['m1']);
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toBeUndefined(); // inherits canonical
+        expect(body.placements).toContainEqual({
+            media_id: 'm1',
+            segment_ref: 'b1',
+            position: 0,
+        });
+    });
+
+    it('reorderSegmentMedia round-tripping an account back to canonical order clears the stale placementsByAccount entry', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1', 'm2'] },
+        };
+        s = composerReducer(s, {
+            type: 'reorderSegmentMedia',
+            segmentRef: '__head__',
+            ids: ['m2', 'm1'],
+            accountId: 'acc-x',
+        });
+        expect(s.placementsByAccount['acc-x']).toEqual({
+            __head__: ['m2', 'm1'],
+        });
+
+        // Reorder back to match canonical order — equal again.
+        s = composerReducer(s, {
+            type: 'reorderSegmentMedia',
+            segmentRef: '__head__',
+            ids: ['m1', 'm2'],
+            accountId: 'acc-x',
+        });
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        // A subsequent canonical-scope edit must now reach acc-x again.
+        s = composerReducer(s, {
+            type: 'reorderSegmentMedia',
+            segmentRef: '__head__',
+            ids: ['m2', 'm1'],
+        });
+        expect(s.placements.__head__).toEqual(['m2', 'm1']);
+
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toBeUndefined(); // inherits canonical
+    });
+
+    it('removeMediaFromSegments round-tripping an account back to canonical clears the stale placementsByAccount entry', () => {
+        // Canonical never had this media placed; acc-x diverged by placing it.
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: {},
+            placementsByAccount: { 'acc-x': { __head__: ['m1'] } },
+        };
+        s = composerReducer(s, {
+            type: 'removeMediaFromSegments',
+            mediaId: 'm1',
+            accountId: 'acc-x',
+        });
+
+        // acc-x's map is now empty, structurally equal to the empty canonical
+        // map — the stale entry must be dropped, not left as an equal-but-
+        // present freeze.
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        // A later canonical-scope edit must now reach acc-x.
+        s = composerReducer(s, {
+            type: 'addMedia',
+            media: mediaFixture('m2'),
+        });
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toBeUndefined(); // inherits canonical
+        expect(body.placements).toContainEqual({
+            media_id: 'm2',
+            segment_ref: '__head__',
+            position: 0,
+        });
+    });
 });
 
 describe('segmentRefsFromBreaks', () => {

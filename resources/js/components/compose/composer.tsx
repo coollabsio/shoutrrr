@@ -542,12 +542,28 @@ export default function Composer({
         setEditing(null);
     }
 
+    // Find the segment an already-attached media id currently lives in, so
+    // re-opening its editor can pin the eventual apply back to that same
+    // segment (see `addMediaToSegment`) instead of falling through to
+    // whatever segment the caret happens to be in when the edit completes.
+    function segmentRefForMedia(mediaId: string): string {
+        const entry = Object.entries(activeScopePlacements).find(([, ids]) =>
+            ids.includes(mediaId),
+        );
+
+        return entry?.[0] ?? '__head__';
+    }
+
     // Open an attached video in the video editor.
     function openVideo(mediaId: string) {
         const m = state.media.find((x) => x.id === mediaId);
         if (!m || m.kind !== 'video') {
             return;
         }
+        // Trimming mints a new media id (see `videoEditor.onComplete`) that
+        // must land back in this video's own segment, not wherever the caret
+        // is — pin the target before opening the editor.
+        explicitUploadSegmentRef.current = segmentRefForMedia(mediaId);
         setEditing({
             kind: 'video',
             url: m.edit_url,
@@ -565,6 +581,13 @@ export default function Composer({
         if (!m || m.kind === 'video' || m.mime === 'image/gif') {
             return;
         }
+        // First-time beautify (the `raw` branch below) mints a new media id
+        // via `imageEditor.applyNew`, which must land back in this image's
+        // own segment rather than the caret's — pin the target before
+        // opening the editor. (`reedit` preserves the id via `applyEdit` and
+        // ignores this target, but setting it here is harmless and keeps the
+        // two branches symmetric.)
+        explicitUploadSegmentRef.current = segmentRefForMedia(mediaId);
         if (m.edit_settings && m.source_url) {
             setEditing({
                 kind: 'reedit',

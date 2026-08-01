@@ -237,6 +237,32 @@ function placementMapsEqual(
     );
 }
 
+/**
+ * Write a per-account divergence-creating edit's resulting map back into
+ * `placementsByAccount`. Mirrors `hydrate`'s divergence check: when the
+ * account's new map is structurally equal to canonical, the entry must be
+ * deleted entirely rather than written as an equal-but-present copy — an
+ * existing entry, even one that happens to equal canonical right now, is
+ * read by `buildPutBody` (and the composer's active-scope lookup) as "this
+ * account has diverged", which permanently freezes it out of subsequent
+ * canonical-scope edits until a full re-hydrate re-runs this same check.
+ */
+function withAccountPlacements(
+    placementsByAccount: Record<string, Record<string, string[]>>,
+    accountId: string,
+    nextScope: Record<string, string[]>,
+    canonicalPlacements: Record<string, string[]>,
+): Record<string, Record<string, string[]>> {
+    if (placementMapsEqual(nextScope, canonicalPlacements)) {
+        const next = { ...placementsByAccount };
+        delete next[accountId];
+
+        return next;
+    }
+
+    return { ...placementsByAccount, [accountId]: nextScope };
+}
+
 /** Remove a media id from every segment array in a segmentRef -> ids map. */
 function removeIdFromAllSegments(
     map: Record<string, string[]>,
@@ -605,10 +631,12 @@ export function composerReducer(
             if (scopeKey) {
                 return {
                     ...state,
-                    placementsByAccount: {
-                        ...state.placementsByAccount,
-                        [scopeKey]: nextScope,
-                    },
+                    placementsByAccount: withAccountPlacements(
+                        state.placementsByAccount,
+                        scopeKey,
+                        nextScope,
+                        state.placements,
+                    ),
                     saveState: 'dirty',
                 };
             }
@@ -621,16 +649,19 @@ export function composerReducer(
             if (scopeKey) {
                 const currentScope =
                     state.placementsByAccount[scopeKey] ?? state.placements;
+                const nextScope = removeIdFromAllSegments(
+                    currentScope,
+                    action.mediaId,
+                );
 
                 return {
                     ...state,
-                    placementsByAccount: {
-                        ...state.placementsByAccount,
-                        [scopeKey]: removeIdFromAllSegments(
-                            currentScope,
-                            action.mediaId,
-                        ),
-                    },
+                    placementsByAccount: withAccountPlacements(
+                        state.placementsByAccount,
+                        scopeKey,
+                        nextScope,
+                        state.placements,
+                    ),
                     saveState: 'dirty',
                 };
             }
@@ -659,16 +690,19 @@ export function composerReducer(
             if (scopeKey) {
                 const currentScope =
                     state.placementsByAccount[scopeKey] ?? state.placements;
+                const nextScope = {
+                    ...currentScope,
+                    [action.segmentRef]: action.ids,
+                };
 
                 return {
                     ...state,
-                    placementsByAccount: {
-                        ...state.placementsByAccount,
-                        [scopeKey]: {
-                            ...currentScope,
-                            [action.segmentRef]: action.ids,
-                        },
-                    },
+                    placementsByAccount: withAccountPlacements(
+                        state.placementsByAccount,
+                        scopeKey,
+                        nextScope,
+                        state.placements,
+                    ),
                     saveState: 'dirty',
                 };
             }

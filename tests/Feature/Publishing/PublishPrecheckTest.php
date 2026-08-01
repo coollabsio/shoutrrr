@@ -361,6 +361,110 @@ test('blockingTargets passes a PNG image on X (compressed at publish)', function
     expect($blocked)->toBe([]);
 });
 
+test('blockingTargets allows 4 images per section across two thread sections on X', function () {
+    $post = Post::factory()->create();
+    $target = PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['first', 'second'],
+        'segment_breaks' => ['break-1'],
+        'section_sources' => [0, 1],
+    ]);
+
+    foreach (range(0, 3) as $position) {
+        $media = PostMedia::factory()->for($post)->create(['kind' => 'image']);
+        PostMediaPlacement::factory()->create([
+            'post_target_id' => $target->id,
+            'post_media_id' => $media->id,
+            'segment_ref' => SegmentMediaResolver::HEAD,
+            'position' => $position,
+        ]);
+    }
+
+    foreach (range(0, 3) as $position) {
+        $media = PostMedia::factory()->for($post)->create(['kind' => 'image']);
+        PostMediaPlacement::factory()->create([
+            'post_target_id' => $target->id,
+            'post_media_id' => $media->id,
+            'segment_ref' => 'break-1',
+            'position' => $position,
+        ]);
+    }
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'targets.placements', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
+test('blockingTargets flags 5 images placed on a single thread section as too_many_media', function () {
+    $post = Post::factory()->create();
+    $target = PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['first'],
+    ]);
+
+    foreach (range(0, 4) as $position) {
+        $media = PostMedia::factory()->for($post)->create(['kind' => 'image']);
+        PostMediaPlacement::factory()->create([
+            'post_target_id' => $target->id,
+            'post_media_id' => $media->id,
+            'segment_ref' => SegmentMediaResolver::HEAD,
+            'position' => $position,
+        ]);
+    }
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'targets.placements', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toContain('too_many_media');
+});
+
+test('blockingTargets flags attached media with no placement as unplaced_media', function () {
+    $post = Post::factory()->create();
+    $placed = PostMedia::factory()->for($post)->create(['kind' => 'image']);
+    PostMedia::factory()->for($post)->create(['kind' => 'image']);
+    $target = PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['hello'],
+    ]);
+    PostMediaPlacement::factory()->create([
+        'post_target_id' => $target->id,
+        'post_media_id' => $placed->id,
+        'segment_ref' => SegmentMediaResolver::HEAD,
+        'position' => 0,
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'targets.placements', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toContain('unplaced_media');
+});
+
+test('blockingTargets passes a target whose placements cover all attached media', function () {
+    $post = Post::factory()->create();
+    $first = PostMedia::factory()->for($post)->create(['kind' => 'image']);
+    $second = PostMedia::factory()->for($post)->create(['kind' => 'image']);
+    $target = PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['hello'],
+    ]);
+    PostMediaPlacement::factory()->create([
+        'post_target_id' => $target->id,
+        'post_media_id' => $first->id,
+        'segment_ref' => SegmentMediaResolver::HEAD,
+        'position' => 0,
+    ]);
+    PostMediaPlacement::factory()->create([
+        'post_target_id' => $target->id,
+        'post_media_id' => $second->id,
+        'segment_ref' => SegmentMediaResolver::HEAD,
+        'position' => 1,
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'targets.placements', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
 test('blockingTargets allows a GIF mixed with an image on LinkedIn', function () {
     $post = Post::factory()->create();
     PostMedia::factory()->for($post)->create(['mime' => 'image/gif']);

@@ -84,6 +84,7 @@ class PublishPrecheck
             'video_too_long' => "The video is longer than {$label} allows.",
             'video_too_large' => "The video is larger than {$label} allows.",
             'gif_not_mixable' => "{$label} allows only one GIF and won't mix it with other media.",
+            'unplaced_media' => "Some attached media isn't placed in this post — remove it or add it to a thread section.",
             default => "{$label} can't publish this post yet.",
         }, $issues);
 
@@ -93,6 +94,15 @@ class PublishPrecheck
     /**
      * Platform-limit issues for a target that has content, plus the media rules
      * the section-length limits don't cover.
+     *
+     * `too_many_media` is deliberately not sourced from
+     * PostSplitter::validateSections() here: that method's media-count argument
+     * is checked against the whole post, but publishing caps media per thread
+     * section (each connector slices `mediaForSection()` to
+     * `Platform::maxMedia()`). A thread with 4 images on each of two sections is
+     * publishable even though it holds 8 images overall, so `mediaIssues()`
+     * recomputes this per section using the same grouping `mixIssues()` already
+     * relies on.
      *
      * @param  Collection<int, PostMedia>  $media
      * @return list<string>
@@ -104,7 +114,7 @@ class PublishPrecheck
         $issues = $this->splitter->validateSections(
             $target->sections,
             $platform,
-            $media->count(),
+            0,
             $target->account?->maxTextLength(),
         );
 
@@ -120,14 +130,14 @@ class PublishPrecheck
     }
 
     /**
-     * Media-attribute rules the connectors enforce only at publish time — video
-     * caps, image/video mixing, and GIF mixing. Video caps are checked against
-     * the whole target's media (never re-encoded server-side, so caps can't
-     * self-heal the way images can). The mixing rules, however, are checked per
-     * thread segment: each connector publishes a thread segment as its own post
-     * (see SegmentMediaResolver/mediaForSection), so two segments each holding a
-     * single video or image don't violate a "one video or images" rule that only
-     * applies within a single published post.
+     * Media-attribute rules the connectors enforce only at publish time — the
+     * per-section media cap, image/video mixing, GIF mixing, and unplaced media.
+     * Video caps are checked against the whole target's media (never
+     * re-encoded server-side, so caps can't self-heal the way images can). The
+     * other rules are checked per thread segment: each connector publishes a
+     * thread segment as its own post (see SegmentMediaResolver/mediaForSection),
+     * so e.g. two segments each holding 4 images don't violate a platform's
+     * 4-image cap that only applies within a single published post.
      *
      * @param  Collection<int, PostMedia>  $media
      * @return list<string>
@@ -139,10 +149,27 @@ class PublishPrecheck
         }
 
         $issues = [];
+        $sections = $this->mediaBySection($target, $media);
 
-        foreach ($this->mediaBySection($target, $media) as $sectionMedia) {
+        foreach ($sections as $sectionMedia) {
+            if ($sectionMedia->count() > $platform->maxMedia()) {
+                $issues[] = 'too_many_media';
+            }
+
             foreach ($this->mixIssues($platform, $sectionMedia) as $issue) {
                 $issues[] = $issue;
+            }
+        }
+
+        if ($target->placements->isNotEmpty()) {
+            $placedIds = collect($sections)
+                ->flatMap(fn (Collection $sectionMedia): Collection => $sectionMedia)
+                ->map(fn (PostMedia $item): string => (string) $item->id)
+                ->all();
+            $attachedIds = $media->map(fn (PostMedia $item): string => (string) $item->id)->all();
+
+            if (array_diff($attachedIds, $placedIds) !== []) {
+                $issues[] = 'unplaced_media';
             }
         }
 

@@ -84,6 +84,65 @@ describe('per-segment media targeting survives the editor session', () => {
         );
     });
 
+    it('re-opening an attached video or image pins its editor session to its own segment, not the caret', () => {
+        const composer = source();
+
+        // Re-editing an already-placed video/image mints a NEW media id on
+        // apply (video trim, and first-time image beautify) and drops the
+        // old one — if the explicit target isn't set to the media's CURRENT
+        // segment before the editor opens, `resolveTargetSegmentRef()` falls
+        // through to the caret and the media visibly jumps to whatever
+        // segment the user was last typing in.
+        const openVideo = composer.slice(
+            composer.indexOf('function openVideo'),
+            composer.indexOf('function openImage'),
+        );
+        expect(openVideo).toContain(
+            'explicitUploadSegmentRef.current = segmentRefForMedia(mediaId);',
+        );
+        expect(
+            openVideo.indexOf('explicitUploadSegmentRef.current ='),
+        ).toBeLessThan(openVideo.indexOf('setEditing({'));
+
+        const openImage = composer.slice(
+            composer.indexOf('function openImage'),
+            composer.indexOf('async function applyEditing'),
+        );
+        expect(openImage).toContain(
+            'explicitUploadSegmentRef.current = segmentRefForMedia(mediaId);',
+        );
+        // Set once, ahead of BOTH branches (`reedit` and `raw`) — the media's
+        // current segment is known before the code decides which editing
+        // kind to open.
+        expect(
+            openImage.indexOf('explicitUploadSegmentRef.current ='),
+        ).toBeLessThan(openImage.indexOf("kind: 'reedit'"));
+        expect(
+            openImage.indexOf('explicitUploadSegmentRef.current ='),
+        ).toBeLessThan(openImage.indexOf("kind: 'raw'"));
+
+        // The `batch` (fresh multi-upload) and already-in-flight `reedit`
+        // apply path are untouched: `reedit` still preserves the media id via
+        // `applyEdit` rather than minting a new one via the segment-scoped
+        // `addMedia` dispatch.
+        const applyEditing = composer.slice(
+            composer.indexOf('async function applyEditing'),
+            composer.indexOf('function cancelEditing'),
+        );
+        expect(applyEditing).toContain('imageEditor.applyEdit(');
+
+        // `segmentRefForMedia` resolves against the placements the rest of
+        // the composer already reads from (`activeScopePlacements`), and
+        // falls back to the head segment defensively rather than leaving the
+        // target unset (which would silently reintroduce the caret bug).
+        const segmentRefForMedia = composer.slice(
+            composer.indexOf('function segmentRefForMedia'),
+            composer.indexOf('function openVideo'),
+        );
+        expect(segmentRefForMedia).toContain('activeScopePlacements');
+        expect(segmentRefForMedia).toContain("?? '__head__'");
+    });
+
     it('hides the per-segment add-media row when an override outgrows the canonical segment breaks', () => {
         const composer = source();
         const normalized = normalize(composer);
