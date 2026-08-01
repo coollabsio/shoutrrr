@@ -18,6 +18,8 @@ final class PostView
      */
     public static function make(Post $post): array
     {
+        $post->loadMissing('targets.placements');
+
         $splitter = app(PostSplitter::class);
         $mediaCount = $post->media->count();
         $defaultAccountId = $post->workspace()->value('default_connected_account_id');

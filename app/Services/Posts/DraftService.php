@@ -189,8 +189,19 @@ class DraftService
                 $effectiveSegments,
             );
 
-            $breaks = $data?->segmentBreaksFor($accountId) ?? [];
-            $placements = $data?->placementsFor($accountId) ?? [];
+            // A partial update (e.g. an MCP text-only edit) omits placements /
+            // segment_breaks entirely. Treating that omission as an explicit empty
+            // would delete every placement and flatten the thread structure, so
+            // fall back to the target's stored state when the payload is silent.
+            $breaksProvided = $data instanceof DraftData && $data->hasSegmentBreaksFor($accountId);
+            $placementsProvided = $data instanceof DraftData && $data->hasPlacementsFor($accountId);
+
+            $breaks = $breaksProvided
+                ? $data->segmentBreaksFor($accountId)
+                : ($current instanceof PostTarget ? ($current->segment_breaks ?? []) : []);
+            $placements = $placementsProvided
+                ? $data->placementsFor($accountId)
+                : ($current instanceof PostTarget ? $this->existingPlacements($current) : []);
             $mediaSegments = $this->mediaSegmentsFromPlacements($placements, $breaks);
 
             $split = $this->splitter->split(
@@ -214,8 +225,29 @@ class DraftService
                 ],
             );
 
-            $this->syncPlacements($post, $target, $placements);
+            // Only rewrite placements when the caller actually sent them; a partial
+            // update leaves the target's existing placement rows in place.
+            if ($placementsProvided) {
+                $this->syncPlacements($post, $target, $placements);
+            }
         }
+    }
+
+    /**
+     * Read a target's stored placements back into the payload shape so a partial
+     * update can preserve (and re-derive media sections from) them unchanged.
+     *
+     * @return list<array{media_id: string, segment_ref: string, position: int}>
+     */
+    private function existingPlacements(PostTarget $target): array
+    {
+        return array_values($target->placements()->get()
+            ->map(static fn (PostMediaPlacement $placement): array => [
+                'media_id' => $placement->post_media_id,
+                'segment_ref' => $placement->segment_ref,
+                'position' => $placement->position,
+            ])
+            ->all());
     }
 
     /**

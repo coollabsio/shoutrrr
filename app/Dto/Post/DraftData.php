@@ -40,6 +40,19 @@ final class DraftData
         public readonly bool $autoRepostProvided = false,
         public readonly array $segmentBreaks = [],
         public readonly array $placements = [],
+        /**
+         * Whether the payload carried a top-level `segment_breaks` key. Like
+         * {@see $autoRepostProvided}, this distinguishes "clear all breaks" from
+         * "leave the stored breaks untouched" so a partial edit (an MCP text-only
+         * change never sends breaks) doesn't silently reset the thread structure.
+         */
+        public readonly bool $segmentBreaksProvided = false,
+        /**
+         * Whether the payload carried a top-level `placements` key. Guards partial
+         * updates from deleting all per-thread media placements — see
+         * {@see $segmentBreaksProvided}.
+         */
+        public readonly bool $placementsProvided = false,
     ) {}
 
     /**
@@ -85,6 +98,8 @@ final class DraftData
                 ? array_values(array_map(static fn (mixed $b): string => (string) $b, $payload['segment_breaks']))
                 : [],
             placements: self::readPlacements($payload['placements'] ?? null),
+            segmentBreaksProvided: array_key_exists('segment_breaks', $payload),
+            placementsProvided: array_key_exists('placements', $payload),
         );
     }
 
@@ -121,10 +136,32 @@ final class DraftData
         return $this->targetsByAccount[$accountId]['format'] ?? 'feed';
     }
 
+    /**
+     * Whether placements were sent for this account — either a per-account
+     * `placements` key or the top-level fallback. When false, a partial update
+     * must leave the target's stored placements untouched rather than clearing them.
+     */
+    public function hasPlacementsFor(string $accountId): bool
+    {
+        return array_key_exists('placements', $this->targetsByAccount[$accountId] ?? [])
+            || $this->placementsProvided;
+    }
+
     /** @return list<array{media_id: string, segment_ref: string, position: int}> */
     public function placementsFor(string $accountId): array
     {
         return $this->targetsByAccount[$accountId]['placements'] ?? $this->placements;
+    }
+
+    /**
+     * Whether segment breaks were sent for this account — either a per-account
+     * `segment_breaks` key or the top-level fallback. When false, a partial update
+     * must preserve the target's stored breaks.
+     */
+    public function hasSegmentBreaksFor(string $accountId): bool
+    {
+        return array_key_exists('segment_breaks', $this->targetsByAccount[$accountId] ?? [])
+            || $this->segmentBreaksProvided;
     }
 
     /** @return list<string> */

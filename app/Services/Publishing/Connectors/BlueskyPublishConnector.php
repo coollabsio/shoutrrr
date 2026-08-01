@@ -64,26 +64,33 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
         $parentCid = null;
 
         try {
-            // Video takes precedence over images, and only on the root post (a fresh
-            // publish attempt, never a resume).
+            // Video takes precedence over images. At most one video/gif rides the whole
+            // post; images ride any section.
             $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
             $gifMedia = array_values(array_filter(
                 $context->media,
                 fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime === 'image/gif',
             ));
 
+            // Media resolved to sections that still need posting on this attempt: every
+            // section on a fresh publish, only the not-yet-posted sections on a resume.
+            // Gating uploads on this means a resumed job still readies the video/gif or
+            // image blobs for a later section that died before it was posted, instead of
+            // silently publishing it without its placed media.
+            $pendingMediaIds = $this->pendingMediaIds($context, $remoteIds);
+
             // Remote embed data keyed by our PostMedia->id, built once before the loop
             // so each section attaches only the embed for the media resolved to it.
             $videoEmbedByMediaId = [];
             $imageBlobsByMediaId = [];
 
-            if ($rootUri === null && $videoMedia !== []) {
+            if ($videoMedia !== [] && isset($pendingMediaIds[$videoMedia[0]->id])) {
                 $ready = $this->ensureVideoReady($context, $videoMedia[0], $pds, $jwt, $did, $session);
                 if (! $ready->isSuccessful()) {
                     return $ready;
                 }
                 $videoEmbedByMediaId[$videoMedia[0]->id] = $this->videoEmbed($context, $videoMedia[0]);
-            } elseif ($rootUri === null && $gifMedia !== []) {
+            } elseif ($gifMedia !== [] && isset($pendingMediaIds[$gifMedia[0]->id])) {
                 $ready = $this->ensureGifVideoReady($context, $gifMedia, $pds, $jwt, $did, $session);
                 if (! $ready->isSuccessful()) {
                     return $ready;
@@ -266,6 +273,32 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
         }
 
         return (string) $response->json('cid');
+    }
+
+    /**
+     * The set of media IDs resolved to sections that still need posting on this attempt,
+     * keyed for isset() lookup. On a fresh publish that's every section's media; on a
+     * resume only the not-yet-posted sections contribute, so already-posted media (which
+     * needs no embed this attempt) is excluded.
+     *
+     * @param  array<int, string>  $remoteIds
+     * @return array<array-key, true>
+     */
+    private function pendingMediaIds(PublishContext $context, array $remoteIds): array
+    {
+        $pending = [];
+
+        foreach (array_keys($context->segments) as $index) {
+            if (isset($remoteIds[$index])) {
+                continue;
+            }
+
+            foreach ($context->mediaForSection($index) as $media) {
+                $pending[$media->id] = true;
+            }
+        }
+
+        return $pending;
     }
 
     /**

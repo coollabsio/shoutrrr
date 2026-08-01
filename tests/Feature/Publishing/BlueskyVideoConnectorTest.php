@@ -65,6 +65,45 @@ test('completed job embeds the blob and posts on resume', function (): void {
         && data_get($req->data(), 'record.embed.$type') === 'app.bsky.embed.video');
 });
 
+test('a resumed publish still embeds video for a not-yet-posted later section', function (): void {
+    $account = ConnectedAccount::factory()->state(['platform' => 'bluesky', 'remote_account_id' => 'did:plc:abc'])->create();
+    $media = PostMedia::factory()->video()->create(['disk' => 'public', 'path' => 'media/ws/v.mp4']);
+    Storage::disk('public')->put('media/ws/v.mp4', str_repeat('x', 2048));
+
+    // Root segment already posted on a prior attempt; the video rides the second segment
+    // which died before it was published. The completed blob is already stashed.
+    $target = PostTarget::factory()->for($account, 'account')->create([
+        'remote_ids' => ['at://did:plc:abc/app.bsky.feed.post/root'],
+        'media_upload_state' => [$media->id => ['remote_ref' => 'job-1', 'state' => 'processing']],
+    ]);
+
+    Http::fake([
+        '*com.atproto.repo.getRecord*' => Http::response(['uri' => 'at://did:plc:abc/app.bsky.feed.post/root', 'cid' => 'rootcid'], 200),
+        'video.bsky.app/xrpc/app.bsky.video.getJobStatus*' => Http::response([
+            'jobStatus' => ['state' => 'JOB_STATE_COMPLETED', 'blob' => ['$type' => 'blob', 'ref' => ['$link' => 'vidcid']]],
+        ], 200),
+        '*/xrpc/com.atproto.repo.createRecord' => Http::response(['uri' => 'at://did:plc:abc/app.bsky.feed.post/2', 'cid' => 'cid2'], 200),
+    ]);
+
+    $ctx = new PublishContext(
+        target: $target,
+        segments: ['root segment', 'second (has video)'],
+        media: [$media],
+        account: $account,
+        credentials: blueskyVideoCredentials(),
+        mediaBySection: [1 => [$media]],
+    );
+
+    $result = app(BlueskyPublishConnector::class)->publish($ctx);
+
+    expect($result->isSuccessful())->toBeTrue();
+
+    Http::assertSent(fn ($req): bool => str_contains($req->url(), 'createRecord')
+        && data_get($req->data(), 'record.text') === 'second (has video)'
+        && data_get($req->data(), 'record.embed.$type') === 'app.bsky.embed.video'
+        && data_get($req->data(), 'record.embed.video.ref.$link') === 'vidcid');
+});
+
 test('gif media is converted to mp4 and embedded as gif video', function (): void {
     $account = ConnectedAccount::factory()->state(['platform' => 'bluesky', 'remote_account_id' => 'did:plc:abc'])->create();
     $media = PostMedia::factory()->create([
