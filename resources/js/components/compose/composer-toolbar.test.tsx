@@ -56,7 +56,14 @@ describe('ComposerToolbar media button', () => {
         render(
             <ComposerToolbar
                 {...base}
-                pending={[{ tempId: 't1', kind: 'image', status: 'uploading' }]}
+                pending={[
+                    {
+                        tempId: 't1',
+                        kind: 'image',
+                        status: 'uploading',
+                        segmentRef: '__head__',
+                    },
+                ]}
             />,
         );
 

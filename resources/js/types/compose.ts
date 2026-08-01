@@ -106,6 +106,8 @@ export type PendingUpload = {
     status: 'processing' | 'uploading' | 'error';
     /** Progress 0–100; set during client-side compression and the storage PUT. */
     progress?: number;
+    /** The thread segment this upload was targeting when it began. */
+    segmentRef: string;
 };
 
 export type TargetStatus =

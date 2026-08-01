@@ -65,11 +65,13 @@ function imageFile(): File {
 
 function Harness({
     activeSegmentRef = () => '__head__',
+    mediaForSegment = () => [],
 }: {
     activeSegmentRef?: () => string;
+    mediaForSegment?: (segmentRef: string) => MediaView[];
 }) {
     const uploads = useMediaUploads({
-        media: [],
+        mediaForSegment,
         videoLimits: [],
         onEnsurePost: async () => 'post-1',
         onAddMedia,
@@ -82,7 +84,12 @@ function Harness({
     return null;
 }
 
-function render(props: { activeSegmentRef?: () => string } = {}) {
+function render(
+    props: {
+        activeSegmentRef?: () => string;
+        mediaForSegment?: (segmentRef: string) => MediaView[];
+    } = {},
+) {
     act(() => {
         root?.render(createElement(Harness, props));
     });
@@ -166,6 +173,64 @@ describe('useMediaUploads handleFiles', () => {
             // the media must still land on the segment active at call time.
             active = '__head__';
             await p;
+        });
+
+        expect(onAddMedia).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'gif-1' }),
+            'b1',
+        );
+    });
+});
+
+describe('useMediaUploads pending chip carries the segment it was targeting', () => {
+    it('tags the pending chip with the segment active when the upload began, not wherever the caret moves to later', async () => {
+        let active = 'b1';
+        render({ activeSegmentRef: () => active });
+
+        // Never resolves — keeps the chip in the "pending" state so it can be
+        // inspected before any upload completion logic runs.
+        post.mockImplementation(() => new Promise(() => {}));
+
+        act(() => {
+            void handleFilesRef?.([imageFile()]);
+        });
+
+        // Caret moves to a different segment while the upload is still in flight.
+        active = '__head__';
+
+        expect(pendingRef).toHaveLength(1);
+        expect(pendingRef[0].segmentRef).toBe('b1');
+    });
+});
+
+describe('useMediaUploads handleFiles media-mixing rule is scoped to the active segment', () => {
+    it('blocks an image upload when a video already sits in the same thread segment', async () => {
+        render({
+            activeSegmentRef: () => 'b1',
+            mediaForSegment: (ref) =>
+                ref === 'b1' ? [{ ...mediaView(), kind: 'video' }] : [],
+        });
+        post.mockResolvedValue({ media: mediaView() });
+
+        await act(async () => {
+            await handleFilesRef?.([imageFile()]);
+        });
+
+        expect(onAddMedia).not.toHaveBeenCalled();
+    });
+
+    it('does not block an image upload when the only video lives in a different thread segment', async () => {
+        render({
+            activeSegmentRef: () => 'b1',
+            mediaForSegment: (ref) =>
+                ref === 'other-segment'
+                    ? [{ ...mediaView(), kind: 'video' }]
+                    : [],
+        });
+        post.mockResolvedValue({ media: mediaView() });
+
+        await act(async () => {
+            await handleFilesRef?.([imageFile()]);
         });
 
         expect(onAddMedia).toHaveBeenCalledWith(

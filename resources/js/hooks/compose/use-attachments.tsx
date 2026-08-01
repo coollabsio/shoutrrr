@@ -155,7 +155,9 @@ export function useAttachments({
         cancelPending,
         trackPending,
     } = useMediaUploads({
-        media,
+        // This surface (reply box / DM composer) has no thread segments — every
+        // upload judges the mixing rule against the surface's whole media list.
+        mediaForSegment: () => media,
         videoLimits,
         onEnsurePost: async () => ownerId,
         onAddMedia: (m) => onChange([...media, m]),

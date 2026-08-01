@@ -18,8 +18,12 @@ import {
 import type { MediaView, PendingUpload, PlatformLimits } from '@/types/compose';
 
 type Options = {
-    /** Currently-attached media (drives the one-video / no-mixing rule). */
-    media: MediaView[];
+    /**
+     * Media already attached to a given thread segment (drives the one-video
+     * / no-mixing rule) — each thread segment publishes as its own post, so
+     * the rule is judged per segment rather than across the whole draft.
+     */
+    mediaForSegment: (segmentRef: string) => MediaView[];
     /** Limits for the selected platforms, used to validate a video before upload. */
     videoLimits: PlatformLimits[];
     /** Guarantee a persisted post id before uploading; returns the post id. */
@@ -69,7 +73,7 @@ type MediaUploads = {
  * one-video / no-mixing-with-images rule. The component stays presentational.
  */
 export function useMediaUploads({
-    media,
+    mediaForSegment,
     videoLimits,
     onEnsurePost,
     onAddMedia,
@@ -152,11 +156,15 @@ export function useMediaUploads({
     function beginUpload(
         file: File,
         kind: PendingUpload['kind'],
+        segmentRef: string,
         status: PendingUpload['status'] = 'uploading',
     ): { tempId: string; previewUrl?: string } {
         const tempId = newTempId();
         const previewUrl = mintPreview(file);
-        setPending((cur) => [...cur, { tempId, kind, previewUrl, status }]);
+        setPending((cur) => [
+            ...cur,
+            { tempId, kind, previewUrl, status, segmentRef },
+        ]);
 
         return { tempId, previewUrl };
     }
@@ -224,6 +232,7 @@ export function useMediaUploads({
                 kind: chip.kind,
                 previewUrl: chip.previewUrl,
                 status: 'uploading',
+                segmentRef,
             },
         ]);
 
@@ -253,7 +262,7 @@ export function useMediaUploads({
     // --- Upload flows -------------------------------------------------------
 
     async function uploadImage(file: File, segmentRef: string): Promise<void> {
-        const { tempId, previewUrl } = beginUpload(file, 'image');
+        const { tempId, previewUrl } = beginUpload(file, 'image', segmentRef);
 
         const id = await onEnsurePost();
         if (!id) {
@@ -292,7 +301,12 @@ export function useMediaUploads({
             // entirely and keep the existing fast path untouched.
             let source = file;
             if (file.type !== 'video/mp4') {
-                const { tempId } = beginUpload(file, 'video', 'processing');
+                const { tempId } = beginUpload(
+                    file,
+                    'video',
+                    segmentRef,
+                    'processing',
+                );
                 register(tempId);
                 try {
                     const { convertToMp4 } =
@@ -358,6 +372,7 @@ export function useMediaUploads({
             const { tempId, previewUrl } = beginUpload(
                 source,
                 'video',
+                segmentRef,
                 willCompress ? 'processing' : 'uploading',
             );
             register(tempId);
@@ -482,8 +497,9 @@ export function useMediaUploads({
         // media lands where the caret was when the batch began even if it
         // moves while an upload is in flight.
         const segmentRef = activeSegmentRef();
-        const hasVideo = media.some((m) => m.kind === 'video');
-        const hasImages = media.some((m) => m.kind === 'image');
+        const segmentMedia = mediaForSegment(segmentRef);
+        const hasVideo = segmentMedia.some((m) => m.kind === 'video');
+        const hasImages = segmentMedia.some((m) => m.kind === 'image');
         // Track this batch too: render-closure `media` is stale for files already
         // dispatched earlier in the same multi-select.
         let videoQueued = false;

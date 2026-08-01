@@ -248,12 +248,6 @@ export default function Composer({
     });
     const publishStatus = usePublishStatus({ pagePost: post });
 
-    // The segment ref the caret currently sits in, kept live via the editor's
-    // onSelectionUpdate so a per-segment media row can tell whether an
-    // in-flight upload (which carries no segment tag of its own) belongs to
-    // it. Clicking a specific segment's "add media" affordance overrides this
-    // for the batch that follows (see `addMediaToSegment`).
-    const [activeSegRef, setActiveSegRef] = useState('__head__');
     const explicitUploadSegmentRef = useRef<string | null>(null);
     const segmentFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -273,7 +267,7 @@ export default function Composer({
     // here so both the editor (⌘/Ctrl+V paste) and the toolbar (picker/drop)
     // feed the same handleFiles and share one in-flight `pending` list.
     const mediaUploads = useMediaUploads({
-        media: state.media,
+        mediaForSegment,
         videoLimits: selectedVideoLimits,
         onEnsurePost: ensurePost,
         onAddMedia: (m, segmentRef) =>
@@ -434,7 +428,13 @@ export default function Composer({
         const targetsBluesky = tabAccounts.some(
             (a) => a.platform === 'bluesky',
         );
-        if (targetsBluesky && wouldViolateBlueskyGif(state.media, all)) {
+        if (
+            targetsBluesky &&
+            wouldViolateBlueskyGif(
+                mediaForSegment(resolveTargetSegmentRef()),
+                all,
+            )
+        ) {
             toast.error(
                 'Bluesky supports one animated GIF per post, and it cannot be mixed with other media.',
             );
@@ -450,7 +450,12 @@ export default function Composer({
 
         // A post is one video OR images, never both — decide before uploading
         // anything, so a mixed drop doesn't half-attach the video.
-        if (wouldMixVideoAndImages(state.media, all)) {
+        if (
+            wouldMixVideoAndImages(
+                mediaForSegment(resolveTargetSegmentRef()),
+                all,
+            )
+        ) {
             toast.error('A post can contain one video or images, not both.');
 
             return;
@@ -1131,17 +1136,15 @@ export default function Composer({
                     }
                     emojiSkinTone={emojiPrefs.skinTone}
                     onEmojiInsert={emojiPrefs.addRecent}
-                    onActiveSegmentChange={setActiveSegRef}
                     renderSegmentMedia={
                         readOnly && state.media.length === 0
                             ? undefined
                             : (ref) => {
                                   const segMedia = mediaForSegment(ref);
                                   const segPending =
-                                      (explicitUploadSegmentRef.current ??
-                                          activeSegRef) === ref
-                                          ? mediaUploads.pending
-                                          : [];
+                                      mediaUploads.pending.filter(
+                                          (p) => p.segmentRef === ref,
+                                      );
                                   if (
                                       readOnly &&
                                       segMedia.length === 0 &&
