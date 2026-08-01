@@ -260,6 +260,9 @@ export function useAutosave({
         state.formatByAccount,
         state.media,
         state.autoRepost,
+        state.placements,
+        state.placementsByAccount,
+        state.segmentBreaks,
     ]);
 
     // Keep the version ref in step with externally-driven baseline changes

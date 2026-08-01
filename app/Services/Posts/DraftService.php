@@ -378,8 +378,12 @@ class DraftService
             // Attach media BEFORE syncing targets: placement rows FK to post_media
             // rows scoped to this post, and attachMedia is what sets post_id on
             // them — syncing targets first would leave placements referencing
-            // still-orphaned media.
-            $this->attachMedia($post, $data->mediaIds);
+            // still-orphaned media. Only when the caller actually sent media_ids;
+            // a partial update (e.g. an MCP text-only edit) that omits the key
+            // must not detach every media row already on the post.
+            if ($data->mediaIdsProvided) {
+                $this->attachMedia($post, $data->mediaIds);
+            }
             $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount, $data);
 
             $post->touch();

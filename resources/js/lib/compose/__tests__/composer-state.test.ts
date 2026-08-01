@@ -1381,6 +1381,53 @@ describe('per-segment placements', () => {
             position: 1,
         });
     });
+
+    it('addMedia appends the new media into every already-diverged account placement, not just canonical', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        // Diverge acc-x by moving m1 to segment b1 for that account only.
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+            accountId: 'acc-x',
+        });
+        expect(s.placementsByAccount['acc-x'].b1).toEqual(['m1']);
+
+        // Add new media after the divergence exists.
+        s = composerReducer(s, {
+            type: 'addMedia',
+            media: mediaFixture('m2'),
+        });
+
+        // Canonical picks up m2 on __head__ as usual.
+        expect(s.placements.__head__).toEqual(['m1', 'm2']);
+
+        // The diverged account must also see m2 at the same segmentRef, or it
+        // silently vanishes from that account's preview and publish payload.
+        expect(s.placementsByAccount['acc-x'].__head__).toEqual(['m2']);
+
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toContainEqual({
+            media_id: 'm2',
+            segment_ref: '__head__',
+            position: 0,
+        });
+    });
+
+    it('addMedia does not invent a placementsByAccount entry for an account that has not diverged', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'addMedia',
+            media: mediaFixture('m2'),
+        });
+        expect(s.placementsByAccount).toEqual({});
+    });
 });
 
 describe('segmentRefsFromBreaks', () => {

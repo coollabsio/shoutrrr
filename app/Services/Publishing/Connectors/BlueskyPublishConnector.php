@@ -64,19 +64,28 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
         $parentCid = null;
 
         try {
-            // Video takes precedence over images. At most one video/gif rides the whole
-            // post; images ride any section.
+            // Within a single section, video/gif take precedence over images (Bluesky's
+            // per-record rule: one video or images, never both — enforced per thread
+            // segment since each segment publishes as its own record; see
+            // PublishPrecheck::mixIssues). But different sections publish as different
+            // records, so one section's video and another section's images are readied
+            // independently below rather than being treated as mutually exclusive.
             $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
             $gifMedia = array_values(array_filter(
                 $context->media,
                 fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime === 'image/gif',
             ));
+            $imageMedia = array_values(array_filter(
+                $context->media,
+                fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime !== 'image/gif',
+            ));
 
             // Media resolved to sections that still need posting on this attempt: every
             // section on a fresh publish, only the not-yet-posted sections on a resume.
-            // Gating uploads on this means a resumed job still readies the video/gif or
-            // image blobs for a later section that died before it was posted, instead of
-            // silently publishing it without its placed media.
+            // Gating video/gif uploads on this means a resumed job still readies the
+            // video/gif for a later section that died before it was posted, instead of
+            // silently publishing it without its placed media — and skips re-readying
+            // one that already belongs to an already-posted section.
             $pendingMediaIds = $this->pendingMediaIds($context, $remoteIds);
 
             // Remote embed data keyed by our PostMedia->id, built once before the loop
@@ -84,22 +93,36 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
             $videoEmbedByMediaId = [];
             $imageBlobsByMediaId = [];
 
-            if ($videoMedia !== [] && isset($pendingMediaIds[$videoMedia[0]->id])) {
-                $ready = $this->ensureVideoReady($context, $videoMedia[0], $pds, $jwt, $did, $session);
+            foreach ($videoMedia as $video) {
+                if (! isset($pendingMediaIds[$video->id])) {
+                    continue;
+                }
+
+                $ready = $this->ensureVideoReady($context, $video, $pds, $jwt, $did, $session);
                 if (! $ready->isSuccessful()) {
                     return $ready;
                 }
-                $videoEmbedByMediaId[$videoMedia[0]->id] = $this->videoEmbed($context, $videoMedia[0]);
-            } elseif ($gifMedia !== [] && isset($pendingMediaIds[$gifMedia[0]->id])) {
-                $ready = $this->ensureGifVideoReady($context, $gifMedia, $pds, $jwt, $did, $session);
+                $videoEmbedByMediaId[$video->id] = $this->videoEmbed($context, $video);
+            }
+
+            foreach ($gifMedia as $gif) {
+                if (! isset($pendingMediaIds[$gif->id])) {
+                    continue;
+                }
+
+                $ready = $this->ensureGifVideoReady($context, [$gif], $pds, $jwt, $did, $session);
                 if (! $ready->isSuccessful()) {
                     return $ready;
                 }
-                $videoEmbedByMediaId[$gifMedia[0]->id] = $this->videoEmbed($context, $gifMedia[0], 'gif');
-            } elseif ($videoMedia === [] && $gifMedia === []) {
-                // Uploaded regardless of fresh vs. resumed publish, so a resumed job
-                // still populates blobs for any not-yet-posted section's images.
-                $imageBlobsByMediaId = $this->uploadImageBlobs($context->media, $pds, $jwt, $session, $context->account);
+                $videoEmbedByMediaId[$gif->id] = $this->videoEmbed($context, $gif, 'gif');
+            }
+
+            // Not gated on $pendingMediaIds, and not mutually exclusive with the video/gif
+            // readiness above: uploaded regardless of fresh vs. resumed publish, and
+            // regardless of whether some other section has a pending video/gif, so a
+            // resumed job still populates blobs for any not-yet-posted section's images.
+            if ($imageMedia !== []) {
+                $imageBlobsByMediaId = $this->uploadImageBlobs($imageMedia, $pds, $jwt, $session, $context->account);
             }
 
             // Resume: remote_ids stores only AT-URIs, so recover the root and parent CIDs

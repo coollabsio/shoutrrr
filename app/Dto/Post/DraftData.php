@@ -53,6 +53,12 @@ final class DraftData
          * {@see $segmentBreaksProvided}.
          */
         public readonly bool $placementsProvided = false,
+        /**
+         * Whether the payload carried a top-level `media_ids` key. Guards partial
+         * updates from detaching every media row on the post — see
+         * {@see $segmentBreaksProvided}.
+         */
+        public readonly bool $mediaIdsProvided = false,
     ) {}
 
     /**
@@ -100,6 +106,7 @@ final class DraftData
             placements: self::readPlacements($payload['placements'] ?? null),
             segmentBreaksProvided: array_key_exists('segment_breaks', $payload),
             placementsProvided: array_key_exists('placements', $payload),
+            mediaIdsProvided: array_key_exists('media_ids', $payload),
         );
     }
 

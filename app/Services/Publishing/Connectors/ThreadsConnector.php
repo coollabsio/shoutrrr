@@ -26,13 +26,18 @@ use RuntimeException;
 /**
  * Publishes to Threads via the same async two-step container flow as Instagram
  * (create a media container, poll it, then publish the container), but adds
- * reply-chain threading: each non-empty segment of the post becomes its own
- * Threads post, chained to the previously published post via `reply_to_id`.
+ * reply-chain threading: each segment of the post (by its original index —
+ * see the loop in publish()) that carries text or media becomes its own
+ * Threads post, chained to the previously PUBLISHED post via `reply_to_id`. A
+ * segment with neither text nor media (e.g. an over-split empty remainder) is
+ * skipped entirely and does not break the chain.
  *
  * Threads has no direct byte-upload API — image/video containers reference a
  * public HTTPS URL that Meta fetches server-side (see PublicMediaUrl). Each
  * segment attaches only the media resolved to its section (PublishContext::
- * mediaForSection); a segment with no resolved media is a plain text reply.
+ * mediaForSection); a segment with no resolved media is a plain text reply,
+ * and a segment with no text but resolved media is a media-only container
+ * (both are valid Threads container shapes).
  */
 class ThreadsConnector implements PublishConnector
 {
@@ -55,34 +60,47 @@ class ThreadsConnector implements PublishConnector
 
         $threadsUserId = (string) $context->account->remote_account_id;
 
-        $segments = array_values(array_filter(
-            array_map(static fn (string $segment): string => trim($segment), $context->segments),
-            static fn (string $segment): bool => $segment !== '',
-        ));
+        $hasText = array_reduce(
+            $context->segments,
+            static fn (bool $carry, string $segment): bool => $carry || trim($segment) !== '',
+            false,
+        );
 
-        if ($segments === []) {
-            // A caption-less media post is valid on Threads (an IMAGE/VIDEO/CAROUSEL
-            // container with empty text), matching Facebook/Instagram — only a post
-            // with neither text nor media is a real error.
-            if ($context->media === []) {
-                return PublishResult::failure(ErrorKind::Validation, 'Threads requires text or media');
-            }
-
-            $segments = [''];
+        // A caption-less media post is valid on Threads (an IMAGE/VIDEO/CAROUSEL
+        // container with empty text), matching Facebook/Instagram — only a post
+        // with neither text nor media anywhere is a real error.
+        if (! $hasText && $context->media === []) {
+            return PublishResult::failure(ErrorKind::Validation, 'Threads requires text or media');
         }
 
         $remoteIds = $context->target->remote_ids ?? [];
         $state = new MediaUploadState($context->target->media_upload_state);
+        $previousId = null;
 
         try {
-            foreach ($segments as $index => $text) {
-                // Resume: skip segments already published on a prior attempt.
-                if (isset($remoteIds[$index])) {
+            // Iterate the ORIGINAL segment indices (not a filtered/re-indexed list) so
+            // `mediaForSection($index)` — which is keyed by the authored/split index —
+            // stays aligned with the segment it was resolved for.
+            foreach ($context->segments as $index => $rawText) {
+                $text = trim($rawText);
+                $media = $context->mediaForSection($index);
+
+                // Threads containers require text or media; a segment with neither
+                // (e.g. an over-split empty remainder) contributes nothing to the
+                // thread and is not published.
+                if ($text === '' && $media === []) {
                     continue;
                 }
 
-                $replyToId = $index > 0 ? ($remoteIds[$index - 1] ?? null) : null;
-                $media = $context->mediaForSection($index);
+                // Resume: skip segments already published on a prior attempt, keeping
+                // the reply chain anchored to their id.
+                if (isset($remoteIds[$index])) {
+                    $previousId = $remoteIds[$index];
+
+                    continue;
+                }
+
+                $replyToId = $previousId;
 
                 $containerId = $this->resolveContainerId($context, $state, $threadsUserId, $index, $text, $media, $replyToId, $token);
 
@@ -109,11 +127,14 @@ class ThreadsConnector implements PublishConnector
                 }
 
                 $remoteIds[$index] = $publishedId;
+                $previousId = $publishedId;
 
                 // Persist this segment's id BEFORE sending the next one so a mid-thread
                 // death resumes (rather than re-posts) the already-published segments.
+                // reset() (not $remoteIds[0]) because segment 0 may have been skipped
+                // (empty text, no media) — the first PUBLISHED segment is the root.
                 $context->target->forceFill([
-                    'remote_id' => $remoteIds[0],
+                    'remote_id' => reset($remoteIds),
                     'remote_ids' => array_values($remoteIds),
                 ])->save();
             }

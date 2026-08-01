@@ -532,6 +532,27 @@ export function composerReducer(
                     ...state.placements,
                     [segmentRef]: [...existing, action.media.id],
                 },
+                // A newly-added item must also land in every account that has
+                // already diverged from canonical (has a placementsByAccount
+                // entry) — otherwise it silently vanishes from that account's
+                // preview and publish payload once a divergence exists. Never
+                // create a new entry for a non-diverged account; that would
+                // invent a divergence where none existed and freeze it off
+                // future canonical-scope edits (see buildPutBody).
+                placementsByAccount: Object.fromEntries(
+                    Object.entries(state.placementsByAccount).map(
+                        ([accountId, map]) => [
+                            accountId,
+                            {
+                                ...map,
+                                [segmentRef]: [
+                                    ...(map[segmentRef] ?? []),
+                                    action.media.id,
+                                ],
+                            },
+                        ],
+                    ),
+                ),
                 saveState: 'dirty',
             };
         }
