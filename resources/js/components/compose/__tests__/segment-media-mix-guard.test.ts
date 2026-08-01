@@ -6,11 +6,23 @@ import { describe, expect, it } from 'vitest';
 // `composer.tsx` wires a lot of imperative, timing-sensitive glue (file
 // pickers, editor sessions, refs) that isn't practical to mount and drive in
 // isolation — see segment-media-target.test.ts for the same source-assertion
-// approach. These pin the fix for a bug where dropping a video into one
-// thread segment was rejected as "mixed video and images" because an image
-// already lived in a *different* segment: the guard checked `state.media`
-// (the whole post's flat media across every segment) instead of only the
-// media already attached to the segment the drop targets.
+// approach. No test in this repo mounts composer.tsx itself: it pulls in
+// live Inertia `useHttp`/`usePage`, autosave-to-server, media upload, and
+// image/video editor hooks that would all need mocking, unlike the small
+// presentational components (ComposerToolbar, SegmentMediaRow) that already
+// have real render tests in this directory. These pin the fix for a bug
+// where dropping a video into one thread segment was rejected as "mixed
+// video and images" because an image already lived in a *different*
+// segment: the guard checked `state.media` (the whole post's flat media
+// across every segment) instead of only the media already attached to the
+// segment the drop targets.
+//
+// `wouldMixVideoAndImages`/`wouldViolateBlueskyGif` themselves are pure and
+// already have real behavioral coverage in
+// `resources/js/lib/compose/__tests__/media-rules.test.ts`; this file's only
+// job is pinning what composer.tsx passes as their `existing` argument at
+// the call site, which is composer-internal wiring with no pure-function
+// home to move to.
 const source = () =>
     readFileSync(
         resolve(process.cwd(), 'resources/js/components/compose/composer.tsx'),

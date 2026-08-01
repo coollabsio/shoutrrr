@@ -185,6 +185,75 @@ test('explicitly sending an empty media_ids array still detaches all media', fun
     expect($updated->media)->toHaveCount(0);
 });
 
+test('an update with diverged per-account placements writes distinct placement rows per target', function (): void {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    $accountA = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::X->value,
+    ]);
+    $accountB = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+    ]);
+
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['hello']);
+
+    $m1 = PostMedia::factory()->create(['workspace_id' => $workspace->id, 'post_id' => null]);
+    $m2 = PostMedia::factory()->create(['workspace_id' => $workspace->id, 'post_id' => null]);
+
+    $data = DraftData::fromArray([
+        'base_text' => 'hello',
+        'destination' => ['kind' => 'all'],
+        'targets' => [
+            [
+                'connected_account_id' => $accountA->id,
+                'auto_split' => true,
+                'segment_breaks' => ['b1'],
+                'placements' => [
+                    ['media_id' => $m1->id, 'segment_ref' => 'b1', 'position' => 0],
+                    ['media_id' => $m2->id, 'segment_ref' => 'b1', 'position' => 1],
+                ],
+            ],
+            [
+                'connected_account_id' => $accountB->id,
+                'auto_split' => true,
+                'segment_breaks' => ['b1'],
+                'placements' => [
+                    ['media_id' => $m1->id, 'segment_ref' => '__head__', 'position' => 0],
+                    ['media_id' => $m2->id, 'segment_ref' => 'b1', 'position' => 0],
+                ],
+            ],
+        ],
+        'media_ids' => [$m1->id, $m2->id],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]);
+
+    $updated = app(DraftService::class)->updateDraft($post, $data);
+
+    $targetA = $updated->targets->firstWhere('connected_account_id', $accountA->id);
+    $targetB = $updated->targets->firstWhere('connected_account_id', $accountB->id);
+    $targetA->load('placements');
+    $targetB->load('placements');
+
+    $placementsA = $targetA->placements->keyBy('post_media_id');
+    $placementsB = $targetB->placements->keyBy('post_media_id');
+
+    expect($targetA->placements)->toHaveCount(2)
+        ->and($placementsA[$m1->id]->segment_ref)->toBe('b1')
+        ->and($placementsA[$m2->id]->segment_ref)->toBe('b1');
+
+    expect($targetB->placements)->toHaveCount(2)
+        ->and($placementsB[$m1->id]->segment_ref)->toBe('__head__')
+        ->and($placementsB[$m2->id]->segment_ref)->toBe('b1');
+
+    // The two targets genuinely diverge: m1 lands in a different segment per account.
+    expect($placementsA[$m1->id]->segment_ref)->not->toBe($placementsB[$m1->id]->segment_ref);
+});
+
 test('creating a draft persists segment breaks on its targets', function (): void {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create(['owner_id' => $user->id]);

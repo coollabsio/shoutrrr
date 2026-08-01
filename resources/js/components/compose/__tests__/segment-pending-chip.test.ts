@@ -6,16 +6,21 @@ import { describe, expect, it } from 'vitest';
 // `composer.tsx` wires a lot of imperative, timing-sensitive glue (file
 // pickers, editor sessions, refs) that isn't practical to mount and drive in
 // isolation — see segment-media-target.test.ts for the same source-assertion
-// approach. This pins the fix for a bug where a video's "uploading" chip
-// showed up under the wrong thread segment: the row decided which segment
-// should show `mediaUploads.pending` by comparing the *current* value of
-// `explicitUploadSegmentRef.current ?? activeSegRef` against its own ref —
-// but `explicitUploadSegmentRef` is released as soon as the upload starts
-// (see segment-media-target.test.ts), so for the whole (often multi-second)
-// video upload the chip rendered under whatever segment the caret currently
-// sat in instead of the segment the upload actually targets. Each pending
-// upload now carries its own `segmentRef`, captured when it began, so the
-// row can just filter on it directly.
+// approach. No test in this repo mounts composer.tsx itself (unlike the
+// presentational SegmentMediaRow, which does have a real render test in this
+// directory): the filtering this file pins happens inline inside
+// composer.tsx's `renderSegmentMedia` callback, computing the `pending` prop
+// *before* SegmentMediaRow ever mounts, so rendering SegmentMediaRow alone
+// can't exercise it. This pins the fix for a bug where a video's "uploading"
+// chip showed up under the wrong thread segment: the row decided which
+// segment should show `mediaUploads.pending` by comparing the *current*
+// value of `explicitUploadSegmentRef.current ?? activeSegRef` against its
+// own ref — but `explicitUploadSegmentRef` is released as soon as the
+// upload starts (see segment-media-target.test.ts), so for the whole (often
+// multi-second) video upload the chip rendered under whatever segment the
+// caret currently sat in instead of the segment the upload actually
+// targets. Each pending upload now carries its own `segmentRef`, captured
+// when it began, so the row can just filter on it directly.
 const source = () =>
     readFileSync(
         resolve(process.cwd(), 'resources/js/components/compose/composer.tsx'),
