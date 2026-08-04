@@ -48,6 +48,19 @@ test('draft targeting never snapshots a disabled account', function () {
     expect($ids)->toBe([$enabled->id]);
 });
 
+test('a "none" destination resolves to zero target accounts', function () {
+    [$user, $workspace, $enabled, $disabled] = ownerWithDisabledAccount();
+
+    Context::add('workspace_id', $workspace->id);
+
+    $ids = app(DraftService::class)->resolveDestinationAccountIds(
+        $workspace->id,
+        ['kind' => 'none'],
+    );
+
+    expect($ids)->toBe([]);
+});
+
 test('the composer and shell exclude disabled accounts', function () {
     [$user, $workspace, $enabled, $disabled] = ownerWithDisabledAccount();
 

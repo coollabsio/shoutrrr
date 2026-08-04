@@ -107,6 +107,9 @@ function selectedAccountIds(
             []
         );
     }
+    if (destination.kind === 'none') {
+        return [];
+    }
 
     return accounts.map((a) => a.id);
 }
@@ -125,6 +128,9 @@ function destinationFromIds(
     accounts: Account[],
     preferredSet: AccountSet | null = null,
 ): Destination {
+    if (ids.length === 0) {
+        return { kind: 'none' };
+    }
     if (ids.length === accounts.length) {
         return { kind: 'all' };
     }
@@ -144,6 +150,9 @@ function triggerLabel(
     accounts: Account[],
     sets: AccountSet[],
 ): string {
+    if (selectedIds.length === 0) {
+        return 'No accounts';
+    }
     if (selectedIds.length === accounts.length) {
         return 'All accounts';
     }
@@ -169,19 +178,20 @@ export default function DestinationSelector({
     const selectedIds = selectedAccountIds(destination, accounts, sets);
     const selected = new Set(selectedIds);
     const label = triggerLabel(destination, selectedIds, accounts, sets);
+    const allSelected =
+        accounts.length > 0 && selectedIds.length === accounts.length;
 
-    function chooseAll() {
-        onChange({ kind: 'all' });
+    // "All accounts" toggles the whole roster: on when nothing (or a subset) is
+    // selected, off when everything is. Clearing to none leaves publishing
+    // disabled until the user picks the specific accounts they want.
+    function toggleAll() {
+        onChange(allSelected ? { kind: 'none' } : { kind: 'all' });
     }
 
     function toggleAccount(accountId: string) {
         const next = selected.has(accountId)
             ? selectedIds.filter((id) => id !== accountId)
             : [...selectedIds, accountId];
-
-        if (next.length === 0) {
-            return;
-        }
 
         onChange(destinationFromIds(next, accounts));
     }
@@ -194,10 +204,6 @@ export default function DestinationSelector({
         const next = allSetAccountsSelected
             ? selectedIds.filter((id) => !setIds.has(id))
             : [...new Set([...selectedIds, ...set.connected_account_ids])];
-
-        if (next.length === 0) {
-            return;
-        }
 
         onChange(destinationFromIds(next, accounts, set));
     }
@@ -224,10 +230,7 @@ export default function DestinationSelector({
                 <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                     Sets
                 </div>
-                <OptionButton
-                    selected={selectedIds.length === accounts.length}
-                    onClick={chooseAll}
-                >
+                <OptionButton selected={allSelected} onClick={toggleAll}>
                     <SetVisual />
                     All accounts
                 </OptionButton>

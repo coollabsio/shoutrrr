@@ -34,6 +34,12 @@ class PublishController extends Controller
             ], 402);
         }
 
+        if ($post->loadMissing('targets')->targets->isEmpty()) {
+            return response()->json([
+                'message' => 'Select at least one account to publish.',
+            ], 422);
+        }
+
         $blocked = $precheck->blockingTargets($post->loadMissing(['targets.account', 'media']));
         if ($blocked !== []) {
             return response()->json([

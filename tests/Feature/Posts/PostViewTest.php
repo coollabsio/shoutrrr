@@ -33,3 +33,18 @@ test('it serializes a post with targets, media, and advisory issues', function (
         ->and($view['media'])->toHaveCount(1)
         ->and($view)->not->toHaveKey('secret');
 });
+
+test('a post with no targets serializes as a "none" destination', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    Context::add('workspace_id', $workspace->id);
+
+    // A workspace with connected accounts, but a post that targets none of them.
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
+    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'author_id' => $user->id]);
+
+    $view = PostView::make($post->fresh(['targets.account', 'media']));
+
+    expect($view['destination']['kind'])->toBe('none')
+        ->and($view['targets'])->toHaveCount(0);
+});
