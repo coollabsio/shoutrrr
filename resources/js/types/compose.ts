@@ -37,6 +37,7 @@ export type MentionPlaceholder = {
 
 export type Destination =
     | { kind: 'all' }
+    | { kind: 'none' }
     | { kind: 'set'; id: string }
     | { kind: 'account'; id: string }
     | { kind: 'accounts'; ids: string[] };

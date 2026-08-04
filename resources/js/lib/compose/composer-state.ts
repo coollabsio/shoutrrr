@@ -391,7 +391,9 @@ function hydrate(post: PostView): ComposerState {
                       post.destination.ids &&
                       post.destination.ids.length > 0
                     ? { kind: 'accounts', ids: post.destination.ids }
-                    : { kind: 'all' },
+                    : post.destination.kind === 'none'
+                      ? { kind: 'none' }
+                      : { kind: 'all' },
         autoSplitByAccount,
         formatByAccount,
         overrideByAccount,

@@ -87,6 +87,7 @@ class DraftService
                 ->where('workspace_id', $workspaceId)
                 ->whereIn('id', $destination['ids'] ?? [])
                 ->pluck('id'),
+            'none' => collect(),
             default => ConnectedAccount::withoutGlobalScopes()
                 ->where('workspace_id', $workspaceId)
                 ->pluck('id'),

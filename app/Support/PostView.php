@@ -88,6 +88,10 @@ final class PostView
             return ['kind' => 'set', 'id' => $post->account_set_id];
         }
 
+        if ($post->targets->isEmpty()) {
+            return ['kind' => 'none', 'id' => null];
+        }
+
         if ($post->targets->count() === 1) {
             return ['kind' => 'account', 'id' => $post->targets->first()->connected_account_id];
         }

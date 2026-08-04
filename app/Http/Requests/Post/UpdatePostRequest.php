@@ -33,7 +33,7 @@ class UpdatePostRequest extends FormRequest
             'mentions.*.handles.linkedin' => ['nullable', 'string'],
             'mentions.*.handles.linkedin_urn' => ['nullable', 'string', 'max:255'],
             'destination' => ['required', 'array'],
-            'destination.kind' => ['required', Rule::in(['all', 'set', 'account', 'accounts'])],
+            'destination.kind' => ['required', Rule::in(['all', 'none', 'set', 'account', 'accounts'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
             'destination.ids' => ['array', 'required_if:destination.kind,accounts'],
             'destination.ids.*' => ['string'],

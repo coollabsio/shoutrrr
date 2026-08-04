@@ -73,6 +73,28 @@ test('POST /posts accepts a custom accounts destination', function () {
         ->assertJsonCount(2, 'post.targets');
 });
 
+test('PUT /posts/{post} accepts a "none" destination and clears every target', function () {
+    [$user, $workspace, $accounts] = actingMember(2);
+    $created = test()->postJson('/posts', [
+        'base_text' => 'a',
+        'segments' => ['a'],
+        'destination' => ['kind' => 'all'],
+    ])->assertCreated()->json('post');
+
+    expect($created['targets'])->toHaveCount(2);
+
+    test()->putJson("/posts/{$created['id']}", [
+        'base_text' => 'a',
+        'segments' => ['a'],
+        'destination' => ['kind' => 'none'],
+        'targets' => [],
+        'expected_updated_at' => $created['updated_at'],
+    ])
+        ->assertOk()
+        ->assertJsonPath('post.destination.kind', 'none')
+        ->assertJsonCount(0, 'post.targets');
+});
+
 test('PUT /posts/{post} autosaves edits and returns the new baseline', function () {
     [$user, $workspace, $accounts] = actingMember(1);
     $created = test()->postJson('/posts', ['base_text' => 'a', 'segments' => ['a'], 'destination' => ['kind' => 'all']])->json('post');

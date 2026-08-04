@@ -42,6 +42,19 @@ test('publish-now sets the post publishing and dispatches targets', function () 
     Bus::assertDispatchedTimes(PublishPostTarget::class, 1);
 });
 
+test('publish-now is blocked (422) when the post has no targets and does not dispatch', function () {
+    Bus::fake();
+    [$user, $workspace] = publishingMember();
+    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'status' => PostStatus::Draft]);
+
+    test()->postJson("/posts/{$post->id}/publish")
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'Select at least one account to publish.');
+
+    expect($post->refresh()->status)->toBe(PostStatus::Draft);
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
 test('publish-now is blocked across workspaces', function () {
     publishingMember();
     $foreign = Post::factory()->create();

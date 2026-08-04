@@ -1,5 +1,5 @@
 import { Link, useHttp, usePage } from '@inertiajs/react';
-import { Eye, Pin, Plug, TriangleAlert } from 'lucide-react';
+import { AtSign, Eye, Pin, Plug, TriangleAlert } from 'lucide-react';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -161,6 +161,9 @@ function accountIdsFor(
         const selected = new Set(destination.ids);
 
         return accounts.filter((a) => selected.has(a.id)).map((a) => a.id);
+    }
+    if (destination.kind === 'none') {
+        return [];
     }
 
     return accounts.map((a) => a.id);
@@ -1300,6 +1303,13 @@ export default function Composer({
                             Connect an account to publish
                         </Link>
                     </div>
+                ) : destinationAccountIds.length === 0 ? (
+                    <div className="px-4 pb-3.5 sm:px-[26px]">
+                        <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1 text-[12px] tracking-[-0.005em] text-muted-foreground">
+                            <AtSign className="size-3.5" aria-hidden />
+                            Select at least one account to publish
+                        </span>
+                    </div>
                 ) : null}
 
                 {activeAccount && activeNotices.length > 0 && (
@@ -1509,7 +1519,10 @@ export default function Composer({
                         <SubmitBar
                             tray={state.scheduleTray}
                             postId={state.postId}
-                            disabled={accounts.length === 0}
+                            disabled={
+                                accounts.length === 0 ||
+                                destinationAccountIds.length === 0
+                            }
                             attentionHandles={attentionAccounts.map(
                                 (account) => account.handle,
                             )}
