@@ -7,6 +7,7 @@ export interface PostCapabilities {
     canUnschedule: boolean;
     canDelete: boolean;
     canRetry: boolean;
+    canDuplicate: boolean;
 }
 
 const NONE: PostCapabilities = {
@@ -16,6 +17,7 @@ const NONE: PostCapabilities = {
     canUnschedule: false,
     canDelete: false,
     canRetry: false,
+    canDuplicate: false,
 };
 
 export function postCapabilities(post: PostView): PostCapabilities {
@@ -43,11 +45,21 @@ export function postCapabilities(post: PostView): PostCapabilities {
         case 'missed':
             // A post the scheduler skipped as too stale: let the user reschedule
             // it back into the pipeline (→ scheduled) or discard it.
-            return { ...NONE, canReschedule: true, canDelete: true };
+            return {
+                ...NONE,
+                canReschedule: true,
+                canDelete: true,
+                canDuplicate: true,
+            };
         case 'published':
         case 'partial':
         case 'failed':
-            return { ...NONE, canDelete: true, canRetry: hasFailedTarget };
+            return {
+                ...NONE,
+                canDelete: true,
+                canRetry: hasFailedTarget,
+                canDuplicate: true,
+            };
         default:
             return NONE;
     }

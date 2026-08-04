@@ -2,6 +2,7 @@ import { Link, router, useHttp, usePage } from '@inertiajs/react';
 import {
     CalendarClock,
     CalendarX,
+    Copy,
     MessageCircle,
     RotateCw,
     Share2,
@@ -57,6 +58,7 @@ export function PostPageActions({ post }: Props) {
     const [rescheduling, setRescheduling] = useState(false);
     const [pickedAt, setPickedAt] = useState<string>(() => defaultPickedAt(tz));
     const [shareOpen, setShareOpen] = useState(false);
+    const [duplicating, setDuplicating] = useState(false);
 
     // Re-render each minute so the relative "going live" label stays current.
     const [, setTick] = useState(0);
@@ -72,6 +74,18 @@ export function PostPageActions({ post }: Props) {
         router.visit(ComposerController.show(post.id).url, {
             preserveScroll: true,
         });
+    }
+
+    function handleDuplicate() {
+        if (duplicating) {
+            return;
+        }
+        setDuplicating(true);
+        router.post(
+            PostController.duplicate(post.id).url,
+            {},
+            { onFinish: () => setDuplicating(false) },
+        );
     }
 
     function openReschedule() {
@@ -234,6 +248,20 @@ export function PostPageActions({ post }: Props) {
                         >
                             <Share2 className="size-3.5" aria-hidden />
                             <span className="hidden sm:inline">Share</span>
+                        </Button>
+                    )}
+                    {caps.canDuplicate && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            aria-label="Copy as draft"
+                            disabled={duplicating}
+                            onClick={handleDuplicate}
+                        >
+                            <Copy className="size-3.5" aria-hidden />
+                            <span className="hidden sm:inline">
+                                Copy as draft
+                            </span>
                         </Button>
                     )}
                     {caps.canDelete && (

@@ -15,6 +15,7 @@ use App\Models\AccountSet;
 use App\Models\Post;
 use App\Models\PostTarget;
 use App\Services\Posts\DraftService;
+use App\Services\Posts\PostDuplicator;
 use App\Services\Posts\PostStaleWriteException;
 use App\Support\PostListItem;
 use App\Support\PostView;
@@ -111,6 +112,21 @@ class PostController extends Controller
         }
 
         return response()->json(['post' => PostView::make($updated->fresh(['targets.account', 'media']))]);
+    }
+
+    public function duplicate(Request $request, Post $post, PostDuplicator $duplicator): RedirectResponse
+    {
+        $request->user()->can('create', Post::class) ?: abort(403);
+
+        // Only terminal posts are eligible — mirror the client capability model
+        // so the endpoint contract can't be bypassed for a draft/scheduled post.
+        in_array($post->status, [
+            PostStatus::Published, PostStatus::Partial, PostStatus::Failed, PostStatus::Missed,
+        ], true) ?: abort(422, 'This post cannot be copied to a draft.');
+
+        $draft = $duplicator->duplicate($post);
+
+        return redirect()->route('posts.show', $draft)->with('success', 'Copied to a new draft.');
     }
 
     public function destroy(Request $request, Post $post): RedirectResponse

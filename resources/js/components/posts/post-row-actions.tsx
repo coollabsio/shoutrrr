@@ -67,9 +67,22 @@ export function PostRowActions({ post }: Props) {
     const [mode, setMode] = useState<Mode>('menu');
     const [pickedAt, setPickedAt] = useState<string>(() => defaultPickedAt(tz));
     const [shareOpen, setShareOpen] = useState(false);
+    const [duplicating, setDuplicating] = useState(false);
 
     function handleEdit() {
         router.visit(ComposerController.show(post.id).url);
+    }
+
+    function handleDuplicate() {
+        if (duplicating) {
+            return;
+        }
+        setDuplicating(true);
+        router.post(
+            PostController.duplicate(post.id).url,
+            {},
+            { onFinish: () => setDuplicating(false) },
+        );
     }
 
     function openSchedule() {
@@ -267,6 +280,14 @@ export function PostRowActions({ post }: Props) {
                     <DropdownMenuItem onClick={() => setShareOpen(true)}>
                         Share&hellip;
                     </DropdownMenuItem>
+                    {caps.canDuplicate && (
+                        <DropdownMenuItem
+                            disabled={duplicating}
+                            onClick={handleDuplicate}
+                        >
+                            Copy as draft
+                        </DropdownMenuItem>
+                    )}
                     {caps.canDelete && (
                         <DropdownMenuItem
                             variant="destructive"
