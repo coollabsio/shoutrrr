@@ -12,6 +12,7 @@ use App\Models\PostTarget;
 use App\Support\FileStorage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Throwable;
 
 class PostDuplicator
 {
@@ -20,49 +21,92 @@ class PostDuplicator
      * files + rows) and per-account targets, resetting all publish state.
      * New draft targets rely on DB defaults for status/attempts/metrics
      * (status defaults to `pending`), so only content fields are carried.
+     *
+     * Backing files are copied *before* the DB transaction — a media disk is a
+     * private S3 bucket in production, and a blocking network copy has no place
+     * holding a DB connection/locks open. Any file written is tracked so a
+     * failure anywhere rolls back the rows *and* deletes the orphaned copies.
      */
     public function duplicate(Post $source): Post
     {
-        return DB::transaction(function () use ($source): Post {
-            $source->loadMissing('media', 'targets');
+        $source->loadMissing('media', 'targets');
 
-            $draft = Post::create([
-                'workspace_id' => $source->workspace_id,
-                'account_set_id' => $source->account_set_id,
-                'author_id' => $source->author_id,
-                'segments' => $source->segments,
-                'base_text' => $source->base_text,
-                'mentions' => $source->mentions,
-                'status' => PostStatus::Draft->value,
-                'auto_repost' => $source->auto_repost,
-            ]);
+        /** @var list<array{0: string, 1: string}> $copiedPaths */
+        $copiedPaths = [];
 
-            $mediaIdMap = $this->cloneMedia($source, $draft);
-            $this->cloneTargets($source, $draft, $mediaIdMap);
+        try {
+            $mediaPlan = $this->copyMediaFiles($source, $copiedPaths);
 
-            return $draft->load('targets', 'media');
-        });
+            return DB::transaction(function () use ($source, $mediaPlan): Post {
+                $draft = Post::create([
+                    'workspace_id' => $source->workspace_id,
+                    'account_set_id' => $source->account_set_id,
+                    'author_id' => $source->author_id,
+                    'segments' => $source->segments,
+                    'base_text' => $source->base_text,
+                    'mentions' => $source->mentions,
+                    'status' => PostStatus::Draft->value,
+                    'auto_repost' => $source->auto_repost,
+                ]);
+
+                $mediaIdMap = $this->createMediaRows($draft, $mediaPlan);
+                $this->cloneTargets($source, $draft, $mediaIdMap);
+
+                return $draft->load('targets', 'media');
+            });
+        } catch (Throwable $e) {
+            foreach ($copiedPaths as [$disk, $path]) {
+                FileStorage::disk($disk)->delete($path);
+            }
+
+            throw $e;
+        }
     }
 
     /**
-     * Copy every media row and its backing file(s) onto the draft.
+     * Copy each media file (and any retained pre-edit source) to a fresh path,
+     * recording every written path in $copiedPaths for rollback cleanup.
      *
+     * @param  list<array{0: string, 1: string}>  $copiedPaths
+     * @return list<array{media: PostMedia, path: string, source_path: string|null}>
+     */
+    private function copyMediaFiles(Post $source, array &$copiedPaths): array
+    {
+        $plan = [];
+
+        foreach ($source->media as $media) {
+            $path = $this->copyFile($media->disk, $media->path);
+            $copiedPaths[] = [$media->disk, $path];
+
+            $sourcePath = null;
+            if ($media->source_path !== null) {
+                $sourceDisk = $media->source_disk ?? $media->disk;
+                $sourcePath = $this->copyFile($sourceDisk, $media->source_path);
+                $copiedPaths[] = [$sourceDisk, $sourcePath];
+            }
+
+            $plan[] = ['media' => $media, 'path' => $path, 'source_path' => $sourcePath];
+        }
+
+        return $plan;
+    }
+
+    /**
+     * Create the draft's media rows from the pre-copied files.
+     *
+     * @param  list<array{media: PostMedia, path: string, source_path: string|null}>  $plan
      * @return array<string, string> old media id => new media id
      */
-    private function cloneMedia(Post $source, Post $draft): array
+    private function createMediaRows(Post $draft, array $plan): array
     {
         $map = [];
 
-        foreach ($source->media as $media) {
-            $newSourcePath = $media->source_path === null
-                ? null
-                : $this->copyFile($media->source_disk ?? $media->disk, $media->source_path);
-
+        foreach ($plan as ['media' => $media, 'path' => $path, 'source_path' => $sourcePath]) {
             $copy = PostMedia::create([
                 'workspace_id' => $draft->workspace_id,
                 'post_id' => $draft->id,
                 'disk' => $media->disk,
-                'path' => $this->copyFile($media->disk, $media->path),
+                'path' => $path,
                 'mime' => $media->mime,
                 'size_bytes' => $media->size_bytes,
                 'width' => $media->width,
@@ -71,8 +115,8 @@ class PostDuplicator
                 'position' => $media->position,
                 'kind' => $media->kind,
                 'duration_seconds' => $media->duration_seconds,
-                'source_disk' => $newSourcePath === null ? null : ($media->source_disk ?? $media->disk),
-                'source_path' => $newSourcePath,
+                'source_disk' => $sourcePath === null ? null : ($media->source_disk ?? $media->disk),
+                'source_path' => $sourcePath,
                 'edit_settings' => $media->edit_settings,
             ]);
 

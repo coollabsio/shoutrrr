@@ -135,6 +135,19 @@ test('targets for deleted accounts are skipped', function (): void {
     expect($draft->targets()->count())->toBe(0);
 });
 
+test('a draft post is not eligible to be copied', function (): void {
+    $post = Post::factory()->for($this->workspace)->create([
+        'author_id' => $this->user->id,
+        'status' => PostStatus::Draft->value,
+    ]);
+
+    $this->actingAs($this->user)
+        ->post(route('posts.duplicate', $post))
+        ->assertStatus(422);
+
+    expect(Post::query()->where('status', PostStatus::Draft->value)->count())->toBe(1);
+});
+
 test('a post from another workspace cannot be duplicated', function (): void {
     $post = publishedPostWithMediaAndTarget($this->workspace, $this->user);
     [$other] = duplicateMember();
