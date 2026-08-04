@@ -27,17 +27,17 @@ class PublishController extends Controller
 
         $workspace = $post->workspace()->firstOrFail();
 
+        if ($post->loadMissing('targets')->targets->isEmpty()) {
+            return response()->json([
+                'message' => 'Select at least one account to publish.',
+            ], 422);
+        }
+
         if (! $subscriptions->canPublish($workspace)) {
             return response()->json([
                 'message' => 'Subscribe to publish this post.',
                 'billing_url' => route('billing.index'),
             ], 402);
-        }
-
-        if ($post->loadMissing('targets')->targets->isEmpty()) {
-            return response()->json([
-                'message' => 'Select at least one account to publish.',
-            ], 422);
         }
 
         $blocked = $precheck->blockingTargets($post->loadMissing(['targets.account', 'media']));
