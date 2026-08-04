@@ -55,35 +55,41 @@ class XConnector implements PublishConnector, RepostConnector
         $remoteIds = $context->target->remote_ids ?? [];
 
         try {
-            $videoMedia = array_values(array_filter($context->media, fn (PostMedia $m): bool => $m->isVideo()));
-            $gifMedia = array_values(array_filter(
-                $context->media,
-                fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime === 'image/gif',
-            ));
-
-            if ($videoMedia !== []) {
-                $ready = $this->ensureVideoReady($context, $videoMedia[0], $token);
-                if (! $ready->isSuccessful()) {
-                    return $ready;
-                }
-                $mediaIds = [(string) $ready->remoteIds[0]];
-            } elseif ($gifMedia !== []) {
-                $ready = $this->ensureGifReady($context, $gifMedia, $token);
-                if (! $ready->isSuccessful()) {
-                    return $ready;
-                }
-                $mediaIds = [(string) $ready->remoteIds[0]];
-            } else {
-                $mediaIds = $this->uploadMedia($context->media, $token, $context->account);
-            }
-
             foreach ($context->segments as $index => $text) {
                 // Resume: skip segments already posted on a prior attempt.
                 if (isset($remoteIds[$index])) {
                     continue;
                 }
 
-                $hasMedia = $index === 0 && $mediaIds !== [];
+                // Video/gif/images is resolved per section (not once for the whole
+                // thread): each tweet has its own media, and X's "one type per tweet"
+                // rule applies per tweet, not per post.
+                $sectionMedia = array_slice($context->mediaForSection($index), 0, Platform::X->maxMedia());
+                $videoMedia = array_values(array_filter($sectionMedia, fn (PostMedia $m): bool => $m->isVideo()));
+                $gifMedia = array_values(array_filter(
+                    $sectionMedia,
+                    fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime === 'image/gif',
+                ));
+
+                if ($videoMedia !== []) {
+                    $ready = $this->ensureVideoReady($context, $videoMedia[0], $token);
+                    if (! $ready->isSuccessful()) {
+                        return $ready;
+                    }
+                    $mediaIds = [(string) $ready->remoteIds[0]];
+                } elseif ($gifMedia !== []) {
+                    $ready = $this->ensureGifReady($context, $sectionMedia, $token);
+                    if (! $ready->isSuccessful()) {
+                        return $ready;
+                    }
+                    $mediaIds = [(string) $ready->remoteIds[0]];
+                } elseif ($sectionMedia !== []) {
+                    $mediaIds = $this->uploadMedia($sectionMedia, $token, $context->account);
+                } else {
+                    $mediaIds = [];
+                }
+
+                $hasMedia = $mediaIds !== [];
 
                 // Quote-posting is opt-in per instance (it needs X Enterprise API access),
                 // and quote_tweet_id is mutually exclusive with media on X — so only pull a
@@ -249,18 +255,24 @@ class XConnector implements PublishConnector, RepostConnector
     }
 
     /**
-     * @param  list<PostMedia>  $media
+     * @param  list<PostMedia>  $sectionMedia  the section's full media list, so a gif
+     *                                         mixed with other media in the same tweet is rejected
      */
-    private function ensureGifReady(PublishContext $context, array $media, string $token): PublishResult
+    private function ensureGifReady(PublishContext $context, array $sectionMedia, string $token): PublishResult
     {
-        if (count($context->media) > 1 || count($media) > 1) {
+        $gifMedia = array_values(array_filter(
+            $sectionMedia,
+            fn (PostMedia $m): bool => ! $m->isVideo() && $m->mime === 'image/gif',
+        ));
+
+        if (count($sectionMedia) > 1 || count($gifMedia) > 1) {
             return PublishResult::failure(
                 ErrorKind::Validation,
                 'X supports one GIF per post, and a GIF cannot be mixed with other media.',
             );
         }
 
-        $item = $media[0];
+        $item = $gifMedia[0];
         $size = (int) Storage::disk($item->disk)->size($item->path);
 
         if ($size > self::GIF_MAX_BYTES) {

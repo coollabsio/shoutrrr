@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+    composerReducer,
     initialComposerState,
     type ComposerState,
 } from '@/lib/compose/composer-state';
@@ -145,5 +146,77 @@ describe('useAutosave onSaved', () => {
 
         expect(httpPut).toHaveBeenCalledOnce();
         expect(onSaved).toHaveBeenCalledOnce();
+    });
+});
+
+describe('autosave debounce reset on placement-only changes', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('resets the timer for a placements-only edit mid-window, so the latest placements are saved (not the stale ones)', async () => {
+        const onSaved = vi.fn();
+        const baseState = draftState({
+            postId: 'post-1',
+            baselineUpdatedAt: post.updated_at,
+        });
+
+        act(() => {
+            root?.render(createElement(Harness, { state: baseState, onSaved }));
+        });
+
+        // Partway through the original debounce window — not enough to fire.
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(250);
+        });
+        expect(httpPut).not.toHaveBeenCalled();
+
+        // A placements-only edit lands mid-window (e.g. dragging media between
+        // segments). saveState stays 'dirty'; nothing else in the currently
+        // tracked deps changes — only `placements` does.
+        const movedState = composerReducer(baseState, {
+            type: 'moveMediaToSegment',
+            mediaId: 'media-99',
+            segmentRef: '__head__',
+        });
+        expect(movedState.placements).not.toBe(baseState.placements);
+        expect(movedState.saveState).toBe('dirty');
+
+        act(() => {
+            root?.render(
+                createElement(Harness, { state: movedState, onSaved }),
+            );
+        });
+
+        // Past the ORIGINAL deadline (250ms + 250ms = 500ms elapsed). If the
+        // timer was correctly reset by the placement change, nothing has
+        // saved yet — the original timer must have been cleared.
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(250);
+        });
+        expect(httpPut).not.toHaveBeenCalled();
+
+        // Past the NEW deadline (250ms mid-window + a fresh 500ms window from
+        // the reset).
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(250);
+        });
+        expect(httpPut).toHaveBeenCalledOnce();
+
+        // The saved payload must reflect the latest placements, not the stale
+        // snapshot captured when the original timer was armed.
+        const lastTransformCall = transform.mock.calls.at(-1) as
+            | [() => { placements: unknown }]
+            | undefined;
+        const body = lastTransformCall?.[0]();
+        expect(body?.placements).toContainEqual({
+            media_id: 'media-99',
+            segment_ref: '__head__',
+            position: 0,
+        });
     });
 });

@@ -11,6 +11,7 @@ use App\Models\AccountSet;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostMedia;
+use App\Models\PostMediaPlacement;
 use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
@@ -37,9 +38,9 @@ class DraftService
      * @param  list<string>  $segments
      * @param  list<array{id?: mixed, label?: mixed, handles?: array<string, mixed>}>  $mentions
      */
-    public function createDraft(string $workspaceId, User $author, array $destination, array $segments, array $mentions = [], ?bool $autoRepost = null): Post
+    public function createDraft(string $workspaceId, User $author, array $destination, array $segments, array $mentions = [], ?bool $autoRepost = null, ?DraftData $data = null): Post
     {
-        return DB::transaction(function () use ($workspaceId, $author, $destination, $segments, $mentions, $autoRepost): Post {
+        return DB::transaction(function () use ($workspaceId, $author, $destination, $segments, $mentions, $autoRepost, $data): Post {
             $post = Post::create([
                 'workspace_id' => $workspaceId,
                 'account_set_id' => $this->scopedAccountSetId($workspaceId, $destination),
@@ -52,7 +53,10 @@ class DraftService
             ]);
 
             $accountIds = $this->resolveDestinationAccountIds($workspaceId, $destination);
-            $this->syncTargets($post, $accountIds, $segments, [], [], $post->mentions ?? []);
+            // Pass the DraftData so the created targets carry the thread's
+            // segment_breaks from the first save (placements settle on the next
+            // PUT once their media is attached).
+            $this->syncTargets($post, $accountIds, $segments, [], [], $post->mentions ?? [], [], $data);
 
             return $post->load('targets');
         });
@@ -147,7 +151,7 @@ class DraftService
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
      * @param  array<string, string>  $formatByAccount
      */
-    public function syncTargets(Post $post, array $accountIds, array $segments, array $autoSplitByAccount, array $overrideByAccount, array $mentions = [], array $formatByAccount = []): void
+    public function syncTargets(Post $post, array $accountIds, array $segments, array $autoSplitByAccount, array $overrideByAccount, array $mentions = [], array $formatByAccount = [], ?DraftData $data = null): void
     {
         $accounts = ConnectedAccount::withoutGlobalScopes()
             ->whereIn('id', $accountIds)
@@ -184,23 +188,136 @@ class DraftService
                 fn (string $segment): string => $this->resolveMentionTokens($segment, $mentions, $account->platform->value),
                 $effectiveSegments,
             );
-            $sections = $this->splitter->split(
+
+            // A partial update (e.g. an MCP text-only edit) omits placements /
+            // segment_breaks entirely. Treating that omission as an explicit empty
+            // would delete every placement and flatten the thread structure, so
+            // fall back to the target's stored state when the payload is silent.
+            $breaksProvided = $data instanceof DraftData && $data->hasSegmentBreaksFor($accountId);
+            $placementsProvided = $data instanceof DraftData && $data->hasPlacementsFor($accountId);
+
+            $breaks = $breaksProvided
+                ? $data->segmentBreaksFor($accountId)
+                : ($current instanceof PostTarget ? ($current->segment_breaks ?? []) : []);
+            $placements = $placementsProvided
+                ? $data->placementsFor($accountId)
+                : ($current instanceof PostTarget ? $this->existingPlacements($current) : []);
+            $mediaSegments = $this->mediaSegmentsFromPlacements($placements, $breaks);
+
+            $split = $this->splitter->split(
                 $resolvedSegments,
                 $account->platform,
                 $autoSplit,
                 $account->maxTextLength(),
-            )->sections;
+                $mediaSegments,
+            );
 
-            PostTarget::updateOrCreate(
+            $target = PostTarget::updateOrCreate(
                 ['post_id' => $post->id, 'connected_account_id' => $accountId],
                 [
                     'platform' => $account->platform->value,
-                    'sections' => $sections,
+                    'sections' => $split->sections,
+                    'segment_breaks' => $breaks,
+                    'section_sources' => $split->sectionSources,
                     'content_override' => $override,
                     'auto_split' => $autoSplit,
                     'format' => $format,
                 ],
             );
+
+            // Only rewrite placements when the caller actually sent them; a partial
+            // update leaves the target's existing placement rows in place.
+            if ($placementsProvided) {
+                $this->syncPlacements($post, $target, $placements);
+            }
+        }
+    }
+
+    /**
+     * Read a target's stored placements back into the payload shape so a partial
+     * update can preserve (and re-derive media sections from) them unchanged.
+     *
+     * @return list<array{media_id: string, segment_ref: string, position: int}>
+     */
+    private function existingPlacements(PostTarget $target): array
+    {
+        return array_values($target->placements()->get()
+            ->map(static fn (PostMediaPlacement $placement): array => [
+                'media_id' => $placement->post_media_id,
+                'segment_ref' => $placement->segment_ref,
+                'position' => $placement->position,
+            ])
+            ->all());
+    }
+
+    /**
+     * Map each placement's segment_ref to the authored-segment index it targets
+     * (`'__head__'` is index 0; otherwise the ref's position in `$breaks` + 1),
+     * so media-only segments still yield a section from the splitter. Refs that
+     * don't match a known break are skipped.
+     *
+     * @param  list<array{media_id: string, segment_ref: string, position: int}>  $placements
+     * @param  list<string>  $breaks
+     * @return list<int>
+     */
+    private function mediaSegmentsFromPlacements(array $placements, array $breaks): array
+    {
+        $indices = [];
+
+        foreach ($placements as $placement) {
+            $ref = $placement['segment_ref'];
+            if ($ref === '__head__') {
+                $indices[] = 0;
+
+                continue;
+            }
+
+            $position = array_search($ref, $breaks, true);
+            if ($position === false) {
+                continue;
+            }
+
+            $indices[] = $position + 1;
+        }
+
+        return array_values(array_unique($indices));
+    }
+
+    /**
+     * Delete-and-reinsert this target's media placements, de-duped on
+     * `post_media_id` (the table's unique key) and guarded so a placement can
+     * never FK-violate on media that isn't (or is no longer) attached to the post.
+     *
+     * @param  list<array{media_id: string, segment_ref: string, position: int}>  $placements
+     */
+    private function syncPlacements(Post $post, PostTarget $target, array $placements): void
+    {
+        $target->placements()->delete();
+
+        if ($placements === []) {
+            return;
+        }
+
+        $attachedMediaIds = PostMedia::withoutGlobalScopes()
+            ->where('post_id', $post->id)
+            ->pluck('id')
+            ->all();
+        $attachedMediaIds = array_flip($attachedMediaIds);
+
+        $seen = [];
+        foreach ($placements as $placement) {
+            $mediaId = $placement['media_id'];
+            if (! isset($attachedMediaIds[$mediaId]) || isset($seen[$mediaId])) {
+                continue;
+            }
+            $seen[$mediaId] = true;
+
+            PostMediaPlacement::create([
+                'post_target_id' => $target->id,
+                'post_media_id' => $mediaId,
+                'segment_ref' => $placement['segment_ref'],
+                'position' => $placement['position'],
+            ]);
         }
     }
 
@@ -258,8 +375,16 @@ class DraftService
 
             $post->forceFill($attributes)->save();
 
-            $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount);
-            $this->attachMedia($post, $data->mediaIds);
+            // Attach media BEFORE syncing targets: placement rows FK to post_media
+            // rows scoped to this post, and attachMedia is what sets post_id on
+            // them — syncing targets first would leave placements referencing
+            // still-orphaned media. Only when the caller actually sent media_ids;
+            // a partial update (e.g. an MCP text-only edit) that omits the key
+            // must not detach every media row already on the post.
+            if ($data->mediaIdsProvided) {
+                $this->attachMedia($post, $data->mediaIds);
+            }
+            $this->syncTargets($post, $accountIds, $data->segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount, $data);
 
             $post->touch();
 

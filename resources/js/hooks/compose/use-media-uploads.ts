@@ -18,14 +18,24 @@ import {
 import type { MediaView, PendingUpload, PlatformLimits } from '@/types/compose';
 
 type Options = {
-    /** Currently-attached media (drives the one-video / no-mixing rule). */
-    media: MediaView[];
+    /**
+     * Media already attached to a given thread segment (drives the one-video
+     * / no-mixing rule) — each thread segment publishes as its own post, so
+     * the rule is judged per segment rather than across the whole draft.
+     */
+    mediaForSegment: (segmentRef: string) => MediaView[];
     /** Limits for the selected platforms, used to validate a video before upload. */
     videoLimits: PlatformLimits[];
     /** Guarantee a persisted post id before uploading; returns the post id. */
     onEnsurePost: () => Promise<string>;
-    /** Append a finished upload to the composer's media. */
-    onAddMedia: (media: MediaView) => void;
+    /** Append a finished upload to the composer's media, tagged with the segment it belongs to. */
+    onAddMedia: (media: MediaView, segmentRef: string) => void;
+    /**
+     * Reads the segment the caret is currently in. Captured once per batch
+     * (at `handleFiles`/`trackPending` call time) so a completed upload lands
+     * where the caret was when it started, even if it moved meanwhile.
+     */
+    activeSegmentRef: () => string;
     /** Upload-target URL builders; defaults to the post controllers. */
     endpoints?: {
         imageStore: (ownerId: string) => string;
@@ -53,6 +63,7 @@ type MediaUploads = {
     trackPending: (
         chip: { kind: 'image' | 'video'; previewUrl?: string },
         work: () => Promise<MediaView>,
+        segmentRef?: string,
     ) => Promise<void>;
 };
 
@@ -62,10 +73,11 @@ type MediaUploads = {
  * one-video / no-mixing-with-images rule. The component stays presentational.
  */
 export function useMediaUploads({
-    media,
+    mediaForSegment,
     videoLimits,
     onEnsurePost,
     onAddMedia,
+    activeSegmentRef,
     endpoints,
 }: Options): MediaUploads {
     const ep = endpoints ?? {
@@ -144,11 +156,15 @@ export function useMediaUploads({
     function beginUpload(
         file: File,
         kind: PendingUpload['kind'],
+        segmentRef: string,
         status: PendingUpload['status'] = 'uploading',
     ): { tempId: string; previewUrl?: string } {
         const tempId = newTempId();
         const previewUrl = mintPreview(file);
-        setPending((cur) => [...cur, { tempId, kind, previewUrl, status }]);
+        setPending((cur) => [
+            ...cur,
+            { tempId, kind, previewUrl, status, segmentRef },
+        ]);
 
         return { tempId, previewUrl };
     }
@@ -176,10 +192,14 @@ export function useMediaUploads({
     function finishUpload(
         tempId: string,
         result: MediaView,
+        segmentRef: string,
         previewUrl?: string,
     ): void {
         // Prefer the local preview over the server URL to avoid a blank flash.
-        onAddMedia(previewUrl ? { ...result, url: previewUrl } : result);
+        onAddMedia(
+            previewUrl ? { ...result, url: previewUrl } : result,
+            segmentRef,
+        );
         setPending((cur) => cur.filter((p) => p.tempId !== tempId));
     }
 
@@ -202,6 +222,7 @@ export function useMediaUploads({
     async function trackPending(
         chip: { kind: 'image' | 'video'; previewUrl?: string },
         work: () => Promise<MediaView>,
+        segmentRef: string = activeSegmentRef(),
     ): Promise<void> {
         const tempId = newTempId();
         setPending((current) => [
@@ -211,12 +232,13 @@ export function useMediaUploads({
                 kind: chip.kind,
                 previewUrl: chip.previewUrl,
                 status: 'uploading',
+                segmentRef,
             },
         ]);
 
         try {
             const result = await work();
-            onAddMedia(result);
+            onAddMedia(result, segmentRef);
             dismissPending(tempId);
         } catch (error) {
             toast.error(
@@ -239,8 +261,8 @@ export function useMediaUploads({
 
     // --- Upload flows -------------------------------------------------------
 
-    async function uploadImage(file: File): Promise<void> {
-        const { tempId, previewUrl } = beginUpload(file, 'image');
+    async function uploadImage(file: File, segmentRef: string): Promise<void> {
+        const { tempId, previewUrl } = beginUpload(file, 'image', segmentRef);
 
         const id = await onEnsurePost();
         if (!id) {
@@ -253,13 +275,13 @@ export function useMediaUploads({
             const { media: result } = await imageHttp.post(ep.imageStore(id), {
                 onNetworkError: () => undefined,
             });
-            finishUpload(tempId, result, previewUrl);
+            finishUpload(tempId, result, segmentRef, previewUrl);
         } catch {
             failUpload(tempId);
         }
     }
 
-    async function uploadVideo(file: File): Promise<void> {
+    async function uploadVideo(file: File, segmentRef: string): Promise<void> {
         // One controller for the whole operation; the cancel button aborts it to
         // stop conversion, compression, or the PUT — whichever is running.
         const controller = new AbortController();
@@ -279,7 +301,12 @@ export function useMediaUploads({
             // entirely and keep the existing fast path untouched.
             let source = file;
             if (file.type !== 'video/mp4') {
-                const { tempId } = beginUpload(file, 'video', 'processing');
+                const { tempId } = beginUpload(
+                    file,
+                    'video',
+                    segmentRef,
+                    'processing',
+                );
                 register(tempId);
                 try {
                     const { convertToMp4 } =
@@ -345,6 +372,7 @@ export function useMediaUploads({
             const { tempId, previewUrl } = beginUpload(
                 source,
                 'video',
+                segmentRef,
                 willCompress ? 'processing' : 'uploading',
             );
             register(tempId);
@@ -447,7 +475,7 @@ export function useMediaUploads({
                     return;
                 }
 
-                finishUpload(tempId, result, previewUrl);
+                finishUpload(tempId, result, segmentRef, previewUrl);
             } catch {
                 // A cancel aborts the PUT/confirm; the chip is already gone.
                 if (signal.aborted) {
@@ -465,8 +493,13 @@ export function useMediaUploads({
     // --- One-video / no-mixing-with-images rule -----------------------------
 
     async function handleFiles(files: FileList | File[]): Promise<void> {
-        const hasVideo = media.some((m) => m.kind === 'video');
-        const hasImages = media.some((m) => m.kind === 'image');
+        // Captured once for the whole batch, before any upload's await, so the
+        // media lands where the caret was when the batch began even if it
+        // moves while an upload is in flight.
+        const segmentRef = activeSegmentRef();
+        const segmentMedia = mediaForSegment(segmentRef);
+        const hasVideo = segmentMedia.some((m) => m.kind === 'video');
+        const hasImages = segmentMedia.some((m) => m.kind === 'image');
         // Track this batch too: render-closure `media` is stale for files already
         // dispatched earlier in the same multi-select.
         let videoQueued = false;
@@ -481,7 +514,7 @@ export function useMediaUploads({
                     continue;
                 }
                 videoQueued = true;
-                await uploadVideo(file);
+                await uploadVideo(file, segmentRef);
                 continue;
             }
 
@@ -491,7 +524,7 @@ export function useMediaUploads({
             }
             // imageQueued does not block more images — multi-image batches all upload.
             imageQueued = true;
-            await uploadImage(file);
+            await uploadImage(file, segmentRef);
         }
     }
 

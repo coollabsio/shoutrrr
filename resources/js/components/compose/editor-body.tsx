@@ -1,6 +1,6 @@
 import { EditorContent, useEditor } from '@tiptap/react';
 import { Split } from 'lucide-react';
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 import {
     forwardRef,
     useEffect,
@@ -8,16 +8,19 @@ import {
     useRef,
     useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import EmojiSuggestPopover from '@/components/compose/emoji-suggest-popover';
 import MentionPicker from '@/components/compose/mention-picker';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { useEmojiTypeahead } from '@/hooks/compose/use-emoji-typeahead';
+import { activeSegmentRef } from '@/lib/compose/active-segment';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
 import { mentionInputValue, updateMentionName } from '@/lib/compose/mentions';
 import {
     docToSegments,
-    segmentsToDoc,
+    docToSegmentsWithBreaks,
+    segmentsToDocWithBreaks,
     type DocNode,
 } from '@/lib/compose/tiptap-doc';
 import {
@@ -26,6 +29,7 @@ import {
     focusEditorAfterMentionLabel,
     removeMentionLabel,
 } from '@/lib/compose/tiptap/mention-focus';
+import type { SegmentAnchor } from '@/lib/compose/tiptap/segment-media-anchors';
 import { composerExtensions } from '@/lib/compose/tiptap/setup';
 import { cn } from '@/lib/utils';
 import type {
@@ -36,7 +40,23 @@ import type {
 
 type EditorBodyProps = {
     value: string[];
-    onChange: (segments: string[]) => void;
+    /**
+     * Stable ids for the section breaks between `value`'s segments
+     * (`breakIds.length === value.length - 1`) — round-tripped back onto the
+     * rebuilt doc's `sectionBreak` nodes so a fresh mount or an external
+     * content reset doesn't mint new ids for breaks that already exist (which
+     * would orphan anything keyed to the old ones, e.g. per-segment media
+     * placements). Omit for callers with no thread structure to preserve.
+     */
+    breakIds?: string[];
+    /**
+     * Fires on every doc change with the segment texts and the stable break
+     * ids that separate them (`breakIds.length === segments.length - 1`) —
+     * see `docToSegmentsWithBreaks`. Callers that don't care about thread
+     * structure (e.g. the single-message reply box) can ignore the second
+     * argument.
+     */
+    onChange: (segments: string[], breakIds: string[]) => void;
     onBlur?: () => void;
     placeholder?: string;
     /** When false, the post is read-only (e.g. already published/scheduled). */
@@ -91,6 +111,19 @@ type EditorBodyProps = {
     emojiSkinTone?: EmojiSkinTone;
     /** Record a chosen emoji as recently used. */
     onEmojiInsert?: (emoji: string) => void;
+    /**
+     * Fired whenever the caret/selection moves into a different segment
+     * (Tiptap `onSelectionUpdate`). Omit if the caller doesn't need live
+     * active-segment tracking (e.g. it only reads it on demand via the handle).
+     */
+    onActiveSegmentChange?: (segmentRef: string) => void;
+    /**
+     * Render the per-segment media row for a given segment ref, portaled INTO
+     * the editor just above that segment's division line (or below the last
+     * segment). Omit for the compact reply editor, which has no thread
+     * structure. Returning `null` leaves that segment's anchor empty.
+     */
+    renderSegmentMedia?: (segmentRef: string) => ReactNode;
 };
 
 export type EditorBodyHandle = {
@@ -100,6 +133,8 @@ export type EditorBodyHandle = {
     focus: () => void;
     /** Release focus from the editor. */
     blur: () => void;
+    /** Pull-based read of the segment ref the caret currently sits in. */
+    activeSegmentRef: () => string;
 };
 
 export function shouldFocusEditorOnMount(
@@ -134,6 +169,7 @@ export function isSubmitShortcut(event: {
 function EditorBodyInner(
     {
         value,
+        breakIds = [],
         onChange,
         onBlur,
         placeholder,
@@ -157,9 +193,14 @@ function EditorBodyInner(
         editable = true,
         emojiSkinTone = 'none',
         onEmojiInsert,
+        onActiveSegmentChange,
+        renderSegmentMedia,
     }: EditorBodyProps,
     ref: Ref<EditorBodyHandle>,
 ) {
+    // Per-segment media-row anchors (DOM nodes the SegmentMediaAnchors plugin
+    // inserts into the editor flow); each hosts a portaled media row.
+    const [segmentAnchors, setSegmentAnchors] = useState<SegmentAnchor[]>([]);
     const [activeMentionId, setActiveMentionId] = useState<string | null>(null);
     const previousMentionCount = useRef(mentions.length);
     const pendingFocusLabel = useRef<string | null>(null);
@@ -191,7 +232,7 @@ function EditorBodyInner(
             emojiOpenRef,
             compact,
         }),
-        content: segmentsToDoc(value) as object,
+        content: segmentsToDocWithBreaks(value, breakIds) as object,
         editable,
         editorProps: {
             handlePaste: (_view, event) => {
@@ -214,8 +255,55 @@ function EditorBodyInner(
                 return true;
             },
         },
-        onUpdate: ({ editor }) =>
-            onChange(docToSegments(editor.getJSON() as DocNode)),
+        onUpdate: ({ editor }) => {
+            const { segments, breakIds } = docToSegmentsWithBreaks(
+                editor.getJSON() as DocNode,
+            );
+            onChange(segments, breakIds);
+        },
+        onSelectionUpdate: ({ editor }) => {
+            if (!onActiveSegmentChange) {
+                return;
+            }
+            // Avoid `editor.getJSON()` + `docToSegmentsWithBreaks` here — both
+            // walk and serialize the *entire* document (every paragraph's
+            // text/marks), which is wasteful on a handler that fires on every
+            // caret move, not just on content changes. `activeSegmentRef` only
+            // needs each top-level node's break id (if any) and size, both of
+            // which the live ProseMirror doc already exposes in O(1) per node.
+            const breakIds: string[] = [];
+            const content: DocNode[] = [];
+            editor.state.doc.forEach((node) => {
+                if (node.type.name === 'sectionBreak') {
+                    const breakId =
+                        (node.attrs.breakId as string | undefined) ??
+                        'b' + breakIds.length;
+                    breakIds.push(breakId);
+                    content.push({ type: 'sectionBreak' });
+
+                    return;
+                }
+                // A same-size stand-in so `activeSegmentRef`'s node-size math
+                // (which reads text length, not full JSON) lines up with the
+                // real document without re-serializing its actual content.
+                content.push({
+                    type: node.type.name,
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'x'.repeat(Math.max(node.nodeSize - 2, 0)),
+                        },
+                    ],
+                });
+            });
+            onActiveSegmentChange(
+                activeSegmentRef(
+                    { type: 'doc', content },
+                    editor.state.selection.from,
+                    breakIds,
+                ),
+            );
+        },
         onBlur,
     });
 
@@ -240,6 +328,19 @@ function EditorBodyInner(
             blur: () => {
                 editor?.commands.blur();
             },
+            activeSegmentRef: () => {
+                if (!editor) {
+                    return '__head__';
+                }
+                const doc = editor.getJSON() as DocNode;
+                const { breakIds } = docToSegmentsWithBreaks(doc);
+
+                return activeSegmentRef(
+                    doc,
+                    editor.state.selection.from,
+                    breakIds,
+                );
+            },
         }),
         [editor],
     );
@@ -261,6 +362,43 @@ function EditorBodyInner(
         editor?.setEditable(editable);
     }, [editor, editable]);
 
+    // Read the per-segment media anchors straight off the rendered DOM after
+    // each doc change, rather than having the plugin push them via a callback
+    // (which can fire mid-render and get dropped). The anchor nodes are stable
+    // (cached per ref by the plugin), so we only re-set state when the ref/el
+    // set actually changes.
+    useEffect(() => {
+        if (!editor || compact) {
+            return;
+        }
+        const read = () => {
+            const next = Array.from(
+                editor.view.dom.querySelectorAll<HTMLElement>(
+                    '.segment-media-anchor',
+                ),
+            ).map((el) => ({
+                ref: el.getAttribute('data-segment-ref') ?? '__head__',
+                el,
+            }));
+            setSegmentAnchors((prev) =>
+                prev.length === next.length &&
+                prev.every(
+                    (a, i) => a.ref === next[i].ref && a.el === next[i].el,
+                )
+                    ? prev
+                    : next,
+            );
+        };
+        read();
+        const frame = window.requestAnimationFrame(read);
+        editor.on('update', read);
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+            editor.off('update', read);
+        };
+    }, [editor, compact]);
+
     // Keep the editor in sync when the value is replaced externally (tab switch,
     // conflict resolution) without emitting an update.
     useEffect(() => {
@@ -269,9 +407,10 @@ function EditorBodyInner(
         }
         const current = docToSegments(editor.getJSON() as DocNode);
         if (JSON.stringify(current) !== JSON.stringify(value)) {
-            editor.commands.setContent(segmentsToDoc(value) as object, {
-                emitUpdate: false,
-            });
+            editor.commands.setContent(
+                segmentsToDocWithBreaks(value, breakIds) as object,
+                { emitUpdate: false },
+            );
         }
         // oxlint-disable-next-line react-hooks/exhaustive-deps
     }, [value, editor]);
@@ -573,6 +712,17 @@ function EditorBodyInner(
                     )}
                 />
             </div>
+            {/* Per-segment media rows, portaled into anchor nodes the
+            SegmentMediaAnchors plugin places at each segment's end so they sit
+            just above that thread post's division line. */}
+            {renderSegmentMedia !== undefined &&
+                segmentAnchors.map((anchor) =>
+                    createPortal(
+                        renderSegmentMedia(anchor.ref),
+                        anchor.el,
+                        anchor.ref,
+                    ),
+                )}
         </div>
     );
 }

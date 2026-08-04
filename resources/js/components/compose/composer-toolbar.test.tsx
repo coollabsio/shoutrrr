@@ -8,16 +8,10 @@ const base = {
     autoSplit: true,
     overrideActive: false,
     media: [],
-    onRemove: vi.fn(),
-    onReorder: vi.fn(),
     onToggleAutoSplit: vi.fn(),
     onToggleOverride: vi.fn(),
-    isExcluded: () => false,
-    onToggleExclude: vi.fn(),
     pending: [],
     handleFiles: vi.fn(),
-    dismissPending: vi.fn(),
-    cancelPending: vi.fn(),
     onInsertEmoji: vi.fn(),
     emojiRecents: [],
     emojiSkinTone: 'none' as const,
@@ -62,7 +56,14 @@ describe('ComposerToolbar media button', () => {
         render(
             <ComposerToolbar
                 {...base}
-                pending={[{ tempId: 't1', kind: 'image', status: 'uploading' }]}
+                pending={[
+                    {
+                        tempId: 't1',
+                        kind: 'image',
+                        status: 'uploading',
+                        segmentRef: '__head__',
+                    },
+                ]}
             />,
         );
 

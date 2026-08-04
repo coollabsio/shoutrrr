@@ -95,9 +95,10 @@ class PostController extends Controller
             array_values(array_map(static fn (mixed $s): string => (string) ($s ?? ''), $request->validated('segments', []))),
             array_values($request->validated('mentions', [])),
             $request->validated('auto_repost'),
+            DraftData::fromArray($request->validated()),
         );
 
-        return response()->json(['post' => PostView::make($post->fresh(['targets.account', 'media']))], 201);
+        return response()->json(['post' => PostView::make($post->fresh(['targets.account', 'targets.placements', 'media']))], 201);
     }
 
     public function update(UpdatePostRequest $request, Post $post): JsonResponse
@@ -106,12 +107,12 @@ class PostController extends Controller
             $updated = $this->drafts->updateDraft($post, DraftData::fromArray($request->validated()));
         } catch (PostStaleWriteException) {
             return response()->json([
-                'post' => PostView::make($post->fresh(['targets.account', 'media'])),
+                'post' => PostView::make($post->fresh(['targets.account', 'targets.placements', 'media'])),
                 'message' => 'stale_write',
             ], 409);
         }
 
-        return response()->json(['post' => PostView::make($updated->fresh(['targets.account', 'media']))]);
+        return response()->json(['post' => PostView::make($updated->fresh(['targets.account', 'targets.placements', 'media']))]);
     }
 
     public function duplicate(Request $request, Post $post, PostDuplicator $duplicator): RedirectResponse

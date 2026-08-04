@@ -25,6 +25,8 @@ use Override;
  * @property string $connected_account_id
  * @property Platform $platform
  * @property list<string> $sections
+ * @property list<string>|null $segment_breaks
+ * @property list<int>|null $section_sources
  * @property array{text?: string|null, media_ids?: list<string>}|null $content_override
  * @property bool $auto_split
  * @property PostFormat $format
@@ -55,6 +57,8 @@ use Override;
     'connected_account_id',
     'platform',
     'sections',
+    'segment_breaks',
+    'section_sources',
     'content_override',
     'auto_split',
     'format',
@@ -95,6 +99,8 @@ class PostTarget extends Model
             'platform' => Platform::class,
             'status' => PostTargetStatus::class,
             'sections' => 'array',
+            'segment_breaks' => 'array',
+            'section_sources' => 'array',
             'content_override' => 'array',
             'auto_split' => 'boolean',
             'format' => PostFormat::class,
@@ -151,5 +157,11 @@ class PostTarget extends Model
     public function replies(): HasMany
     {
         return $this->hasMany(PostTargetReply::class, 'post_target_id');
+    }
+
+    /** @return HasMany<PostMediaPlacement, $this> */
+    public function placements(): HasMany
+    {
+        return $this->hasMany(PostMediaPlacement::class, 'post_target_id')->orderBy('position');
     }
 }

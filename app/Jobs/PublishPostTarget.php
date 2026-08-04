@@ -12,6 +12,7 @@ use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
 use App\Exceptions\TokenRefreshException;
+use App\Models\PostMediaPlacement;
 use App\Models\PostTarget;
 use App\Models\PostTargetAttempt;
 use App\Notifications\AccountNeedsAttentionNotification;
@@ -21,6 +22,7 @@ use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Publishing\BackoffSchedule;
 use App\Services\Publishing\PostStatusRollup;
 use App\Services\Publishing\PublishConnectorRegistry;
+use App\Services\Publishing\SegmentMediaResolver;
 use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -213,13 +215,30 @@ class PublishPostTarget implements ShouldQueue
     private function context(PostTarget $target, array $credentials): PublishContext
     {
         $post = $target->post()->firstOrFail();
+        $media = array_values($post->media()->get()->all());
+
+        $placements = array_values($target->placements()->get()
+            ->map(fn (PostMediaPlacement $p): array => [
+                'post_media_id' => $p->post_media_id,
+                'segment_ref' => $p->segment_ref,
+                'position' => $p->position,
+            ])->all());
+
+        $mediaBySection = app(SegmentMediaResolver::class)->resolve(
+            sections: $target->sections,
+            sectionSources: $target->section_sources ?? [],
+            segmentBreaks: $target->segment_breaks ?? [],
+            placements: $placements,
+            allMedia: $media,
+        );
 
         return new PublishContext(
             target: $target,
             segments: $target->sections,
-            media: array_values($post->media()->get()->all()),
+            media: $media,
             account: $target->account()->firstOrFail(),
             credentials: $credentials,
+            mediaBySection: $mediaBySection,
         );
     }
 

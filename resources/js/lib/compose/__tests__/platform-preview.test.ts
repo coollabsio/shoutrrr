@@ -72,6 +72,52 @@ describe('buildPlatformPreview', () => {
         expect(preview.items[0]?.media).toEqual([image]);
     });
 
+    it('distributes placed media under the thread post it belongs to', () => {
+        const image2: MediaView = { ...image, id: 'media-2' };
+        const preview = buildPlatformPreview({
+            account: account('bluesky'),
+            segments: ['First post', 'Second post'],
+            mentions: [],
+            media: [image, image2],
+            excludedMediaIds: new Set(),
+            limit: 300,
+            autoSplit: true,
+            // media-1 on the first segment (__head__), media-2 on the second (b0).
+            placements: { __head__: ['media-1'], b0: ['media-2'] },
+            segmentBreaks: ['b0'],
+        });
+
+        expect(preview.items.map((item) => item.text)).toEqual([
+            'First post',
+            'Second post',
+        ]);
+        expect(preview.items[0]?.media.map((m) => m.id)).toEqual(['media-1']);
+        expect(preview.items[1]?.media.map((m) => m.id)).toEqual(['media-2']);
+    });
+
+    it('rides placed media on the first sub-post when a segment auto-splits', () => {
+        const long = 'word '.repeat(40).trim(); // > 28 chars → splits on Bluesky-28
+        const preview = buildPlatformPreview({
+            account: account('bluesky'),
+            segments: [long, 'tail'],
+            mentions: [],
+            media: [image],
+            excludedMediaIds: new Set(),
+            limit: 28,
+            autoSplit: true,
+            // Placed on the second authored segment (b0).
+            placements: { b0: ['media-1'] },
+            segmentBreaks: ['b0'],
+        });
+
+        // The first authored segment produced several sections (none carry media);
+        // the media lands on the first section of the second authored segment.
+        const withMedia = preview.items.filter((i) => i.media.length > 0);
+        expect(withMedia).toHaveLength(1);
+        expect(withMedia[0]?.text).toBe('tail');
+        expect(withMedia[0]?.media.map((m) => m.id)).toEqual(['media-1']);
+    });
+
     it('honors manual segment split when automatic splitting is off', () => {
         const preview = buildPlatformPreview({
             account: account('bluesky'),

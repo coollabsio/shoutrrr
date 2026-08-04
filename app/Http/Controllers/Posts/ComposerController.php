@@ -55,7 +55,7 @@ class ComposerController extends Controller
             ])->all();
 
         return Inertia::render('compose/index', [
-            'post' => PostView::make($post->load(['targets.account', 'media'])),
+            'post' => PostView::make($post->load(['targets.account', 'targets.placements', 'media'])),
             'accounts' => $accounts,
             'sets' => $sets,
             'limits' => Platform::allLimits(),

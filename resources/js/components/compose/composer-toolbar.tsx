@@ -23,8 +23,6 @@ import type {
 } from '@/types/compose';
 import type { GifItem } from '@/types/gifs';
 
-import { MediaChips } from './media-chips';
-
 type Props = {
     /** Active account's platform; undefined on the generic "Post" tab. */
     activePlatform?: PlatformName;
@@ -35,27 +33,16 @@ type Props = {
     overrideActive: boolean;
     /** When false, hides Override + Auto-split (generic tab has no platform). */
     showSplitControls?: boolean;
+    /** Attached media — drives the "add media" badge count and accept type. */
     media: MediaView[];
-    onRemove: (mediaId: string) => void;
-    onReorder: (ids: string[]) => void;
     onToggleAutoSplit: () => void;
     onToggleOverride: () => void;
-    isExcluded: (mediaId: string) => boolean;
-    onToggleExclude: (mediaId: string) => void;
     /** Read-only post: show attached media, hide all editing controls. */
     readOnly?: boolean;
     /** In-flight uploads (owned by the parent's useMediaUploads). */
     pending: PendingUpload[];
     /** Validate + upload a picked/dropped batch. */
     handleFiles: (files: FileList) => Promise<void>;
-    /** Drop a failed/pending upload chip. */
-    dismissPending: (tempId: string) => void;
-    /** Abort an in-flight video conversion/upload chip. */
-    cancelPending: (tempId: string) => void;
-    /** Click an attached image to (re)open it in the editor. */
-    onImageClick?: (mediaId: string) => void;
-    /** Click a video chip's Edit button to open the video editor. */
-    onVideoClick?: (mediaId: string) => void;
     /**
      * Per-post Auto-boost control; absent hides the button (read-only, or no
      * selected account is on a repost-capable platform).
@@ -83,19 +70,11 @@ export function ComposerToolbar({
     overrideActive,
     showSplitControls = true,
     media,
-    onRemove,
-    onReorder,
     onToggleAutoSplit,
     onToggleOverride,
-    isExcluded,
-    onToggleExclude,
     readOnly = false,
     pending,
     handleFiles,
-    dismissPending,
-    cancelPending,
-    onImageClick,
-    onVideoClick,
     boost,
     onInsertEmoji,
     emojiRecents,
@@ -226,21 +205,6 @@ export function ComposerToolbar({
                     </EToolButton>
                 </>
             )}
-
-            <MediaChips
-                media={media}
-                pending={pending}
-                activePlatform={activePlatform}
-                isExcluded={isExcluded}
-                onToggleExclude={onToggleExclude}
-                onReorder={onReorder}
-                onRemove={onRemove}
-                onDismissPending={dismissPending}
-                onCancelPending={cancelPending}
-                readOnly={readOnly}
-                onImageClick={onImageClick}
-                onVideoClick={onVideoClick}
-            />
 
             <div className="ml-auto sm:flex-1" />
 

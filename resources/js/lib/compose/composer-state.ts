@@ -1,12 +1,27 @@
+import { segmentRefs } from '@/lib/compose/tiptap-doc';
 import {
     type Account,
     BASE_TAB,
     type Destination,
     type MediaView,
     type MentionPlaceholder,
+    type Placement,
     type PostFormat,
     type PostView,
 } from '@/types/compose';
+
+/** Placement key used for media added before any explicit segment break exists. */
+const HEAD_SEGMENT_REF = '__head__';
+
+/**
+ * The ordered segmentRefs for a post given its segment-break ids: `__head__`
+ * (the first segment, which has no opening break) followed by each break id
+ * in order. Thin re-export of `segmentRefs` from `tiptap-doc.ts` so
+ * placement-consuming code doesn't need a second import for the same concept.
+ */
+export function segmentRefsFromBreaks(breaks: string[]): string[] {
+    return segmentRefs(breaks);
+}
 
 export type SaveState =
     | 'idle'
@@ -34,8 +49,13 @@ export type ComposerState = {
     autoSplitByAccount: Record<string, boolean>;
     formatByAccount: Record<string, PostFormat>;
     overrideByAccount: Record<string, string[] | undefined>;
-    mediaSubsetExcludes: Set<string>;
     media: MediaView[];
+    /** Ordered ids of tiptap segment breaks; segment refs are derived from these. */
+    segmentBreaks: string[];
+    /** Canonical segmentRef -> ordered media ids. */
+    placements: Record<string, string[]>;
+    /** Per-account placement overrides; only present for accounts that diverge from canonical. */
+    placementsByAccount: Record<string, Record<string, string[]>>;
     scheduleTray: ScheduleTray;
     conflict: PostView | null;
     autoRepost: boolean | null;
@@ -55,11 +75,24 @@ export type ComposerAction =
     | { type: 'disableAutoSplit'; accountIds: string[] }
     | { type: 'setOverrideSegments'; accountId: string; segments: string[] }
     | { type: 'discardOverride'; accountId: string }
-    | { type: 'toggleMediaExclude'; mediaId: string; accountId: string }
-    | { type: 'addMedia'; media: MediaView }
+    | { type: 'addMedia'; media: MediaView; segmentRef?: string }
     | { type: 'replaceMedia'; media: MediaView }
     | { type: 'removeMedia'; mediaId: string }
     | { type: 'reorderMedia'; ids: string[] }
+    | {
+          type: 'moveMediaToSegment';
+          mediaId: string;
+          segmentRef: string;
+          accountId?: string;
+      }
+    | { type: 'removeMediaFromSegments'; mediaId: string; accountId?: string }
+    | {
+          type: 'reorderSegmentMedia';
+          segmentRef: string;
+          ids: string[];
+          accountId?: string;
+      }
+    | { type: 'setSegmentBreaks'; breakIds: string[] }
     | { type: 'setScheduleTray'; tray: ScheduleTray }
     | { type: 'saveStarted' }
     | { type: 'saveSkippedEmpty' }
@@ -117,8 +150,10 @@ export function initialComposerState(
         autoSplitByAccount: {},
         formatByAccount: {},
         overrideByAccount: {},
-        mediaSubsetExcludes: new Set(),
         media: [],
+        segmentBreaks: [],
+        placements: {},
+        placementsByAccount: {},
         scheduleTray: scheduleAt
             ? { mode: 'pick', pickedAt: scheduleAt }
             : { mode: 'now', pickedAt: null },
@@ -152,11 +187,172 @@ export function parseDestinationParam(raw: string | null): Destination | null {
     return null;
 }
 
+/**
+ * Group a flat `Placement[]` (as received over the wire) into a canonical
+ * `segmentRef -> ordered media ids` map, ordering each segment's ids by
+ * `position`.
+ */
+function groupPlacements(
+    placements: Placement[] | undefined,
+): Record<string, string[]> {
+    const bySegment = new Map<string, Placement[]>();
+    for (const placement of placements ?? []) {
+        const list = bySegment.get(placement.segment_ref) ?? [];
+        list.push(placement);
+        bySegment.set(placement.segment_ref, list);
+    }
+
+    const grouped: Record<string, string[]> = {};
+    for (const [segmentRef, list] of bySegment) {
+        grouped[segmentRef] = [...list]
+            .sort((a, b) => a.position - b.position)
+            .map((p) => p.media_id);
+    }
+
+    return grouped;
+}
+
+/**
+ * Structural equality for two `segmentRef -> ordered media ids` maps: same
+ * set of segmentRefs, each with the same media ids in the same order. Used to
+ * decide whether a target's placements actually diverge from canonical (a
+ * non-divergent target must get NO `placementsByAccount` entry so it keeps
+ * inheriting canonical edits).
+ */
+function placementMapsEqual(
+    a: Record<string, string[]>,
+    b: Record<string, string[]>,
+): boolean {
+    const aKeys = Object.keys(a).filter((key) => a[key].length > 0);
+    const bKeys = Object.keys(b).filter((key) => b[key].length > 0);
+    if (aKeys.length !== bKeys.length) {
+        return false;
+    }
+
+    return aKeys.every(
+        (key) =>
+            b[key] !== undefined &&
+            a[key].length === b[key].length &&
+            a[key].every((id, i) => id === b[key][i]),
+    );
+}
+
+/**
+ * Write a per-account divergence-creating edit's resulting map back into
+ * `placementsByAccount`. Mirrors `hydrate`'s divergence check: when the
+ * account's new map is structurally equal to canonical, the entry must be
+ * deleted entirely rather than written as an equal-but-present copy — an
+ * existing entry, even one that happens to equal canonical right now, is
+ * read by `buildPutBody` (and the composer's active-scope lookup) as "this
+ * account has diverged", which permanently freezes it out of subsequent
+ * canonical-scope edits until a full re-hydrate re-runs this same check.
+ */
+function withAccountPlacements(
+    placementsByAccount: Record<string, Record<string, string[]>>,
+    accountId: string,
+    nextScope: Record<string, string[]>,
+    canonicalPlacements: Record<string, string[]>,
+): Record<string, Record<string, string[]>> {
+    if (placementMapsEqual(nextScope, canonicalPlacements)) {
+        const next = { ...placementsByAccount };
+        delete next[accountId];
+
+        return next;
+    }
+
+    return { ...placementsByAccount, [accountId]: nextScope };
+}
+
+/** Remove a media id from every segment array in a segmentRef -> ids map. */
+function removeIdFromAllSegments(
+    map: Record<string, string[]>,
+    mediaId: string,
+): Record<string, string[]> {
+    return Object.fromEntries(
+        Object.entries(map).map(([segmentRef, ids]) => [
+            segmentRef,
+            ids.filter((id) => id !== mediaId),
+        ]),
+    );
+}
+
+/**
+ * Re-home a segmentRef -> ids map after the thread structure changes (a
+ * section break was inserted, deleted, or reordered). A ref that no longer
+ * exists (its break was deleted — segments merge into the previous one) has
+ * its media moved onto the nearest still-surviving EARLIER ref in the old
+ * order, falling back to `__head__` (which always survives) — so deleting a
+ * thread break folds that segment's media into the segment it merged into,
+ * instead of orphaning it. A no-op (same reference) when nothing was removed.
+ */
+function migratePlacementsAfterBreakChange(
+    map: Record<string, string[]>,
+    oldRefs: string[],
+    newRefs: string[],
+): Record<string, string[]> {
+    const survives = new Set(newRefs);
+    if (oldRefs.every((ref) => survives.has(ref))) {
+        return map;
+    }
+
+    function targetFor(ref: string): string {
+        if (survives.has(ref)) {
+            return ref;
+        }
+        const idx = oldRefs.indexOf(ref);
+        for (let i = idx - 1; i >= 0; i--) {
+            if (survives.has(oldRefs[i])) {
+                return oldRefs[i];
+            }
+        }
+
+        return HEAD_SEGMENT_REF;
+    }
+
+    const next: Record<string, string[]> = {};
+    for (const [ref, ids] of Object.entries(map)) {
+        if (ids.length === 0) {
+            continue;
+        }
+        const target = targetFor(ref);
+        next[target] = [...(next[target] ?? []), ...ids];
+    }
+
+    return next;
+}
+
+/**
+ * Fold any media that has no placement (a legacy draft whose media predates
+ * per-segment placements, or media attached before its placement persisted)
+ * onto the first segment, so it renders in the composer instead of vanishing —
+ * mirroring the server resolver's "no placements → all media on post 1"
+ * fallback. Returns the map unchanged when nothing is orphaned.
+ */
+function withOrphanMediaOnHead(
+    map: Record<string, string[]>,
+    media: MediaView[],
+): Record<string, string[]> {
+    const placed = new Set(Object.values(map).flat());
+    const orphans = media.map((m) => m.id).filter((id) => !placed.has(id));
+    if (orphans.length === 0) {
+        return map;
+    }
+
+    return { ...map, __head__: [...(map.__head__ ?? []), ...orphans] };
+}
+
 function hydrate(post: PostView): ComposerState {
     const autoSplitByAccount: Record<string, boolean> = {};
     const formatByAccount: Record<string, PostFormat> = {};
     const overrideByAccount: Record<string, string[] | undefined> = {};
-    const mediaSubsetExcludes = new Set<string>();
+    const placementsByAccount: Record<string, Record<string, string[]>> = {};
+    // Raw canonical grouping drives the per-account divergence check below;
+    // the display map additionally folds in any unplaced media.
+    const canonicalPlacements = groupPlacements(post.placements);
+    const displayPlacements = withOrphanMediaOnHead(
+        canonicalPlacements,
+        post.media,
+    );
 
     for (const target of post.targets) {
         autoSplitByAccount[target.connected_account_id] = target.auto_split;
@@ -164,6 +360,18 @@ function hydrate(post: PostView): ComposerState {
         const overrideSegments = target.content_override?.segments;
         if (overrideSegments !== undefined && overrideSegments !== null) {
             overrideByAccount[target.connected_account_id] = overrideSegments;
+        }
+        // Only seed a placementsByAccount entry when the target's placements
+        // actually diverge from canonical. A non-divergent entry would freeze
+        // that account onto a stale snapshot: buildPutBody treats ANY entry
+        // here as "diverged" and stops emitting the account's per-target
+        // segment_breaks/placements from canonical, so a later canonical-scope
+        // edit (no accountId) would silently never reach that account.
+        if (target.placements !== undefined) {
+            const grouped = groupPlacements(target.placements);
+            if (!placementMapsEqual(grouped, canonicalPlacements)) {
+                placementsByAccount[target.connected_account_id] = grouped;
+            }
         }
     }
 
@@ -187,8 +395,10 @@ function hydrate(post: PostView): ComposerState {
         autoSplitByAccount,
         formatByAccount,
         overrideByAccount,
-        mediaSubsetExcludes,
         media: post.media,
+        segmentBreaks: post.segment_breaks ?? [],
+        placements: displayPlacements,
+        placementsByAccount,
         scheduleTray: {
             mode: post.scheduled_at ? 'pick' : 'now',
             pickedAt: post.scheduled_at ?? null,
@@ -337,24 +547,41 @@ export function composerReducer(
             return { ...state, overrideByAccount: next, saveState: 'dirty' };
         }
 
-        case 'toggleMediaExclude': {
-            const key = `${action.mediaId}:${action.accountId}`;
-            const next = new Set(state.mediaSubsetExcludes);
-            if (next.has(key)) {
-                next.delete(key);
-            } else {
-                next.add(key);
-            }
+        case 'addMedia': {
+            const segmentRef = action.segmentRef ?? HEAD_SEGMENT_REF;
+            const existing = state.placements[segmentRef] ?? [];
 
-            return { ...state, mediaSubsetExcludes: next, saveState: 'dirty' };
-        }
-
-        case 'addMedia':
             return {
                 ...state,
                 media: [...state.media, action.media],
+                placements: {
+                    ...state.placements,
+                    [segmentRef]: [...existing, action.media.id],
+                },
+                // A newly-added item must also land in every account that has
+                // already diverged from canonical (has a placementsByAccount
+                // entry) — otherwise it silently vanishes from that account's
+                // preview and publish payload once a divergence exists. Never
+                // create a new entry for a non-diverged account; that would
+                // invent a divergence where none existed and freeze it off
+                // future canonical-scope edits (see buildPutBody).
+                placementsByAccount: Object.fromEntries(
+                    Object.entries(state.placementsByAccount).map(
+                        ([accountId, map]) => [
+                            accountId,
+                            {
+                                ...map,
+                                [segmentRef]: [
+                                    ...(map[segmentRef] ?? []),
+                                    action.media.id,
+                                ],
+                            },
+                        ],
+                    ),
+                ),
                 saveState: 'dirty',
             };
+        }
 
         case 'replaceMedia':
             return {
@@ -369,8 +596,158 @@ export function composerReducer(
             return {
                 ...state,
                 media: state.media.filter((m) => m.id !== action.mediaId),
+                placements: removeIdFromAllSegments(
+                    state.placements,
+                    action.mediaId,
+                ),
+                placementsByAccount: Object.fromEntries(
+                    Object.entries(state.placementsByAccount).map(
+                        ([accountId, map]) => [
+                            accountId,
+                            removeIdFromAllSegments(map, action.mediaId),
+                        ],
+                    ),
+                ),
                 saveState: 'dirty',
             };
+
+        case 'moveMediaToSegment': {
+            const scopeKey = action.accountId;
+            const currentScope: Record<string, string[]> = scopeKey
+                ? (state.placementsByAccount[scopeKey] ?? state.placements)
+                : state.placements;
+            const withoutId = removeIdFromAllSegments(
+                currentScope,
+                action.mediaId,
+            );
+            const nextScope: Record<string, string[]> = {
+                ...withoutId,
+                [action.segmentRef]: [
+                    ...(withoutId[action.segmentRef] ?? []),
+                    action.mediaId,
+                ],
+            };
+
+            if (scopeKey) {
+                return {
+                    ...state,
+                    placementsByAccount: withAccountPlacements(
+                        state.placementsByAccount,
+                        scopeKey,
+                        nextScope,
+                        state.placements,
+                    ),
+                    saveState: 'dirty',
+                };
+            }
+
+            return { ...state, placements: nextScope, saveState: 'dirty' };
+        }
+
+        case 'removeMediaFromSegments': {
+            const scopeKey = action.accountId;
+            if (scopeKey) {
+                const currentScope =
+                    state.placementsByAccount[scopeKey] ?? state.placements;
+                const nextScope = removeIdFromAllSegments(
+                    currentScope,
+                    action.mediaId,
+                );
+
+                return {
+                    ...state,
+                    placementsByAccount: withAccountPlacements(
+                        state.placementsByAccount,
+                        scopeKey,
+                        nextScope,
+                        state.placements,
+                    ),
+                    saveState: 'dirty',
+                };
+            }
+
+            return {
+                ...state,
+                media: state.media.filter((m) => m.id !== action.mediaId),
+                placements: removeIdFromAllSegments(
+                    state.placements,
+                    action.mediaId,
+                ),
+                placementsByAccount: Object.fromEntries(
+                    Object.entries(state.placementsByAccount).map(
+                        ([accountId, map]) => [
+                            accountId,
+                            removeIdFromAllSegments(map, action.mediaId),
+                        ],
+                    ),
+                ),
+                saveState: 'dirty',
+            };
+        }
+
+        case 'reorderSegmentMedia': {
+            const scopeKey = action.accountId;
+            if (scopeKey) {
+                const currentScope =
+                    state.placementsByAccount[scopeKey] ?? state.placements;
+                const nextScope = {
+                    ...currentScope,
+                    [action.segmentRef]: action.ids,
+                };
+
+                return {
+                    ...state,
+                    placementsByAccount: withAccountPlacements(
+                        state.placementsByAccount,
+                        scopeKey,
+                        nextScope,
+                        state.placements,
+                    ),
+                    saveState: 'dirty',
+                };
+            }
+
+            return {
+                ...state,
+                placements: {
+                    ...state.placements,
+                    [action.segmentRef]: action.ids,
+                },
+                saveState: 'dirty',
+            };
+        }
+
+        case 'setSegmentBreaks': {
+            // A deleted break merges two segments — re-home any media that was
+            // placed on the now-gone ref onto the segment it merged into,
+            // rather than leaving it orphaned (still in the media pool, but
+            // owned by no surviving segment).
+            const oldRefs = segmentRefsFromBreaks(state.segmentBreaks);
+            const newRefs = segmentRefsFromBreaks(action.breakIds);
+
+            return {
+                ...state,
+                segmentBreaks: action.breakIds,
+                placements: migratePlacementsAfterBreakChange(
+                    state.placements,
+                    oldRefs,
+                    newRefs,
+                ),
+                placementsByAccount: Object.fromEntries(
+                    Object.entries(state.placementsByAccount).map(
+                        ([accountId, map]) => [
+                            accountId,
+                            migratePlacementsAfterBreakChange(
+                                map,
+                                oldRefs,
+                                newRefs,
+                            ),
+                        ],
+                    ),
+                ),
+                saveState: 'dirty',
+            };
+        }
 
         case 'reorderMedia': {
             // Reorder media to match the given id sequence. Ignore unknown ids
@@ -464,6 +841,8 @@ export type PutTarget = {
     auto_split: boolean;
     format: PostFormat;
     content_override: { segments: string[]; media_ids: string[] } | null;
+    segment_breaks?: string[];
+    placements?: Placement[];
 };
 
 export type PutBody = {
@@ -474,13 +853,35 @@ export type PutBody = {
     mentions: MentionPlaceholder[];
     expected_updated_at: string | null;
     auto_repost: boolean | null;
+    segment_breaks: string[];
+    placements: Placement[];
 };
+
+/**
+ * Flatten a canonical/per-account `segmentRef -> ordered media ids` map into
+ * the wire `Placement[]` shape, deriving `position` from each segment's array
+ * index.
+ */
+export function flattenPlacements(map: Record<string, string[]>): Placement[] {
+    const flat: Placement[] = [];
+    for (const [segmentRef, ids] of Object.entries(map)) {
+        ids.forEach((mediaId, position) => {
+            flat.push({ media_id: mediaId, segment_ref: segmentRef, position });
+        });
+    }
+
+    return flat;
+}
 
 /**
  * Build the autosave PUT payload. Each target ALWAYS carries an explicit
  * content_override: the override shape when the account has a local override,
  * or `null` to explicitly clear any stored override server-side (a discard must
  * survive reload; omitting the key would let the old override silently persist).
+ *
+ * `segment_breaks`/`placements` are emitted at the top level (canonical) and,
+ * per target, only when that account has a diverged placements map — omitting
+ * them for non-diverged accounts tells the server to keep inheriting canonical.
  */
 export function buildPutBody(
     state: ComposerState,
@@ -488,26 +889,31 @@ export function buildPutBody(
 ): PutBody {
     const targets: PutTarget[] = accountIds.map((accountId) => {
         const override = state.overrideByAccount[accountId];
+        // Per-account media now lives in per-target placements (see below), not
+        // in content_override.media_ids — the old per-account exclude mechanism
+        // is retired. media_ids here is the full set purely to satisfy the
+        // stored override shape; publishing reads placements, not this field.
         const content_override =
             override !== undefined
                 ? {
                       segments: override,
-                      media_ids: state.media
-                          .map((m) => m.id)
-                          .filter(
-                              (mediaId) =>
-                                  !state.mediaSubsetExcludes.has(
-                                      `${mediaId}:${accountId}`,
-                                  ),
-                          ),
+                      media_ids: state.media.map((m) => m.id),
                   }
                 : null;
+
+        const divergedPlacements = state.placementsByAccount[accountId];
 
         return {
             connected_account_id: accountId,
             auto_split: state.autoSplitByAccount[accountId] ?? true,
             format: state.formatByAccount[accountId] ?? 'feed',
             content_override,
+            ...(divergedPlacements !== undefined
+                ? {
+                      segment_breaks: state.segmentBreaks,
+                      placements: flattenPlacements(divergedPlacements),
+                  }
+                : {}),
         };
     });
 
@@ -519,6 +925,8 @@ export function buildPutBody(
         mentions: state.mentions,
         expected_updated_at: state.baselineUpdatedAt,
         auto_repost: state.autoRepost,
+        segment_breaks: state.segmentBreaks,
+        placements: flattenPlacements(state.placements),
     };
 }
 
@@ -551,6 +959,36 @@ export function contentMatchesServer(
         return false;
     }
 
+    if (
+        JSON.stringify(state.segmentBreaks) !==
+        JSON.stringify(post.segment_breaks ?? [])
+    ) {
+        return false;
+    }
+
+    // Compare through the same "fold unplaced media onto __head__" display
+    // semantics `hydrate` applies, not the raw server grouping — a legacy post
+    // with media but no placement rows groups to `{}` while the hydrated state
+    // folds that same media onto `__head__`; those are the same post and must
+    // not be flagged as diverged.
+    if (
+        JSON.stringify(
+            normalizePlacements(
+                withOrphanMediaOnHead(state.placements, state.media),
+            ),
+        ) !==
+        JSON.stringify(
+            normalizePlacements(
+                withOrphanMediaOnHead(
+                    groupPlacements(post.placements),
+                    post.media,
+                ),
+            ),
+        )
+    ) {
+        return false;
+    }
+
     const localOverrides = normalizeOverrides(state.overrideByAccount);
     const serverOverrides: Record<string, string> = {};
     for (const target of post.targets) {
@@ -568,6 +1006,24 @@ export function contentMatchesServer(
         localKeys.length === serverKeys.length &&
         localKeys.every((key) => localOverrides[key] === serverOverrides[key])
     );
+}
+
+/**
+ * Drop empty segment arrays from a placements map so a segment that was
+ * emptied out (e.g. its last media id moved elsewhere) compares equal to one
+ * that never had a key for that segment at all.
+ */
+function normalizePlacements(
+    map: Record<string, string[]>,
+): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    for (const [segmentRef, ids] of Object.entries(map)) {
+        if (ids.length > 0) {
+            out[segmentRef] = ids;
+        }
+    }
+
+    return out;
 }
 
 /**
@@ -604,6 +1060,16 @@ export function composerHasContent(state: ComposerState): boolean {
     return Object.values(state.overrideByAccount).some(
         (segments) => (segments ?? []).join('').trim().length > 0,
     );
+}
+
+/**
+ * More than one thread post exists. With a single thread, the global
+ * toolbar's "add media" button already attaches to it — the per-segment
+ * affordance only earns its keep once there's more than one segment to
+ * choose between.
+ */
+export function hasMultipleThreads(state: ComposerState): boolean {
+    return state.segmentBreaks.length > 0;
 }
 
 /**

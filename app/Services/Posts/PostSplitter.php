@@ -13,43 +13,58 @@ class PostSplitter
      *
      * Manual thread breaks are the array boundaries between `$segments` (the
      * structured author body) — there is no longer any in-text marker. Each
-     * segment is trimmed; empty segments are dropped. For thread-capped
-     * platforms (LinkedIn) all segments collapse into a single section.
+     * segment is trimmed; empty segments are dropped unless listed in
+     * `$mediaSegments` (so a media-only segment still yields a section). For
+     * thread-capped platforms (LinkedIn) all segments collapse into a single
+     * section. `sectionSources` on the result maps each resolved section back
+     * to the authored segment index it came from.
      *
      * @param  list<string>  $segments
+     * @param  list<int>  $mediaSegments  Authored indices kept even when empty.
      */
-    public function split(array $segments, Platform $platform, bool $autoSplit, ?int $maxLength = null): SplitResult
+    public function split(array $segments, Platform $platform, bool $autoSplit, ?int $maxLength = null, array $mediaSegments = []): SplitResult
     {
-        $clean = array_values(array_filter(
-            array_map(static fn (string $s): string => trim($s), $segments),
-            static fn (string $s): bool => $s !== '',
-        ));
-        if ($clean === []) {
-            $clean = [''];
+        $keep = array_flip($mediaSegments);
+
+        // Keep authored index alongside trimmed text; drop empties unless the
+        // segment carries media (so a media-only post survives).
+        $kept = [];
+        foreach ($segments as $index => $segment) {
+            $text = trim($segment);
+            if ($text !== '' || isset($keep[$index])) {
+                $kept[] = ['index' => $index, 'text' => $text];
+            }
+        }
+        if ($kept === []) {
+            $kept = [['index' => 0, 'text' => '']];
         }
 
         if ($platform->threadMax() !== null) {
-            $sections = [implode("\n", $clean)];
+            $sections = [implode("\n", array_map(static fn (array $s): string => $s['text'], $kept))];
 
-            return new SplitResult($sections, $this->validateSections($sections, $platform, 0, $maxLength));
+            return new SplitResult($sections, $this->validateSections($sections, $platform, 0, $maxLength), [0]);
         }
 
         $sections = [];
-        foreach ($clean as $segment) {
-            if ($autoSplit) {
-                foreach ($this->chunk($segment, $platform, $maxLength) as $chunk) {
+        $sources = [];
+        foreach ($kept as $seg) {
+            if ($autoSplit && $seg['text'] !== '') {
+                foreach ($this->chunk($seg['text'], $platform, $maxLength) as $chunk) {
                     $sections[] = $chunk;
+                    $sources[] = $seg['index'];
                 }
             } else {
-                $sections[] = $segment;
+                $sections[] = $seg['text'];
+                $sources[] = $seg['index'];
             }
         }
 
         if ($sections === []) {
             $sections = [''];
+            $sources = [0];
         }
 
-        return new SplitResult($sections, $this->validateSections($sections, $platform, 0, $maxLength));
+        return new SplitResult($sections, $this->validateSections($sections, $platform, 0, $maxLength), $sources);
     }
 
     /**

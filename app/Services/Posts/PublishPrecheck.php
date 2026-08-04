@@ -7,12 +7,17 @@ namespace App\Services\Posts;
 use App\Enums\Platform;
 use App\Models\Post;
 use App\Models\PostMedia;
+use App\Models\PostMediaPlacement;
 use App\Models\PostTarget;
+use App\Services\Publishing\SegmentMediaResolver;
 use Illuminate\Support\Collection;
 
 class PublishPrecheck
 {
-    public function __construct(private readonly PostSplitter $splitter) {}
+    public function __construct(
+        private readonly PostSplitter $splitter,
+        private readonly SegmentMediaResolver $segmentMediaResolver,
+    ) {}
 
     /**
      * Targets whose stored content would be rejected by the platform. Reuses the
@@ -79,6 +84,7 @@ class PublishPrecheck
             'video_too_long' => "The video is longer than {$label} allows.",
             'video_too_large' => "The video is larger than {$label} allows.",
             'gif_not_mixable' => "{$label} allows only one GIF and won't mix it with other media.",
+            'unplaced_media' => "Some attached media isn't placed in this post — remove it or add it to a thread section.",
             default => "{$label} can't publish this post yet.",
         }, $issues);
 
@@ -88,6 +94,15 @@ class PublishPrecheck
     /**
      * Platform-limit issues for a target that has content, plus the media rules
      * the section-length limits don't cover.
+     *
+     * `too_many_media` is deliberately not sourced from
+     * PostSplitter::validateSections() here: that method's media-count argument
+     * is checked against the whole post, but publishing caps media per thread
+     * section (each connector slices `mediaForSection()` to
+     * `Platform::maxMedia()`). A thread with 4 images on each of two sections is
+     * publishable even though it holds 8 images overall, so `mediaIssues()`
+     * recomputes this per section using the same grouping `mixIssues()` already
+     * relies on.
      *
      * @param  Collection<int, PostMedia>  $media
      * @return list<string>
@@ -99,7 +114,7 @@ class PublishPrecheck
         $issues = $this->splitter->validateSections(
             $target->sections,
             $platform,
-            $media->count(),
+            0,
             $target->account?->maxTextLength(),
         );
 
@@ -107,7 +122,7 @@ class PublishPrecheck
             $issues[] = 'media_required';
         }
 
-        foreach ($this->mediaIssues($platform, $media) as $issue) {
+        foreach ($this->mediaIssues($target, $platform, $media) as $issue) {
             $issues[] = $issue;
         }
 
@@ -115,20 +130,72 @@ class PublishPrecheck
     }
 
     /**
-     * Media-attribute rules the connectors enforce only at publish time — video
-     * caps, image/video mixing, and GIF mixing. Validated per target because the
-     * same post media set is judged against each platform's rules, and video is
-     * never re-encoded server-side (so its caps can't self-heal the way images can).
+     * Media-attribute rules the connectors enforce only at publish time — the
+     * per-section media cap, image/video mixing, GIF mixing, and unplaced media.
+     * Video caps are checked against the whole target's media (never
+     * re-encoded server-side, so caps can't self-heal the way images can). The
+     * other rules are checked per thread segment: each connector publishes a
+     * thread segment as its own post (see SegmentMediaResolver/mediaForSection),
+     * so e.g. two segments each holding 4 images don't violate a platform's
+     * 4-image cap that only applies within a single published post.
      *
      * @param  Collection<int, PostMedia>  $media
      * @return list<string>
      */
-    private function mediaIssues(Platform $platform, Collection $media): array
+    private function mediaIssues(PostTarget $target, Platform $platform, Collection $media): array
     {
         if ($media->isEmpty()) {
             return [];
         }
 
+        $issues = [];
+        $sections = $this->mediaBySection($target, $media);
+
+        foreach ($sections as $sectionMedia) {
+            if ($sectionMedia->count() > $platform->maxMedia()) {
+                $issues[] = 'too_many_media';
+            }
+
+            foreach ($this->mixIssues($platform, $sectionMedia) as $issue) {
+                $issues[] = $issue;
+            }
+        }
+
+        if ($target->placements->isNotEmpty()) {
+            $placedIds = collect($sections)
+                ->flatMap(fn (Collection $sectionMedia): Collection => $sectionMedia)
+                ->map(fn (PostMedia $item): string => (string) $item->id)
+                ->all();
+            $attachedIds = $media->map(fn (PostMedia $item): string => (string) $item->id)->all();
+
+            if (array_diff($attachedIds, $placedIds) !== []) {
+                $issues[] = 'unplaced_media';
+            }
+        }
+
+        $videos = $media->filter(fn (PostMedia $item): bool => $item->isVideo());
+        foreach ($videos as $video) {
+            if ($video->duration_seconds !== null && $video->duration_seconds > $platform->maxVideoDurationSeconds()) {
+                $issues[] = 'video_too_long';
+            }
+
+            if ($video->size_bytes > $platform->maxVideoBytes()) {
+                $issues[] = 'video_too_large';
+            }
+        }
+
+        return $issues;
+    }
+
+    /**
+     * The image/video and GIF mixing rules, judged against a single thread
+     * segment's media rather than the whole post's.
+     *
+     * @param  Collection<int, PostMedia>  $media
+     * @return list<string>
+     */
+    private function mixIssues(Platform $platform, Collection $media): array
+    {
         $issues = [];
 
         $videos = $media->filter(fn (PostMedia $item): bool => $item->isVideo());
@@ -141,16 +208,6 @@ class PublishPrecheck
             $issues[] = 'mixed_video_and_images';
         }
 
-        foreach ($videos as $video) {
-            if ($video->duration_seconds !== null && $video->duration_seconds > $platform->maxVideoDurationSeconds()) {
-                $issues[] = 'video_too_long';
-            }
-
-            if ($video->size_bytes > $platform->maxVideoBytes()) {
-                $issues[] = 'video_too_large';
-            }
-        }
-
         if (! $platform->allowsGifWithOtherMedia()) {
             $gifCount = $media->filter(fn (PostMedia $item): bool => $item->mime === 'image/gif')->count();
             if ($gifCount >= 1 && ($media->count() > 1 || $gifCount > 1)) {
@@ -159,6 +216,37 @@ class PublishPrecheck
         }
 
         return $issues;
+    }
+
+    /**
+     * This target's media grouped by resolved thread segment, mirroring how
+     * PublishPostTarget builds the PublishContext each connector actually
+     * publishes from. Targets with no placements (e.g. media added before
+     * per-segment placements existed, or fixtures that don't set them up) fall
+     * back to a single segment holding all of the target's media.
+     *
+     * @param  Collection<int, PostMedia>  $media
+     * @return array<int, Collection<int, PostMedia>>
+     */
+    private function mediaBySection(PostTarget $target, Collection $media): array
+    {
+        $placements = array_values($target->placements
+            ->map(fn (PostMediaPlacement $placement): array => [
+                'post_media_id' => $placement->post_media_id,
+                'segment_ref' => $placement->segment_ref,
+                'position' => $placement->position,
+            ])
+            ->all());
+
+        $bySection = $this->segmentMediaResolver->resolve(
+            sections: $target->sections,
+            sectionSources: $target->section_sources ?? [],
+            segmentBreaks: $target->segment_breaks ?? [],
+            placements: $placements,
+            allMedia: array_values($media->all()),
+        );
+
+        return array_map(static fn (array $sectionMedia): Collection => collect($sectionMedia), $bySection);
     }
 
     /**

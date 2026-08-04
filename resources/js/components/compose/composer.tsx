@@ -16,6 +16,7 @@ import { useVideoEditor } from '@/hooks/compose/use-video-editor';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import {
     composerReducer,
+    hasMultipleThreads,
     initialComposerState,
     pickActiveAccount,
     shouldShowConnectAccountPrompt,
@@ -52,6 +53,7 @@ import {
     type Account,
     type AccountSet,
     type Destination,
+    type MediaView,
     type MentionPlaceholder,
     type PlatformLimits,
     type PlatformName,
@@ -70,6 +72,7 @@ import { PlatformPreviewPanel } from './platform-preview-panel';
 import PlatformTabs from './platform-tabs';
 import SaveIndicator from './save-indicator';
 import { ScheduleTray } from './schedule-tray';
+import { SegmentMediaRow } from './segment-media-row';
 import { SubmitBar } from './submit-bar';
 import { TargetStatusChips } from './target-status-chips';
 import { VideoEditor } from './video-editor';
@@ -245,26 +248,52 @@ export default function Composer({
     });
     const publishStatus = usePublishStatus({ pagePost: post });
 
+    const explicitUploadSegmentRef = useRef<string | null>(null);
+    const segmentFileInputRef = useRef<HTMLInputElement | null>(null);
+
+    // Resolves which segment a just-finished upload/edit should attach to: an
+    // explicit per-segment target (see `addMediaToSegment`), held for the
+    // *entire* upload+editor session — not just until the file picker's
+    // promise settles — else the caret's current segment, else the head.
+    function resolveTargetSegmentRef(): string {
+        return (
+            explicitUploadSegmentRef.current ??
+            editorRef.current?.activeSegmentRef() ??
+            '__head__'
+        );
+    }
+
     // Owns the media-upload pipeline (image/video validation + upload). Lifted
     // here so both the editor (⌘/Ctrl+V paste) and the toolbar (picker/drop)
     // feed the same handleFiles and share one in-flight `pending` list.
     const mediaUploads = useMediaUploads({
-        media: state.media,
+        mediaForSegment,
         videoLimits: selectedVideoLimits,
         onEnsurePost: ensurePost,
-        onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
+        onAddMedia: (m, segmentRef) =>
+            dispatch({ type: 'addMedia', media: m, segmentRef }),
+        activeSegmentRef: resolveTargetSegmentRef,
     });
 
     const imageEditor = useImageEditor({
         onEnsurePost: ensurePost,
-        onAddMedia: (m) => dispatch({ type: 'addMedia', media: m }),
+        onAddMedia: (m) =>
+            dispatch({
+                type: 'addMedia',
+                media: m,
+                segmentRef: resolveTargetSegmentRef(),
+            }),
         onReplaceMedia: (m) => dispatch({ type: 'replaceMedia', media: m }),
     });
 
     const videoEditor = useVideoEditor({
         onEnsurePost: ensurePost,
         onComplete: (oldMediaId, media) => {
-            dispatch({ type: 'addMedia', media });
+            dispatch({
+                type: 'addMedia',
+                media,
+                segmentRef: resolveTargetSegmentRef(),
+            });
             if (oldMediaId) {
                 dispatch({ type: 'removeMedia', mediaId: oldMediaId });
             }
@@ -283,7 +312,17 @@ export default function Composer({
 
     // The server downloads and re-hosts the chosen GIF, so this is a chip +
     // fetch rather than the local upload flow the other media handlers use.
-    async function attachGif(item: GifItem) {
+    // `targetSegmentRef` lets a segment row's own GIF button target that
+    // segment explicitly; the global toolbar button omits it and falls back
+    // to the caret's segment.
+    async function attachGif(item: GifItem, targetSegmentRef?: string) {
+        // Frozen before the `ensurePost` await, which can round-trip to the
+        // server, so the GIF lands where it was targeted at selection time
+        // even if the caret moves while the draft post is being created.
+        const segmentRef =
+            targetSegmentRef ??
+            editorRef.current?.activeSegmentRef() ??
+            '__head__';
         const postId = await ensurePost();
         if (!postId) {
             return;
@@ -304,6 +343,7 @@ export default function Composer({
                     // box does, or the mixing-rule guard has nothing to check.
                     state.media.map((m) => m.id),
                 ),
+            segmentRef,
         );
     }
 
@@ -360,12 +400,26 @@ export default function Composer({
                 URL.revokeObjectURL(it.url);
             }
         }
+        // The editing session (which may span several batch items) is over —
+        // only now is it safe to release the explicit per-segment target, since
+        // `imageEditor.onAddMedia` reads it for every apply along the way.
+        explicitUploadSegmentRef.current = null;
         setEditing(null);
     }
+
+    // Set synchronously in lockstep with every `setEditing(...)` call below
+    // that opens a genuine editing session for freshly-picked files. Reading
+    // `editing`/`editingRef` back from `acceptSegmentFiles`'s `.finally()`
+    // isn't reliable there — that ref only tracks the *rendered* state, and a
+    // promise microtask isn't guaranteed to run after React has re-rendered
+    // in response to the `setEditing` call in the same tick. This ref sidesteps
+    // that entirely by being written directly, independent of any render.
+    const openedEditorRef = useRef(false);
 
     // Split a picked/dropped/pasted batch: videos upload directly; images open
     // the editor as a batch (edited one at a time).
     async function handleAddedFiles(files: FileList | File[]): Promise<void> {
+        openedEditorRef.current = false;
         const all = Array.from(files);
 
         // Bluesky publishes a GIF as video and allows only one, unmixed. Block it
@@ -374,7 +428,13 @@ export default function Composer({
         const targetsBluesky = tabAccounts.some(
             (a) => a.platform === 'bluesky',
         );
-        if (targetsBluesky && wouldViolateBlueskyGif(state.media, all)) {
+        if (
+            targetsBluesky &&
+            wouldViolateBlueskyGif(
+                mediaForSegment(resolveTargetSegmentRef()),
+                all,
+            )
+        ) {
             toast.error(
                 'Bluesky supports one animated GIF per post, and it cannot be mixed with other media.',
             );
@@ -390,7 +450,12 @@ export default function Composer({
 
         // A post is one video OR images, never both — decide before uploading
         // anything, so a mixed drop doesn't half-attach the video.
-        if (wouldMixVideoAndImages(state.media, all)) {
+        if (
+            wouldMixVideoAndImages(
+                mediaForSegment(resolveTargetSegmentRef()),
+                all,
+            )
+        ) {
             toast.error('A post can contain one video or images, not both.');
 
             return;
@@ -400,6 +465,7 @@ export default function Composer({
             const file = videos[0];
             try {
                 const meta = await readVideoMetadata(file);
+                openedEditorRef.current = true;
                 setEditing({
                     kind: 'video-new',
                     url: URL.createObjectURL(file),
@@ -428,6 +494,7 @@ export default function Composer({
         if (editable.length === 0) {
             return;
         }
+        openedEditorRef.current = true;
         setEditing({
             kind: 'batch',
             items: editable.map((f) => ({
@@ -438,12 +505,53 @@ export default function Composer({
         });
     }
 
+    // A segment's "add media" affordance: target that segment for whatever
+    // gets picked next, then open the shared file picker. Images/videos don't
+    // attach immediately — they open the beautifier/trim editor first — so the
+    // override must survive that whole session; it's only released once the
+    // editor actually closes (see `endEditingStep` / `closeVideoEditing`), or
+    // right here if nothing ended up opening an editor (e.g. a GIF-only pick,
+    // a validation rejection, or an empty selection).
+    function addMediaToSegment(segmentRef: string) {
+        explicitUploadSegmentRef.current = segmentRef;
+        segmentFileInputRef.current?.click();
+    }
+
+    function acceptSegmentFiles(files: FileList) {
+        void handleAddedFiles(files).finally(() => {
+            if (segmentFileInputRef.current) {
+                segmentFileInputRef.current.value = '';
+            }
+            // If nothing opened an editor (a GIF-only pick, a validation
+            // rejection, or an empty selection), there's no later apply/cancel
+            // to release the target on — clear it now. Otherwise leave it for
+            // `endEditingStep`/`closeVideoEditing` to release once that
+            // session actually ends.
+            if (!openedEditorRef.current) {
+                explicitUploadSegmentRef.current = null;
+            }
+        });
+    }
+
     // Revoke the object URL for a video-new session and close the editor.
     function closeVideoEditing() {
         if (editing?.kind === 'video-new') {
             URL.revokeObjectURL(editing.url);
         }
+        explicitUploadSegmentRef.current = null;
         setEditing(null);
+    }
+
+    // Find the segment an already-attached media id currently lives in, so
+    // re-opening its editor can pin the eventual apply back to that same
+    // segment (see `addMediaToSegment`) instead of falling through to
+    // whatever segment the caret happens to be in when the edit completes.
+    function segmentRefForMedia(mediaId: string): string {
+        const entry = Object.entries(activeScopePlacements).find(([, ids]) =>
+            ids.includes(mediaId),
+        );
+
+        return entry?.[0] ?? '__head__';
     }
 
     // Open an attached video in the video editor.
@@ -452,6 +560,10 @@ export default function Composer({
         if (!m || m.kind !== 'video') {
             return;
         }
+        // Trimming mints a new media id (see `videoEditor.onComplete`) that
+        // must land back in this video's own segment, not wherever the caret
+        // is — pin the target before opening the editor.
+        explicitUploadSegmentRef.current = segmentRefForMedia(mediaId);
         setEditing({
             kind: 'video',
             url: m.edit_url,
@@ -469,6 +581,13 @@ export default function Composer({
         if (!m || m.kind === 'video' || m.mime === 'image/gif') {
             return;
         }
+        // First-time beautify (the `raw` branch below) mints a new media id
+        // via `imageEditor.applyNew`, which must land back in this image's
+        // own segment rather than the caret's — pin the target before
+        // opening the editor. (`reedit` preserves the id via `applyEdit` and
+        // ignores this target, but setting it here is harmless and keeps the
+        // two branches symmetric.)
+        explicitUploadSegmentRef.current = segmentRefForMedia(mediaId);
         if (m.edit_settings && m.source_url) {
             setEditing({
                 kind: 'reedit',
@@ -596,6 +715,56 @@ export default function Composer({
         activeAccount && state.overrideByAccount[activeAccount.id] !== undefined
             ? (state.overrideByAccount[activeAccount.id] as string[])
             : state.segments;
+    const activeHasOverride =
+        activeAccount !== null &&
+        state.overrideByAccount[activeAccount.id] !== undefined;
+
+    // Media-placement edits (move/remove/reorder) diverge onto the active
+    // account only when that account is being customized: it has an explicit
+    // content override, or already carries account-specific placements (e.g.
+    // hydrated from an already-diverged post). Otherwise edits stay canonical
+    // (shared across every account), mirroring how text overrides gate
+    // per-account text divergence. `undefined` = canonical scope.
+    const divergeAccountId =
+        activeAccount &&
+        (activeHasOverride ||
+            state.placementsByAccount[activeAccount.id] !== undefined)
+            ? activeAccount.id
+            : undefined;
+
+    // The per-segment media rows (portaled into the editor by segment ref) read
+    // placements from the active scope: the diverging account's own copy, else
+    // canonical.
+    const activeScopePlacements =
+        divergeAccountId && state.placementsByAccount[divergeAccountId]
+            ? state.placementsByAccount[divergeAccountId]
+            : state.placements;
+
+    function mediaForSegment(segmentRef: string): MediaView[] {
+        const ids = activeScopePlacements[segmentRef] ?? [];
+
+        return ids
+            .map((id) => state.media.find((m) => m.id === id))
+            .filter((m): m is MediaView => m !== undefined);
+    }
+
+    // With a single thread, the global toolbar's "add media" button already
+    // attaches to it, so the per-segment hover-reveal row is redundant — it
+    // only earns its keep once there's more than one thread to choose between.
+    const singleThread = !hasMultipleThreads(state);
+
+    // An account override can carry more thread posts than the canonical
+    // `segmentBreaks` structure tracks (its own manual splits diverge from the
+    // shared thread shape). Placements are always keyed by the *canonical*
+    // break refs, so a segment past that range has no ref the server's
+    // `mediaSegmentsFromPlacements` recognizes — media added there would
+    // silently fail to persist on save. Hide the per-segment "add media" row
+    // for the whole account in that case, the same coarse-grained way
+    // `singleThread` hides it above.
+    const overrideExceedsSegmentBreaks =
+        activeAccount !== null &&
+        (state.overrideByAccount[activeAccount.id]?.length ?? 0) >
+            state.segmentBreaks.length + 1;
 
     function limitForPlatform(platform: PlatformName): number {
         return limits.find((l) => l.platform === platform)?.maxLength ?? 0;
@@ -620,9 +789,9 @@ export default function Composer({
             state.overrideByAccount[accountId] !== undefined
                 ? (state.overrideByAccount[accountId] as string[])
                 : state.segments;
-        // Global media count — the connector publishes the full post media set to
-        // every target (see precheckDestinations), so per-account exclusions must
-        // not change the severity a destination shows.
+        // Whole-post media count — the server precheck and connectors still
+        // enforce media caps per whole post (see precheckDestinations), so the
+        // severity a destination shows is judged against the full media set.
         const mediaCount = state.media.length;
         const hasVideo = state.media.some((item) => item.kind === 'video');
         const reasons = precheckAccount({
@@ -765,7 +934,7 @@ export default function Composer({
         );
     }
 
-    function handleSegments(segments: string[]) {
+    function handleSegments(segments: string[], breakIds: string[]) {
         const manualSplit = segments.length > 1;
         if (
             activeAccount &&
@@ -791,6 +960,12 @@ export default function Composer({
             return;
         }
         dispatch({ type: 'updateSegments', segments });
+        // Overrides carry their own text but not their own thread structure —
+        // segment refs (and therefore per-segment media placement) always
+        // track the canonical break ids, so only update them here.
+        if (JSON.stringify(breakIds) !== JSON.stringify(state.segmentBreaks)) {
+            dispatch({ type: 'setSegmentBreaks', breakIds });
+        }
         if (manualSplit) {
             dispatch({
                 type: 'disableAutoSplit',
@@ -818,18 +993,18 @@ export default function Composer({
                   state.overrideByAccount[previewAccount.id] ?? state.segments,
               mentions: state.mentions,
               media: state.media,
-              excludedMediaIds: new Set(
-                  state.media
-                      .filter((media) =>
-                          state.mediaSubsetExcludes.has(
-                              `${media.id}:${previewAccount.id}`,
-                          ),
-                      )
-                      .map((media) => media.id),
-              ),
+              // Per-account media divergence now lives in placements (Task 15),
+              // not a global exclude set.
+              excludedMediaIds: new Set<string>(),
               limit: limitForAccount(previewAccount),
               autoSplit: state.autoSplitByAccount[previewAccount.id] ?? true,
               format: state.formatByAccount[previewAccount.id] ?? 'feed',
+              // Show each media under the thread post it's placed on, using the
+              // previewed account's scope (diverged copy, else canonical).
+              placements:
+                  state.placementsByAccount[previewAccount.id] ??
+                  state.placements,
+              segmentBreaks: state.segmentBreaks,
           })
         : buildPlatformPreview({
               account: PREVIEW_FALLBACK_ACCOUNT,
@@ -840,6 +1015,8 @@ export default function Composer({
               limit: limitForPlatform('x'),
               autoSplit: true,
               format: 'feed',
+              placements: state.placements,
+              segmentBreaks: state.segmentBreaks,
           });
 
     const blockedAccounts = precheckDestinations({
@@ -954,6 +1131,7 @@ export default function Composer({
                 <EditorBody
                     ref={editorRef}
                     value={activeSegments}
+                    breakIds={state.segmentBreaks}
                     onChange={handleSegments}
                     onBlur={flush}
                     editable={!readOnly}
@@ -981,6 +1159,81 @@ export default function Composer({
                     }
                     emojiSkinTone={emojiPrefs.skinTone}
                     onEmojiInsert={emojiPrefs.addRecent}
+                    renderSegmentMedia={
+                        readOnly && state.media.length === 0
+                            ? undefined
+                            : (ref) => {
+                                  const segMedia = mediaForSegment(ref);
+                                  const segPending =
+                                      mediaUploads.pending.filter(
+                                          (p) => p.segmentRef === ref,
+                                      );
+                                  if (
+                                      readOnly &&
+                                      segMedia.length === 0 &&
+                                      segPending.length === 0
+                                  ) {
+                                      return null;
+                                  }
+                                  if (
+                                      (singleThread ||
+                                          overrideExceedsSegmentBreaks) &&
+                                      segMedia.length === 0 &&
+                                      segPending.length === 0
+                                  ) {
+                                      return null;
+                                  }
+
+                                  return (
+                                      <SegmentMediaRow
+                                          segmentRef={ref}
+                                          media={segMedia}
+                                          pending={segPending}
+                                          readOnly={readOnly}
+                                          onRemove={(mediaId) =>
+                                              dispatch({
+                                                  type: 'removeMediaFromSegments',
+                                                  mediaId,
+                                                  accountId: divergeAccountId,
+                                              })
+                                          }
+                                          onReorder={(ids) =>
+                                              dispatch({
+                                                  type: 'reorderSegmentMedia',
+                                                  segmentRef: ref,
+                                                  ids,
+                                                  accountId: divergeAccountId,
+                                              })
+                                          }
+                                          onDropMedia={(mediaId, targetRef) =>
+                                              dispatch({
+                                                  type: 'moveMediaToSegment',
+                                                  mediaId,
+                                                  segmentRef: targetRef,
+                                                  accountId: divergeAccountId,
+                                              })
+                                          }
+                                          onImageClick={openImage}
+                                          onVideoClick={openVideo}
+                                          onAddClick={() =>
+                                              addMediaToSegment(ref)
+                                          }
+                                          onAttachGif={
+                                              shell.gifs_enabled
+                                                  ? (item) =>
+                                                        attachGif(item, ref)
+                                                  : undefined
+                                          }
+                                          onDismissPending={
+                                              mediaUploads.dismissPending
+                                          }
+                                          onCancelPending={
+                                              mediaUploads.cancelPending
+                                          }
+                                      />
+                                  );
+                              }
+                    }
                     markerState={
                         activeAccount
                             ? {
@@ -1000,6 +1253,27 @@ export default function Composer({
                             : undefined
                     }
                 />
+
+                {!readOnly && (
+                    <input
+                        ref={segmentFileInputRef}
+                        type="file"
+                        accept={
+                            state.media.some((m) => m.kind === 'video')
+                                ? 'image/*'
+                                : 'image/*,video/*'
+                        }
+                        multiple
+                        hidden
+                        onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                                acceptSegmentFiles(e.target.files);
+                            } else {
+                                explicitUploadSegmentRef.current = null;
+                            }
+                        }}
+                    />
+                )}
 
                 {/* Counter row — or the connect prompt when there are no accounts. */}
                 {activeAccount ? (
@@ -1099,12 +1373,6 @@ export default function Composer({
                                 : undefined
                         }
                         media={state.media}
-                        onRemove={(id) =>
-                            dispatch({ type: 'removeMedia', mediaId: id })
-                        }
-                        onReorder={(ids) =>
-                            dispatch({ type: 'reorderMedia', ids })
-                        }
                         onToggleAutoSplit={() =>
                             activeAccount &&
                             dispatch({
@@ -1132,27 +1400,8 @@ export default function Composer({
                                 });
                             }
                         }}
-                        isExcluded={(mediaId) =>
-                            activeAccount
-                                ? state.mediaSubsetExcludes.has(
-                                      `${mediaId}:${activeAccount.id}`,
-                                  )
-                                : false
-                        }
-                        onToggleExclude={(mediaId) =>
-                            activeAccount &&
-                            dispatch({
-                                type: 'toggleMediaExclude',
-                                mediaId,
-                                accountId: activeAccount.id,
-                            })
-                        }
                         pending={mediaUploads.pending}
                         handleFiles={handleAddedFiles}
-                        dismissPending={mediaUploads.dismissPending}
-                        cancelPending={mediaUploads.cancelPending}
-                        onImageClick={openImage}
-                        onVideoClick={openVideo}
                     />
                 )}
 

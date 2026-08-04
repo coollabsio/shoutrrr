@@ -1,15 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import { BASE_TAB, type Account, type PostView } from '@/types/compose';
+import {
+    BASE_TAB,
+    type Account,
+    type MediaView,
+    type PostView,
+    type TargetView,
+} from '@/types/compose';
 
 import {
     buildPutBody,
+    type ComposerState,
     composerHasContent,
     composerReducer,
     firstLineTitle,
+    hasMultipleThreads,
     initialComposerState,
     parseDestinationParam,
     pickActiveAccount,
+    segmentRefsFromBreaks,
     shouldShowConnectAccountPrompt,
 } from '../composer-state';
 
@@ -22,6 +31,47 @@ function account(id: string): Account {
         avatar_url: null,
         max_text_length: 280,
         x_premium: false,
+    };
+}
+
+function mediaFixture(id: string): MediaView {
+    return {
+        id,
+        url: `http://x/${id}.png`,
+        mime: 'image/png',
+        kind: 'image',
+        alt_text: null,
+        duration_seconds: null,
+        position: 0,
+        edit_settings: null,
+        source_url: null,
+        edit_url: 'http://x/raw',
+        source_edit_url: null,
+    };
+}
+
+function targetFixture(
+    accountId: string,
+    overrides: Partial<TargetView> = {},
+): TargetView {
+    return {
+        id: `t-${accountId}`,
+        connected_account_id: accountId,
+        platform: 'x',
+        handle: `@${accountId}`,
+        display_name: null,
+        avatar_url: null,
+        sections: ['hello'],
+        content_override: null,
+        auto_split: true,
+        format: 'feed',
+        issues: [],
+        status: 'pending',
+        error_kind: null,
+        error_message: null,
+        attempts: 0,
+        remote_id: null,
+        ...overrides,
     };
 }
 
@@ -830,6 +880,28 @@ describe('composerHasContent', () => {
     });
 });
 
+describe('hasMultipleThreads', () => {
+    it('is false for a fresh composer with a single thread', () => {
+        expect(hasMultipleThreads(initialComposerState())).toBe(false);
+    });
+
+    it('is still false once text is typed, as long as there is only one thread', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'updateSegments',
+            segments: ['hi'],
+        });
+        expect(hasMultipleThreads(state)).toBe(false);
+    });
+
+    it('is true once a second thread exists, even with no text yet', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setSegmentBreaks',
+            breakIds: ['b1'],
+        });
+        expect(hasMultipleThreads(state)).toBe(true);
+    });
+});
+
 describe('parseDestinationParam', () => {
     it('parses all / account / set', () => {
         expect(parseDestinationParam('all')).toEqual({ kind: 'all' });
@@ -895,6 +967,598 @@ describe('composer format state', () => {
             format: 'reels',
         });
         expect(body.targets[1].format).toBe('feed');
+    });
+});
+
+describe('per-segment placements', () => {
+    it('adds media to the active segment placement', () => {
+        let s = initialComposerState();
+        s = { ...s, segmentBreaks: ['b1'] };
+        s = composerReducer(s, {
+            type: 'addMedia',
+            media: mediaFixture('m1'),
+            segmentRef: 'b1',
+        });
+        expect(s.media.map((m) => m.id)).toEqual(['m1']);
+        expect(s.placements.b1).toEqual(['m1']);
+    });
+
+    it('addMedia without a segmentRef defaults to __head__', () => {
+        let s = initialComposerState();
+        s = composerReducer(s, { type: 'addMedia', media: mediaFixture('m1') });
+        expect(s.placements.__head__).toEqual(['m1']);
+    });
+
+    it('hydrate folds media that has no placement onto the first segment', () => {
+        const post: PostView = {
+            id: 'post-1',
+            base_text: 'test',
+            segments: ['test'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            // A media item with no placements array at all (legacy draft).
+            media: [mediaFixture('m1')],
+        };
+        const s = composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+        expect(s.media.map((m) => m.id)).toEqual(['m1']);
+        expect(s.placements.__head__).toEqual(['m1']);
+    });
+
+    it('does not flag a legacy post (media but no placement rows) as diverged on a stale-write 409', () => {
+        // Regression: contentMatchesServer used to compare state.placements
+        // (folded onto __head__ by hydrate) against the RAW server grouping
+        // groupPlacements(post.placements), which is `{}` when a legacy post
+        // has no placement rows at all — an always-unequal, always-"diverged"
+        // comparison that popped the conflict dialog on every save.
+        const post: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            segments: ['hello'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            targets: [],
+            // Legacy post: media attached, but no placement rows (undefined).
+            media: [mediaFixture('m1')],
+        };
+        const state = composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+        expect(state.placements.__head__).toEqual(['m1']);
+
+        // Echoing the same post back (e.g. a stale-write 409) must silently
+        // re-baseline, not surface a false conflict dialog.
+        const next = composerReducer(state, {
+            type: 'saveFailedStale',
+            post,
+        });
+        expect(next.saveState).toBe('saved');
+        expect(next.conflict).toBeNull();
+    });
+
+    it('still opens the conflict dialog when placements genuinely diverge from the server', () => {
+        const post: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            segments: ['hello'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            segment_breaks: ['b1'],
+            placements: [{ media_id: 'm1', segment_ref: 'b1', position: 0 }],
+            targets: [],
+            media: [mediaFixture('m1')],
+        };
+        let state = composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+        expect(state.placements.b1).toEqual(['m1']);
+
+        // Local edit moves the media to a different segment (canonical scope).
+        state = composerReducer(state, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: '__head__',
+        });
+
+        // The server still reports the original placement — a real conflict.
+        const next = composerReducer(state, {
+            type: 'saveFailedStale',
+            post,
+        });
+        expect(next.saveState).toBe('conflict');
+    });
+
+    it('moving media on an account tab diverges only that account', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+            accountId: 'acc-x',
+        });
+        expect(s.placements.__head__).toEqual(['m1']); // canonical untouched
+        expect(s.placementsByAccount['acc-x'].b1).toEqual(['m1']);
+    });
+
+    it('moving media with no accountId updates the canonical placements', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+        });
+        expect(s.placements.__head__ ?? []).toEqual([]);
+        expect(s.placements.b1).toEqual(['m1']);
+    });
+
+    it('removeMediaFromSegments without an accountId drops the media entirely and un-places it everywhere', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: { __head__: ['m1'] },
+            placementsByAccount: { 'acc-x': { b1: ['m1'] } },
+        };
+        s = composerReducer(s, {
+            type: 'removeMediaFromSegments',
+            mediaId: 'm1',
+        });
+        expect(s.media).toEqual([]);
+        expect(s.placements.__head__ ?? []).toEqual([]);
+        expect(s.placementsByAccount['acc-x'].b1 ?? []).toEqual([]);
+    });
+
+    it('removeMediaFromSegments with an accountId only un-places for that account, keeping the file', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: { __head__: ['m1'] },
+            placementsByAccount: { 'acc-x': { b1: ['m1'] } },
+        };
+        s = composerReducer(s, {
+            type: 'removeMediaFromSegments',
+            mediaId: 'm1',
+            accountId: 'acc-x',
+        });
+        expect(s.media.map((m) => m.id)).toEqual(['m1']);
+        expect(s.placements.__head__).toEqual(['m1']);
+        expect(s.placementsByAccount['acc-x'].b1 ?? []).toEqual([]);
+    });
+
+    it('removeMediaFromSegments with an accountId only touches that account, leaving canonical and other diverged accounts untouched', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: { __head__: ['m1'] },
+            placementsByAccount: {
+                'acc-x': { b1: ['m1'] },
+                'acc-y': { b1: ['m1'] },
+            },
+        };
+        s = composerReducer(s, {
+            type: 'removeMediaFromSegments',
+            mediaId: 'm1',
+            accountId: 'acc-x',
+        });
+        expect(s.placements.__head__).toEqual(['m1']);
+        expect(s.placementsByAccount['acc-x'].b1 ?? []).toEqual([]);
+        expect(s.placementsByAccount['acc-y'].b1).toEqual(['m1']);
+    });
+
+    it('reorderSegmentMedia sets the segment order in the given scope', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1', 'm2'] },
+        };
+        s = composerReducer(s, {
+            type: 'reorderSegmentMedia',
+            segmentRef: '__head__',
+            ids: ['m2', 'm1'],
+        });
+        expect(s.placements.__head__).toEqual(['m2', 'm1']);
+    });
+
+    it('setSegmentBreaks replaces state.segmentBreaks', () => {
+        const s = composerReducer(initialComposerState(), {
+            type: 'setSegmentBreaks',
+            breakIds: ['b1', 'b2'],
+        });
+        expect(s.segmentBreaks).toEqual(['b1', 'b2']);
+    });
+
+    it('deleting a break folds its media into the segment it merged into, not orphaned', () => {
+        // Two segments: __head__ has m1, the second (b1) has m2 — mirrors two
+        // threads each with their own attached image.
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1'), mediaFixture('m2')],
+            segmentBreaks: ['b1'],
+            placements: { __head__: ['m1'], b1: ['m2'] },
+        };
+        // Backspacing at the start of the second segment merges it into the
+        // first — the break disappears from the doc's breakIds.
+        s = composerReducer(s, { type: 'setSegmentBreaks', breakIds: [] });
+
+        expect(s.segmentBreaks).toEqual([]);
+        // Both media now live under the single surviving segment — neither is
+        // dropped, and the media pool (the "2" the badge counts) is untouched.
+        expect(s.placements.__head__ ?? []).toEqual(
+            expect.arrayContaining(['m1', 'm2']),
+        );
+        expect(s.placements.__head__).toHaveLength(2);
+        expect(s.placements.b1).toBeUndefined();
+        expect(s.media.map((m) => m.id)).toEqual(['m1', 'm2']);
+    });
+
+    it('deleting a middle break re-homes its media on the nearest surviving earlier segment', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            segmentBreaks: ['b1', 'b2'],
+            placements: { b1: ['m1'] },
+        };
+        // b1 is removed (its segment merged backward); b2 survives.
+        s = composerReducer(s, { type: 'setSegmentBreaks', breakIds: ['b2'] });
+
+        expect(s.placements.__head__).toEqual(['m1']);
+        expect(s.placements.b1).toBeUndefined();
+    });
+
+    it('deleting a break also re-homes per-account diverged placements', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            segmentBreaks: ['b1'],
+            placements: {},
+            placementsByAccount: { 'acc-x': { b1: ['m1'] } },
+        };
+        s = composerReducer(s, { type: 'setSegmentBreaks', breakIds: [] });
+
+        expect(s.placementsByAccount['acc-x'].__head__).toEqual(['m1']);
+        expect(s.placementsByAccount['acc-x'].b1).toBeUndefined();
+    });
+
+    it('adding a break (no removals) leaves existing placements untouched', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            segmentBreaks: [],
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'setSegmentBreaks',
+            breakIds: ['b1'],
+        });
+
+        expect(s.placements.__head__).toEqual(['m1']);
+        expect(s.placements.b1 ?? []).toEqual([]);
+    });
+
+    it('removeMedia also drops the id from canonical and per-account placements', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: { __head__: ['m1'] },
+            placementsByAccount: { 'acc-x': { b1: ['m1'] } },
+        };
+        s = composerReducer(s, { type: 'removeMedia', mediaId: 'm1' });
+        expect(s.media).toEqual([]);
+        expect(s.placements.__head__ ?? []).toEqual([]);
+        expect(s.placementsByAccount['acc-x'].b1 ?? []).toEqual([]);
+    });
+
+    it('buildPutBody flattens canonical placements', () => {
+        const s = {
+            ...initialComposerState(),
+            segmentBreaks: ['b1'],
+            placements: { __head__: ['m1'], b1: ['m2'] },
+            media: [mediaFixture('m1'), mediaFixture('m2')],
+        };
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.segment_breaks).toEqual(['b1']);
+        expect(body.placements).toContainEqual({
+            media_id: 'm1',
+            segment_ref: '__head__',
+            position: 0,
+        });
+        expect(body.placements).toContainEqual({
+            media_id: 'm2',
+            segment_ref: 'b1',
+            position: 0,
+        });
+    });
+
+    it('buildPutBody omits per-target placements for accounts that have not diverged', () => {
+        const s = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toBeUndefined();
+        expect(body.targets[0].segment_breaks).toBeUndefined();
+    });
+
+    it('buildPutBody includes per-target placements only for a diverged account', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            segmentBreaks: ['b1'],
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+            accountId: 'acc-x',
+        });
+        const body = buildPutBody(s, ['acc-x', 'acc-y']);
+        expect(body.targets[0].connected_account_id).toBe('acc-x');
+        expect(body.targets[0].segment_breaks).toEqual(['b1']);
+        expect(body.targets[0].placements).toContainEqual({
+            media_id: 'm1',
+            segment_ref: 'b1',
+            position: 0,
+        });
+        expect(body.targets[1].placements).toBeUndefined();
+    });
+
+    it('hydrate does NOT create a placementsByAccount entry for a target whose placements match canonical, so a later canonical edit still propagates to it', () => {
+        const post: PostView = {
+            id: 'post-1',
+            base_text: 'hello',
+            segments: ['hello'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-06-12T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            segment_breaks: [],
+            placements: [
+                { media_id: 'm1', segment_ref: '__head__', position: 0 },
+            ],
+            targets: [
+                targetFixture('a1', {
+                    placements: [
+                        {
+                            media_id: 'm1',
+                            segment_ref: '__head__',
+                            position: 0,
+                        },
+                    ],
+                }),
+                targetFixture('a2', {
+                    placements: [
+                        { media_id: 'm1', segment_ref: 'b1', position: 0 },
+                    ],
+                }),
+            ],
+            media: [mediaFixture('m1')],
+        };
+
+        let state = composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+
+        // a1 matches canonical exactly -> no entry; a2 genuinely diverges -> entry.
+        expect(state.placementsByAccount.a1).toBeUndefined();
+        expect(state.placementsByAccount.a2).toEqual({ b1: ['m1'] });
+
+        // A canonical-scope edit (no accountId) must still reach a1, since it
+        // has no stale per-account snapshot pinning it to the pre-edit state.
+        state = composerReducer(state, {
+            type: 'addMedia',
+            media: mediaFixture('m2'),
+        });
+        const body = buildPutBody(state, ['a1', 'a2']);
+        expect(body.targets[0].connected_account_id).toBe('a1');
+        expect(body.targets[0].placements).toBeUndefined(); // still inherits canonical
+        expect(body.placements).toContainEqual({
+            media_id: 'm2',
+            segment_ref: '__head__',
+            position: 1,
+        });
+    });
+
+    it('addMedia appends the new media into every already-diverged account placement, not just canonical', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        // Diverge acc-x by moving m1 to segment b1 for that account only.
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+            accountId: 'acc-x',
+        });
+        expect(s.placementsByAccount['acc-x'].b1).toEqual(['m1']);
+
+        // Add new media after the divergence exists.
+        s = composerReducer(s, {
+            type: 'addMedia',
+            media: mediaFixture('m2'),
+        });
+
+        // Canonical picks up m2 on __head__ as usual.
+        expect(s.placements.__head__).toEqual(['m1', 'm2']);
+
+        // The diverged account must also see m2 at the same segmentRef, or it
+        // silently vanishes from that account's preview and publish payload.
+        expect(s.placementsByAccount['acc-x'].__head__).toEqual(['m2']);
+
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toContainEqual({
+            media_id: 'm2',
+            segment_ref: '__head__',
+            position: 0,
+        });
+    });
+
+    it('addMedia does not invent a placementsByAccount entry for an account that has not diverged', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1'] },
+        };
+        s = composerReducer(s, {
+            type: 'addMedia',
+            media: mediaFixture('m2'),
+        });
+        expect(s.placementsByAccount).toEqual({});
+    });
+
+    it('moveMediaToSegment round-tripping an account back to canonical clears the stale placementsByAccount entry', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            segmentBreaks: ['b1'],
+            placements: { __head__: ['m1'] },
+        };
+        // Diverge acc-x: move m1 to b1 for that account only.
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+            accountId: 'acc-x',
+        });
+        expect(s.placementsByAccount['acc-x'].b1).toEqual(['m1']);
+
+        // Move it back to __head__ for the same account — now structurally
+        // identical to canonical again.
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: '__head__',
+            accountId: 'acc-x',
+        });
+
+        // The stale entry must be removed entirely, not left equal-but-present
+        // — an equal-but-present entry still freezes the account out of future
+        // canonical-scope edits (see buildPutBody).
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        // A subsequent canonical-scope edit must now reach acc-x again.
+        s = composerReducer(s, {
+            type: 'moveMediaToSegment',
+            mediaId: 'm1',
+            segmentRef: 'b1',
+        });
+        expect(s.placements.b1).toEqual(['m1']);
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toBeUndefined(); // inherits canonical
+        expect(body.placements).toContainEqual({
+            media_id: 'm1',
+            segment_ref: 'b1',
+            position: 0,
+        });
+    });
+
+    it('reorderSegmentMedia round-tripping an account back to canonical order clears the stale placementsByAccount entry', () => {
+        let s: ComposerState = {
+            ...initialComposerState(),
+            placements: { __head__: ['m1', 'm2'] },
+        };
+        s = composerReducer(s, {
+            type: 'reorderSegmentMedia',
+            segmentRef: '__head__',
+            ids: ['m2', 'm1'],
+            accountId: 'acc-x',
+        });
+        expect(s.placementsByAccount['acc-x']).toEqual({
+            __head__: ['m2', 'm1'],
+        });
+
+        // Reorder back to match canonical order — equal again.
+        s = composerReducer(s, {
+            type: 'reorderSegmentMedia',
+            segmentRef: '__head__',
+            ids: ['m1', 'm2'],
+            accountId: 'acc-x',
+        });
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        // A subsequent canonical-scope edit must now reach acc-x again.
+        s = composerReducer(s, {
+            type: 'reorderSegmentMedia',
+            segmentRef: '__head__',
+            ids: ['m2', 'm1'],
+        });
+        expect(s.placements.__head__).toEqual(['m2', 'm1']);
+
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toBeUndefined(); // inherits canonical
+    });
+
+    it('removeMediaFromSegments round-tripping an account back to canonical clears the stale placementsByAccount entry', () => {
+        // Canonical never had this media placed; acc-x diverged by placing it.
+        let s: ComposerState = {
+            ...initialComposerState(),
+            media: [mediaFixture('m1')],
+            placements: {},
+            placementsByAccount: { 'acc-x': { __head__: ['m1'] } },
+        };
+        s = composerReducer(s, {
+            type: 'removeMediaFromSegments',
+            mediaId: 'm1',
+            accountId: 'acc-x',
+        });
+
+        // acc-x's map is now empty, structurally equal to the empty canonical
+        // map — the stale entry must be dropped, not left as an equal-but-
+        // present freeze.
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        // A later canonical-scope edit must now reach acc-x.
+        s = composerReducer(s, {
+            type: 'addMedia',
+            media: mediaFixture('m2'),
+        });
+        expect(s.placementsByAccount['acc-x']).toBeUndefined();
+
+        const body = buildPutBody(s, ['acc-x']);
+        expect(body.targets[0].placements).toBeUndefined(); // inherits canonical
+        expect(body.placements).toContainEqual({
+            media_id: 'm2',
+            segment_ref: '__head__',
+            position: 0,
+        });
+    });
+});
+
+describe('segmentRefsFromBreaks', () => {
+    it('prefixes __head__ before the ordered break ids', () => {
+        expect(segmentRefsFromBreaks(['b1', 'b2'])).toEqual([
+            '__head__',
+            'b1',
+            'b2',
+        ]);
+    });
+
+    it('returns just __head__ for no breaks', () => {
+        expect(segmentRefsFromBreaks([])).toEqual(['__head__']);
     });
 });
 

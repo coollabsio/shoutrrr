@@ -172,3 +172,30 @@ describe('composer editor text rhythm', () => {
         expect(source).toContain('[&_.ProseMirror_p+p]:mt-0');
     });
 });
+
+describe('editor body break-id preservation', () => {
+    // Rebuilding the doc from `value` alone (via the id-less `segmentsToDoc`)
+    // would mint fresh `sectionBreak` ids on every mount/reset, orphaning
+    // anything already keyed to the real ones (e.g. per-segment media
+    // placements hydrated from the server). Both the initial mount and the
+    // external-value resync must round-trip the caller's `breakIds` instead.
+    function source(): string {
+        return readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/compose/editor-body.tsx',
+            ),
+            'utf8',
+        );
+    }
+
+    it('builds the initial editor content with the caller-supplied break ids', () => {
+        expect(source()).toContain(
+            'content: segmentsToDocWithBreaks(value, breakIds) as object,',
+        );
+    });
+
+    it('never rebuilds the doc from segments alone (which would drop break ids)', () => {
+        expect(source()).not.toMatch(/[^.]segmentsToDoc\(value\)/);
+    });
+});
