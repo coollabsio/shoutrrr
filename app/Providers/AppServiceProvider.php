@@ -10,6 +10,8 @@ use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Auth\Socialite\ThreadsProvider;
+use App\Services\Media\ImageCompressor;
+use App\Services\Media\ImageToJpegConverter;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Authenticated;
 use Illuminate\Auth\Events\Login;
@@ -44,7 +46,13 @@ class AppServiceProvider extends ServiceProvider
     #[Override]
     public function register(): void
     {
-        //
+        // Both classes take $maxPixels as a constructor default (a config() call can't be
+        // a default expression), so the publish/convert pipeline needs this binding to
+        // actually honor the configured decode guard rather than always falling back to
+        // the compile-time constant.
+        $this->app->when([ImageCompressor::class, ImageToJpegConverter::class])
+            ->needs('$maxPixels')
+            ->give(fn (): int => (int) config('media.max_image_pixels', ImageCompressor::DEFAULT_MAX_PIXELS));
     }
 
     /**

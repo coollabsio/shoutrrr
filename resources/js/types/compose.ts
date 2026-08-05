@@ -109,6 +109,8 @@ export type PendingUpload = {
     progress?: number;
     /** The thread segment this upload was targeting when it began. */
     segmentRef: string;
+    /** Server-provided reason for a failed upload (e.g. a validation message); falls back to a generic label when absent. */
+    errorMessage?: string;
 };
 
 export type TargetStatus =

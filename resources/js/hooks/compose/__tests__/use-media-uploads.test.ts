@@ -182,6 +182,32 @@ describe('useMediaUploads handleFiles', () => {
     });
 });
 
+describe('useMediaUploads image upload failure', () => {
+    it('carries the server validation message onto the failed chip instead of a generic error', async () => {
+        render();
+        post.mockImplementation(
+            (
+                _url: string,
+                opts: { onError?: (errors: Record<string, string>) => void },
+            ) => {
+                opts.onError?.({ file: 'The image resolution is too large.' });
+
+                return Promise.reject(new Error('422'));
+            },
+        );
+
+        await act(async () => {
+            await handleFilesRef?.([imageFile()]);
+        });
+
+        expect(pendingRef).toHaveLength(1);
+        expect(pendingRef[0].status).toBe('error');
+        expect(pendingRef[0].errorMessage).toBe(
+            'The image resolution is too large.',
+        );
+    });
+});
+
 describe('useMediaUploads pending chip carries the segment it was targeting', () => {
     it('tags the pending chip with the segment active when the upload began, not wherever the caret moves to later', async () => {
         let active = 'b1';

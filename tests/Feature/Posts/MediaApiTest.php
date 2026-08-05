@@ -61,6 +61,20 @@ test('it rejects an image whose resolution exceeds the pixel ceiling', function 
         ->assertJsonValidationErrors('file');
 });
 
+test('it rejects an image above the shipped pixel ceiling without any config override', function () {
+    Storage::fake('public');
+    [$user, $workspace, $post] = memberWithDraft();
+
+    // 5000x3500 = 17.5M pixels, above the shipped 16M default (config/media.php) —
+    // proves the gate rejects on its own, not only when a test lowers the ceiling.
+    // The rule reads the header only, so no real 17.5M-pixel canvas is allocated.
+    test()->post("/posts/{$post['id']}/media", [
+        'file' => UploadedFile::fake()->image('huge.jpg', 5000, 3500)->size(300),
+    ], ['Accept' => 'application/json'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('file');
+});
+
 test('it rejects an upload to a post that is no longer editable', function () {
     Storage::fake('public');
     [$user, $workspace, $post] = memberWithDraft();

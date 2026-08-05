@@ -92,10 +92,12 @@ function CornerButton({
                 'absolute -top-1.5 -right-1.5 z-10 grid size-4 place-items-center rounded-full',
                 'border border-background bg-destructive text-[11px] leading-none text-destructive-foreground shadow-sm',
                 'transition-opacity hover:bg-destructive/90',
-                always
-                    ? 'flex'
-                    : // Always visible on touch (no hover); reveal on hover/focus on pointer devices.
-                      'max-md:opacity-100 md:opacity-0 md:group-focus-within/chip:opacity-100 md:group-hover/chip:opacity-100',
+                // `always` just needs to skip the hover-reveal opacity dance below —
+                // it must not touch `display`, or it fights the base `grid` and the
+                // icon loses `place-items-center`'s horizontal centering.
+                !always &&
+                    // Always visible on touch (no hover); reveal on hover/focus on pointer devices.
+                    'max-md:opacity-100 md:opacity-0 md:group-focus-within/chip:opacity-100 md:group-hover/chip:opacity-100',
             )}
         >
             {children}
@@ -392,7 +394,8 @@ export function SegmentMediaRow({
                                 ? 'Processing…'
                                 : p.status === 'uploading'
                                   ? 'Uploading…'
-                                  : 'Upload failed — dismiss and retry'}
+                                  : (p.errorMessage ??
+                                    'Upload failed — dismiss and retry')}
                         </TooltipContent>
                     </Tooltip>
                 );
