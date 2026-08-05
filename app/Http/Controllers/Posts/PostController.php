@@ -76,10 +76,25 @@ class PostController extends Controller
                     ->where('status', '!=', PostStatus::Deleted->value)
                     ->when($status !== '' && $status !== 'all', fn ($query) => $query->where('status', $status))
             )
-                ->orderByRaw('COALESCE(scheduled_at, created_at) DESC')
+                // Order by the effective timeline date. Cursor pagination cannot
+                // build its keyset WHERE clause from a raw orderBy (those orders
+                // carry no direction and get stripped, crashing page 2), so the
+                // expression is aliased to a real column and ordered by the alias.
+                // `id` is the unique tiebreaker keyset pagination requires.
+                ->select('posts.*')
+                ->selectRaw('COALESCE(scheduled_at, created_at) as sort_key')
+                ->orderByDesc('sort_key')
+                ->orderByDesc('id')
                 ->cursorPaginate(20)
                 ->withQueryString()
-                ->through(fn (Post $post): array => PostListItem::make($post)))->defer(),
+                // The cursor's keyset is (sort_key, id), so both must survive the
+                // item transform — the paginator reads them off each emitted row to
+                // encode the next cursor. `id` is already in PostListItem; carry the
+                // computed `sort_key` alongside it.
+                ->through(fn (Post $post): array => [
+                    ...PostListItem::make($post),
+                    'sort_key' => $post->getAttribute('sort_key'),
+                ]))->defer(),
             'filters' => ['status' => $status ?: 'all', 'set' => $set, 'platform' => $platform, 'q' => $q],
             'sets' => $sets,
             'counts' => $counts,
