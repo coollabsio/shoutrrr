@@ -178,6 +178,7 @@ export const Info = icon(InformationCircleIcon);
 export const KeyRound = icon(Key01Icon);
 export const Layers = icon(Layers01Icon);
 export const LayoutGrid = icon(LayoutGridIcon);
+export const ListChecks = icon(CheckListIcon);
 export const Loader2 = icon(Loading03Icon);
 export const LoaderCircle = icon(Loading03Icon);
 export const LockKeyhole = icon(LockIcon);
