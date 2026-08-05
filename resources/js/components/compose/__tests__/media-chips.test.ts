@@ -28,4 +28,11 @@ describe('media chips', () => {
         // Image chips are editable only when the item is not a GIF.
         expect(chips).toContain('Boolean(onImageClick) && !isGif');
     });
+
+    it("CornerButton's always-visible variant does not override display (would break the icon's centering against the base grid layout)", () => {
+        const chips = source();
+
+        expect(chips).not.toMatch(/always\s*\?\s*'flex'/);
+        expect(chips).toContain('!always &&');
+    });
 });

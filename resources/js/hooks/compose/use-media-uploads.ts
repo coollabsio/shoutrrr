@@ -169,10 +169,12 @@ export function useMediaUploads({
         return { tempId, previewUrl };
     }
 
-    function failUpload(tempId: string): void {
+    function failUpload(tempId: string, errorMessage?: string): void {
         setPending((cur) =>
             cur.map((p) =>
-                p.tempId === tempId ? { ...p, status: 'error' } : p,
+                p.tempId === tempId
+                    ? { ...p, status: 'error', errorMessage }
+                    : p,
             ),
         );
     }
@@ -271,13 +273,20 @@ export function useMediaUploads({
 
         // transform injects the file at submit time (multipart upload).
         imageHttp.transform(() => ({ file }));
+        let validationMessage: string | undefined;
         try {
             const { media: result } = await imageHttp.post(ep.imageStore(id), {
+                onError: (errors) => {
+                    const first =
+                        errors?.file ?? Object.values(errors ?? {})[0];
+                    validationMessage =
+                        typeof first === 'string' ? first : undefined;
+                },
                 onNetworkError: () => undefined,
             });
             finishUpload(tempId, result, segmentRef, previewUrl);
         } catch {
-            failUpload(tempId);
+            failUpload(tempId, validationMessage);
         }
     }
 

@@ -156,3 +156,23 @@ test('an image exceeding the pixel guard is left untouched without decoding', fu
         ->and($result->bytes)->toBe($bytes)
         ->and($result->mime)->toBe('image/jpeg');
 });
+
+test('the container-resolved compressor honors a configured pixel ceiling', function () {
+    // AppServiceProvider binds $maxPixels from config('media.max_image_pixels') for
+    // container-resolved instances (the publish path), rather than always falling back
+    // to the compile-time default — this is what actually protects the queue worker.
+    config(['media.max_image_pixels' => 100]);
+
+    $bytes = compressorJpeg(1200, 1200); // 1.44M pixels
+
+    $result = app(ImageCompressor::class)->compressToFit($bytes, (int) (strlen($bytes) * 0.6), 'image/jpeg', WEBP_ALLOWED);
+
+    expect($result->wasCompressed)->toBeFalse()
+        ->and($result->bytes)->toBe($bytes)
+        ->and($result->mime)->toBe('image/jpeg');
+});
+
+test('the shipped default pixel ceiling is calibrated for a 256M worker', function () {
+    expect(ImageCompressor::DEFAULT_MAX_PIXELS)->toBe(16_000_000)
+        ->and(config('media.max_image_pixels'))->toBe(16_000_000);
+});

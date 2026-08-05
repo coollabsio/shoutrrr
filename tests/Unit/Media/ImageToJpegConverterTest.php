@@ -126,3 +126,21 @@ it('refuses to decode a canvas beyond the pixel ceiling', function () {
 
     (new ImageToJpegConverter(maxPixels: 100))->convert($media);
 })->throws(ImageConversionFailed::class);
+
+it('the container-resolved converter honors a configured pixel ceiling', function () {
+    // AppServiceProvider binds $maxPixels from config('media.max_image_pixels') for
+    // container-resolved instances (the Instagram/Threads publish path), rather than
+    // always falling back to the compile-time default.
+    Storage::fake('public');
+    Storage::disk('public')->put('media/ws/huge.png', transparentPng(50, 50));
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/ws/huge.png',
+        'mime' => 'image/png',
+    ]);
+
+    config(['media.max_image_pixels' => 100]);
+
+    app(ImageToJpegConverter::class)->convert($media);
+})->throws(ImageConversionFailed::class);

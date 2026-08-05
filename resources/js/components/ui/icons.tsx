@@ -121,16 +121,11 @@ export type IconProps = Omit<HugeiconsProps, 'strokeWidth'> & {
 export type IconComponent = ComponentType<IconProps>;
 
 function icon(data: IconSvgElement): IconComponent {
-    return function Icon({ strokeWidth, ...props }: IconProps) {
-        return (
-            <HugeiconsIcon
-                icon={data}
-                strokeWidth={
-                    strokeWidth === undefined ? undefined : Number(strokeWidth)
-                }
-                {...props}
-            />
-        );
+    // Hugeicons' outline paths bake in strokeWidth: 1.5, ~25% thinner than the
+    // strokeWidth: 2 every call site was designed around under lucide-react. Default
+    // to 2 here so every icon keeps its original weight unless a call site overrides it.
+    return function Icon({ strokeWidth = 2, ...props }: IconProps) {
+        return <HugeiconsIcon icon={data} strokeWidth={Number(strokeWidth)} {...props} />;
     };
 }
 

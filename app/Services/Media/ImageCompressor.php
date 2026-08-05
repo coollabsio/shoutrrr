@@ -18,7 +18,7 @@ use Throwable;
  */
 class ImageCompressor
 {
-    public const int DEFAULT_MAX_PIXELS = 50_000_000;
+    public const int DEFAULT_MAX_PIXELS = 16_000_000;
 
     private const int QUALITY_CEIL = 92;
 
@@ -33,8 +33,11 @@ class ImageCompressor
     /**
      * @param  int  $maxPixels  Decode guard: images whose pixel count exceeds this are left
      *                          untouched rather than decoded, so a decompression-bomb (tiny
-     *                          file, enormous canvas) cannot OOM the publish worker. The
-     *                          default comfortably exceeds every platform's max dimensions.
+     *                          file, enormous canvas) cannot OOM the publish worker. GD peak
+     *                          memory is ~2 x (W x H x 4 bytes) since scale() clones the
+     *                          source canvas, so the default is calibrated to stay under a
+     *                          256M worker memory_limit while still passing standard ~12MP
+     *                          phone photos.
      */
     public function __construct(private readonly int $maxPixels = self::DEFAULT_MAX_PIXELS) {}
 
