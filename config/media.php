@@ -6,5 +6,14 @@ return [
     // calibrated to stay under a 256M worker memory_limit. Images over this are
     // shipped untouched by the compressor, rejected by the JPEG converter, or
     // refused at upload, rather than OOMing the worker.
-    'max_image_pixels' => (int) env('MEDIA_MAX_IMAGE_PIXELS', 16_000_000),
+    //
+    // Validate the override to a positive integer: a zero/negative/non-numeric value
+    // would make the two decode guards disagree (ImageCompressor would skip
+    // compression while ImageToJpegConverter rejects every image), so an invalid
+    // override falls back to the calibrated default rather than being trusted.
+    'max_image_pixels' => filter_var(
+        env('MEDIA_MAX_IMAGE_PIXELS'),
+        FILTER_VALIDATE_INT,
+        ['options' => ['default' => 16_000_000, 'min_range' => 1]],
+    ),
 ];

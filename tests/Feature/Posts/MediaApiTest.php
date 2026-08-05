@@ -67,7 +67,9 @@ test('it rejects an image above the shipped pixel ceiling without any config ove
 
     // 5000x3500 = 17.5M pixels, above the shipped 16M default (config/media.php) —
     // proves the gate rejects on its own, not only when a test lowers the ceiling.
-    // The rule reads the header only, so no real 17.5M-pixel canvas is allocated.
+    // The validation rule itself reads the header only (no decode); the canvas that
+    // UploadedFile::fake() allocates here is one-off test fixture setup, not the code
+    // path under test.
     test()->post("/posts/{$post['id']}/media", [
         'file' => UploadedFile::fake()->image('huge.jpg', 5000, 3500)->size(300),
     ], ['Accept' => 'application/json'])
