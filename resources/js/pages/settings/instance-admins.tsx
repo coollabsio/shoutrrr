@@ -1,5 +1,4 @@
 import { Form, Head, router, usePage } from '@inertiajs/react';
-import { Crown, MoreVertical, Search, Trash2, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -16,6 +15,13 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+    Crown,
+    MoreVertical,
+    Search,
+    Trash2,
+    UserPlus,
+} from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {

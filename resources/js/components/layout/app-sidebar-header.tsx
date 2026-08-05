@@ -1,9 +1,8 @@
-import { Search } from 'lucide-react';
-
 import { ThemeToggle } from '@/components/common/theme-toggle';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { openCommandPalette } from '@/components/layout/command-palette';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { Search } from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useLivePropsPoll } from '@/hooks/use-live-props';

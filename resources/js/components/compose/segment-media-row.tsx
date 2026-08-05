@@ -1,8 +1,8 @@
-import { ImagePlay, Paperclip, X } from 'lucide-react';
 import type { DragEvent, ReactNode } from 'react';
 import { useRef, useState } from 'react';
 
 import { GifPopover } from '@/components/compose/gif-popover';
+import { ImagePlay, Paperclip, X } from '@/components/ui/icons';
 import {
     Tooltip,
     TooltipContent,

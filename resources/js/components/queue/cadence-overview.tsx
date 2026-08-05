@@ -1,5 +1,4 @@
-import { CalendarClock } from 'lucide-react';
-
+import { CalendarClock } from '@/components/ui/icons';
 import { type Dayjs } from '@/lib/datetime/dayjs';
 import {
     DISPLAY_DAYS,

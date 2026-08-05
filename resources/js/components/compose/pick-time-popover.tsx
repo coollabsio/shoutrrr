@@ -1,10 +1,10 @@
 import { Link } from '@inertiajs/react';
-import { CalendarClock } from 'lucide-react';
 import { useState } from 'react';
 
 import { showOverview as workspaceSettings } from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { CalendarClock } from '@/components/ui/icons';
 import {
     Popover,
     PopoverContent,

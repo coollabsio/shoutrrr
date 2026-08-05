@@ -1,10 +1,10 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowLeft, PenLine } from 'lucide-react';
 
 import Composer from '@/components/compose/composer';
 import { PostPageActions } from '@/components/posts/post-page-actions';
 import { PublishedPostView } from '@/components/posts/published-post-view';
 import { Button } from '@/components/ui/button';
+import { ArrowLeft, PenLine } from '@/components/ui/icons';
 import { usePostStatusPoll } from '@/hooks/compose/use-post-status-poll';
 import { firstLineTitle } from '@/lib/compose/composer-state';
 import { dashboard } from '@/routes';

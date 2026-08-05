@@ -1,5 +1,4 @@
 import { Form, Head, router } from '@inertiajs/react';
-import { ChevronsUpDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -17,6 +16,7 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
+import { ChevronsUpDown } from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {

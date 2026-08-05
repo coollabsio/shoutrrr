@@ -1,7 +1,6 @@
-import { CheckCheck } from 'lucide-react';
-
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { CheckCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
 import { atHandle, initials, relativeTime } from '../helpers';

@@ -1,3 +1,6 @@
+import type { ReactNode } from 'react';
+
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     Bookmark,
     Film,
@@ -8,10 +11,7 @@ import {
     Send,
     Share2,
     ThumbsUp,
-} from 'lucide-react';
-import type { ReactNode } from 'react';
-
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+} from '@/components/ui/icons';
 import type { PlatformPreview } from '@/lib/compose/platform-preview';
 import { LinkedText } from '@/lib/linked-text';
 import { cn } from '@/lib/utils';

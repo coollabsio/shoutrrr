@@ -1,11 +1,11 @@
 import { router } from '@inertiajs/react';
-import { Film, Image as ImageIcon } from 'lucide-react';
 import { Fragment } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import type { ChipTarget } from '@/components/compose/target-status-chips';
 import { Badge } from '@/components/ui/badge';
+import { Film, Image } from '@/components/ui/icons';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { postStatusMeta } from '@/lib/posts/status';
 import { cn } from '@/lib/utils';
@@ -88,7 +88,7 @@ function MediaThumb({
                     {preview.kind === 'video' ? (
                         <Film size={16} strokeWidth={1.75} />
                     ) : (
-                        <ImageIcon size={16} strokeWidth={1.75} />
+                        <Image size={16} strokeWidth={1.75} />
                     )}
                 </div>
             )}

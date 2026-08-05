@@ -1,11 +1,11 @@
 import type { UrlMethodPair } from '@inertiajs/core';
 import { router } from '@inertiajs/react';
 import { usePasskeyVerify } from '@laravel/passkeys/react';
-import { KeyRound } from 'lucide-react';
 
 import InputError from '@/components/common/input-error';
 import OrSeparator from '@/components/common/or-separator';
 import { Button } from '@/components/ui/button';
+import { KeyRound } from '@/components/ui/icons';
 import { Spinner } from '@/components/ui/spinner';
 
 type Props = {

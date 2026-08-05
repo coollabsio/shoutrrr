@@ -1,16 +1,5 @@
 import { Link, router } from '@inertiajs/react';
 import {
-    Check,
-    ChevronDown,
-    ChevronRight,
-    Circle,
-    Clock,
-    PenLine,
-    Radio,
-    UserPlus,
-    X,
-} from 'lucide-react';
-import {
     AnimatePresence,
     domAnimation,
     LazyMotion,
@@ -20,6 +9,17 @@ import {
 import { useState, useSyncExternalStore } from 'react';
 
 import { Button } from '@/components/ui/button';
+import {
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Circle,
+    Clock,
+    PenLine,
+    Radio,
+    UserPlus,
+    X,
+} from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import {
     dismiss as dismissRoute,

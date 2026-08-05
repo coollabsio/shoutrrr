@@ -1,4 +1,11 @@
 import { Link, router, usePage } from '@inertiajs/react';
+import { useEffect } from 'react';
+
+import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
+import AppLogo from '@/components/layout/app-logo';
+import { NavUser } from '@/components/layout/nav-user';
+import { SidebarFooterCard } from '@/components/layout/sidebar-footer-card';
+import type { IconComponent } from '@/components/ui/icons';
 import {
     Blocks,
     CalendarDays,
@@ -16,14 +23,7 @@ import {
     Shield,
     Users,
     Wrench,
-    type LucideIcon,
-} from 'lucide-react';
-import { useEffect } from 'react';
-
-import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
-import AppLogo from '@/components/layout/app-logo';
-import { NavUser } from '@/components/layout/nav-user';
-import { SidebarFooterCard } from '@/components/layout/sidebar-footer-card';
+} from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import {
     Sidebar,
@@ -69,20 +69,20 @@ import { index as postsRoute } from '@/routes/posts';
 type NavItem = {
     title: string;
     href: NonNullable<Parameters<typeof Link>[0]['href']>;
-    icon: LucideIcon;
+    icon: IconComponent;
 };
 
 export const workspaceSettingsLabel = 'Workspace';
 export const instanceSettingsLabel = 'Instance settings';
 
-const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, LucideIcon> = {
+const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, IconComponent> = {
     overview: Settings,
     members: Users,
     apiKeys: KeyRound,
     subscription: CreditCard,
 };
 
-const instanceSettingsIcons: Record<InstanceSettingsNavKey, LucideIcon> = {
+const instanceSettingsIcons: Record<InstanceSettingsNavKey, IconComponent> = {
     general: Wrench,
     polling: RefreshCw,
     platforms: Blocks,

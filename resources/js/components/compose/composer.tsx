@@ -1,11 +1,11 @@
 import { Link, useHttp, usePage } from '@inertiajs/react';
-import { AtSign, Eye, Pin, Plug, TriangleAlert } from 'lucide-react';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import PostGifController from '@/actions/App/Http/Controllers/Gifs/PostGifController';
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import { useConfirm } from '@/components/common/confirm-dialog';
+import { AtSign, Eye, Pin, Plug, TriangleAlert } from '@/components/ui/icons';
 import { useAutosave } from '@/hooks/compose/use-autosave';
 import { useEmojiPreferences } from '@/hooks/compose/use-emoji-preferences';
 import { useImageEditor } from '@/hooks/compose/use-image-editor';

@@ -1,10 +1,9 @@
-import { FileText } from 'lucide-react';
-
 import {
     CommandGroup,
     CommandItem,
     CommandSeparator,
 } from '@/components/ui/command';
+import { FileText } from '@/components/ui/icons';
 import type { RecentItem } from '@/lib/command/recents';
 import { show as postShow } from '@/routes/posts';
 

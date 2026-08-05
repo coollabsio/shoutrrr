@@ -1,13 +1,4 @@
 import { Deferred, router, useHttp, usePage } from '@inertiajs/react';
-import {
-    CheckCircle2,
-    ExternalLink,
-    Eye,
-    Heart,
-    MessageCircle,
-    RefreshCw,
-    Repeat2,
-} from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -16,6 +7,15 @@ import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { TargetStatusChips } from '@/components/compose/target-status-chips';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+    CheckCircle2,
+    ExternalLink,
+    Eye,
+    Heart,
+    MessageCircle,
+    RefreshCw,
+    Repeat2,
+} from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { dayjs } from '@/lib/datetime/dayjs';
@@ -59,9 +59,9 @@ const METRIC_ICON: Record<EngagementKey, typeof Heart> = {
 };
 
 /**
- * lucide's MessageCircle is drawn heavier (and carries a chat tail) than the
- * leaner Repeat2/Eye/Heart glyphs, so at a shared box it reads oversized in a
- * tight number row. A hair smaller brings it back to optical parity.
+ * MessageCircle is drawn heavier (and carries a chat tail) than the leaner
+ * Repeat2/Eye/Heart glyphs, so at a shared box it reads oversized in a tight
+ * number row. A hair smaller brings it back to optical parity.
  */
 const METRIC_ICON_CLASS: Partial<Record<EngagementKey, string>> = {
     comments: 'size-[0.875rem]',

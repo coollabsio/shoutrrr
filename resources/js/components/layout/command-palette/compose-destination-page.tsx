@@ -1,7 +1,7 @@
 import { router } from '@inertiajs/react';
-import { ListChecks, Pencil, Share2 } from 'lucide-react';
 
 import { CommandGroup, CommandItem } from '@/components/ui/command';
+import { ListChecks, Pencil, Share2 } from '@/components/ui/icons';
 
 interface Account {
     id: string;

@@ -1,5 +1,4 @@
 import { usePage } from '@inertiajs/react';
-import { AlertTriangle, ImagePlay, Paperclip, Smile } from 'lucide-react';
 import { useState, type RefObject } from 'react';
 
 import ConversationGifController from '@/actions/App/Http/Controllers/Gifs/ConversationGifController';
@@ -8,6 +7,12 @@ import ConversationVideoUploadController from '@/actions/App/Http/Controllers/Me
 import { EmojiPopover } from '@/components/compose/emoji-popover';
 import { GifPopover } from '@/components/compose/gif-popover';
 import { Button } from '@/components/ui/button';
+import {
+    AlertTriangle,
+    ImagePlay,
+    Paperclip,
+    Smile,
+} from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import { Textarea } from '@/components/ui/textarea';
 import { useAttachments } from '@/hooks/compose/use-attachments';

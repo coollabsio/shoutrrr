@@ -1,8 +1,8 @@
 import { Head, Link } from '@inertiajs/react';
-import { Calendar, User, Users } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Calendar, User, Users } from '@/components/ui/icons';
 
 type Props = {
     invitation: {

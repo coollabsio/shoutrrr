@@ -21,11 +21,11 @@ beforeAll(() => {
 });
 
 const INTENTS = [
-    { fire: toast.success, message: 'Published', type: 'success', icon: 'lucide-circle-check' },
-    { fire: toast.error, message: 'Publish failed', type: 'error', icon: 'lucide-octagon-x' },
-    { fire: toast.warning, message: 'Nearly out of room', type: 'warning', icon: 'lucide-triangle-alert' },
-    { fire: toast.info, message: 'Draft autosaved', type: 'info', icon: 'lucide-info' },
-    { fire: toast.loading, message: 'Publishing', type: 'loading', icon: 'lucide-loader-circle' },
+    { fire: toast.success, message: 'Published', type: 'success' },
+    { fire: toast.error, message: 'Publish failed', type: 'error' },
+    { fire: toast.warning, message: 'Nearly out of room', type: 'warning' },
+    { fire: toast.info, message: 'Draft autosaved', type: 'info' },
+    { fire: toast.loading, message: 'Publishing', type: 'loading' },
 ] as const;
 
 async function toastElement(message: string): Promise<HTMLElement> {
@@ -60,12 +60,15 @@ describe('Toaster intent styling contract', () => {
 
         const icons: string[] = [];
 
-        for (const { message, icon } of INTENTS) {
+        for (const { message } of INTENTS) {
             const li = await toastElement(message);
             const svg = li.querySelector('[data-icon] svg');
 
-            expect(svg).toHaveClass(icon);
-            icons.push(icon);
+            expect(svg).not.toBeNull();
+            // hugeicons doesn't add a per-icon class (or any library class at
+            // all), so identity has to be checked via the actual path markup
+            // rather than a class name.
+            icons.push(svg!.innerHTML);
         }
 
         // Redundant non-color encoding (WCAG 1.4.1): color alone must not be

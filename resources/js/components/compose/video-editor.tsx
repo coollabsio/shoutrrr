@@ -1,4 +1,3 @@
-import { Crop, Pause, Play, Volume1, Volume2, VolumeX, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -8,6 +7,15 @@ import {
     DialogDescription,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    Crop,
+    Pause,
+    Play,
+    Volume1,
+    Volume2,
+    VolumeX,
+    X,
+} from '@/components/ui/icons';
 import { centeredCropForRatio } from '@/lib/image-editor/layout';
 import type { CropRect } from '@/lib/image-editor/settings';
 import { cn } from '@/lib/utils';

@@ -1,11 +1,11 @@
 import { useHttp, usePage } from '@inertiajs/react';
 import { toBlob } from 'html-to-image';
-import { MessageSquarePlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import FeedbackController from '@/actions/App/Http/Controllers/FeedbackController';
 import { Button } from '@/components/ui/button';
+import { MessageSquarePlus } from '@/components/ui/icons';
 import {
     Popover,
     PopoverContent,

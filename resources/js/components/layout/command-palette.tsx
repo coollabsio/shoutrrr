@@ -1,17 +1,4 @@
 import { router, usePage } from '@inertiajs/react';
-import {
-    Building2,
-    CalendarDays,
-    FileText,
-    ListChecks,
-    LogOut,
-    Moon,
-    Pencil,
-    Plug,
-    Settings,
-    Share2,
-    Wrench,
-} from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
@@ -27,6 +14,19 @@ import {
     CommandList,
     CommandSeparator,
 } from '@/components/ui/command';
+import {
+    Building2,
+    CalendarDays,
+    FileText,
+    ListChecks,
+    LogOut,
+    Moon,
+    Pencil,
+    Plug,
+    Settings,
+    Share2,
+    Wrench,
+} from '@/components/ui/icons';
 import { useAppearance } from '@/hooks/use-appearance';
 import { parseDateJump } from '@/lib/command/parse-date-jump';
 import {

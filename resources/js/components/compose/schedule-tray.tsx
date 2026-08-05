@@ -1,6 +1,5 @@
-import { Clock, ListChecks, Zap } from 'lucide-react';
-import type { ComponentType } from 'react';
-
+import { Clock, ListChecks, Zap } from '@/components/ui/icons';
+import type { IconComponent } from '@/components/ui/icons';
 import type { QueueSlotState } from '@/hooks/compose/use-next-slot';
 import type { ScheduleTray as TrayState } from '@/lib/compose/composer-state';
 import { cn } from '@/lib/utils';
@@ -70,7 +69,7 @@ export function ScheduleTray({ tray, onChange, tz, queueState }: Props) {
 }
 
 type TabProps = {
-    icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+    icon: IconComponent;
     label: string;
     active: boolean;
     onClick: () => void;

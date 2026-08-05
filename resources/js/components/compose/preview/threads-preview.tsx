@@ -1,6 +1,5 @@
-import { MoreHorizontal } from 'lucide-react';
-
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { MoreHorizontal } from '@/components/ui/icons';
 import type {
     PlatformPreview,
     PlatformPreviewItem,

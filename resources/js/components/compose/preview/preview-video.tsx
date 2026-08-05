@@ -1,6 +1,6 @@
-import { Volume2, VolumeX } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Volume2, VolumeX } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
 type Props = {

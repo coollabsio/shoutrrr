@@ -1,8 +1,8 @@
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { Link } from '@inertiajs/react';
-import { Check, Rocket } from 'lucide-react';
 import { useState } from 'react';
 
+import { Check, Rocket } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { index as accountsRoute } from '@/routes/accounts';
 import type { Account } from '@/types/compose';

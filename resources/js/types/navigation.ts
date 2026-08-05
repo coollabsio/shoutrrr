@@ -1,6 +1,7 @@
 import type { InertiaLinkProps } from '@inertiajs/react';
-import type { LucideIcon } from 'lucide-react';
 import type { HTMLAttributeAnchorTarget } from 'react';
+
+import type { IconComponent } from '@/components/ui/icons';
 
 export type BreadcrumbItem = {
     title: string;
@@ -10,7 +11,7 @@ export type BreadcrumbItem = {
 export type NavItem = {
     title: string;
     href: NonNullable<InertiaLinkProps['href']>;
-    icon?: LucideIcon | null;
+    icon?: IconComponent | null;
     isActive?: boolean;
     target?: HTMLAttributeAnchorTarget;
 };

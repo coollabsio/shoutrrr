@@ -1,5 +1,4 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, Copy, KeyRound, MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -31,6 +30,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { Check, Copy, KeyRound, MoreHorizontal } from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
 import {
     Table,

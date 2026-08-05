@@ -1,5 +1,4 @@
 import { Form } from '@inertiajs/react';
-import { Eye, EyeOff, LockKeyhole, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import AlertError from '@/components/common/alert-error';
@@ -11,6 +10,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { Eye, EyeOff, LockKeyhole, RefreshCw } from '@/components/ui/icons';
 import { regenerateRecoveryCodes } from '@/routes/two-factor';
 
 type Props = {

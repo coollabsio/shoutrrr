@@ -1,8 +1,8 @@
 import { Link, router, useHttp, usePage } from '@inertiajs/react';
-import { Bell, Loader2, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Bell, Loader2, Trash2 } from '@/components/ui/icons';
 import {
     Popover,
     PopoverContent,

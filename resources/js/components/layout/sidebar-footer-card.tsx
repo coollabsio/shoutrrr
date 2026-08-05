@@ -1,7 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Heart, Star } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Heart, Star } from '@/components/ui/icons';
 
 export function formatStars(count: number): string {
     if (count < 1000) {

@@ -1,6 +1,5 @@
 import { router } from '@inertiajs/react';
 import dayjs from 'dayjs';
-import { MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
@@ -18,6 +17,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { MoreHorizontal } from '@/components/ui/icons';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { removeById, replaceById } from '@/lib/optimistic';
 import { postCapabilities } from '@/lib/posts/capabilities';

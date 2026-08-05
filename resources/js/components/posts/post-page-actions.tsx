@@ -1,13 +1,4 @@
 import { Link, router, useHttp, usePage } from '@inertiajs/react';
-import {
-    CalendarClock,
-    CalendarX,
-    Copy,
-    MessageCircle,
-    RotateCw,
-    Share2,
-    Trash2,
-} from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
@@ -19,6 +10,15 @@ import {
     PickTimePopover,
 } from '@/components/compose/pick-time-popover';
 import { Button } from '@/components/ui/button';
+import {
+    CalendarClock,
+    CalendarX,
+    Copy,
+    MessageCircle,
+    RotateCw,
+    Share2,
+    Trash2,
+} from '@/components/ui/icons';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { postCapabilities } from '@/lib/posts/capabilities';

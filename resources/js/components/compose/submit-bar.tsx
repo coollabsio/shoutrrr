@@ -1,11 +1,11 @@
 import { Link, router, useHttp } from '@inertiajs/react';
-import { Send } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import PostScheduleController from '@/actions/App/Http/Controllers/Posts/PostScheduleController';
+import { Send } from '@/components/ui/icons';
 import {
     Tooltip,
     TooltipContent,
