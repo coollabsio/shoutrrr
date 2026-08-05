@@ -6,7 +6,6 @@ import {
     router,
     usePage,
 } from '@inertiajs/react';
-import { Filter, Inbox, Search, SearchX, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { FilterTabs } from '@/components/common/filter-tabs';
@@ -31,6 +30,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { Filter, Inbox, Search, SearchX, X } from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { dashboard } from '@/routes';

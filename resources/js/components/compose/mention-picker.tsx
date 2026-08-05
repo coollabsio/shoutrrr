@@ -1,12 +1,3 @@
-import {
-    ArrowLeft,
-    Building2,
-    Info,
-    Pencil,
-    Plus,
-    Trash2,
-    X,
-} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -19,6 +10,15 @@ import {
     CommandList,
     CommandSeparator,
 } from '@/components/ui/command';
+import {
+    ArrowLeft,
+    Building2,
+    Info,
+    Pencil,
+    Plus,
+    Trash2,
+    X,
+} from '@/components/ui/icons';
 import {
     InputGroup,
     InputGroupAddon,

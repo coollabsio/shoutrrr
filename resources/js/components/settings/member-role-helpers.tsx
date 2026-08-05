@@ -1,4 +1,4 @@
-import { Crown, Shield, User } from 'lucide-react';
+import { Crown, Shield, User } from '@/components/ui/icons';
 
 export function roleIcon(role: string) {
     switch (role) {

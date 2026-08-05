@@ -1,6 +1,5 @@
-import { Moon, Settings, Sun } from 'lucide-react';
-
 import { CommandGroup, CommandItem } from '@/components/ui/command';
+import { Moon, Settings, Sun } from '@/components/ui/icons';
 import type { Appearance } from '@/hooks/use-appearance';
 
 interface ThemePageProps {

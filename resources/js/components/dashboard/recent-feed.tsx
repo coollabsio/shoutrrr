@@ -1,5 +1,4 @@
 import { Link } from '@inertiajs/react';
-import { Inbox } from 'lucide-react';
 import { useState } from 'react';
 
 import { FilterTabs } from '@/components/common/filter-tabs';
@@ -15,6 +14,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { Inbox } from '@/components/ui/icons';
 import { index as postsRoute } from '@/routes/posts';
 
 type FilterId = 'all' | 'scheduled' | 'published' | 'draft';

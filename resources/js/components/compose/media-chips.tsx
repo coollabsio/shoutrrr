@@ -1,7 +1,7 @@
-import { Eye, EyeOff, Film, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
 
+import { Eye, EyeOff, Film, X } from '@/components/ui/icons';
 import {
     Tooltip,
     TooltipContent,

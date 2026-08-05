@@ -1,7 +1,7 @@
-import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { GifTile } from '@/components/compose/gif-tile';
+import { Loader2 } from '@/components/ui/icons';
 import { useGifSearch } from '@/hooks/compose/use-gif-search';
 import {
     FAVORITES_KEY,

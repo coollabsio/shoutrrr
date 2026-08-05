@@ -1,4 +1,3 @@
-import { ImagePlay, Paperclip, Shuffle, Smile, Split } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 
@@ -6,6 +5,13 @@ import type { BoostValue } from '@/components/compose/boost-popover';
 import { BoostPopover } from '@/components/compose/boost-popover';
 import { EmojiPopover } from '@/components/compose/emoji-popover';
 import { GifPopover } from '@/components/compose/gif-popover';
+import {
+    ImagePlay,
+    Paperclip,
+    Shuffle,
+    Smile,
+    Split,
+} from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import {
     Tooltip,

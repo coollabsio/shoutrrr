@@ -1,4 +1,3 @@
-import { ChevronDown, Crop, Trash2, Wand2, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -9,6 +8,7 @@ import {
     DialogDescription,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { ChevronDown, Crop, Trash2, Wand2, X } from '@/components/ui/icons';
 import { cropToBlob, loadImage } from '@/lib/image-editor/crop';
 import { rasterizeStage } from '@/lib/image-editor/export';
 import {

@@ -1,5 +1,4 @@
 import { Form } from '@inertiajs/react';
-import { AtSign, ChevronDown, Loader2, Plus } from 'lucide-react';
 import { useState } from 'react';
 
 import BlueskyConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyConnectionController';
@@ -31,6 +30,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { AtSign, ChevronDown, Loader2, Plus } from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
 import {
     InputGroup,

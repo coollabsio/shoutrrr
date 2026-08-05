@@ -1,8 +1,8 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Home } from 'lucide-react';
 
 import AppLogoIcon from '@/components/layout/app-logo-icon';
 import { Button } from '@/components/ui/button';
+import { ArrowLeft, Home } from '@/components/ui/icons';
 import { home } from '@/routes';
 
 type Props = {

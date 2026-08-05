@@ -1,9 +1,9 @@
 import { router } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import { PlatformGlyphStack } from '@/components/common/platform-glyph-stack';
 import type { PostRowData, PostStatus } from '@/components/posts/post-row';
+import { Plus } from '@/components/ui/icons';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { dayjs, toUserTz, weekRange } from '@/lib/datetime/dayjs';
 import type { Dayjs } from '@/lib/datetime/dayjs';

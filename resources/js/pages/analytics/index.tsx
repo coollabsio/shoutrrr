@@ -1,5 +1,4 @@
 import { Head, Link } from '@inertiajs/react';
-import { PauseCircle, TrendingUp } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 
 import { StatTile } from '@/components/analytics/stat-tile';
@@ -13,6 +12,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { PauseCircle, TrendingUp } from '@/components/ui/icons';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { disabledPlatformLabels } from '@/lib/platforms';
 import { cn } from '@/lib/utils';

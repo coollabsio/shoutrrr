@@ -1,5 +1,4 @@
 import { Form } from '@inertiajs/react';
-import { RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import ConnectedAccountController from '@/actions/App/Http/Controllers/ConnectedAccounts/ConnectedAccountController';
@@ -17,6 +16,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { RefreshCw, Trash2 } from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
 import {
     InputGroup,

@@ -1,6 +1,5 @@
-import { ArrowDown, ArrowUp } from 'lucide-react';
-
 import { Badge } from '@/components/ui/badge';
+import { ArrowDown, ArrowUp } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
 /** Signed, thousands-grouped delta: `+342`, `−1,204`, `0`. */

@@ -1,3 +1,5 @@
+import { PlatformGlyph } from '@/components/common/platform-glyph';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     BarChart3,
     CheckCircle2,
@@ -5,10 +7,7 @@ import {
     Heart,
     MessageCircle,
     Repeat2,
-} from 'lucide-react';
-
-import { PlatformGlyph } from '@/components/common/platform-glyph';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+} from '@/components/ui/icons';
 import type {
     PlatformPreview,
     PlatformPreviewItem,

@@ -1,9 +1,9 @@
-import { Globe } from 'lucide-react';
 import type { ReactElement, SVGProps } from 'react';
 
 import GoogleIcon from '@/components/socialite/icons/google-icon';
 import LinkedInIcon from '@/components/socialite/icons/linkedin-icon';
 import XIcon from '@/components/socialite/icons/x-icon';
+import { Globe } from '@/components/ui/icons';
 
 const ICONS: Record<string, (props: SVGProps<SVGSVGElement>) => ReactElement> =
     {

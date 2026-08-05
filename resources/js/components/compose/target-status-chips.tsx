@@ -1,6 +1,5 @@
-import { Check, ExternalLink, RotateCw, X } from 'lucide-react';
-
 import { PlatformGlyph } from '@/components/common/platform-glyph';
+import { Check, ExternalLink, RotateCw, X } from '@/components/ui/icons';
 import { Spinner } from '@/components/ui/spinner';
 import {
     Tooltip,

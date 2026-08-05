@@ -1,6 +1,5 @@
-import { ExternalLink, Heart, Trash2 } from 'lucide-react';
-
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ExternalLink, Heart, Trash2 } from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { platformLabel, postPermalink } from '@/lib/posts/permalink';
 import { cn } from '@/lib/utils';

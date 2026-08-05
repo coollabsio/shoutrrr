@@ -1,5 +1,4 @@
 import { useHttp, usePage } from '@inertiajs/react';
-import { ImagePlay, Paperclip, Smile } from 'lucide-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import ReplyImageEditController from '@/actions/App/Http/Controllers/Engagement/ReplyImageEditController';
@@ -13,6 +12,7 @@ import EditorBody, {
 import { EmojiPopover } from '@/components/compose/emoji-popover';
 import { GifPopover } from '@/components/compose/gif-popover';
 import { Button } from '@/components/ui/button';
+import { ImagePlay, Paperclip, Smile } from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import {
     Tooltip,

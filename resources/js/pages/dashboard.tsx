@@ -1,5 +1,4 @@
 import { Deferred, Head, Link, router, usePage } from '@inertiajs/react';
-import { Plug } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import Composer from '@/components/compose/composer';
@@ -16,6 +15,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { Plug } from '@/components/ui/icons';
 import { parseDestinationParam } from '@/lib/compose/composer-state';
 import { shouldShowDashboardNoAccountsNotice } from '@/lib/dashboard/accounts';
 import { dashboard } from '@/routes';

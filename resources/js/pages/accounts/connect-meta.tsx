@@ -1,5 +1,4 @@
 import { Head, router } from '@inertiajs/react';
-import { Plug } from 'lucide-react';
 import { useState } from 'react';
 
 import ConnectedAccountController from '@/actions/App/Http/Controllers/ConnectedAccounts/ConnectedAccountController';
@@ -15,6 +14,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { Plug } from '@/components/ui/icons';
 
 export type MetaAsset = {
     key: string;

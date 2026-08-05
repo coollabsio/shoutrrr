@@ -1,5 +1,4 @@
 import { Deferred, Head, router, useHttp } from '@inertiajs/react';
-import { Archive, Inbox, MessagesSquare, SearchX } from 'lucide-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { toast } from 'sonner';
 
@@ -13,6 +12,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { Archive, Inbox, MessagesSquare, SearchX } from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';

@@ -1,5 +1,4 @@
 import { EditorContent, useEditor } from '@tiptap/react';
-import { Split } from 'lucide-react';
 import type { ReactNode, Ref } from 'react';
 import {
     forwardRef,
@@ -12,6 +11,7 @@ import { createPortal } from 'react-dom';
 
 import EmojiSuggestPopover from '@/components/compose/emoji-suggest-popover';
 import MentionPicker from '@/components/compose/mention-picker';
+import { Split } from '@/components/ui/icons';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { useEmojiTypeahead } from '@/hooks/compose/use-emoji-typeahead';
 import { activeSegmentRef } from '@/lib/compose/active-segment';

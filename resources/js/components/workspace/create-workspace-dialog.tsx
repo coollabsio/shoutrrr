@@ -1,5 +1,4 @@
 import { Form } from '@inertiajs/react';
-import { Loader2 } from 'lucide-react';
 
 import WorkspaceController from '@/actions/App/Http/Controllers/WorkspaceController';
 import InputError from '@/components/common/input-error';
@@ -11,6 +10,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Loader2 } from '@/components/ui/icons';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 

@@ -1,7 +1,7 @@
 import { router } from '@inertiajs/react';
-import { Plug } from 'lucide-react';
 
 import { CommandGroup, CommandItem } from '@/components/ui/command';
+import { Plug } from '@/components/ui/icons';
 import {
     connect as accountConnect,
     index as accountsRoute,

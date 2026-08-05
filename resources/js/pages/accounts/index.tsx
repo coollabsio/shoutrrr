@@ -1,5 +1,4 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { CircleAlert, Plug, X as XIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
@@ -17,6 +16,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { CircleAlert, Plug, X } from '@/components/ui/icons';
 import { removeById } from '@/lib/optimistic';
 
 export const ACCOUNT_GRID_CLASS = 'grid grid-cols-1 gap-4 lg:grid-cols-2';
@@ -173,7 +173,7 @@ export default function ConnectedAccounts({
                         aria-label="Dismiss"
                         className="absolute top-3 right-3 text-muted-foreground transition-colors hover:text-foreground"
                     >
-                        <XIcon className="size-4" />
+                        <X className="size-4" />
                     </button>
                 </Alert>
             )}

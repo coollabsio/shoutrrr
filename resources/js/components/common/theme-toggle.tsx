@@ -1,5 +1,3 @@
-import { Monitor, Moon, Sun } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -7,6 +5,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Monitor, Moon, Sun } from '@/components/ui/icons';
 import type { Appearance } from '@/hooks/use-appearance';
 import { useAppearance } from '@/hooks/use-appearance';
 

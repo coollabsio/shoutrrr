@@ -1,7 +1,7 @@
-import { Copy } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Copy } from '@/components/ui/icons';
 import {
     copyMondayToWeekdays,
     mergeSlots,

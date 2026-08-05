@@ -1,8 +1,8 @@
 import { Head, Link } from '@inertiajs/react';
-import { ArrowUpRight, BookText, Bot, Home } from 'lucide-react';
 
 import AppLogoIcon from '@/components/layout/app-logo-icon';
 import { Button } from '@/components/ui/button';
+import { ArrowUpRight, BookText, Bot, Home } from '@/components/ui/icons';
 import { home } from '@/routes';
 
 const DOCS_URL = 'https://shoutrrr.com/docs/mcp';

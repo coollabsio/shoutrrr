@@ -1,5 +1,3 @@
-import { Crown, MoreVertical, Trash2 } from 'lucide-react';
-
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,6 +8,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Crown, MoreVertical, Trash2 } from '@/components/ui/icons';
 import {
     Table,
     TableBody,

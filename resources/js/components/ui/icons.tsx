@@ -115,11 +115,22 @@ import {
 } from '@hugeicons/core-free-icons';
 import type { ComponentType } from 'react';
 
-export type IconComponent = ComponentType<HugeiconsProps>;
+export type IconProps = Omit<HugeiconsProps, 'strokeWidth'> & {
+    strokeWidth?: string | number;
+};
+export type IconComponent = ComponentType<IconProps>;
 
 function icon(data: IconSvgElement): IconComponent {
-    return function Icon(props: HugeiconsProps) {
-        return <HugeiconsIcon icon={data} {...props} />;
+    return function Icon({ strokeWidth, ...props }: IconProps) {
+        return (
+            <HugeiconsIcon
+                icon={data}
+                strokeWidth={
+                    strokeWidth === undefined ? undefined : Number(strokeWidth)
+                }
+                {...props}
+            />
+        );
     };
 }
 

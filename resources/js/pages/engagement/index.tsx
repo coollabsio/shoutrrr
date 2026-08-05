@@ -1,13 +1,4 @@
 import { Deferred, Head, Link, router, useHttp } from '@inertiajs/react';
-import {
-    Archive,
-    ArrowUp,
-    ChevronDown,
-    Inbox,
-    MessagesSquare,
-    PauseCircle,
-    SearchX,
-} from 'lucide-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { toast } from 'sonner';
 
@@ -29,6 +20,15 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import {
+    Archive,
+    ArrowUp,
+    ChevronDown,
+    Inbox,
+    MessagesSquare,
+    PauseCircle,
+    SearchX,
+} from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';

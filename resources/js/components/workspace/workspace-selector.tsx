@@ -1,5 +1,4 @@
 import { usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Loader2, Plus, Users } from 'lucide-react';
 import { useState } from 'react';
 
 import {
@@ -8,6 +7,13 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+    Check,
+    ChevronsUpDown,
+    Loader2,
+    Plus,
+    Users,
+} from '@/components/ui/icons';
 import {
     SidebarMenu,
     SidebarMenuButton,

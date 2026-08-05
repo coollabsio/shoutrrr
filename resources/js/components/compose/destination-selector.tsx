@@ -1,9 +1,14 @@
 import { router } from '@inertiajs/react';
-import { AlertTriangle, Check, ChevronDown, Layers } from 'lucide-react';
 import type React from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+    AlertTriangle,
+    Check,
+    ChevronDown,
+    Layers,
+} from '@/components/ui/icons';
 import {
     Popover,
     PopoverContent,

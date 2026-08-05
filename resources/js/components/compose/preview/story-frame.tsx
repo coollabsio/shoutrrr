@@ -1,14 +1,13 @@
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     Clapperboard,
     Heart,
-    ImageIcon,
+    Image,
     Send,
     Share2,
     ThumbsUp,
     X,
-} from 'lucide-react';
-
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+} from '@/components/ui/icons';
 import type { PlatformPreview } from '@/lib/compose/platform-preview';
 import { cn } from '@/lib/utils';
 
@@ -67,10 +66,7 @@ export function StoryFrame({
                                     aria-hidden
                                 />
                             ) : (
-                                <ImageIcon
-                                    className="mx-auto size-6"
-                                    aria-hidden
-                                />
+                                <Image className="mx-auto size-6" aria-hidden />
                             )}
                             <p className="text-[12px] leading-4">
                                 Add a photo or video to preview your story

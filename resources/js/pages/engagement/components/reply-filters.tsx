@@ -1,5 +1,4 @@
 import { router } from '@inertiajs/react';
-import { Check, ChevronDown, FileText, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
@@ -13,6 +12,7 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
+import { Check, ChevronDown, FileText, X } from '@/components/ui/icons';
 import {
     Popover,
     PopoverContent,

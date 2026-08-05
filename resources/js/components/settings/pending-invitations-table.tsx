@@ -1,8 +1,7 @@
-import { Mail, Trash2 } from 'lucide-react';
-
 import Heading from '@/components/common/heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Mail, Trash2 } from '@/components/ui/icons';
 import {
     Table,
     TableBody,

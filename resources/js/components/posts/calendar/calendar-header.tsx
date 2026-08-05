@@ -1,12 +1,12 @@
-import {
-    Calendar as CalendarIcon,
-    ChevronLeft,
-    ChevronRight,
-} from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import {
+    Calendar as CalendarIcon,
+    ChevronLeft,
+    ChevronRight,
+} from '@/components/ui/icons';
 import {
     Popover,
     PopoverContent,

@@ -1,6 +1,6 @@
-import { Heart } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+import { Heart } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import type { GifItem } from '@/types/gifs';
 

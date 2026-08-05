@@ -1,16 +1,16 @@
+import { useRef, useState } from 'react';
+
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     Bookmark,
     ChevronLeft,
     ChevronRight,
     Heart,
-    ImageIcon,
+    Image,
     MessageCircle,
     MoreHorizontal,
     Send,
-} from 'lucide-react';
-import { useRef, useState } from 'react';
-
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+} from '@/components/ui/icons';
 import type { PlatformPreview } from '@/lib/compose/platform-preview';
 import { LinkedText } from '@/lib/linked-text';
 import { cn } from '@/lib/utils';
@@ -204,7 +204,7 @@ function InstagramFeedPost({ preview }: { preview: PlatformPreview }) {
             ) : (
                 <div className="grid aspect-square w-full place-items-center bg-muted/60 text-center">
                     <div className="space-y-1.5 px-6 text-muted-foreground">
-                        <ImageIcon className="mx-auto size-6" aria-hidden />
+                        <Image className="mx-auto size-6" aria-hidden />
                         <p className="text-[12px] leading-4">
                             Add a photo or video — Instagram posts always
                             include media.
