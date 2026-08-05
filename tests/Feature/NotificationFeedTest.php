@@ -1,9 +1,12 @@
 <?php
 
+use App\Enums\WorkspaceRole;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Models\WorkspaceMembership;
 use App\Notifications\PostPublishedNotification;
 use App\Support\Notifications\NotificationPresenter;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -72,6 +75,26 @@ test('the feed is scoped to the current workspace', function () {
         ->getJson(route('notifications.index'))
         ->assertOk()
         ->assertJsonCount(2, 'items');
+});
+
+test('a foreign cursor on another cursor-paginated page does not break the shared notifications prop', function () {
+    // Regression for SHOUTRRR-F: the posts index also cursor-paginates under the
+    // default 'cursor' query param. Loading /posts with a leftover posts cursor
+    // used to make the shared `notifications` prop (paginated with a null cursor)
+    // resolve that same ?cursor= value and blow up looking for `created_at`.
+    $workspace = Workspace::factory()->create();
+    $user = User::factory()->create(['current_workspace_id' => $workspace->id]);
+    WorkspaceMembership::factory()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+        'role' => WorkspaceRole::Owner,
+    ]);
+
+    $foreignCursor = (new Cursor(['id' => 'not-a-notification-cursor'], true))->encode();
+
+    $this->actingAs($user)
+        ->get(route('posts.index', ['cursor' => $foreignCursor]))
+        ->assertOk();
 });
 
 test('the feed requires authentication', function () {

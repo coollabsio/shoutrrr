@@ -43,7 +43,10 @@ class NotificationPresenter
             ->cursorPaginate(
                 self::PER_PAGE,
                 ['*'],
-                'cursor',
+                // A dedicated cursor name (not the default 'cursor') so a null
+                // cursor here never falls back to reading another cursor-paginated
+                // page's ?cursor= query param off the shared request.
+                'notifications',
                 $cursor !== null ? Cursor::fromEncoded($cursor) : null,
             );
 
