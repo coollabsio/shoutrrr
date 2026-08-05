@@ -194,10 +194,19 @@ class PublishPostTarget implements ShouldQueue
      *   - all segments posted  → mark Published (the run just died before recording it);
      *   - some segments posted → re-dispatch to resume the thread (bounded by MAX_ATTEMPTS);
      *   - nothing posted       → mark terminally Failed.
+     *
+     * A redelivery can land up to `retry_after` after the orphan was created, so the
+     * target may already be terminal (a parallel retry finished it, the user deleted the
+     * post, or the platform was frozen). Mirror handle()'s terminal guard first so we
+     * never resurrect a Deleted post, re-notify a Published one, or clobber a Skipped one.
      */
     public function failed(Throwable $e): void
     {
         $target = $this->target->fresh() ?? $this->target;
+
+        if (in_array($target->status, self::TERMINAL, true)) {
+            return;
+        }
 
         $segmentCount = count($target->sections ?? []);
         $postedCount = count($this->postedRemoteIds($target));
@@ -226,7 +235,7 @@ class PublishPostTarget implements ShouldQueue
     {
         return array_values(array_filter(
             $target->remote_ids ?? [],
-            static fn (string $id): bool => $id !== '',
+            static fn (string $remoteId): bool => $remoteId !== '',
         ));
     }
 

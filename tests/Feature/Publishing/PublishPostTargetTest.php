@@ -340,6 +340,25 @@ test('failed() gives up on a partial thread once the attempt budget is exhausted
     Bus::assertNotDispatched(PublishPostTarget::class);
 });
 
+test('failed() is a no-op when the target already reached a terminal state', function () {
+    Bus::fake();
+    // A redelivery can fire up to retry_after after the orphan was created, by which
+    // point another path may have deleted the post. failed() must not resurrect it.
+    $target = publishTarget(['one', 'two']);
+    $target->forceFill([
+        'status' => PostTargetStatus::Deleted->value,
+        'remote_ids' => ['111', '222'],
+        'remote_id' => '111',
+    ])->save();
+
+    (new PublishPostTarget($target->fresh()))->failed(
+        new MaxAttemptsExceededException('App\Jobs\PublishPostTarget has been attempted too many times.'),
+    );
+
+    expect($target->refresh()->status)->toBe(PostTargetStatus::Deleted);
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
 test('failed() with no posted segments marks the target failed', function () {
     $target = publishTarget(['one']);
     $target->forceFill(['status' => PostTargetStatus::Publishing->value])->save();
