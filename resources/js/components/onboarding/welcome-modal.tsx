@@ -67,7 +67,7 @@ export function WelcomeModal({ welcomed }: { welcomed: boolean }) {
                                     }}
                                 />
                                 <m.span
-                                    className="relative grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-md"
+                                    className="relative grid size-14 place-items-center rounded-full bg-primary-gradient text-primary-foreground shadow-md inset-shadow-[0_1px_0_0_var(--primary-gradient-highlight)]"
                                     initial={{ opacity: 0, scale: 0.5 }}
                                     animate={{ opacity: 1, scale: 1 }}
                                     transition={{

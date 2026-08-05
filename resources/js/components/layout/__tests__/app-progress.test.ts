@@ -14,7 +14,21 @@ describe('Inertia progress indicator color', () => {
             'utf8',
         );
 
-        expect(buttonSource).toContain('default: "bg-primary');
+        // Scoped to the `variant` block so this reads the default *variant*, not
+        // the default `size`. Matches anywhere in the class string rather than at
+        // its start — the emphasis gradient prepends utilities to it.
+        const variantBlock = buttonSource.slice(
+            buttonSource.indexOf('variant: {'),
+            buttonSource.indexOf('size: {'),
+        );
+
+        // `bg-primary-gradient` is spelled out rather than left to a \b boundary,
+        // which would match it by accident and make this pass for the wrong
+        // reason. Its bottom stop is var(--primary), so either form keeps the
+        // progress bar and the default button on the same token.
+        expect(variantBlock).toMatch(
+            /default:\s*\n?\s*"[^"]*\bbg-primary(-gradient)?[\s"]/,
+        );
         expect(appSource).toContain("color: 'var(--primary)'");
     });
 });

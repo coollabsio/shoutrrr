@@ -157,7 +157,7 @@ function DayCell({
                         className={cn(
                             'inline-flex h-[18px] min-w-[18px] items-center justify-center px-1 text-[11px] leading-none font-medium tabular-nums',
                             isToday
-                                ? 'rounded-full bg-primary text-primary-foreground'
+                                ? 'rounded-full bg-primary-gradient text-primary-foreground inset-shadow-[0_1px_0_0_var(--primary-gradient-highlight)]'
                                 : 'text-foreground/85',
                         )}
                     >

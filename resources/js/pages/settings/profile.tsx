@@ -7,9 +7,10 @@ import Heading from '@/components/common/heading';
 import InputError from '@/components/common/input-error';
 import DeleteUser from '@/components/settings/delete-user';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 import type { Auth } from '@/types';
@@ -82,7 +83,10 @@ export default function Profile({
                                         <label
                                             htmlFor="profile-photo"
                                             aria-disabled={processing}
-                                            className="inline-flex h-8 w-fit shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-primary px-3 text-sm font-medium whitespace-nowrap text-primary-foreground transition-all hover:bg-primary/80 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                                            className={cn(
+                                                buttonVariants(),
+                                                'w-fit cursor-pointer aria-disabled:pointer-events-none aria-disabled:opacity-50',
+                                            )}
                                         >
                                             Choose photo
                                         </label>

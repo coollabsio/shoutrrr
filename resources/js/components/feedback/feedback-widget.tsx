@@ -272,7 +272,7 @@ export default function FeedbackWidget() {
                 render={
                     <Button
                         data-feedback-ignore
-                        className="fixed right-5 bottom-5 z-40 size-11 rounded-full shadow-lg transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-xl"
+                        className="fixed right-5 bottom-5 z-40 size-11 rounded-full shadow-lg transition-[transform,box-shadow,--primary-gradient-top] hover:-translate-y-0.5 hover:shadow-xl"
                         aria-label="Send feedback"
                     />
                 }

@@ -103,6 +103,26 @@
     --chart-3: oklch(0.646 0.222 41.116);
     --chart-4: oklch(0.553 0.195 38.402);
     --chart-5: oklch(0.47 0.157 37.304);
+    /* Emphasis gradient, derived from --primary (Kumo's token-derived treatment):
+       a light-to-brand vertical wash, a 1px inset top highlight and a darker edge.
+
+       The mix percentages are ~2x Kumo's. Kumo is tuned for Cloudflare orange
+       (L=0.68), where +15% white travels 0.048 in lightness. Our lime sits at
+       L=0.84, so an identical +15% travels only 0.024 — half the effect — and
+       reads as flat until hover. Keep these calibrated to the *travel*, not to
+       Kumo's literal numbers, if --primary ever changes.
+
+       Declared only here: .dark redefines --primary on the same element (<html>),
+       so these re-resolve per theme on their own and must NOT be copied into
+       .dark. */
+    --primary-gradient-from: color-mix(in oklch, var(--primary), white 30%);
+    --primary-gradient-to: var(--primary);
+    --primary-gradient-highlight: color-mix(
+        in oklch,
+        var(--primary),
+        white 45%
+    );
+    --primary-gradient-edge: color-mix(in oklch, var(--primary), black 12%);
     /* Categorical account-line palette — distinct hues assigned in fixed order,
        validated colorblind-safe for the light card surface (dataviz method). */
     --account-1: #2a78d6;
@@ -169,6 +189,39 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Registered so hover can animate. A gradient in background-image is not an
+   interpolatable value, and an *unregistered* custom property changes discretely,
+   so either route would snap. Registering the top stop as a real <color> lets the
+   browser tween it and repaint the gradient each frame.
+
+   Two consequences, both verified in Chromium and easy to regress:
+   1. `transition-property: all` does NOT cover custom properties. Call sites must
+      name --primary-gradient-top explicitly, e.g. transition-[all,--primary-gradient-top].
+   2. A registered property always has a computed value, so it is never
+      "guaranteed-invalid" and a var() fallback on it can never fire. The utility
+      below therefore assigns the resting stop outright instead of relying on
+      var(--primary-gradient-top, …). */
+@property --primary-gradient-top {
+    syntax: '<color>';
+    inherits: false;
+    initial-value: transparent;
+}
+
+/* Single definition of the emphasis wash, shared by every filled-primary surface
+   (buttons, badges, the switch track, chat bubbles, calendar chips). Only the
+   background is set here so it composes with each call site's own border, shadow
+   and radius. --primary-gradient-top is an indirection hook: set it in a variant
+   (e.g. hover) to move the top stop without restating the whole gradient. */
+@utility bg-primary-gradient {
+    --primary-gradient-top: var(--primary-gradient-from);
+    background-color: var(--primary);
+    background-image: linear-gradient(
+        to bottom,
+        var(--primary-gradient-top),
+        var(--primary-gradient-to)
+    );
 }
 
 @layer base {

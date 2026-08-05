@@ -152,7 +152,7 @@ function NewRepliesButton({
                 <button
                     type="button"
                     onClick={onShow}
-                    className="pointer-events-auto flex animate-in items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg ring-1 ring-primary/20 transition-transform duration-150 ease-out fade-in-0 hover:bg-primary/90 active:scale-[0.97] motion-safe:slide-in-from-top-2"
+                    className="pointer-events-auto flex animate-in items-center gap-1.5 rounded-full bg-primary-gradient px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg ring-1 inset-shadow-[0_1px_0_0_var(--primary-gradient-highlight)] ring-primary/20 transition-[transform,--primary-gradient-top] duration-150 ease-out fade-in-0 hover:[--primary-gradient-top:var(--primary-gradient-highlight)] active:scale-[0.97] motion-safe:slide-in-from-top-2"
                 >
                     <ArrowUp className="size-3.5" />
                     {count === 1
