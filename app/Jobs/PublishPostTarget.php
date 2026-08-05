@@ -182,21 +182,101 @@ class PublishPostTarget implements ShouldQueue
     }
 
     /**
-     * Runs when the job throws an uncaught exception. Closes the open attempt row and
-     * marks the target terminally Failed so it is never left stuck on `publishing`.
-     * An uncaught throw is unexpected, so we do NOT auto-retry it.
+     * Runs when the job fails — either an uncaught throw from handle() or, more
+     * insidiously, an orphaned queue reservation: a worker that died mid-run
+     * (deploy/OOM/crash) leaves its reserved message behind, the database queue
+     * re-delivers it after `retry_after`, and because `tries=1` the redelivery is
+     * rejected as "attempted too many times" BEFORE handle() (and its terminal-status
+     * guard) can run. Rather than blindly bury the target as Failed, reconcile against
+     * the segment ids already persisted mid-run (BlueskyPublishConnector saves each
+     * uri before sending the next), so a post that actually went out — or partly did —
+     * is not lost:
+     *   - all segments posted  → mark Published (the run just died before recording it);
+     *   - some segments posted → re-dispatch to resume the thread (bounded by MAX_ATTEMPTS);
+     *   - nothing posted       → mark terminally Failed.
      */
     public function failed(Throwable $e): void
     {
         $target = $this->target->fresh() ?? $this->target;
 
-        $attempt = $target->attemptLogs()->whereNull('finished_at')->latest('id')->first();
+        $segmentCount = count($target->sections ?? []);
+        $postedCount = count($this->postedRemoteIds($target));
 
-        $attempt?->forceFill([
-            'status' => 'failed',
-            'error_message' => Str::limit($e->getMessage(), 1000),
-            'finished_at' => Date::now(),
+        if ($segmentCount > 0 && $postedCount >= $segmentCount) {
+            $this->reconcilePublished($target);
+
+            return;
+        }
+
+        if ($postedCount > 0 && $target->attempts < self::MAX_ATTEMPTS) {
+            $this->resumePartial($target);
+
+            return;
+        }
+
+        $this->markFailed($target, $e);
+    }
+
+    /**
+     * The non-empty AT-URIs already persisted for this target, in segment order.
+     *
+     * @return list<string>
+     */
+    private function postedRemoteIds(PostTarget $target): array
+    {
+        return array_values(array_filter(
+            $target->remote_ids ?? [],
+            static fn (string $id): bool => $id !== '',
+        ));
+    }
+
+    /**
+     * A worker died after every segment was posted but before onSuccess recorded it.
+     * Recover the target to Published so the author is not wrongly told it failed.
+     */
+    private function reconcilePublished(PostTarget $target): void
+    {
+        $remoteIds = $this->postedRemoteIds($target);
+
+        $target->forceFill([
+            'status' => PostTargetStatus::Published->value,
+            'remote_id' => $remoteIds[0] ?? $target->remote_id,
+            'remote_ids' => $remoteIds,
+            'posted_at' => $target->posted_at ?? Date::now(),
+            'error_kind' => null,
+            'error_message' => null,
+            'next_attempt_at' => null,
         ])->save();
+
+        $this->closeOpenAttempt($target, 'published');
+
+        app(PostStatusRollup::class)->recompute($target->post()->firstOrFail());
+
+        $this->notifyPublished($target);
+    }
+
+    /**
+     * A worker died mid-thread. Re-dispatch so handle() resumes from the persisted
+     * remote_ids (posting only the unsent segments) rather than abandoning a
+     * half-published thread as Failed.
+     */
+    private function resumePartial(PostTarget $target): void
+    {
+        $this->closeOpenAttempt($target, 'retrying');
+
+        $target->forceFill([
+            'status' => PostTargetStatus::Publishing->value,
+            'next_attempt_at' => Date::now(),
+        ])->save();
+
+        app(PostStatusRollup::class)->recompute($target->post()->firstOrFail());
+
+        self::dispatch($target->fresh());
+    }
+
+    private function markFailed(PostTarget $target, Throwable $e): void
+    {
+        $this->closeOpenAttempt($target, 'failed', Str::limit($e->getMessage(), 1000));
 
         $target->forceFill([
             'status' => PostTargetStatus::Failed->value,
@@ -207,6 +287,26 @@ class PublishPostTarget implements ShouldQueue
         app(PostStatusRollup::class)->recompute($target->post()->firstOrFail());
 
         $this->notifyFailed($target, ErrorKind::Unknown);
+    }
+
+    /**
+     * Close the currently-open attempt row (the one this dead run left unfinished).
+     */
+    private function closeOpenAttempt(PostTarget $target, string $status, ?string $errorMessage = null): void
+    {
+        $attempt = $target->attemptLogs()->whereNull('finished_at')->latest('id')->first();
+
+        if ($attempt === null) {
+            return;
+        }
+
+        $fields = ['status' => $status, 'finished_at' => Date::now()];
+
+        if ($errorMessage !== null) {
+            $fields['error_message'] = $errorMessage;
+        }
+
+        $attempt->forceFill($fields)->save();
     }
 
     /**
