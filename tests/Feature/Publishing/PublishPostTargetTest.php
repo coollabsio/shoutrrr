@@ -12,6 +12,7 @@ use App\Services\Publishing\BackoffSchedule;
 use App\Services\Publishing\PostStatusRollup;
 use App\Services\Publishing\PublishConnectorRegistry;
 use App\Services\Publishing\TokenManager;
+use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Date;
 
@@ -255,6 +256,118 @@ test('an uncaught exception closes the attempt and marks the target failed (neve
         ->and($attempt->finished_at)->not->toBeNull();
 
     expect($target->post->refresh()->status)->toBe(PostStatus::Failed);
+});
+
+test('failed() reconciles a fully-posted target to published (orphaned redelivery)', function () {
+    // Simulates the SHOUTRRR-E scenario: a worker died after every segment was
+    // posted; the DB queue redelivered the reserved message and tries=1 rejected it
+    // as "attempted too many times" before handle() could record success.
+    $target = publishTarget(['one', 'two']);
+    $target->forceFill([
+        'status' => PostTargetStatus::Publishing->value,
+        'remote_ids' => ['111', '222'],
+        'remote_id' => '111',
+    ])->save();
+
+    PostTargetAttempt::create([
+        'post_target_id' => $target->id,
+        'attempt_no' => 1,
+        'status' => 'retrying',
+        'started_at' => now(),
+    ]);
+
+    (new PublishPostTarget($target->fresh()))->failed(
+        new MaxAttemptsExceededException('App\Jobs\PublishPostTarget has been attempted too many times.'),
+    );
+
+    $target->refresh();
+    expect($target->status)->toBe(PostTargetStatus::Published)
+        ->and($target->remote_id)->toBe('111')
+        ->and($target->remote_ids)->toBe(['111', '222'])
+        ->and($target->posted_at)->not->toBeNull()
+        ->and($target->error_message)->toBeNull();
+
+    $attempt = PostTargetAttempt::where('post_target_id', $target->id)->latest('id')->first();
+    expect($attempt->status)->toBe('published')
+        ->and($attempt->finished_at)->not->toBeNull();
+
+    expect($target->post->refresh()->status)->toBe(PostStatus::Published);
+});
+
+test('failed() resumes a partially-posted thread instead of failing it', function () {
+    Bus::fake();
+    $target = publishTarget(['one', 'two']);
+    $target->forceFill([
+        'status' => PostTargetStatus::Publishing->value,
+        'attempts' => 1,
+        'remote_ids' => ['111'],
+        'remote_id' => '111',
+    ])->save();
+
+    PostTargetAttempt::create([
+        'post_target_id' => $target->id,
+        'attempt_no' => 1,
+        'status' => 'retrying',
+        'started_at' => now(),
+    ]);
+
+    (new PublishPostTarget($target->fresh()))->failed(new RuntimeException('worker killed mid-thread'));
+
+    $target->refresh();
+    expect($target->status)->toBe(PostTargetStatus::Publishing)
+        ->and($target->next_attempt_at)->not->toBeNull();
+
+    $attempt = PostTargetAttempt::where('post_target_id', $target->id)->latest('id')->first();
+    expect($attempt->status)->toBe('retrying')
+        ->and($attempt->finished_at)->not->toBeNull();
+
+    Bus::assertDispatched(PublishPostTarget::class);
+});
+
+test('failed() gives up on a partial thread once the attempt budget is exhausted', function () {
+    Bus::fake();
+    $target = publishTarget(['one', 'two']);
+    $target->forceFill([
+        'status' => PostTargetStatus::Publishing->value,
+        'attempts' => 5,
+        'remote_ids' => ['111'],
+        'remote_id' => '111',
+    ])->save();
+
+    (new PublishPostTarget($target->fresh()))->failed(new RuntimeException('still broken'));
+
+    expect($target->refresh()->status)->toBe(PostTargetStatus::Failed);
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
+test('failed() is a no-op when the target already reached a terminal state', function () {
+    Bus::fake();
+    // A redelivery can fire up to retry_after after the orphan was created, by which
+    // point another path may have deleted the post. failed() must not resurrect it.
+    $target = publishTarget(['one', 'two']);
+    $target->forceFill([
+        'status' => PostTargetStatus::Deleted->value,
+        'remote_ids' => ['111', '222'],
+        'remote_id' => '111',
+    ])->save();
+
+    (new PublishPostTarget($target->fresh()))->failed(
+        new MaxAttemptsExceededException('App\Jobs\PublishPostTarget has been attempted too many times.'),
+    );
+
+    expect($target->refresh()->status)->toBe(PostTargetStatus::Deleted);
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
+test('failed() with no posted segments marks the target failed', function () {
+    $target = publishTarget(['one']);
+    $target->forceFill(['status' => PostTargetStatus::Publishing->value])->save();
+
+    (new PublishPostTarget($target->fresh()))->failed(new RuntimeException('boom'));
+
+    $target->refresh();
+    expect($target->status)->toBe(PostTargetStatus::Failed)
+        ->and($target->error_message)->not->toBeNull();
 });
 
 test('job has tries=1 and a timeout below the queue retry_after', function () {
