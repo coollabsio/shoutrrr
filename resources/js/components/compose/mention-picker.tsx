@@ -437,7 +437,7 @@ function MentionHandleEditor({
                         }
                         onClick={onSave}
                         className={cn(
-                            'rounded-lg bg-primary py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90',
+                            'rounded-lg bg-primary-gradient py-1.5 text-xs font-medium text-primary-foreground inset-shadow-[0_1px_0_0_var(--primary-gradient-highlight)] transition-[color,background-color,border-color,--primary-gradient-top] hover:[--primary-gradient-top:var(--primary-gradient-highlight)]',
                             'disabled:cursor-not-allowed disabled:opacity-60',
                         )}
                     >

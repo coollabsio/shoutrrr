@@ -65,7 +65,7 @@ export function ReplyThread({
                         key={reply.id}
                         className="group flex min-w-0 flex-col items-end gap-1"
                     >
-                        <div className="max-w-[min(85%,28rem)] min-w-0 rounded-2xl rounded-br-sm bg-primary px-3.5 py-2.5 text-primary-foreground">
+                        <div className="max-w-[min(85%,28rem)] min-w-0 rounded-2xl rounded-br-sm bg-primary-gradient px-3.5 py-2.5 text-primary-foreground inset-shadow-[0_1px_0_0_var(--primary-gradient-highlight)]">
                             <p className="text-sm break-words whitespace-pre-wrap">
                                 {reply.text}
                             </p>

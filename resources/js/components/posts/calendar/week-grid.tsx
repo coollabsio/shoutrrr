@@ -103,7 +103,7 @@ export function WeekGrid({
                                 className={cn(
                                     'inline-flex h-[18px] min-w-[18px] items-center justify-center text-[11px] tabular-nums',
                                     isToday &&
-                                        'rounded-full bg-primary px-1 text-primary-foreground',
+                                        'rounded-full bg-primary-gradient px-1 text-primary-foreground inset-shadow-[0_1px_0_0_var(--primary-gradient-highlight)]',
                                 )}
                             >
                                 {d.format('D')}
@@ -147,7 +147,7 @@ export function WeekGrid({
                             width: `calc((100% - var(--gutter)) / 7)`,
                         }}
                     >
-                        <span className="-translate-y-1/2 rounded bg-primary px-1 py-0.5 text-[9px] leading-none font-semibold text-primary-foreground tabular-nums shadow-sm">
+                        <span className="-translate-y-1/2 rounded bg-primary-gradient px-1 py-0.5 text-[9px] leading-none font-semibold text-primary-foreground tabular-nums shadow-sm">
                             {dropLabel}
                         </span>
                         <span className="h-0.5 flex-1 rounded-full bg-primary" />

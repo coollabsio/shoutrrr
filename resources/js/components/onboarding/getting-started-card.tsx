@@ -217,7 +217,7 @@ export function GettingStartedCard({
                                                             className={cn(
                                                                 'flex size-5 shrink-0 items-center justify-center rounded-full border',
                                                                 step.done
-                                                                    ? 'border-primary bg-primary text-primary-foreground'
+                                                                    ? 'border-(--primary-gradient-edge) bg-primary-gradient text-primary-foreground'
                                                                     : 'border-muted-foreground/40',
                                                             )}
                                                         >

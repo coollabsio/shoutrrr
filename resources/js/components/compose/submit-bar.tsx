@@ -442,11 +442,11 @@ function TrayButton({
             disabled={disabled}
             onClick={onClick}
             className={cn(
-                'inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12.5px] font-medium transition-[background,border-color,transform] duration-[120ms] active:scale-[0.985] sm:h-8',
+                'inline-flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-[12.5px] font-medium transition-[background,border-color,transform,--primary-gradient-top] duration-[120ms] active:scale-[0.985] sm:h-8',
                 variant === 'outline' &&
                     'border-border bg-background text-foreground hover:bg-muted disabled:opacity-50',
                 variant === 'primary' &&
-                    'border-primary bg-primary text-primary-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.04)] hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
+                    'border-(--primary-gradient-edge) bg-primary-gradient text-primary-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.04)] inset-shadow-[0_1px_0_0_var(--primary-gradient-highlight)] hover:[--primary-gradient-top:var(--primary-gradient-highlight)] disabled:cursor-not-allowed disabled:opacity-50',
                 className,
             )}
         >

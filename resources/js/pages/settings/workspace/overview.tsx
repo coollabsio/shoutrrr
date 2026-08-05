@@ -7,7 +7,7 @@ import WorkspaceController from '@/actions/App/Http/Controllers/WorkspaceControl
 import { useConfirm } from '@/components/common/confirm-dialog';
 import Heading from '@/components/common/heading';
 import InputError from '@/components/common/input-error';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
     Command,
     CommandEmpty,
@@ -24,6 +24,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 type Props = {
     workspace: {
@@ -127,7 +128,10 @@ export default function WorkspaceOverview({
                                             aria-disabled={
                                                 !canManage || processing
                                             }
-                                            className="inline-flex h-8 w-fit shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-primary px-3 text-sm font-medium whitespace-nowrap text-primary-foreground transition-all hover:bg-primary/80 aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                                            className={cn(
+                                                buttonVariants(),
+                                                'w-fit cursor-pointer aria-disabled:pointer-events-none aria-disabled:opacity-50',
+                                            )}
                                         >
                                             Choose photo
                                         </label>

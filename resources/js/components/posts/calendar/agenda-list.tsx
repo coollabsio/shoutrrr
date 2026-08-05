@@ -107,7 +107,7 @@ export function AgendaList({ anchor, view, posts, onEmptyDayClick }: Props) {
                                 className={cn(
                                     'mt-0.5 inline-flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[15px] font-semibold tabular-nums',
                                     isToday
-                                        ? 'bg-primary text-primary-foreground'
+                                        ? 'bg-primary-gradient text-primary-foreground inset-shadow-[0_1px_0_0_var(--primary-gradient-highlight)]'
                                         : isPast
                                           ? 'text-muted-foreground'
                                           : 'text-foreground',

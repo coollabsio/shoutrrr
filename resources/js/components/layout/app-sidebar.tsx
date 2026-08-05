@@ -265,7 +265,7 @@ export function AppSidebar() {
                                             <span>{item.title}</span>
                                             {item.title === 'Engagement' &&
                                             unreadReplies > 0 ? (
-                                                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
                                                     {unreadReplies > 99
                                                         ? '99+'
                                                         : unreadReplies}
@@ -273,7 +273,7 @@ export function AppSidebar() {
                                             ) : null}
                                             {item.title === 'Messages' &&
                                             unreadMessages > 0 ? (
-                                                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
                                                     {unreadMessages > 99
                                                         ? '99+'
                                                         : unreadMessages}
