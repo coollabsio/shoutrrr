@@ -70,6 +70,11 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
+          # Bake the running version into the image (frontend bundle + PHP env).
+          # A release supplies its published tag; a manual dispatch (no tag) falls
+          # back to the commit sha so the built image still self-reports a version.
+          build-args: |
+            APP_VERSION=${{ github.event.release.tag_name || github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.cache }}

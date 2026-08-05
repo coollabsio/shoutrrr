@@ -9,6 +9,8 @@ import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 
+import { resolveAppVersion } from './resolve-app-version';
+
 // Copy the emojibase `en` locale into public/ so Frimousse and the emoji
 // typeahead fetch it same-origin. The app's CSP (connect-src 'self') blocks
 // Frimousse's default jsdelivr CDN, so the data must be served from our origin.
@@ -93,6 +95,11 @@ export default defineConfig(({ mode }) => {
     const disableHotPlugin = disableHotFileForHttpsAppUrl(appUrl);
 
     return {
+        // Baked into the client + SSR bundles so the sidebar version badge does
+        // not need a committed VERSION file. See resolve-app-version.ts.
+        define: {
+            __APP_VERSION__: JSON.stringify(resolveAppVersion()),
+        },
         server: {
             // Listen on all interfaces so LAN / hostname access works.
             host: '0.0.0.0',

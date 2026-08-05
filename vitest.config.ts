@@ -2,7 +2,12 @@ import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
+import { resolveAppVersion } from './resolve-app-version';
+
 export default defineConfig({
+    define: {
+        __APP_VERSION__: JSON.stringify(resolveAppVersion()),
+    },
     plugins: [react()],
     resolve: {
         alias: {

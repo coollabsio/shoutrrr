@@ -49,11 +49,11 @@ test('does not touch the Sentry scope when no DSN is configured', function () {
     expect(sentryScopeUser())->toBeNull();
 });
 
-test('the Sentry release defaults to the VERSION file', function () {
-    $version = trim((string) file_get_contents(base_path('VERSION')));
+test('the Sentry release defaults to the app version env', function () {
+    $expected = env('SENTRY_RELEASE') ?: (env('APP_VERSION') ?: null);
 
-    expect(config('sentry.release'))->toBe($version)
-        ->and(config('sentry-browser.release'))->toBe($version);
+    expect(config('sentry.release'))->toBe($expected)
+        ->and(config('sentry-browser.release'))->toBe($expected);
 });
 
 test('browser Sentry config is not injected without a frontend DSN', function () {

@@ -6,12 +6,11 @@
  * @see https://docs.sentry.io/platforms/php/guides/laravel/configuration/options/
  */
 
-// Tag every event with the running app version. Falls back to the VERSION file
-// (the same source the frontend reads) when SENTRY_RELEASE is not set so a
-// prebuilt Docker image reports the release it was cut from without extra config.
-$sentryRelease = env('SENTRY_RELEASE') ?: (is_file(base_path('VERSION'))
-    ? (trim((string) file_get_contents(base_path('VERSION'))) ?: null)
-    : null);
+// Tag every event with the running app version. Falls back to APP_VERSION (the
+// tag baked in by the release pipeline, the same source the frontend reads) when
+// SENTRY_RELEASE is not set so a prebuilt Docker image reports the release it was
+// cut from without extra config.
+$sentryRelease = env('SENTRY_RELEASE') ?: (env('APP_VERSION') ?: null);
 
 $sentryEnvironment = env('SENTRY_ENVIRONMENT') ?: env('APP_ENV', 'production');
 

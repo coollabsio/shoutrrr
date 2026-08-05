@@ -17,6 +17,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Application Version
+    |--------------------------------------------------------------------------
+    |
+    | The running application version. Injected by the release pipeline from the
+    | published git tag (Docker build arg -> ENV APP_VERSION). Left null in local
+    | development, where App\Support\AppVersion falls back to `git describe`.
+    |
+    */
+
+    'version' => env('APP_VERSION'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
     |

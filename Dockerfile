@@ -9,6 +9,11 @@ ARG SERVERSIDEUP_PHP_VERSION=8.5-frankenphp-trixie
 ARG POSTGRES_VERSION=17
 ARG USER_ID=9999
 ARG GROUP_ID=9999
+# The running app version, set by the release pipeline from the published git
+# tag. Baked into the frontend bundle (assets stage) and exposed to PHP at
+# runtime (app stage). Empty for local `docker build`; the app degrades to a
+# blank version badge rather than failing.
+ARG APP_VERSION=
 
 # ============================================================
 # Stage: vendor — composer deps + Wayfinder generation
@@ -86,6 +91,10 @@ COPY --from=vendor /var/www/html/resources/js/wayfinder ./resources/js/wayfinder
 
 # Skip the wayfinder vite plugin (no PHP here; files already generated)
 ENV SKIP_WAYFINDER_GENERATE=true
+# Bake the release version into the bundle (.git is dockerignored, so the vite
+# build cannot derive it; APP_VERSION is the only source here).
+ARG APP_VERSION
+ENV APP_VERSION=${APP_VERSION}
 # Builds client assets AND the SSR bundle (bootstrap/ssr/ssr.mjs)
 RUN bun run build:ssr
 
@@ -105,6 +114,7 @@ FROM serversideup/php:${SERVERSIDEUP_PHP_VERSION} AS app
 ARG USER_ID
 ARG GROUP_ID
 ARG POSTGRES_VERSION
+ARG APP_VERSION
 
 WORKDIR /var/www/html
 USER root
@@ -179,6 +189,7 @@ ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
     AUTORUN_LARAVEL_VIEW_CACHE=${AUTORUN_LARAVEL_VIEW_CACHE} \
     AUTORUN_LARAVEL_STORAGE_LINK=${AUTORUN_LARAVEL_STORAGE_LINK} \
     APP_BASE_DIR=/var/www/html \
+    APP_VERSION=${APP_VERSION} \
     SSL_MODE=${SSL_MODE} \
     OCTANE_SERVER=frankenphp \
     HEALTHCHECK_PATH=/up \

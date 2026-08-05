@@ -15,11 +15,9 @@
  */
 
 // Mirror the backend's release/environment derivation (see config/sentry.php):
-// tag events with the running app version, falling back to the VERSION file the
-// frontend already reads, and default the environment to APP_ENV.
-$release = env('SENTRY_RELEASE') ?: (is_file(base_path('VERSION'))
-    ? (trim((string) file_get_contents(base_path('VERSION'))) ?: null)
-    : null);
+// tag events with the running app version, falling back to APP_VERSION (the tag
+// baked in by the release pipeline), and default the environment to APP_ENV.
+$release = env('SENTRY_RELEASE') ?: (env('APP_VERSION') ?: null);
 
 return [
     'dsn' => env('SENTRY_FRONTEND_DSN'),

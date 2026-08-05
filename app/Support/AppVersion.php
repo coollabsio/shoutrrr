@@ -4,33 +4,57 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use Illuminate\Support\Facades\Log;
-
 class AppVersion
 {
     private static ?string $current = null;
 
+    /**
+     * The running application version.
+     *
+     * Resolved from config('app.version') (set by the release pipeline from the
+     * published git tag). Falls back to `git describe` in local development so
+     * the version is meaningful without a committed VERSION file.
+     */
     public static function current(): string
     {
         if (self::$current !== null) {
             return self::$current;
         }
 
-        $path = base_path('VERSION');
+        $configured = trim((string) config('app.version'));
 
-        if (! is_readable($path)) {
-            Log::warning('VERSION file is missing or unreadable.', ['path' => $path]);
-
-            return self::$current = '';
+        if ($configured !== '') {
+            return self::$current = $configured;
         }
 
-        return self::$current = trim((string) file_get_contents($path));
+        return self::$current = self::describeFromGit();
+    }
+
+    /**
+     * Best-effort version from the local git checkout (dev only). Production
+     * images have no `.git`, so this returns '' there and callers degrade
+     * gracefully.
+     */
+    private static function describeFromGit(): string
+    {
+        if (! function_exists('exec')) {
+            return '';
+        }
+
+        $command = sprintf(
+            'git -C %s describe --tags --always 2>/dev/null',
+            escapeshellarg(base_path()),
+        );
+
+        $output = @exec($command, $ignored, $status);
+
+        return $status === 0 && is_string($output) ? trim($output) : '';
     }
 
     /**
      * Pin the running version for tests so channel-dependent behaviour does not
-     * couple to whatever the shipped VERSION file happens to contain. Passing
-     * null clears the override and restores reading from the VERSION file.
+     * couple to whatever version the build happens to bake in. Passing null
+     * clears the override and restores resolution from config/git.
      */
     public static function fake(?string $version): void
     {
