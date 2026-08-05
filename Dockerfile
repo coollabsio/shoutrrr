@@ -197,6 +197,9 @@ ENV PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE} \
 
 # Supervisor supervises the web/worker/scheduler/ssr processes
 COPY docker/supervisord.conf /etc/supervisor/laravel.conf
+# Queue worker launcher (kept out of supervisord.conf's inline command= so
+# supervisor's shlex tokenizer never has to parse the shell logic)
+COPY --chmod=755 docker/worker-command.sh /usr/local/bin/worker-command.sh
 
 # Entrypoint init scripts (run by the serversideup ENTRYPOINT before the CMD)
 COPY --chmod=755 docker/entrypoint.d/ /etc/entrypoint.d/
