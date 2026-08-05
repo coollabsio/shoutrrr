@@ -69,7 +69,7 @@ import {
     Message02Icon,
     MessageAdd01Icon,
     MinusSignIcon,
-    MoonIcon,
+    Moon02Icon,
     MoreHorizontalIcon,
     MoreVerticalIcon,
     MusicNote01Icon,
@@ -202,7 +202,7 @@ export const MessageSquarePlus = icon(MessageAdd01Icon);
 export const MessagesSquare = icon(Message02Icon);
 export const Minus = icon(MinusSignIcon);
 export const Monitor = icon(ComputerIcon);
-export const Moon = icon(MoonIcon);
+export const Moon = icon(Moon02Icon);
 export const MoreHorizontal = icon(MoreHorizontalIcon);
 export const MoreVertical = icon(MoreVerticalIcon);
 export const Music2 = icon(MusicNote01Icon);
