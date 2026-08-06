@@ -62,7 +62,6 @@ test('the accounts page lists accounts and exposes capabilities and canManage to
 test('the accounts page exposes the linkedin pages availability flags', function () {
     $owner = viewerInWorkspace(WorkspaceRole::Owner);
 
-    // Off + unconfigured by default.
     test()->actingAs($owner)->get('/accounts')
         ->assertInertia(fn (Assert $page) => $page
             ->where('linkedinPagesEnabled', false)

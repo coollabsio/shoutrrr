@@ -147,8 +147,14 @@ class ConnectedAccountController extends Controller
 
         // LinkedIn Pages reconnect against the dedicated Community Management app,
         // not the personal `linkedin-openid` flow — its token was minted there.
+        // The Pages redirect route 404s unless BOTH the toggle is on and the app
+        // is configured, so mirror that here and flash a friendly reason instead
+        // of bouncing the user into a bare 404.
         if ($account->platform === Platform::LinkedIn && $account->isLinkedInOrganization()) {
-            if (! LinkedInPageOAuthController::pagesAppConfigured()) {
+            if (
+                ! app(InstanceSettings::class)->linkedinCommunityManagementEnabled()
+                || ! LinkedInPageOAuthController::pagesAppConfigured()
+            ) {
                 return redirect()->route('accounts.index')
                     ->with('error', 'LinkedIn Pages is not configured for reconnection.');
             }

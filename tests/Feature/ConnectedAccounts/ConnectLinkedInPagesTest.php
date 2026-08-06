@@ -4,11 +4,6 @@ use App\Models\ConnectedAccount;
 use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Http;
 
-// Reuses ownerActingIn() from tests/Pest.php (shared across the
-// connected-accounts Feature suite). LinkedIn Pages run through a SEPARATE
-// Community Management developer app (`services.linkedin-pages`), gated on the
-// instance "LinkedIn Pages" (Community Management) toggle.
-
 beforeEach(function () {
     config()->set('services.linkedin-pages.client_id', 'pages-cid');
     config()->set('services.linkedin-pages.client_secret', 'pages-secret');
@@ -62,8 +57,6 @@ test('pages callback renders the org picker after the CM token exchange', functi
     ]);
 
     test()->get('/accounts/callback/linkedin-pages?code=abc&state=xyz')
-        // The `accounts/connect-linkedin` picker page's existence check is skipped
-        // (mirrors ConnectMetaTest): assert only the props it's handed.
         ->assertInertia(fn ($page) => $page
             ->component('accounts/connect-linkedin', false)
             ->has('organizations', 1)
