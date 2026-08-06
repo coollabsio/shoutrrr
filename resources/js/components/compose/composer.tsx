@@ -28,6 +28,7 @@ import {
 } from '@/lib/compose/format-notices';
 import { postGifAttachment } from '@/lib/compose/gifs/attach';
 import {
+    isAttachOnlyImage,
     wouldMixVideoAndImages,
     wouldViolateBlueskyGif,
 } from '@/lib/compose/media-rules';
@@ -340,11 +341,12 @@ export default function Composer({
                 postGifAttachment(
                     PostGifController.store.url({ post: postId }),
                     item,
-                    // Draft media rows stay orphaned (`post_id` null) until the
-                    // next save, so the post's media() relation cannot see what
-                    // the composer already holds. Declare it, the way the reply
-                    // box does, or the mixing-rule guard has nothing to check.
-                    state.media.map((m) => m.id),
+                    // Declare only the *target segment's* media, not the whole
+                    // post's: the mixing-rule guard is per-segment, so a GIF in
+                    // one thread must not be blocked by media in another. Draft
+                    // rows also stay orphaned (`post_id` null) until the next
+                    // save, so this client-declared set is what the guard checks.
+                    mediaForSegment(segmentRef).map((m) => m.id),
                 ),
             segmentRef,
         );
@@ -580,8 +582,9 @@ export default function Composer({
     // source + settings; a plain one is beautified from scratch.
     function openImage(mediaId: string) {
         const m = state.media.find((x) => x.id === mediaId);
-        // GIFs have no editor — the beautifier would flatten them to a static PNG.
-        if (!m || m.kind === 'video' || m.mime === 'image/gif') {
+        // Animated images (GIF, or a GIF-browser WebP) have no editor — the
+        // beautifier would flatten them to a still frame.
+        if (!m || m.kind === 'video' || isAttachOnlyImage(m)) {
             return;
         }
         // First-time beautify (the `raw` branch below) mints a new media id

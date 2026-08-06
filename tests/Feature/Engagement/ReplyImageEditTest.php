@@ -64,6 +64,19 @@ test('the reply store endpoint accepts a compact composed image', function (stri
     'webp' => ['out.webp', 'image/webp'],
 ]);
 
+test('the reply update endpoint rejects editing an animated gif', function () {
+    $gif = PostMedia::factory()->create([
+        'workspace_id' => $this->workspace->id, 'kind' => 'image', 'mime' => 'image/gif',
+    ]);
+
+    $this->actingAs($this->user)
+        ->put(route('engagement.image-edit.update', ['reply' => $this->reply, 'media' => $gif->id]), [
+            'composed' => UploadedFile::fake()->image('out.webp', 900, 600),
+            'settings' => editSettings(),
+        ])
+        ->assertStatus(422);
+});
+
 test('the reply update endpoint accepts a compact composed image', function () {
     $mediaId = $this->actingAs($this->user)
         ->post(route('engagement.image-edit.store', $this->reply), [

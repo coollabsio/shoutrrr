@@ -9,6 +9,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { getMediaDrag, setMediaDrag } from '@/lib/compose/media-dnd';
+import { isAttachOnlyImage } from '@/lib/compose/media-rules';
 import { cn } from '@/lib/utils';
 import type { MediaView, PendingUpload } from '@/types/compose';
 import type { GifItem } from '@/types/gifs';
@@ -214,14 +215,14 @@ export function SegmentMediaRow({
             onDrop={handleRowDrop}
         >
             {media.map((m, idx) => {
-                const isGif = m.mime === 'image/gif';
                 // Videos open the trim editor; static images open the beautifier.
-                // GIFs open neither — the beautifier would flatten them to a
-                // static PNG — so they're attach-only.
+                // Animated images (GIF, or a GIF-browser WebP) open neither — the
+                // beautifier would flatten them to a still frame — so they're
+                // attach-only.
                 const canEdit =
                     m.kind === 'video'
                         ? Boolean(onVideoClick)
-                        : Boolean(onImageClick) && !isGif;
+                        : Boolean(onImageClick) && !isAttachOnlyImage(m);
 
                 return (
                     <Tooltip key={m.id}>

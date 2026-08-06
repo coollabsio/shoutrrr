@@ -4,6 +4,26 @@ import type { MediaView } from '@/types/compose';
 const GIF_MIME = 'image/gif';
 
 /**
+ * Whether an image is attach-only rather than editable. The raster beautifier
+ * would flatten an animation to a single frame, so animated media must never
+ * open the editor. Animation isn't visible from the mime alone — Klipy stores a
+ * "GIF" as the larger `image/webp` variant, the same mime the beautifier itself
+ * emits — so we distinguish by provenance: a WebP is editable only when it's a
+ * beautifier output (it carries `edit_settings`). A WebP without `edit_settings`
+ * is a GIF-browser animation (or a raw upload we can't prove is static), so it's
+ * treated as attach-only. GIFs are always animated.
+ */
+export function isAttachOnlyImage(
+    media: Pick<MediaView, 'mime' | 'edit_settings'>,
+): boolean {
+    if (media.mime === GIF_MIME) {
+        return true;
+    }
+
+    return media.mime === 'image/webp' && media.edit_settings === null;
+}
+
+/**
  * A post carries one video OR images, never both. Given the already-attached
  * media and an incoming batch, returns whether the batch would mix the two — a
  * video joining images, or images joining a video.

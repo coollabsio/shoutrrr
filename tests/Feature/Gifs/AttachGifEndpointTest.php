@@ -33,6 +33,9 @@ beforeEach(function (): void {
     // NXDOMAIN in real DNS, and SafeImageFetcher resolves the host for real
     // before Http::fake ever intercepts the request (see GifAttacherTest).
     Http::fake([
+        // Clips route through SafeVideoFetcher, which rejects gif bytes — the
+        // .mp4 pattern must be registered before the catch-all (first match wins).
+        'https://static.klipy.com/*.mp4' => Http::response("\x00\x00\x00\x20".'ftypisom'.str_repeat("\x00", 4096), 200, ['Content-Type' => 'video/mp4']),
         'https://static.klipy.com/*' => Http::response(tinyGif(), 200, ['Content-Type' => 'image/gif']),
         'https://api.klipy.com/*' => Http::response(['result' => true, 'data' => []]),
     ]);
@@ -235,6 +238,44 @@ test('rejects a post gif when the composer declares a draft video it holds', fun
             'media_ids' => [$draftVideo->id],
         ]))
         ->assertStatus(422);
+});
+
+test('attaches a post gif to an empty segment while another segment already holds media', function () {
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    // A saved image already lives on the post in a *different* thread segment.
+    // The composer declares only the target segment's media (none), so this
+    // GIF must attach — the mixing rules are per-segment, not per-post.
+    PostMedia::factory()->create([
+        'workspace_id' => $user->current_workspace_id,
+        'post_id' => $post->id,
+        'kind' => 'image',
+        'mime' => 'image/png',
+    ]);
+
+    $this->actingAs($user)
+        ->postJson("/posts/{$post->id}/gifs", attachPayload(['media_ids' => []]))
+        ->assertCreated();
+});
+
+test('attaches a post clip to an empty segment while another segment already holds media', function () {
+    $user = User::factory()->withWorkspace()->create();
+    $post = Post::factory()->create(['workspace_id' => $user->current_workspace_id]);
+    PostMedia::factory()->create([
+        'workspace_id' => $user->current_workspace_id,
+        'post_id' => $post->id,
+        'kind' => 'image',
+        'mime' => 'image/png',
+    ]);
+
+    $this->actingAs($user)
+        ->postJson("/posts/{$post->id}/gifs", attachPayload([
+            'catalog' => 'clip',
+            'variants' => [['url' => 'https://static.klipy.com/ok.mp4', 'mime' => 'video/mp4', 'width' => 320, 'height' => 240, 'bytes' => 40000]],
+            'duration_seconds' => 5,
+            'media_ids' => [],
+        ]))
+        ->assertCreated();
 });
 
 test('ignores post media ids from another workspace', function () {
