@@ -340,11 +340,12 @@ export default function Composer({
                 postGifAttachment(
                     PostGifController.store.url({ post: postId }),
                     item,
-                    // Draft media rows stay orphaned (`post_id` null) until the
-                    // next save, so the post's media() relation cannot see what
-                    // the composer already holds. Declare it, the way the reply
-                    // box does, or the mixing-rule guard has nothing to check.
-                    state.media.map((m) => m.id),
+                    // Declare only the *target segment's* media, not the whole
+                    // post's: the mixing-rule guard is per-segment, so a GIF in
+                    // one thread must not be blocked by media in another. Draft
+                    // rows also stay orphaned (`post_id` null) until the next
+                    // save, so this client-declared set is what the guard checks.
+                    mediaForSegment(segmentRef).map((m) => m.id),
                 ),
             segmentRef,
         );
