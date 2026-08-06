@@ -48,6 +48,16 @@ test('a new media instance defaults to the image kind in memory', function () {
     expect((new PostMedia)->kind)->toBe('image');
 });
 
+test('isAttachOnlyImage distinguishes GIF-browser media from editable images', function () {
+    // GIFs and GIF-browser WebP (no edit_settings) are attach-only; a beautified
+    // WebP (has edit_settings) and plain rasters stay editable.
+    expect(PostMedia::factory()->make(['mime' => 'image/gif', 'edit_settings' => null])->isAttachOnlyImage())->toBeTrue()
+        ->and(PostMedia::factory()->make(['mime' => 'image/webp', 'edit_settings' => null])->isAttachOnlyImage())->toBeTrue()
+        ->and(PostMedia::factory()->make(['mime' => 'image/webp', 'edit_settings' => ['version' => 1]])->isAttachOnlyImage())->toBeFalse()
+        ->and(PostMedia::factory()->make(['mime' => 'image/jpeg', 'edit_settings' => null])->isAttachOnlyImage())->toBeFalse()
+        ->and(PostMedia::factory()->make(['mime' => 'image/png', 'edit_settings' => null])->isAttachOnlyImage())->toBeFalse();
+});
+
 test('deleting a media removes its composed and retained source files', function () {
     Storage::fake('public');
 

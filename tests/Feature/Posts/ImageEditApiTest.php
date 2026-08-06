@@ -101,6 +101,41 @@ test('it 404s when updating media from another workspace', function () {
     ], ['Accept' => 'application/json'])->assertStatus(404);
 });
 
+test('it rejects editing an animated gif', function () {
+    Storage::fake('public');
+    [$user, $workspace, $post] = imageEditMember();
+    // Editing a GIF through the raster beautifier would flatten it to a static
+    // frame, silently destroying the animation — reject it server-side.
+    $gif = PostMedia::factory()->create([
+        'workspace_id' => $workspace->id,
+        'kind' => 'image',
+        'mime' => 'image/gif',
+    ]);
+
+    test()->put("/posts/{$post['id']}/image-edit/{$gif->id}", [
+        'composed' => UploadedFile::fake()->image('out.png', 800, 600),
+        'settings' => settingsPayload(),
+    ], ['Accept' => 'application/json'])->assertStatus(422);
+});
+
+test('it rejects editing a gif-browser webp (no edit_settings)', function () {
+    Storage::fake('public');
+    [$user, $workspace, $post] = imageEditMember();
+    // A GIF browsed from Klipy is stored as the larger WebP variant with no
+    // edit_settings — that's how it's told apart from a beautified WebP, which
+    // always carries edit_settings and stays editable.
+    $webp = PostMedia::factory()->create([
+        'workspace_id' => $workspace->id,
+        'mime' => 'image/webp',
+        'edit_settings' => null,
+    ]);
+
+    test()->put("/posts/{$post['id']}/image-edit/{$webp->id}", [
+        'composed' => UploadedFile::fake()->image('out.png', 800, 600),
+        'settings' => settingsPayload(),
+    ], ['Accept' => 'application/json'])->assertStatus(422);
+});
+
 test('it rejects a non-image composed file', function () {
     Storage::fake('public');
     [$user, $workspace, $post] = imageEditMember();
