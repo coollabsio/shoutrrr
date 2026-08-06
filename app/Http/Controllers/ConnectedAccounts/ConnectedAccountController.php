@@ -76,6 +76,11 @@ class ConnectedAccountController extends Controller
             'accounts' => $accounts,
             'capabilities' => Platform::capabilities(),
             'canManage' => $request->user()->can('create', ConnectedAccount::class),
+            // LinkedIn Pages is a distinct connect entry backed by a separate
+            // Community Management app; expose whether the operator has opted in
+            // and configured it so the connect menu can show it (or "Not set up").
+            'linkedinPagesEnabled' => app(InstanceSettings::class)->linkedinCommunityManagementEnabled(),
+            'linkedinPagesConfigured' => LinkedInPageOAuthController::pagesAppConfigured(),
         ]);
     }
 
@@ -138,6 +143,17 @@ class ConnectedAccountController extends Controller
             $this->connections->reconnect($account, $data, $request->user());
 
             return redirect()->route('accounts.index')->with('success', 'Account reconnected.');
+        }
+
+        // LinkedIn Pages reconnect against the dedicated Community Management app,
+        // not the personal `linkedin-openid` flow — its token was minted there.
+        if ($account->platform === Platform::LinkedIn && $account->isLinkedInOrganization()) {
+            if (! LinkedInPageOAuthController::pagesAppConfigured()) {
+                return redirect()->route('accounts.index')
+                    ->with('error', 'LinkedIn Pages is not configured for reconnection.');
+            }
+
+            return redirect()->route('accounts.linkedin-pages.redirect');
         }
 
         if (! $account->platform->supportsAppPassword()) {

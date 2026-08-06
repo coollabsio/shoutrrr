@@ -165,6 +165,61 @@ test('reconnecting a facebook account restarts the shared meta login flow, not t
         ->assertRedirect(route('accounts.meta.redirect'));
 });
 
+test('reconnecting a linkedin page restarts the community management flow, not the personal route', function () {
+    [$user, $workspace] = ownerWithWorkspace();
+    config()->set('services.linkedin-openid.client_id', 'cid');
+    config()->set('services.linkedin-openid.client_secret', 'secret');
+    config()->set('services.linkedin-pages.client_id', 'pages-cid');
+    config()->set('services.linkedin-pages.client_secret', 'pages-secret');
+
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+        'connected_by_user_id' => $user->id,
+        'capabilities' => ['linkedin_account_type' => 'organization'],
+    ]);
+    ConnectedAccountSecret::factory()->create(['connected_account_id' => $account->id]);
+
+    test()->post("/accounts/{$account->id}/reconnect")
+        ->assertRedirect(route('accounts.linkedin-pages.redirect'));
+});
+
+test('reconnecting a linkedin page errors when the community management app is not configured', function () {
+    [$user, $workspace] = ownerWithWorkspace();
+    config()->set('services.linkedin-openid.client_id', 'cid');
+    config()->set('services.linkedin-openid.client_secret', 'secret');
+    config()->set('services.linkedin-pages.client_id', null);
+    config()->set('services.linkedin-pages.client_secret', null);
+
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+        'connected_by_user_id' => $user->id,
+        'capabilities' => ['linkedin_account_type' => 'organization'],
+    ]);
+    ConnectedAccountSecret::factory()->create(['connected_account_id' => $account->id]);
+
+    test()->post("/accounts/{$account->id}/reconnect")
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('error');
+});
+
+test('reconnecting a personal linkedin account uses the generic per-platform route', function () {
+    [$user, $workspace] = ownerWithWorkspace();
+    config()->set('services.linkedin-openid.client_id', 'cid');
+    config()->set('services.linkedin-openid.client_secret', 'secret');
+
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::LinkedIn->value,
+        'connected_by_user_id' => $user->id,
+    ]);
+    ConnectedAccountSecret::factory()->create(['connected_account_id' => $account->id]);
+
+    test()->post("/accounts/{$account->id}/reconnect")
+        ->assertRedirect(route('accounts.connect', ['platform' => 'linkedin']));
+});
+
 test('disconnect removes both the account and its secret row', function () {
     [$user, $workspace] = ownerWithWorkspace();
     $account = ConnectedAccount::factory()->create([

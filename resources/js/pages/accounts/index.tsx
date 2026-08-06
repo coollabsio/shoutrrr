@@ -46,12 +46,16 @@ type Props = {
     accounts: Account[];
     capabilities: Capability[];
     canManage: boolean;
+    linkedinPagesEnabled: boolean;
+    linkedinPagesConfigured: boolean;
 };
 
 export default function ConnectedAccounts({
     accounts,
     capabilities,
     canManage,
+    linkedinPagesEnabled,
+    linkedinPagesConfigured,
 }: Props) {
     const disabledPlatforms = new Set(
         capabilities.filter((c) => !c.enabled).map((c) => c.platform),
@@ -159,7 +163,13 @@ export default function ConnectedAccounts({
                     title="Connected accounts"
                     description="Workspace-owned social accounts shared by every member."
                 />
-                {canManage && <ConnectButtons capabilities={capabilities} />}
+                {canManage && (
+                    <ConnectButtons
+                        capabilities={capabilities}
+                        linkedinPagesEnabled={linkedinPagesEnabled}
+                        linkedinPagesConfigured={linkedinPagesConfigured}
+                    />
+                )}
             </div>
 
             {connectError && (
@@ -193,7 +203,13 @@ export default function ConnectedAccounts({
                     </EmptyHeader>
                     {canManage && (
                         <div className="mt-4 flex justify-center">
-                            <ConnectButtons capabilities={capabilities} />
+                            <ConnectButtons
+                                capabilities={capabilities}
+                                linkedinPagesEnabled={linkedinPagesEnabled}
+                                linkedinPagesConfigured={
+                                    linkedinPagesConfigured
+                                }
+                            />
                         </div>
                     )}
                 </Empty>

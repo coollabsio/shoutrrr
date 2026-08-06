@@ -8,13 +8,6 @@ import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 
-type LinkedInPerson = {
-    remoteAccountId: string;
-    handle: string;
-    displayName: string | null;
-    avatarUrl: string | null;
-};
-
 type LinkedInOrganization = {
     id: string;
     urn: string;
@@ -22,21 +15,17 @@ type LinkedInOrganization = {
     vanityName: string;
 };
 
-type Selection = { type: 'person' } | { type: 'organization'; id: string };
+type Selection = { type: 'organization'; id: string };
 
-type Props = { person: LinkedInPerson; organizations: LinkedInOrganization[] };
+type Props = { organizations: LinkedInOrganization[] };
 
-export default function ConnectLinkedIn({ person, organizations }: Props) {
-    const [personChecked, setPersonChecked] = useState(true);
+export default function ConnectLinkedIn({ organizations }: Props) {
     const [checkedOrgs, setCheckedOrgs] = useState<Record<string, boolean>>({});
     const [processing, setProcessing] = useState(false);
 
-    const selection: Selection[] = [
-        ...(personChecked ? [{ type: 'person' as const }] : []),
-        ...organizations
-            .filter((org) => checkedOrgs[org.id])
-            .map((org) => ({ type: 'organization' as const, id: org.id })),
-    ];
+    const selection: Selection[] = organizations
+        .filter((org) => checkedOrgs[org.id])
+        .map((org) => ({ type: 'organization' as const, id: org.id }));
 
     const submit = () => {
         router.post(
@@ -53,28 +42,10 @@ export default function ConnectLinkedIn({ person, organizations }: Props) {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-6 pb-16 sm:px-6">
             <Head title="Connect LinkedIn" />
             <Heading
-                title="Choose what to connect"
-                description="Connect your personal LinkedIn profile and any Pages you administer to this workspace."
+                title="Choose which Pages to connect"
+                description="Connect any LinkedIn Pages you administer to this workspace."
             />
             <div className="flex flex-col gap-4">
-                <label className="flex items-center gap-3 rounded-xl border p-4">
-                    <Checkbox
-                        checked={personChecked}
-                        onCheckedChange={(c) => setPersonChecked(c === true)}
-                    />
-                    <PlatformGlyph
-                        platform="linkedin"
-                        size={16}
-                        className="size-4"
-                    />
-                    <span className="font-medium">
-                        {person.displayName ?? person.handle}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                        Personal profile
-                    </span>
-                </label>
-
                 {organizations.map((org) => (
                     <label
                         key={org.id}

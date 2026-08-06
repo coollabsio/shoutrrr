@@ -303,7 +303,11 @@ class TokenManager
             $endpoint = 'https://www.linkedin.com/oauth/v2/accessToken';
         }
 
-        $configKey = $account->platform->configKey();
+        // LinkedIn Pages/organizations are minted by — and so must be refreshed
+        // against — the dedicated Community Management app, not the personal one.
+        $configKey = $account->isLinkedInOrganization()
+            ? 'services.linkedin-pages'
+            : $account->platform->configKey();
         $clientId = $account->platform === Platform::Bluesky
             ? (string) ($secret->session['client_id'] ?? route('oauth.bluesky.metadata'))
             : (string) config($configKey.'.client_id');
