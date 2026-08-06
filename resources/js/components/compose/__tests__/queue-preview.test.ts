@@ -34,7 +34,9 @@ describe('queue slot selection', () => {
         );
 
         expect(preview).toContain('state.slots.length > 1');
-        expect(preview).toContain('<select');
+        // The slot picker uses the shadcn Select (Base UI), not a native <select>.
+        expect(preview).toContain('<Select');
+        expect(preview).toContain('onValueChange');
         expect(submitBar).toContain('{ scheduled_at: tray.pickedAt }');
     });
 });

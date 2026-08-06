@@ -2,6 +2,13 @@ import { Link } from '@inertiajs/react';
 
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
     formatSlotLabel,
     type QueueSlotState,
 } from '@/hooks/compose/use-next-slot';
@@ -61,21 +68,43 @@ export function QueuePreview({ state, selectedSlot, onSelectSlot }: Props) {
 
     if (state.status === 'found') {
         if (state.slots.length > 1) {
+            const items = state.slots.map((slot) => ({
+                value: slot,
+                label: formatSlotLabel(slot, state.tz),
+            }));
+
             return (
-                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                     Add to
-                    <select
+                    <Select
+                        items={items}
                         value={selectedSlot ?? state.slot ?? state.slots[0]}
-                        onChange={(event) => onSelectSlot(event.target.value)}
-                        className="h-7 rounded-md border border-border bg-background px-2 text-[11px] font-medium text-foreground"
+                        onValueChange={(value) => {
+                            if (value !== null) {
+                                onSelectSlot(value);
+                            }
+                        }}
                     >
-                        {state.slots.map((slot) => (
-                            <option key={slot} value={slot}>
-                                {formatSlotLabel(slot, state.tz)}
-                            </option>
-                        ))}
-                    </select>
-                </label>
+                        <SelectTrigger
+                            size="sm"
+                            aria-label="Queue slot"
+                            className="text-[11px] font-medium text-foreground"
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {items.map((item) => (
+                                <SelectItem
+                                    key={item.value}
+                                    value={item.value}
+                                    className="text-[11px]"
+                                >
+                                    {item.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </span>
             );
         }
 
