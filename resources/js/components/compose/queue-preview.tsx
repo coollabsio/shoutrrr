@@ -39,7 +39,14 @@ export function QueuePreview({ state, selectedSlot, onSelectSlot }: Props) {
     if (state.status === 'full') {
         return (
             <span className="text-[11px] text-muted-foreground">
-                Queue is full for the next 14 days — pick a time instead.
+                Your queue is booked out —{' '}
+                <Link
+                    href={PostingScheduleController.show().url}
+                    className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                >
+                    add posting times
+                </Link>{' '}
+                or pick a custom time.
             </span>
         );
     }
