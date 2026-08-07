@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Http\Requests\Post;
 
 use App\Enums\PostFormat;
+use App\Http\Requests\Post\Concerns\DerivesMentionHandleRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdatePostRequest extends FormRequest
 {
+    use DerivesMentionHandleRules;
+
     public function authorize(): bool
     {
         return $this->user()->can('update', $this->route('post'));
@@ -28,10 +31,7 @@ class UpdatePostRequest extends FormRequest
             'mentions.*.id' => ['required', 'string'],
             'mentions.*.label' => ['required', 'string'],
             'mentions.*.handles' => ['array'],
-            'mentions.*.handles.x' => ['nullable', 'string'],
-            'mentions.*.handles.bluesky' => ['nullable', 'string'],
-            'mentions.*.handles.linkedin' => ['nullable', 'string'],
-            'mentions.*.handles.linkedin_urn' => ['nullable', 'string', 'max:255'],
+            ...$this->mentionHandleRules(),
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'none', 'set', 'account', 'accounts'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],

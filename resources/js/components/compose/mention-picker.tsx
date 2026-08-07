@@ -25,10 +25,12 @@ import {
     InputGroupInput,
 } from '@/components/ui/input-group';
 import {
+    discordMentionMarkup,
     extractLinkedInOrgRef,
     hasEmptyActiveHandle,
     mentionInputValue,
     normalizeMentionName,
+    parseDiscordMention,
     platformSupportsMention,
     savedMentionToPlaceholder,
     setPlatformMentionMode,
@@ -36,6 +38,7 @@ import {
     updateMentionLinkedInUrn,
     updateMentionName,
     usesPlatformMention,
+    type DiscordMentionKind,
 } from '@/lib/compose/mentions';
 import { cn } from '@/lib/utils';
 import type {
@@ -405,22 +408,36 @@ function MentionHandleEditor({
                  * Keyed on the mention id so each field's local mode state resets
                  * when a different mention is edited.
                  */}
-                {activePlatforms.map((platform) =>
-                    platform === 'linkedin' ? (
-                        <LinkedInMentionField
-                            key={`linkedin-${activeMention.id}`}
-                            activeMention={activeMention}
-                            onUpdateMention={onUpdateMention}
-                        />
-                    ) : (
+                {activePlatforms.map((platform) => {
+                    if (platform === 'linkedin') {
+                        return (
+                            <LinkedInMentionField
+                                key={`linkedin-${activeMention.id}`}
+                                activeMention={activeMention}
+                                onUpdateMention={onUpdateMention}
+                            />
+                        );
+                    }
+
+                    if (platform === 'discord') {
+                        return (
+                            <DiscordMentionField
+                                key={`discord-${activeMention.id}`}
+                                activeMention={activeMention}
+                                onUpdateMention={onUpdateMention}
+                            />
+                        );
+                    }
+
+                    return (
                         <PlatformMentionField
                             key={`${platform}-${activeMention.id}`}
                             activeMention={activeMention}
                             platform={platform}
                             onUpdateMention={onUpdateMention}
                         />
-                    ),
-                )}
+                    );
+                })}
             </div>
             {onSave && (
                 <div className="flex flex-col gap-1.5">
@@ -680,6 +697,167 @@ function LinkedInMentionField({
                         <span className="text-[11px] text-muted-foreground/80">
                             Match the company&rsquo;s exact name above, or
                             LinkedIn won&rsquo;t link it.
+                        </span>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+type DiscordMentionFieldProps = {
+    activeMention: MentionPlaceholder;
+    onUpdateMention: (
+        previous: MentionPlaceholder,
+        next: MentionPlaceholder,
+    ) => void;
+};
+
+const DISCORD_KIND_OPTIONS: { value: DiscordMentionKind; label: string }[] = [
+    { value: 'user', label: 'User' },
+    { value: 'role', label: 'Role' },
+    { value: 'channel', label: 'Channel' },
+];
+
+/**
+ * The Discord row: a plain-text ⇄ mention toggle, and in mention mode a
+ * User/Role/Channel picker plus a snowflake-id field. The chosen kind + id are
+ * composed into Discord's native markup (`<@id>`, `<@&id>`, `<#id>`) and stored
+ * in `handles.discord`, which the webhook posts verbatim so Discord renders the
+ * mention. Local state (mode, kind, and the separate id/text values) resets per
+ * mention because the parent keys this element on the mention id.
+ */
+function DiscordMentionField({
+    activeMention,
+    onUpdateMention,
+}: DiscordMentionFieldProps) {
+    const stored = activeMention.handles.discord ?? '';
+    const parsed = parseDiscordMention(stored);
+    const [idMode, setIdMode] = useState(Boolean(parsed));
+    const [kind, setKind] = useState<DiscordMentionKind>(
+        parsed?.kind ?? 'user',
+    );
+    const [idValue, setIdValue] = useState(parsed?.id ?? '');
+    // In id mode the stored value is markup, so seed the plain-text field from
+    // the label instead of the markup that would otherwise leak into it.
+    const [textValue, setTextValue] = useState(
+        mentionInputValue(
+            parsed ? activeMention.label : stored || activeMention.label,
+        ),
+    );
+
+    function writeMarkup(nextKind: DiscordMentionKind, nextId: string) {
+        onUpdateMention(
+            activeMention,
+            updateMentionHandle(
+                activeMention,
+                'discord',
+                discordMentionMarkup(nextKind, nextId),
+                false,
+            ),
+        );
+    }
+
+    function writeText(value: string) {
+        onUpdateMention(
+            activeMention,
+            updateMentionHandle(activeMention, 'discord', value, false),
+        );
+    }
+
+    function setMode(next: boolean) {
+        setIdMode(next);
+        if (next) {
+            writeMarkup(kind, idValue);
+        } else {
+            writeText(textValue);
+        }
+    }
+
+    function changeKind(next: DiscordMentionKind) {
+        setKind(next);
+        writeMarkup(next, idValue);
+    }
+
+    function changeId(raw: string) {
+        // Discord ids are numeric snowflakes; drop anything else as it is typed.
+        const digits = raw.replace(/\D+/g, '');
+        setIdValue(digits);
+        writeMarkup(kind, digits);
+    }
+
+    function changeText(value: string) {
+        setTextValue(value);
+        writeText(value);
+    }
+
+    const markup = discordMentionMarkup(kind, idValue);
+    const idPlaceholder =
+        kind === 'role'
+            ? 'Role ID'
+            : kind === 'channel'
+              ? 'Channel ID'
+              : 'User ID';
+
+    return (
+        <div className="flex flex-col gap-1 text-xs">
+            <div className="flex items-center gap-2">
+                <PlatformGlyph
+                    platform="discord"
+                    size={15}
+                    className="shrink-0 text-muted-foreground"
+                />
+                <InputGroup className="h-8 min-w-0 flex-1 rounded-lg">
+                    <InputGroupInput
+                        value={idMode ? idValue : textValue}
+                        inputMode={idMode ? 'numeric' : undefined}
+                        placeholder={
+                            idMode ? idPlaceholder : 'Name shown on Discord'
+                        }
+                        aria-label={`discord ${
+                            idMode ? `${kind} id` : 'display text'
+                        } for ${activeMention.label}`}
+                        className="text-xs"
+                        onChange={(event) =>
+                            idMode
+                                ? changeId(event.target.value)
+                                : changeText(event.target.value)
+                        }
+                    />
+                </InputGroup>
+                <MentionModeToggle
+                    ariaLabel={`How to show ${activeMention.label} on Discord`}
+                    value={idMode ? 'id' : 'text'}
+                    options={[
+                        { value: 'text', label: 'Plain text' },
+                        { value: 'id', label: 'Mention' },
+                    ]}
+                    onChange={(next) => setMode(next === 'id')}
+                />
+            </div>
+            {idMode && (
+                <div className="flex flex-col gap-1.5 pl-6">
+                    <MentionModeToggle
+                        ariaLabel={`Discord mention type for ${activeMention.label}`}
+                        value={kind}
+                        options={DISCORD_KIND_OPTIONS}
+                        onChange={(next) =>
+                            changeKind(next as DiscordMentionKind)
+                        }
+                    />
+                    {idValue ? (
+                        <span className="flex items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1">
+                            <span className="shrink-0 text-foreground">
+                                Posts as
+                            </span>
+                            <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+                                {markup}
+                            </code>
+                        </span>
+                    ) : (
+                        <span className="text-[11px] text-muted-foreground">
+                            Turn on Developer Mode in Discord, then right-click
+                            the {kind} &rarr; Copy ID.
                         </span>
                     )}
                 </div>
