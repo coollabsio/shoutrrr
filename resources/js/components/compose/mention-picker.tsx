@@ -767,9 +767,13 @@ function DiscordMentionField({
 
     function setMode(next: boolean) {
         setIdMode(next);
-        if (next) {
+        // Only overwrite the stored handle when there is an id to write —
+        // otherwise toggling into mention mode with an empty field would erase
+        // the plain-text handle (permanently, if the component then remounts on
+        // a mention rename). Typing an id later composes the markup.
+        if (next && idValue !== '') {
             writeMarkup(kind, idValue);
-        } else {
+        } else if (!next) {
             writeText(textValue);
         }
     }

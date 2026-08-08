@@ -23,12 +23,11 @@ trait DerivesMentionHandleRules
     {
         $rules = [];
 
-        foreach ([...Platform::cases(), 'linkedin_urn'] as $handleKey) {
-            $key = $handleKey instanceof Platform ? $handleKey->value : $handleKey;
-            $rules['mentions.*.handles.'.$key] = $key === 'linkedin_urn'
-                ? ['nullable', 'string', 'max:255']
-                : ['nullable', 'string'];
+        foreach (Platform::cases() as $platform) {
+            $rules['mentions.*.handles.'.$platform->value] = ['nullable', 'string'];
         }
+
+        $rules['mentions.*.handles.linkedin_urn'] = ['nullable', 'string', 'max:255'];
 
         return $rules;
     }
