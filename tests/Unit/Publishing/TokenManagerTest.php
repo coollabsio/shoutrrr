@@ -50,6 +50,57 @@ it('refreshes bluesky oauth tokens with dpop and returns a bluesky session paylo
         && $request['client_id'] === 'https://app.example/oauth/bluesky/client-metadata.json');
 });
 
+it('sends the private_key_jwt assertion on refresh even when route() drifts from the stored client_id', function () {
+    // Regression: refreshOAuth runs in queue workers, where route('oauth.bluesky.metadata')
+    // derives its scheme/host from APP_URL and drifts from the web-request context that
+    // connected the account (e.g. behind a reverse proxy). The old
+    // `usesAssertion = clientId === route(...)` check then went false, the confidential
+    // client dropped its private_key_jwt assertion, and Bluesky rejected the refresh with
+    // invalid_client, flipping the account to needs-attention. atproto requires refresh to
+    // authenticate with the same method used at connect.
+    $key = app(DPoP::class)->generateKey();
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Bluesky->value,
+        'auth_method' => 'oauth',
+        'token_expires_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'old-access',
+        'refresh_token' => 'old-refresh',
+        'session' => [
+            'pds' => 'https://pds.example',
+            'token_endpoint' => 'https://auth.example/oauth/token',
+            'issuer' => 'https://auth.example',
+            // Captured at connect behind a proxy (https + real host); differs from the
+            // worker's route('oauth.bluesky.metadata') (http://localhost in tests).
+            'client_id' => 'https://app.example/oauth/bluesky/client-metadata.json',
+            'dpop_private_jwk' => $key,
+            'dpop_nonce' => 'old-nonce',
+        ],
+    ]);
+
+    expect('https://app.example/oauth/bluesky/client-metadata.json')
+        ->not->toBe(route('oauth.bluesky.metadata'));
+
+    Http::fake([
+        'https://auth.example/oauth/token' => Http::response([
+            'access_token' => 'new-access',
+            'refresh_token' => 'new-refresh',
+            'expires_in' => 3600,
+        ], 200, ['DPoP-Nonce' => 'new-nonce']),
+    ]);
+
+    app(TokenManager::class)->fresh($account->fresh());
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://auth.example/oauth/token'
+        && $request['client_assertion_type'] === 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
+        && isset($request['client_assertion'])
+        && $request['client_id'] === 'https://app.example/oauth/bluesky/client-metadata.json');
+
+    expect($account->fresh()->status)->toBe(ConnectedAccountStatus::Active);
+});
+
 it('uses a bluesky oauth token rotated by another worker instead of refreshing again', function () {
     $key = app(DPoP::class)->generateKey();
     $account = ConnectedAccount::factory()->create([
