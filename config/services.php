@@ -57,6 +57,16 @@ return [
         'api_version' => env('LINKEDIN_API_VERSION', LinkedInConnector::DEFAULT_VERSION),
     ],
 
+    // LinkedIn Pages/Organizations run through a SEPARATE developer app approved
+    // for the Community Management API — LinkedIn requires that product to be the
+    // only one on the app, so it cannot share the personal `linkedin-openid` app.
+    'linkedin-pages' => [
+        'client_id' => env('LINKEDIN_PAGES_CLIENT_ID'),
+        'client_secret' => env('LINKEDIN_PAGES_CLIENT_SECRET'),
+        'redirect' => env('LINKEDIN_PAGES_REDIRECT_URI'),
+        'api_version' => env('LINKEDIN_API_VERSION', LinkedInConnector::DEFAULT_VERSION),
+    ],
+
     'facebook' => [
         'client_id' => env('FACEBOOK_CLIENT_ID'),
         'client_secret' => env('FACEBOOK_CLIENT_SECRET'),

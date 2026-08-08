@@ -177,7 +177,7 @@ test('callback maps a linkedin-openid user', function () {
         ->and($account->token_expires_at)->not->toBeNull();
 });
 
-test('linkedin connect requests the community management feed scopes only when enabled', function () {
+test('personal linkedin connect never requests organization or member-feed scopes', function () {
     config()->set('services.linkedin-openid.client_id', 'cid');
     config()->set('services.linkedin-openid.client_secret', 'secret');
     config()->set('services.linkedin-openid.redirect', 'https://app.test/accounts/callback/linkedin');
@@ -194,80 +194,39 @@ test('linkedin connect requests the community management feed scopes only when e
     $provider->shouldReceive('redirect')->andReturn(redirect('https://provider.test/oauth'));
     Socialite::shouldReceive('driver')->with('linkedin-openid')->andReturn($provider);
 
-    // Off by default: never request the restricted scope (it would break authorize).
-    test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
-    expect($captured)->not->toContain('r_member_social_feed');
-
+    // Pages/organizations run through the dedicated Community Management app, so
+    // the personal app only ever asks for its base member scopes — even when the
+    // Community Management ("LinkedIn Pages") toggle is on. Requesting the closed
+    // org/member-feed scopes here would break the authorize outright.
     app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
 
     test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
-    expect($captured)->toContain('r_member_social_feed')
-        ->and($captured)->toContain('w_member_social_feed');
+
+    expect($captured)->toEqual(['openid', 'profile', 'email', 'w_member_social'])
+        ->and($captured)->not->toContain('r_member_social_feed')
+        ->and($captured)->not->toContain('w_organization_social')
+        ->and($captured)->not->toContain('rw_organization_admin');
 });
 
-test('linkedin connect requests the organization scopes only when community management is enabled', function () {
-    config()->set('services.linkedin-openid.client_id', 'cid');
-    config()->set('services.linkedin-openid.client_secret', 'secret');
-    config()->set('services.linkedin-openid.redirect', 'https://app.test/accounts/callback/linkedin');
-    ownerActingIn();
-
-    $captured = [];
-    $provider = Mockery::mock(AbstractProvider::class);
-    $provider->shouldReceive('setScopes')->andReturnUsing(function (array $scopes) use ($provider, &$captured) {
-        $captured = $scopes;
-
-        return $provider;
-    });
-    $provider->shouldReceive('redirectUrl')->andReturnSelf();
-    $provider->shouldReceive('redirect')->andReturn(redirect('https://provider.test/oauth'));
-    Socialite::shouldReceive('driver')->with('linkedin-openid')->andReturn($provider);
-
-    test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
-    expect($captured)->not->toContain('w_organization_social');
-
-    app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
-
-    test()->get('/accounts/connect/linkedin')->assertRedirect('https://provider.test/oauth');
-    expect($captured)->toContain('r_organization_social')
-        ->and($captured)->toContain('w_organization_social')
-        ->and($captured)->toContain('rw_organization_admin');
-});
-
-test('linkedin connect records the engagement capability from the granted scopes', function () {
+test('personal linkedin connect does not grant the engagement capability', function () {
+    // Member reply-reading needs the closed Community Management member-feed
+    // scope, which the personal app can't hold — so personal profiles never get
+    // engagement. Only Pages (connected via the CM app) can fetch engagement.
     config()->set('services.linkedin-openid.client_id', 'cid');
     config()->set('services.linkedin-openid.client_secret', 'secret');
     config()->set('services.linkedin-openid.redirect', 'https://app.test/accounts/callback/linkedin');
     ownerActingIn();
     fakeOAuthUser('linkedin-openid', [
-        'id' => 'sub-cap',
+        'id' => 'sub-person',
         'name' => 'Ada Lovelace',
-        'expiresIn' => 5184000,
-        'approvedScopes' => ['openid', 'profile', 'email', 'w_member_social', 'r_member_social_feed'],
-    ]);
-
-    test()->get('/accounts/callback/linkedin')->assertRedirect(route('accounts.index'));
-
-    $account = ConnectedAccount::withoutGlobalScopes()->firstWhere('remote_account_id', 'sub-cap');
-    expect($account->capabilities['linkedin_engagement'])->toBeTrue()
-        ->and($account->canFetchEngagement())->toBeTrue();
-});
-
-test('linkedin connect marks engagement unavailable when the feed scope is not granted', function () {
-    config()->set('services.linkedin-openid.client_id', 'cid');
-    config()->set('services.linkedin-openid.client_secret', 'secret');
-    config()->set('services.linkedin-openid.redirect', 'https://app.test/accounts/callback/linkedin');
-    ownerActingIn();
-    fakeOAuthUser('linkedin-openid', [
-        'id' => 'sub-nocap',
-        'name' => 'Alan Turing',
         'expiresIn' => 5184000,
         'approvedScopes' => ['openid', 'profile', 'email', 'w_member_social'],
     ]);
 
     test()->get('/accounts/callback/linkedin')->assertRedirect(route('accounts.index'));
 
-    $account = ConnectedAccount::withoutGlobalScopes()->firstWhere('remote_account_id', 'sub-nocap');
-    expect($account->capabilities['linkedin_engagement'])->toBeFalse()
+    $account = ConnectedAccount::withoutGlobalScopes()->firstWhere('remote_account_id', 'sub-person');
+    expect($account->isLinkedInOrganization())->toBeFalse()
         ->and($account->canFetchEngagement())->toBeFalse();
 });
 

@@ -9,15 +9,12 @@ use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
-use App\Services\ConnectedAccounts\LinkedIn\LinkedInOrganizationDiscovery;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\ConnectedAccounts\XAccountCapabilities;
 use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Inertia\Inertia;
-use Inertia\Response as InertiaResponse;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider;
 use Laravel\Socialite\Two\InvalidStateException;
@@ -32,7 +29,6 @@ class OAuthConnectionController extends Controller
         private readonly XAccountCapabilities $xCapabilities,
         private readonly ThreadsTokenExchanger $threadsExchanger,
         private readonly InstanceSettings $settings,
-        private readonly LinkedInOrganizationDiscovery $linkedInOrganizations,
     ) {}
 
     public function redirect(Request $request, string $platform): Response
@@ -44,7 +40,7 @@ class OAuthConnectionController extends Controller
         return $this->driver($resolved)->setScopes($this->scopesFor($resolved))->redirect();
     }
 
-    public function callback(Request $request, string $platform): RedirectResponse|InertiaResponse
+    public function callback(Request $request, string $platform): RedirectResponse
     {
         $resolved = $this->resolveOAuthPlatform($platform);
 
@@ -109,19 +105,6 @@ class OAuthConnectionController extends Controller
             $data = $data->withCapabilities([...($data->capabilities ?? []), 'dm_enabled' => $dmGranted]);
         }
 
-        $linkedInGrantedScopes = [];
-
-        if ($resolved === Platform::LinkedIn) {
-            // Record whether LinkedIn actually granted the restricted Community
-            // Management read scope, so the engagement inbox only polls accounts
-            // that can read replies (others 403). `approvedScopes` comes from the
-            // token response's `scope` field.
-            $linkedInGrantedScopes = array_values((array) $oauthUser->approvedScopes);
-            $data = $data->withCapabilities([
-                'linkedin_engagement' => in_array('r_member_social_feed', $linkedInGrantedScopes, true),
-            ]);
-        }
-
         if ($resolved === Platform::Threads) {
             // The short-lived Threads token is useless for publishing, so a failed
             // long-lived exchange is a failed connection — redirect with a friendly
@@ -140,66 +123,10 @@ class OAuthConnectionController extends Controller
             $data = $data->withLongLivedToken($long['token'], $long['expiresAt']);
         }
 
-        if ($resolved === Platform::LinkedIn && $this->settings->linkedinCommunityManagementEnabled()) {
-            $picker = $this->renderLinkedInPagePicker($request, $data, $linkedInGrantedScopes);
-
-            if ($picker !== null) {
-                return $picker;
-            }
-        }
-
         $this->connections->store($data, $request->user());
 
         return redirect()->route('accounts.index')
             ->with('success', $this->successMessage($resolved));
-    }
-
-    /**
-     * When the operator has opted into Community Management, offer the member's
-     * administered Pages alongside their personal profile. Returns the picker
-     * response, or null when the member administers no Pages (then the caller
-     * falls through to the normal single personal-account store).
-     *
-     * @param  list<string>  $grantedScopes
-     */
-    private function renderLinkedInPagePicker(Request $request, ConnectedAccountData $data, array $grantedScopes): ?InertiaResponse
-    {
-        $organizations = $this->linkedInOrganizations->administeredOrganizations((string) $data->accessToken);
-
-        if ($organizations === []) {
-            return null;
-        }
-
-        $stashedOrganizations = [];
-        foreach ($organizations as $organization) {
-            $stashedOrganizations[$organization->id] = [
-                'id' => $organization->id,
-                'urn' => $organization->urn,
-                'name' => $organization->name,
-                'vanityName' => $organization->vanityName,
-            ];
-        }
-
-        $person = [
-            'remoteAccountId' => $data->remoteAccountId,
-            'handle' => $data->handle,
-            'displayName' => $data->displayName,
-            'avatarUrl' => $data->avatarUrl,
-        ];
-
-        $request->session()->put('accounts.linkedin.connect', [
-            'person' => $person,
-            'organizations' => $stashedOrganizations,
-            'accessToken' => $data->accessToken,
-            'refreshToken' => $data->refreshToken,
-            'tokenExpiresAt' => $data->tokenExpiresAt?->toIso8601String(),
-            'approvedScopes' => $grantedScopes,
-        ]);
-
-        return Inertia::render('accounts/connect-linkedin', [
-            'person' => $person,
-            'organizations' => array_values($stashedOrganizations),
-        ]);
     }
 
     private function failed(string $message): RedirectResponse
@@ -244,27 +171,15 @@ class OAuthConnectionController extends Controller
     }
 
     /**
-     * OAuth scopes to request for a platform. LinkedIn's engagement inbox needs
-     * the restricted Community Management feed scopes; they are only appended
-     * when the operator has declared the app is approved for them, because
-     * requesting a scope an app lacks makes LinkedIn reject the whole authorize.
+     * OAuth scopes to request for a platform. LinkedIn Pages/organizations run
+     * through the dedicated Community Management app (LinkedInPageOAuthController),
+     * so the personal LinkedIn app here only ever requests its base member scopes.
      *
      * @return list<string>
      */
     private function scopesFor(Platform $platform): array
     {
         $scopes = $platform->scopes();
-
-        if ($platform === Platform::LinkedIn && $this->settings->linkedinCommunityManagementEnabled()) {
-            $scopes = [
-                ...$scopes,
-                'r_member_social_feed',
-                'w_member_social_feed',
-                'r_organization_social',
-                'w_organization_social',
-                'rw_organization_admin',
-            ];
-        }
 
         if ($platform->supportsDirectMessages() && $this->settings->directMessagesEnabled()) {
             $scopes = [...$scopes, ...$this->directMessageScopeDeltas($platform)];
