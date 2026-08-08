@@ -173,6 +173,81 @@ export function normalizeLinkedInUrn(reference: string): string | null {
     return null;
 }
 
+/** The kinds of Discord entity a mention can reference. */
+export type DiscordMentionKind = 'user' | 'role' | 'channel';
+
+/**
+ * Compose Discord's native mention markup for a snowflake id: `<@id>` for a
+ * user, `<@&id>` for a role, `<#id>` for a channel. Stored verbatim in
+ * `handles.discord` and posted to the webhook as-is, so Discord renders (and,
+ * per the server's mention settings, pings) the referenced entity. Returns ''
+ * for a blank id so the mention falls back to the label.
+ */
+export function discordMentionMarkup(
+    kind: DiscordMentionKind,
+    id: string,
+): string {
+    const trimmed = id.trim();
+    if (trimmed === '') {
+        return '';
+    }
+
+    switch (kind) {
+        case 'role':
+            return `<@&${trimmed}>`;
+        case 'channel':
+            return `<#${trimmed}>`;
+        default:
+            return `<@${trimmed}>`;
+    }
+}
+
+const DISCORD_MENTION_TOKEN = /^<(@&|@!?|#)(\d+)>$/;
+
+/**
+ * Parse a stored `handles.discord` value back into its kind + snowflake id, or
+ * null when it is plain display text (i.e. never configured as an id mention).
+ * The legacy `<@!id>` nickname form is normalized to a plain user mention.
+ */
+export function parseDiscordMention(
+    value: string | undefined,
+): { kind: DiscordMentionKind; id: string } | null {
+    const match = (value ?? '').trim().match(DISCORD_MENTION_TOKEN);
+    if (!match) {
+        return null;
+    }
+
+    const [, prefix, id] = match;
+    if (prefix === '@&') {
+        return { kind: 'role', id };
+    }
+    if (prefix === '#') {
+        return { kind: 'channel', id };
+    }
+
+    return { kind: 'user', id };
+}
+
+/**
+ * Reverse-map a mention set to `snowflake id → display label`, so resolved
+ * Discord markup (`<@id>` etc.) in published/preview text can be rendered as the
+ * friendly mention name instead of the raw id.
+ */
+export function discordMentionLabels(
+    mentions: readonly Pick<MentionPlaceholder, 'label' | 'handles'>[],
+): Record<string, string> {
+    const labels: Record<string, string> = {};
+
+    for (const mention of mentions) {
+        const parsed = parseDiscordMention(mention.handles.discord);
+        if (parsed) {
+            labels[parsed.id] = mention.label;
+        }
+    }
+
+    return labels;
+}
+
 const LINKEDIN_URN_TOKEN = /urn:li:organization:\d+/;
 const LINKEDIN_COMPANY_TOKEN = /\S*linkedin\.com\/company\/([^\s/?#]+)\S*/i;
 

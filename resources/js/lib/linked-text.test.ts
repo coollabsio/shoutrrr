@@ -159,6 +159,29 @@ describe('linkedTextParts', () => {
         ]);
     });
 
+    it('renders a LinkedIn company annotation as a named link, not raw markup', () => {
+        expect(
+            linkedTextParts(
+                'Thanks @[Coolify](urn:li:organization:12345) team',
+                'linkedin',
+            ),
+        ).toEqual([
+            { type: 'text', text: 'Thanks ' },
+            {
+                type: 'link',
+                text: 'Coolify',
+                href: 'https://www.linkedin.com/company/12345',
+            },
+            { type: 'text', text: ' team' },
+        ]);
+    });
+
+    it('leaves a plain LinkedIn display name untouched (no annotation)', () => {
+        expect(linkedTextParts('Thanks Coolify team', 'linkedin')).toEqual([
+            { type: 'text', text: 'Thanks Coolify team' },
+        ]);
+    });
+
     it('renders preview links with visible link styling', () => {
         const markup = renderToStaticMarkup(
             createElement(LinkedText, { text: 'Read shoutrrr.com' }),
@@ -167,5 +190,49 @@ describe('linkedTextParts', () => {
         expect(markup).toContain('href="https://shoutrrr.com"');
         expect(markup).toContain('underline');
         expect(markup).toContain('text-primary');
+    });
+
+    it('resolves Discord user/role/channel markup to labeled mention pills', () => {
+        const labels = { '1': '@adiology', '2': '@mods', '3': '@general' };
+
+        expect(
+            linkedTextParts('hi <@1> and <@&2> in <#3>', 'discord', [], labels),
+        ).toEqual([
+            { type: 'text', text: 'hi ' },
+            { type: 'mention', text: '@adiology' },
+            { type: 'text', text: ' and ' },
+            { type: 'mention', text: '@mods' },
+            { type: 'text', text: ' in ' },
+            { type: 'mention', text: '#general' },
+        ]);
+    });
+
+    it('treats the legacy <@!id> nickname form as a user mention', () => {
+        expect(
+            linkedTextParts('yo <@!1>', 'discord', [], { '1': '@adiology' }),
+        ).toEqual([
+            { type: 'text', text: 'yo ' },
+            { type: 'mention', text: '@adiology' },
+        ]);
+    });
+
+    it('leaves an unknown Discord id as raw text rather than a fake handle', () => {
+        expect(linkedTextParts('ping <@999>', 'discord', [], {})).toEqual([
+            { type: 'text', text: 'ping <@999>' },
+        ]);
+    });
+
+    it('renders a Discord mention as a non-link styled pill', () => {
+        const markup = renderToStaticMarkup(
+            createElement(LinkedText, {
+                text: 'hi <@1>',
+                platform: 'discord',
+                discordLabels: { '1': '@adiology' },
+            }),
+        );
+
+        expect(markup).toContain('@adiology');
+        expect(markup).not.toContain('<@1>');
+        expect(markup).not.toContain('<a ');
     });
 });

@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { discordMentionLabels } from '@/lib/compose/mentions';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { formatCompact, formatFull } from '@/lib/format';
 import { LinkedText } from '@/lib/linked-text';
@@ -229,6 +230,7 @@ function PublishedCard({
     stat,
     showMetrics,
     loading,
+    discordLabels,
 }: {
     target: TargetView;
     media: MediaView[];
@@ -236,6 +238,7 @@ function PublishedCard({
     stat: PostStatTarget | undefined;
     showMetrics: boolean;
     loading: boolean;
+    discordLabels: Record<string, string>;
 }) {
     const name =
         target.display_name ?? target.handle ?? platformLabel(target.platform);
@@ -321,6 +324,7 @@ function PublishedCard({
                                     <LinkedText
                                         text={section}
                                         platform={target.platform}
+                                        discordLabels={discordLabels}
                                     />
                                 </p>
                                 {index === 0 && cardMedia.length > 0 && (
@@ -576,6 +580,7 @@ function PublishedBody({
                     stat={statsById.get(selectedTarget.id)}
                     showMetrics={showMetrics}
                     loading={loading}
+                    discordLabels={discordMentionLabels(post.mentions ?? [])}
                 />
             )}
 
