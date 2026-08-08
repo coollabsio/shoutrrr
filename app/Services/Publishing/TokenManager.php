@@ -14,6 +14,7 @@ use App\Services\Atproto\DPoP;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -46,7 +47,7 @@ class TokenManager
         $secret = $account->secret()->firstOrFail();
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'app_password') {
-            return $this->blueskyCredentials($account, $secret);
+            return $this->blueskyCredentials($account);
         }
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'oauth') {
@@ -194,9 +195,49 @@ class TokenManager
      * also lapsed. Only when both fail do we surface the account as needing
      * attention and return the stale session (the publish then fails cleanly).
      *
+     * `refreshSession` rotates the single-use refreshJwt on every call, so
+     * concurrent callers — the publish, engagement, DM-poll, and repost jobs that
+     * all call fresh() — would otherwise race: the winner rotates the token, the
+     * loser POSTs the now-revoked one, 400s, falls back to createSession, and the
+     * churn hammers Bluesky's login rate limit until the account flips to
+     * needs-attention. ATProto's guidance is to serialize refreshes per session
+     * (see the XRPC spec and bluesky-social/atproto#3637); do so per account and
+     * re-read the rotated session under the lock. We refresh unconditionally rather
+     * than skipping while "still valid": the tokens are opaque per spec (their JWT
+     * fields "are not a stable part of the specification"), there is no
+     * server-provided expiry to gate on as the OAuth path has, and the spec expects
+     * a new access JWT to be fetched freely — refreshSession is cheap and, unlike
+     * createSession, not the rate-limited endpoint.
+     *
      * @return array<string, mixed>
      */
-    private function blueskyCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret): array
+    private function blueskyCredentials(ConnectedAccount $account): array
+    {
+        try {
+            return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
+                ->block(10, function () use ($account): array {
+                    $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
+                    $freshSecret = $freshAccount->secret()->firstOrFail();
+
+                    return $this->refreshBlueskyCredentials($freshAccount, $freshSecret);
+                });
+        } catch (LockTimeoutException) {
+            // Another worker already holds the lock and is refreshing this session. Rather
+            // than throw — which would fail the tries=1 publish job and risk flipping the
+            // account to needs-attention — degrade to the concurrently-persisted session,
+            // restoring the never-throw contract this path had before it was serialized.
+            // The holder saves the rotated tokens before releasing, so the re-read is at
+            // worst marginally stale and the publish proceeds with a valid session.
+            $freshSecret = $account->secret()->firstOrFail();
+
+            return ['session' => $freshSecret->session ?? [], 'app_password' => $freshSecret->app_password];
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function refreshBlueskyCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret): array
     {
         $session = $secret->session ?? [];
         $pds = (string) ($session['pds'] ?? self::BLUESKY_DEFAULT_PDS);
@@ -239,7 +280,10 @@ class TokenManager
         }
 
         // refreshSession authenticates with the refreshJwt as the bearer token.
-        $response = $this->http->withToken($refreshJwt)->acceptJson()
+        // Bound the request so a hung PDS cannot outlast the refresh lock's lease
+        // (which would let a second worker refresh concurrently and race the
+        // single-use refreshJwt); mirrors the timeouts used across the connectors.
+        $response = $this->http->timeout(10)->connectTimeout(5)->withToken($refreshJwt)->acceptJson()
             ->post($pds.'/xrpc/com.atproto.server.refreshSession');
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
@@ -259,7 +303,7 @@ class TokenManager
             return null;
         }
 
-        $response = $this->http->acceptJson()
+        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
             ->post($pds.'/xrpc/com.atproto.server.createSession', [
                 'identifier' => $identifier,
                 'password' => $appPassword,
@@ -309,7 +353,9 @@ class TokenManager
             : (string) config($configKey.'.client_id');
         $clientSecret = (string) config($configKey.'.client_secret');
 
-        $request = $this->http->asForm();
+        // Bound the token request so a hung endpoint cannot outlast the refresh
+        // lock's lease and let a second worker race the single-use refresh token.
+        $request = $this->http->asForm()->timeout(10)->connectTimeout(5);
 
         $body = [
             'grant_type' => 'refresh_token',
@@ -328,10 +374,17 @@ class TokenManager
             if ($key === null || $endpoint === '') {
                 throw new TokenRefreshException("Token refresh failed for account {$account->id}.");
             }
-            // Confidential clients authenticate with a private_key_jwt assertion; the
-            // loopback dev client (the synthesized `http://localhost/?…` id) is public
-            // and must not send one.
-            $usesAssertion = $clientId === route('oauth.bluesky.metadata');
+            // Confidential clients authenticate every token request — including refresh
+            // (atproto OAuth spec: refresh must reuse the connect-time auth method) —
+            // with a private_key_jwt assertion; the loopback dev client (the synthesized
+            // `http://localhost/?…` id) is public and must not send one. Derive this from
+            // the stored client_id, NOT by re-deriving route('oauth.bluesky.metadata')
+            // here: refreshOAuth runs in queue workers, where route() takes its scheme/
+            // host from APP_URL and drifts from the web-request context that connected the
+            // account (e.g. behind a reverse proxy). A mismatch dropped the assertion, so
+            // the auth server rejected the refresh with invalid_client and the account was
+            // flipped to needs-attention.
+            $usesAssertion = ! str_starts_with($clientId, 'http://localhost');
             if ($usesAssertion) {
                 $body['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
                 $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
@@ -349,7 +402,7 @@ class TokenManager
                 if ($usesAssertion) {
                     $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
                 }
-                $response = $this->http->asForm()
+                $response = $this->http->asForm()->timeout(10)->connectTimeout(5)
                     ->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $nonce))
                     ->post((string) $endpoint, $body);
             }
