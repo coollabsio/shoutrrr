@@ -280,9 +280,10 @@ test('bluesky app-password refresh serializes under the per-account lock', funct
 });
 
 test('fresh re-reads the rotated bluesky session under the lock before refreshing', function () {
-    // The refresh runs against the session read inside the lock, not a stale copy
-    // captured before the lock was acquired — so a token another worker already
-    // rotated is used as the basis for the next refresh.
+    // The refresh must run against the session read INSIDE the lock, not a stale copy
+    // captured before it was acquired. To prove the reload happens after acquisition,
+    // a concurrent worker rotates the refreshJwt from within the mocked block()
+    // callback — only a lock-scoped reload picks it up.
     $account = ConnectedAccount::factory()->bluesky()->create(['token_expires_at' => null]);
     ConnectedAccountSecret::factory()->create([
         'connected_account_id' => $account->id,
@@ -292,11 +293,6 @@ test('fresh re-reads the rotated bluesky session under the lock before refreshin
 
     $staleAccount = $account->fresh();
 
-    // Another worker rotated the refreshJwt after this caller loaded the account.
-    $account->secret->forceFill([
-        'session' => ['accessJwt' => 'worker-jwt', 'refreshJwt' => 'worker-rjwt', 'pds' => 'https://bsky.social'],
-    ])->save();
-
     Http::fake([
         'https://bsky.social/xrpc/com.atproto.server.refreshSession' => Http::response([
             'accessJwt' => 'fresh-jwt',
@@ -304,9 +300,25 @@ test('fresh re-reads the rotated bluesky session under the lock before refreshin
         ]),
     ]);
 
+    $lock = Mockery::mock(Lock::class);
+    $lock->shouldReceive('block')->once()
+        ->with(10, Mockery::type('Closure'))
+        ->andReturnUsing(function (int $seconds, Closure $callback) use ($account) {
+            // Another worker rotates the refreshJwt after the lock is acquired,
+            // before the callback reloads the credentials.
+            $account->secret->forceFill([
+                'session' => ['accessJwt' => 'worker-jwt', 'refreshJwt' => 'worker-rjwt', 'pds' => 'https://bsky.social'],
+            ])->save();
+
+            return $callback();
+        });
+    Cache::partialMock()->shouldReceive('lock')->once()
+        ->with("connected-account-token-refresh:{$account->id}", 60)
+        ->andReturn($lock);
+
     app(TokenManager::class)->fresh($staleAccount);
 
-    // refreshSession authenticated with the rotated token, not the stale one.
+    // refreshSession authenticated with the token rotated inside the lock, not the stale one.
     Http::assertSent(fn ($request) => $request->url() === 'https://bsky.social/xrpc/com.atproto.server.refreshSession'
         && $request->hasHeader('Authorization', 'Bearer worker-rjwt'));
 });

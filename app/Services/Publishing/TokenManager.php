@@ -14,6 +14,7 @@ use App\Services\Atproto\DPoP;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -46,7 +47,7 @@ class TokenManager
         $secret = $account->secret()->firstOrFail();
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'app_password') {
-            return $this->blueskyCredentials($account, $secret);
+            return $this->blueskyCredentials($account);
         }
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'oauth') {
@@ -210,15 +211,27 @@ class TokenManager
      *
      * @return array<string, mixed>
      */
-    private function blueskyCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret): array
+    private function blueskyCredentials(ConnectedAccount $account): array
     {
-        return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
-            ->block(10, function () use ($account): array {
-                $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
-                $freshSecret = $freshAccount->secret()->firstOrFail();
+        try {
+            return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
+                ->block(10, function () use ($account): array {
+                    $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
+                    $freshSecret = $freshAccount->secret()->firstOrFail();
 
-                return $this->refreshBlueskyCredentials($freshAccount, $freshSecret);
-            });
+                    return $this->refreshBlueskyCredentials($freshAccount, $freshSecret);
+                });
+        } catch (LockTimeoutException) {
+            // Another worker already holds the lock and is refreshing this session. Rather
+            // than throw — which would fail the tries=1 publish job and risk flipping the
+            // account to needs-attention — degrade to the concurrently-persisted session,
+            // restoring the never-throw contract this path had before it was serialized.
+            // The holder saves the rotated tokens before releasing, so the re-read is at
+            // worst marginally stale and the publish proceeds with a valid session.
+            $freshSecret = $account->secret()->firstOrFail();
+
+            return ['session' => $freshSecret->session ?? [], 'app_password' => $freshSecret->app_password];
+        }
     }
 
     /**
@@ -267,7 +280,10 @@ class TokenManager
         }
 
         // refreshSession authenticates with the refreshJwt as the bearer token.
-        $response = $this->http->withToken($refreshJwt)->acceptJson()
+        // Bound the request so a hung PDS cannot outlast the refresh lock's lease
+        // (which would let a second worker refresh concurrently and race the
+        // single-use refreshJwt); mirrors the timeouts used across the connectors.
+        $response = $this->http->timeout(10)->connectTimeout(5)->withToken($refreshJwt)->acceptJson()
             ->post($pds.'/xrpc/com.atproto.server.refreshSession');
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
@@ -287,7 +303,7 @@ class TokenManager
             return null;
         }
 
-        $response = $this->http->acceptJson()
+        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
             ->post($pds.'/xrpc/com.atproto.server.createSession', [
                 'identifier' => $identifier,
                 'password' => $appPassword,
@@ -337,7 +353,9 @@ class TokenManager
             : (string) config($configKey.'.client_id');
         $clientSecret = (string) config($configKey.'.client_secret');
 
-        $request = $this->http->asForm();
+        // Bound the token request so a hung endpoint cannot outlast the refresh
+        // lock's lease and let a second worker race the single-use refresh token.
+        $request = $this->http->asForm()->timeout(10)->connectTimeout(5);
 
         $body = [
             'grant_type' => 'refresh_token',
@@ -384,7 +402,7 @@ class TokenManager
                 if ($usesAssertion) {
                     $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
                 }
-                $response = $this->http->asForm()
+                $response = $this->http->asForm()->timeout(10)->connectTimeout(5)
                     ->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $nonce))
                     ->post((string) $endpoint, $body);
             }
