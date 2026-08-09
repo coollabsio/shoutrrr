@@ -69,7 +69,11 @@ class WorkspaceSubscriptionGate
             return null;
         }
 
-        $publishCostMicrousd = $this->xPublishCostMicrousd();
+        $publishCostMicrousd = $this->pricing->costWeightMicrousd(
+            Platform::X->value,
+            UsageOperation::POST,
+            1,
+        );
 
         if ($publishCostMicrousd <= 0) {
             return null;

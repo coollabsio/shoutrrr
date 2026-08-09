@@ -112,23 +112,18 @@ test('additional cloud workspaces must have an active subscription to publish', 
     expect(app(WorkspaceSubscriptionGate::class)->canPublish($workspace))->toBeFalse();
 });
 
-test('x publishing quota is five dollars worth of worst case monthly requests', function () {
+test('x publishing quota uses the standard post price while the budget guards expensive posts', function () {
     Date::setTestNow('2026-06-15 12:00:00');
     $workspace = subscribedWorkspace();
     $gate = app(WorkspaceSubscriptionGate::class);
 
-    expect($gate->monthlyXPostLimit($workspace))->toBe(25)
-        ->and($gate->remainingXPosts($workspace))->toBe(25);
+    expect($gate->monthlyXPostLimit($workspace))->toBe(333)
+        ->and($gate->remainingXPosts($workspace))->toBe(333);
 
-    recordXPosts($workspace, 24);
+    recordXPosts($workspace, 25);
 
-    expect($gate->remainingXPosts($workspace))->toBe(1)
+    expect($gate->remainingXPosts($workspace))->toBe(308)
         ->and($gate->canPublishX($workspace))->toBeTrue();
-
-    recordXPosts($workspace);
-
-    expect($gate->remainingXPosts($workspace))->toBe(0)
-        ->and($gate->canPublishX($workspace))->toBeFalse();
 
     Date::setTestNow();
 });
@@ -195,7 +190,7 @@ test('x publishing reserves enough budget for url bearing tweets', function () {
 
     $gate = app(WorkspaceSubscriptionGate::class);
 
-    expect($gate->remainingXPosts($workspace))->toBe(25)
+    expect($gate->remainingXPosts($workspace))->toBe(333)
         ->and($gate->remainingXBudgetMicrousd($workspace))->toBe(150_000)
         ->and($gate->canPublishX($workspace))->toBeFalse();
 
@@ -259,7 +254,7 @@ test('a failed x publish does not consume quota because the job no longer pre-ch
     // Quota is now driven by the metering counters the publish connector increments
     // on success. A failed publish meters nothing, so the full quota remains.
     expect($connectorCalls)->toBe(1)
-        ->and(app(WorkspaceSubscriptionGate::class)->remainingXPosts($workspace))->toBe(25);
+        ->and(app(WorkspaceSubscriptionGate::class)->remainingXPosts($workspace))->toBe(333);
 
     Date::setTestNow();
 });
@@ -267,7 +262,7 @@ test('a failed x publish does not consume quota because the job no longer pre-ch
 test('x publishing stops before calling the connector when quota is exhausted', function () {
     Date::setTestNow('2026-06-15 12:00:00');
     $workspace = subscribedWorkspace();
-    recordXPosts($workspace, 25);
+    recordXPosts($workspace, 333);
     $post = Post::factory()->create([
         'workspace_id' => $workspace->id,
         'status' => PostStatus::Publishing,
@@ -392,7 +387,7 @@ test('url bearing tweets count toward the x post quota', function () {
     $gate = app(WorkspaceSubscriptionGate::class);
 
     expect($gate->currentXPostUsage($workspace))->toBe(5)
-        ->and($gate->remainingXPosts($workspace))->toBe(20);
+        ->and($gate->remainingXPosts($workspace))->toBe(328);
 
     Date::setTestNow();
 });
@@ -434,11 +429,11 @@ test('x quota period is anchored to the subscription date, not the calendar mont
     // Only the 2 posts since June 10 count, even though 5 happened in June and
     // a calendar-month reset on July 1 would have shown zero usage.
     expect($gate->currentXPostUsage($workspace))->toBe(2)
-        ->and($gate->remainingXPosts($workspace))->toBe(23);
+        ->and($gate->remainingXPosts($workspace))->toBe(331);
 
     Date::setTestNow('2026-07-11 12:00:00'); // next cycle started July 10
     expect($gate->currentXPostUsage($workspace))->toBe(0)
-        ->and($gate->remainingXPosts($workspace))->toBe(25);
+        ->and($gate->remainingXPosts($workspace))->toBe(333);
 
     Date::setTestNow();
 });
@@ -479,7 +474,7 @@ it('applies a finite per-workspace override to the budget and post limit', funct
     $gate = app(WorkspaceSubscriptionGate::class);
 
     expect($gate->monthlyXBudgetMicrousd($workspace))->toBe(20_000_000)
-        ->and($gate->monthlyXPostLimit($workspace))->toBe(100); // floor(20 / 0.20)
+        ->and($gate->monthlyXPostLimit($workspace))->toBe(1333); // floor(20 / 0.015)
 });
 
 it('recomputes X cost from the current pricing map, ignoring stale stored cost', function (): void {
