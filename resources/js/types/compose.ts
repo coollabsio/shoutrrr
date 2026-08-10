@@ -140,6 +140,23 @@ export type Placement = {
     position: number;
 };
 
+export type GoogleBusinessProfileLocalPostOptions = {
+    local_post_type: 'standard' | 'event' | 'offer';
+    language?: string;
+    cta_type?: string;
+    cta_url?: string;
+    title?: string;
+    start_at?: string;
+    end_at?: string;
+    coupon_code?: string;
+    redemption_url?: string;
+    terms?: string;
+};
+
+export type ProviderOptions = {
+    google_business_profile?: GoogleBusinessProfileLocalPostOptions;
+};
+
 export type TargetView = {
     id: string;
     connected_account_id: string;
@@ -151,6 +168,8 @@ export type TargetView = {
     content_override: { segments?: string[]; media_ids?: string[] } | null;
     auto_split: boolean;
     format: PostFormat;
+    provider_options?: ProviderOptions | null;
+    remote_metadata?: Record<string, unknown> | null;
     issues: string[];
     status: TargetStatus;
     error_kind: string | null;

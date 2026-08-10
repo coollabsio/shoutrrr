@@ -39,6 +39,51 @@ test('blockingTargets passes a within-limit target', function () {
     expect($blocked)->toBe([]);
 });
 
+test('blockingTargets enforces Google Business Profile event and offer options', function () {
+    $post = Post::factory()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::GoogleBusinessProfile]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::GoogleBusinessProfile->value,
+        'sections' => ['An event summary'],
+        'provider_options' => ['google_business_profile' => [
+            'local_post_type' => 'event',
+            'title' => '',
+            'start_at' => '2026-08-11T10:00:00Z',
+            'end_at' => '2026-08-11T09:00:00Z',
+        ]],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked[0]['issues'])->toContain('gbp_event_title_required', 'gbp_event_schedule_required');
+});
+
+test('blockingTargets enforces Google Business Profile policy safeguards', function () {
+    $post = Post::factory()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::GoogleBusinessProfile]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::GoogleBusinessProfile->value,
+        'sections' => ['Hotel deal today! Hotel deal today! Cannabis discount. Call 555-111-2222 or 555-333-4444. Visit http://127.0.0.1.'],
+        'provider_options' => ['google_business_profile' => [
+            'local_post_type' => 'standard',
+            'cta_url' => 'http://example.test',
+        ]],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked[0]['issues'])->toContain(
+        'gbp_cta_url_invalid',
+        'gbp_unsafe_url',
+        'gbp_phone_stuffing',
+        'gbp_regulated_promotion',
+        'gbp_hotel_promotion',
+        'gbp_repetitive_content',
+    );
+});
+
 test('blockingTargets flags a target with no text and no media', function () {
     $post = Post::factory()->create();
     PostTarget::factory()->for($post)->create([

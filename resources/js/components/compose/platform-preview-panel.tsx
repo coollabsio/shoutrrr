@@ -14,7 +14,10 @@ import type {
 } from '@/lib/compose/platform-preview';
 import { LinkedText } from '@/lib/linked-text';
 import { cn } from '@/lib/utils';
-import type { PlatformName } from '@/types/compose';
+import type {
+    GoogleBusinessProfileLocalPostOptions,
+    PlatformName,
+} from '@/types/compose';
 
 import { FacebookPreview } from './preview/facebook-preview';
 import { InstagramPreview } from './preview/instagram-preview';
@@ -28,6 +31,7 @@ const PLATFORM_LABELS: Record<PlatformName, string> = {
     instagram: 'Instagram',
     threads: 'Threads',
     discord: 'Discord',
+    google_business_profile: 'Google Business Profile',
 };
 
 const PLATFORM_GLYPH_CLASS: Record<PlatformName, string> = {
@@ -38,6 +42,7 @@ const PLATFORM_GLYPH_CLASS: Record<PlatformName, string> = {
     instagram: 'text-[#E4405F]',
     threads: 'text-foreground',
     discord: 'text-[#5865F2]',
+    google_business_profile: 'text-[#4285F4]',
 };
 
 function initials(name: string): string {
@@ -192,8 +197,10 @@ function PlatformPreviewPost({
 
 export function PlatformPreviewPanel({
     preview,
+    googleBusinessProfileOptions,
 }: {
     preview: PlatformPreview | null;
+    googleBusinessProfileOptions?: GoogleBusinessProfileLocalPostOptions;
 }) {
     const label = preview ? PLATFORM_LABELS[preview.platform] : null;
 
@@ -250,6 +257,29 @@ export function PlatformPreviewPanel({
                 <ThreadsPreview preview={preview} />
             ) : (
                 <div className="p-4">
+                    {preview.platform === 'google_business_profile' &&
+                        googleBusinessProfileOptions && (
+                            <div className="mb-3 rounded-xl border bg-muted/40 p-3 text-[12px]">
+                                <p className="font-semibold text-foreground">
+                                    {googleBusinessProfileOptions.local_post_type ===
+                                    'standard'
+                                        ? 'Standard local post'
+                                        : `${googleBusinessProfileOptions.local_post_type === 'event' ? 'Event' : 'Offer'} local post`}
+                                </p>
+                                {googleBusinessProfileOptions.title && (
+                                    <p className="mt-1 text-muted-foreground">
+                                        {googleBusinessProfileOptions.title}
+                                    </p>
+                                )}
+                                {googleBusinessProfileOptions.start_at &&
+                                    googleBusinessProfileOptions.end_at && (
+                                        <p className="mt-1 text-muted-foreground">
+                                            {googleBusinessProfileOptions.start_at} –{' '}
+                                            {googleBusinessProfileOptions.end_at}
+                                        </p>
+                                    )}
+                            </div>
+                        )}
                     <div className="rounded-3xl border border-border bg-background px-4 pt-4 shadow-xs">
                         {preview.items.map((item, index) => (
                             <PlatformPreviewPost

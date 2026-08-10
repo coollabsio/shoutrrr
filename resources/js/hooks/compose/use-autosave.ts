@@ -258,6 +258,7 @@ export function useAutosave({
         state.overrideByAccount,
         state.autoSplitByAccount,
         state.formatByAccount,
+        state.providerOptionsByAccount,
         state.media,
         state.autoRepost,
         state.placements,

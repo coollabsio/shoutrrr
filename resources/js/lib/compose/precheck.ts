@@ -3,6 +3,7 @@ import { measure } from '@/lib/compose/section-split';
 import { platformLabel } from '@/lib/platforms';
 import type {
     Account,
+    GoogleBusinessProfileLocalPostOptions,
     MediaView,
     MentionPlaceholder,
     PlatformLimits,
@@ -21,7 +22,21 @@ export type BlockReason =
     | 'video_too_large'
     | 'gif_not_mixable'
     | 'reels_requires_video'
-    | 'story_requires_media';
+    | 'story_requires_media'
+    | 'gbp_summary_required'
+    | 'gbp_threads_not_supported'
+    | 'gbp_media_not_supported'
+    | 'gbp_event_title_required'
+    | 'gbp_event_schedule_required'
+    | 'gbp_offer_title_required'
+    | 'gbp_offer_schedule_required'
+    | 'gbp_offer_redemption_url_required'
+    | 'gbp_cta_url_invalid'
+    | 'gbp_unsafe_url'
+    | 'gbp_phone_stuffing'
+    | 'gbp_regulated_promotion'
+    | 'gbp_hotel_promotion'
+    | 'gbp_repetitive_content';
 
 export type AccountBlock = {
     accountId: string;
@@ -39,7 +54,70 @@ type PrecheckAccountInput = {
     hasVideo: boolean;
     format: PostFormat;
     limits: PlatformLimits;
+    providerOptions?: GoogleBusinessProfileLocalPostOptions;
 };
+
+function hasValidGoogleBusinessProfileSchedule(
+    options: GoogleBusinessProfileLocalPostOptions,
+): boolean {
+    const start = Date.parse(options.start_at ?? '');
+    const end = Date.parse(options.end_at ?? '');
+
+    return !Number.isNaN(start) && !Number.isNaN(end) && end > start;
+}
+
+function isInvalidGoogleBusinessProfileUrl(value: string | undefined): boolean {
+    if (!value || !URL.canParse(value)) {
+        return true;
+    }
+
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+
+    return (
+        url.protocol !== 'https:' ||
+        /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) ||
+        ['bit.ly', 'tinyurl.com', 't.co'].includes(hostname)
+    );
+}
+
+function googleBusinessProfilePolicyReasons(
+    text: string,
+    localPostType: GoogleBusinessProfileLocalPostOptions['local_post_type'],
+): BlockReason[] {
+    const reasons: BlockReason[] = [];
+    const urls = text.match(/https?:\/\/[^\s<]+/gi) ?? [];
+    if (urls.some((url) => isInvalidGoogleBusinessProfileUrl(url))) {
+        reasons.push('gbp_unsafe_url');
+    }
+    if ((text.match(/(?:\+?\d[\d().\-\s]{6,}\d)/g) ?? []).length > 1) {
+        reasons.push('gbp_phone_stuffing');
+    }
+    const promotional = /\b(discount|deal|offer|promotion|sale|coupon)\b/i.test(text);
+    if (
+        promotional &&
+        /\b(alcohol|cannabis|marijuana|tobacco|vape|gambling|casino|firearm|weapon|adult)\b/i.test(
+            text,
+        )
+    ) {
+        reasons.push('gbp_regulated_promotion');
+    }
+    if (
+        /\b(hotel|motel|resort|inn)\b/i.test(text) &&
+        (localPostType === 'offer' || promotional)
+    ) {
+        reasons.push('gbp_hotel_promotion');
+    }
+
+    const sentences = (text.toLowerCase().match(/[^.!?]+[.!?]?/g) ?? [])
+        .map((sentence) => sentence.trim())
+        .filter(Boolean);
+    if (new Set(sentences).size !== sentences.length) {
+        reasons.push('gbp_repetitive_content');
+    }
+
+    return reasons;
+}
 
 function byteLength(text: string): number {
     return new TextEncoder().encode(text).length;
@@ -68,11 +146,53 @@ export function precheckAccount({
     hasVideo,
     format,
     limits,
+    providerOptions,
 }: PrecheckAccountInput): BlockReason[] {
     const reasons: BlockReason[] = [];
     const clean = segments
         .map((segment) => segment.trim())
         .filter((segment) => segment !== '');
+
+    if (account.platform === 'google_business_profile') {
+        if (clean.length === 0) {
+            reasons.push('gbp_summary_required');
+        }
+        if (clean.length > 1) {
+            reasons.push('gbp_threads_not_supported');
+        }
+        if (mediaCount > 0) {
+            reasons.push('gbp_media_not_supported');
+        }
+
+        const type = providerOptions?.local_post_type ?? 'standard';
+        reasons.push(
+            ...googleBusinessProfilePolicyReasons(clean.join('\n'), type),
+        );
+        if (
+            providerOptions?.cta_url &&
+            isInvalidGoogleBusinessProfileUrl(providerOptions.cta_url)
+        ) {
+            reasons.push('gbp_cta_url_invalid');
+        }
+        if (type === 'event' || type === 'offer') {
+            if (!providerOptions?.title?.trim()) {
+                reasons.push(`gbp_${type}_title_required` as BlockReason);
+            }
+            if (!providerOptions || !hasValidGoogleBusinessProfileSchedule(providerOptions)) {
+                reasons.push(`gbp_${type}_schedule_required` as BlockReason);
+            }
+            if (
+                type === 'offer' &&
+                isInvalidGoogleBusinessProfileUrl(
+                    providerOptions?.redemption_url,
+                )
+            ) {
+                reasons.push('gbp_offer_redemption_url_required');
+            }
+        }
+
+        return reasons;
+    }
 
     if (clean.length === 0 && mediaCount === 0) {
         return ['empty'];
@@ -131,6 +251,10 @@ type PrecheckDestinationsInput = {
     media: MediaView[];
     limits: PlatformLimits[];
     formatByAccount: Record<string, PostFormat>;
+    providerOptionsByAccount?: Record<
+        string,
+        GoogleBusinessProfileLocalPostOptions | undefined
+    >;
 };
 
 /**
@@ -153,6 +277,7 @@ export function precheckDestinations({
     media,
     limits,
     formatByAccount,
+    providerOptionsByAccount = {},
 }: PrecheckDestinationsInput): AccountBlock[] {
     const blocks: AccountBlock[] = [];
     const mediaCount = media.length;
@@ -175,6 +300,7 @@ export function precheckDestinations({
             hasVideo,
             format: formatByAccount[account.id] ?? 'feed',
             limits: platformLimits,
+            providerOptions: providerOptionsByAccount[account.id],
         });
         if (reasons.length > 0) {
             blocks.push({
@@ -226,5 +352,31 @@ export function describeReason(
             return `${label} Reels need a video`;
         case 'story_requires_media':
             return `${label} Stories need an image or video`;
+        case 'gbp_summary_required':
+            return 'Google Business Profile requires a post summary';
+        case 'gbp_threads_not_supported':
+            return 'Google Business Profile does not support threaded posts';
+        case 'gbp_media_not_supported':
+            return 'Google Business Profile media is not supported in this release';
+        case 'gbp_event_title_required':
+        case 'gbp_offer_title_required':
+            return 'this local post needs a title';
+        case 'gbp_event_schedule_required':
+        case 'gbp_offer_schedule_required':
+            return 'this local post needs a valid start and end time';
+        case 'gbp_offer_redemption_url_required':
+            return 'this offer needs a valid redemption URL';
+        case 'gbp_cta_url_invalid':
+            return 'Google Business Profile CTA URLs must be safe HTTPS URLs';
+        case 'gbp_unsafe_url':
+            return 'post text contains an unsafe URL';
+        case 'gbp_phone_stuffing':
+            return 'post text contains too many phone numbers';
+        case 'gbp_regulated_promotion':
+            return 'promotional content cannot advertise regulated products or services';
+        case 'gbp_hotel_promotion':
+            return 'hotels cannot publish offers, deals, or promotions';
+        case 'gbp_repetitive_content':
+            return 'post text appears repetitive or spam-like';
     }
 }

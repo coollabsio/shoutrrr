@@ -16,7 +16,7 @@ final class DraftData
      * @param  list<string>  $destinationIds
      * @param  list<string>  $mediaIds
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
-     * @param  array<string, array{auto_split?: bool, format?: string, content_override?: array{segments: list<string>, media_ids: list<string>}|null, placements?: list<array{media_id: string, segment_ref: string, position: int}>, segment_breaks?: list<string>}>  $targetsByAccount
+     * @param  array<string, array{auto_split?: bool, format?: string, content_override?: array{segments: list<string>, media_ids: list<string>}|null, provider_options?: array<string, mixed>|null, placements?: list<array{media_id: string, segment_ref: string, position: int}>, segment_breaks?: list<string>}>  $targetsByAccount
      * @param  list<string>  $segmentBreaks
      * @param  list<array{media_id: string, segment_ref: string, position: int}>  $placements
      */
@@ -80,6 +80,9 @@ final class DraftData
             if (array_key_exists('format', $target) && $target['format'] !== null) {
                 $entry['format'] = (string) $target['format'];
             }
+            if (array_key_exists('provider_options', $target)) {
+                $entry['provider_options'] = is_array($target['provider_options']) ? $target['provider_options'] : null;
+            }
             if (array_key_exists('placements', $target)) {
                 $entry['placements'] = self::readPlacements($target['placements']);
             }
@@ -141,6 +144,17 @@ final class DraftData
     public function formatFor(string $accountId): string
     {
         return $this->targetsByAccount[$accountId]['format'] ?? 'feed';
+    }
+
+    public function hasProviderOptionsFor(string $accountId): bool
+    {
+        return array_key_exists('provider_options', $this->targetsByAccount[$accountId] ?? []);
+    }
+
+    /** @return array<string, mixed>|null */
+    public function providerOptionsFor(string $accountId): ?array
+    {
+        return $this->targetsByAccount[$accountId]['provider_options'] ?? null;
     }
 
     /**
