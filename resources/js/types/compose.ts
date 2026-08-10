@@ -9,7 +9,8 @@ export type PlatformName =
     | 'facebook'
     | 'instagram'
     | 'threads'
-    | 'discord';
+    | 'discord'
+    | 'google_business_profile';
 
 export type PostFormat = 'feed' | 'reels' | 'story';
 

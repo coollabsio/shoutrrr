@@ -19,9 +19,9 @@ test('only discord supports the webhook connect flow', function () {
     }
 });
 
-test('discord is the only platform without engagement support', function () {
+test('discord and google business profile do not support engagement', function () {
     foreach (Platform::cases() as $platform) {
-        expect($platform->supportsEngagement())->toBe($platform !== Platform::Discord);
+        expect($platform->supportsEngagement())->toBe(! in_array($platform, [Platform::Discord, Platform::GoogleBusinessProfile], true));
     }
 });
 

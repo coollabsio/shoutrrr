@@ -17,6 +17,7 @@ it('defaults every platform to available', function () {
         'instagram' => true,
         'threads' => true,
         'discord' => true,
+        'google_business_profile' => true,
     ]);
 });
 
@@ -46,7 +47,7 @@ it('lets an owner view the platforms page', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('settings/instance-platforms')
-            ->has('platforms', 7)
+            ->has('platforms', 8)
             ->where('linkedin_community_management_enabled', false));
 });
 
@@ -71,6 +72,7 @@ it('persists platform toggles for an owner', function () {
                 'instagram' => true,
                 'threads' => true,
                 'discord' => true,
+                'google_business_profile' => true,
             ],
             'linkedin_community_management_enabled' => false,
         ])
@@ -94,6 +96,7 @@ it('persists the linkedin community management toggle from the platforms page', 
                 'instagram' => true,
                 'threads' => true,
                 'discord' => true,
+                'google_business_profile' => true,
             ],
             'linkedin_community_management_enabled' => true,
         ])
@@ -115,6 +118,7 @@ it('rejects a platforms update missing the linkedin community management field',
                 'instagram' => true,
                 'threads' => true,
                 'discord' => true,
+                'google_business_profile' => true,
             ],
         ])
         ->assertSessionHasErrors('linkedin_community_management_enabled');

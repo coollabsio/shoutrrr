@@ -8,7 +8,9 @@ test('platform capability flags are correct', function () {
         ->and(Platform::LinkedIn->supportsOAuth())->toBeTrue()
         ->and(Platform::LinkedIn->supportsAppPassword())->toBeFalse()
         ->and(Platform::Bluesky->supportsOAuth())->toBeFalse()
-        ->and(Platform::Bluesky->supportsAppPassword())->toBeTrue();
+        ->and(Platform::Bluesky->supportsAppPassword())->toBeTrue()
+        ->and(Platform::GoogleBusinessProfile->supportsOAuth())->toBeTrue()
+        ->and(Platform::GoogleBusinessProfile->supportsAppPassword())->toBeFalse();
 });
 
 test('x scopes include users.email so Socialite can read confirmed_email', function () {
@@ -36,6 +38,7 @@ test('platforms report whether their connector can like a reply', function () {
         ->and(Platform::LinkedIn->supportsReplyLikes())->toBeTrue()
         ->and(Platform::Facebook->supportsReplyLikes())->toBeTrue()
         ->and(Platform::Discord->supportsReplyLikes())->toBeTrue()
+        ->and(Platform::GoogleBusinessProfile->supportsReplyLikes())->toBeFalse()
         ->and(Platform::Instagram->supportsReplyLikes())->toBeTrue()
         ->and(Platform::Threads->supportsReplyLikes())->toBeFalse();
 });
@@ -78,24 +81,43 @@ test('app-password platform is always configured', function () {
     expect(Platform::Bluesky->isConfigured())->toBeTrue();
 });
 
+test('google business profile requires separate approved credentials', function () {
+    config()->set('services.google_business_profile.client_id', 'cid');
+    config()->set('services.google_business_profile.client_secret', 'secret');
+    config()->set('services.google_business_profile.api_approved', false);
+
+    expect(Platform::GoogleBusinessProfile->label())->toBe('Google Business Profile')
+        ->and(Platform::GoogleBusinessProfile->configKey())->toBe('services.google_business_profile')
+        ->and(Platform::GoogleBusinessProfile->socialiteDriver())->toBeNull()
+        ->and(Platform::GoogleBusinessProfile->scopes())->toBe(['business.manage'])
+        ->and(Platform::GoogleBusinessProfile->isConfigured())->toBeFalse();
+
+    config()->set('services.google_business_profile.api_approved', true);
+    expect(Platform::GoogleBusinessProfile->isConfigured())->toBeTrue();
+
+    config()->set('services.google_business_profile.client_secret', '');
+    expect(Platform::GoogleBusinessProfile->isConfigured())->toBeFalse();
+});
+
 test('capabilities array exposes one entry per platform for the frontend', function () {
     config()->set('services.x.client_id', 'cid');
     config()->set('services.x.client_secret', 'secret');
 
     $caps = Platform::capabilities();
 
-    expect($caps)->toHaveCount(7)
+    expect($caps)->toHaveCount(8)
         ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'supportsWebhook', 'configured', 'launched', 'enabled']);
 });
 
-test('every platform is launched', function () {
+test('existing platforms are launched while google business profile is inert', function () {
     expect(Platform::X->isLaunched())->toBeTrue()
         ->and(Platform::Bluesky->isLaunched())->toBeTrue()
         ->and(Platform::LinkedIn->isLaunched())->toBeTrue()
         ->and(Platform::Facebook->isLaunched())->toBeTrue()
         ->and(Platform::Instagram->isLaunched())->toBeTrue()
         ->and(Platform::Threads->isLaunched())->toBeTrue()
-        ->and(Platform::Discord->isLaunched())->toBeTrue();
+        ->and(Platform::Discord->isLaunched())->toBeTrue()
+        ->and(Platform::GoogleBusinessProfile->isLaunched())->toBeFalse();
 });
 
 test('facebook scopes cover the reconciled facebook-login set', function () {

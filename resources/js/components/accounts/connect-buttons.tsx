@@ -54,6 +54,7 @@ const SUPPORTED_PLATFORM_ICONS = [
     'instagram',
     'threads',
     'discord',
+    'google_business_profile',
 ];
 
 export function isSupportedPlatformIcon(
