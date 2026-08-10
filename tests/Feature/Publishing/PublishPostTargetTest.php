@@ -7,6 +7,7 @@ use App\Enums\ErrorKind;
 use App\Enums\PostStatus;
 use App\Enums\PostTargetStatus;
 use App\Jobs\PublishPostTarget;
+use App\Jobs\ReconcileGoogleBusinessProfileLocalPost;
 use App\Models\PostTargetAttempt;
 use App\Services\Publishing\BackoffSchedule;
 use App\Services\Publishing\PostStatusRollup;
@@ -35,6 +36,26 @@ test('successful publish marks the target published with remote ids', function (
 
     expect(PostTargetAttempt::where('post_target_id', $target->id)->where('status', 'published')->count())->toBe(1);
     expect($target->post->refresh()->status)->toBe(PostStatus::Published);
+});
+
+test('accepted Google Business Profile post schedules bounded reconciliation', function () {
+    Bus::fake();
+    $target = publishTarget();
+    $target->forceFill(['platform' => 'google_business_profile'])->save();
+    bindConnector(PublishResult::success(['accounts/one/locations/one/localPosts/post-one'], [
+        'name' => 'accounts/one/locations/one/localPosts/post-one',
+        'state' => 'PROCESSING',
+    ]));
+
+    (new PublishPostTarget($target))->handle(
+        app(PublishConnectorRegistry::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+        app(BackoffSchedule::class),
+    );
+
+    expect($target->refresh()->remote_metadata['state'])->toBe('PROCESSING');
+    Bus::assertDispatched(ReconcileGoogleBusinessProfileLocalPost::class);
 });
 
 test('retryable failure schedules a retry and re-dispatches', function () {

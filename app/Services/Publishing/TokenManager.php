@@ -19,6 +19,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\RateLimiter;
 use Throwable;
 
 class TokenManager
@@ -121,6 +122,11 @@ class TokenManager
                 if (! $force && ! $this->needsRefresh($freshAccount)) {
                     return ['access_token' => $freshSecret->access_token];
                 }
+
+                if (RateLimiter::tooManyAttempts('google-business-profile', 10)) {
+                    throw new TokenRefreshException('Google Business Profile requests are temporarily rate limited.');
+                }
+                RateLimiter::hit('google-business-profile', 60);
 
                 $response = $this->http->asForm()->timeout(10)->connectTimeout(5)->post('https://oauth2.googleapis.com/token', [
                     'grant_type' => 'refresh_token',

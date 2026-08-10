@@ -10,6 +10,7 @@ final readonly class PublishResult
 {
     /**
      * @param  list<string>  $remoteIds
+     * @param  array<string, mixed>|null  $remoteMetadata
      */
     public function __construct(
         public array $remoteIds,
@@ -18,14 +19,16 @@ final readonly class PublishResult
         public ?int $httpStatus = null,
         public ?string $responseExcerpt = null,
         public ?int $retryAfter = null,
+        public ?array $remoteMetadata = null,
     ) {}
 
     /**
      * @param  list<string>  $remoteIds
      */
-    public static function success(array $remoteIds): self
+    /** @param array<string, mixed>|null $remoteMetadata */
+    public static function success(array $remoteIds, ?array $remoteMetadata = null, ?int $httpStatus = null): self
     {
-        return new self(remoteIds: $remoteIds);
+        return new self(remoteIds: $remoteIds, remoteMetadata: $remoteMetadata, httpStatus: $httpStatus);
     }
 
     public static function failure(ErrorKind $kind, string $message, ?int $httpStatus = null, ?string $excerpt = null, ?int $retryAfter = null): self

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
 use App\Models\PostTarget;
 use App\Services\Publishing\PublishConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -22,6 +24,14 @@ class DeletePostTarget implements ShouldQueue
     public int $timeout = 120;
 
     public function __construct(public PostTarget $target) {}
+
+    /** @return array<int, object> */
+    public function middleware(): array
+    {
+        return $this->target->platform === Platform::GoogleBusinessProfile
+            ? [new RateLimited('google-business-profile')]
+            : [];
+    }
 
     /**
      * @return array<int, int>

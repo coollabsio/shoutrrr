@@ -12,11 +12,14 @@ use App\Exceptions\GoogleBusinessProfileDiscoveryException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\RateLimiter;
 
 class GoogleBusinessProfileLocationDiscovery
 {
     public const string ACCOUNT_MANAGEMENT_BASE = 'https://mybusinessaccountmanagement.googleapis.com/v1';
+
     public const string BUSINESS_INFORMATION_BASE = 'https://mybusinessbusinessinformation.googleapis.com/v1';
+
     public const string LOCATION_READ_MASK = 'name,title,storeCode,storefrontAddress,metadata';
 
     public function __construct(private readonly HttpFactory $http) {}
@@ -69,6 +72,13 @@ class GoogleBusinessProfileLocationDiscovery
         $maxPages = str_contains($url, 'accountmanagement') ? 20 : 50;
 
         for ($page = 0; $page < $maxPages; $page++) {
+            if (RateLimiter::tooManyAttempts('google-business-profile', 10)) {
+                throw new GoogleBusinessProfileDiscoveryException(new GoogleBusinessProfileReadinessIssue(
+                    GoogleBusinessProfileReadinessIssueCode::QuotaExceeded,
+                    'Google Business Profile requests are temporarily rate limited.',
+                ));
+            }
+            RateLimiter::hit('google-business-profile', 60);
             $response = $this->http->acceptJson()->withToken($accessToken)->get($url, [...$query, 'pageSize' => str_contains($url, 'accountmanagement') ? 20 : 100, ...($pageToken === null ? [] : ['pageToken' => $pageToken])]);
             if ($response->failed()) {
                 throw new GoogleBusinessProfileDiscoveryException($this->issueFor($response));

@@ -27,6 +27,7 @@ use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -66,6 +67,14 @@ class PublishPostTarget implements ShouldQueue
     ];
 
     public function __construct(public PostTarget $target) {}
+
+    /** @return array<int, object> */
+    public function middleware(): array
+    {
+        return $this->target->platform === Platform::GoogleBusinessProfile
+            ? [new RateLimited('google-business-profile')]
+            : [];
+    }
 
     public function handle(
         PublishConnectorRegistry $registry,
@@ -392,6 +401,7 @@ class PublishPostTarget implements ShouldQueue
             'status' => PostTargetStatus::Published->value,
             'remote_id' => $result->remoteIds[0] ?? null,
             'remote_ids' => $result->remoteIds,
+            'remote_metadata' => $result->remoteMetadata ?? $target->remote_metadata,
             'posted_at' => Date::now(),
             'error_kind' => null,
             'error_message' => null,
@@ -403,6 +413,10 @@ class PublishPostTarget implements ShouldQueue
             'http_status' => $result->httpStatus,
             'finished_at' => Date::now(),
         ])->save();
+
+        if (in_array($result->remoteMetadata['state'] ?? null, ['PROCESSING', 'SCHEDULED'], true)) {
+            ReconcileGoogleBusinessProfileLocalPost::dispatch($target->fresh())->delay(30);
+        }
 
         $this->notifyPublished($target);
     }

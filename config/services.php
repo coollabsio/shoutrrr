@@ -47,6 +47,7 @@ return [
         'client_id' => env('GOOGLE_BUSINESS_PROFILE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_BUSINESS_PROFILE_CLIENT_SECRET'),
         'api_approved' => env('GOOGLE_BUSINESS_PROFILE_API_APPROVED', false),
+        'base_url' => env('GOOGLE_BUSINESS_PROFILE_BASE_URL', 'https://mybusiness.googleapis.com/v4'),
     ],
 
     'x' => [
