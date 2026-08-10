@@ -253,6 +253,11 @@ enum Platform: string
         return $this !== self::GoogleBusinessProfile;
     }
 
+    public function hasConnectionFlow(): bool
+    {
+        return $this->isLaunched() || $this === self::GoogleBusinessProfile;
+    }
+
     /**
      * The subset of the Facebook-Login-driven Meta platforms (Facebook,
      * Instagram) that are launched — used to gate the shared
@@ -300,7 +305,7 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, supportsWebhook: bool, configured: bool, launched: bool, enabled: bool}>
+     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, supportsWebhook: bool, configured: bool, launched: bool, connectable: bool, enabled: bool}>
      */
     public static function capabilities(): array
     {
@@ -314,6 +319,7 @@ enum Platform: string
             'supportsWebhook' => $platform->supportsWebhook(),
             'configured' => $platform->isConfigured(),
             'launched' => $platform->isLaunched(),
+            'connectable' => $platform->hasConnectionFlow(),
             'enabled' => $enabled[$platform->value] ?? true,
         ], self::cases());
     }

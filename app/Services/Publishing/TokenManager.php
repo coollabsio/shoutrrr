@@ -76,6 +76,10 @@ class TokenManager
             return ['webhook_url' => $secret->access_token];
         }
 
+        if ($account->platform === Platform::GoogleBusinessProfile) {
+            return $this->googleBusinessProfileCredentials($account, $secret, $force);
+        }
+
         if (! $force && ! $this->needsRefresh($account)) {
             return ['access_token' => $secret->access_token];
         }
@@ -100,6 +104,60 @@ class TokenManager
         }
 
         return $account->token_expires_at->lte(Date::now()->addSeconds(self::SKEW_SECONDS));
+    }
+
+    /** @return array<string, mixed> */
+    private function googleBusinessProfileCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret, bool $force): array
+    {
+        if (! $force && ! $this->needsRefresh($account)) {
+            return ['access_token' => $secret->access_token];
+        }
+
+        return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
+            ->block(10, function () use ($account, $force): array {
+                $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
+                $freshSecret = $freshAccount->secret()->firstOrFail();
+
+                if (! $force && ! $this->needsRefresh($freshAccount)) {
+                    return ['access_token' => $freshSecret->access_token];
+                }
+
+                $response = $this->http->asForm()->timeout(10)->connectTimeout(5)->post('https://oauth2.googleapis.com/token', [
+                    'grant_type' => 'refresh_token',
+                    'refresh_token' => $freshSecret->refresh_token,
+                    'client_id' => config('services.google_business_profile.client_id'),
+                    'client_secret' => config('services.google_business_profile.client_secret'),
+                ]);
+
+                if ($response->failed() || ! filled($response->json('access_token'))) {
+                    $freshAccount->forceFill([
+                        'status' => ConnectedAccountStatus::NeedsAttention->value,
+                        'refresh_failed_at' => Date::now(),
+                        'refresh_failure_reason' => $this->refreshFailureReason($response),
+                    ])->save();
+
+                    throw new TokenRefreshException("Token refresh failed for account {$freshAccount->id}.");
+                }
+
+                $accessToken = (string) $response->json('access_token');
+                $refreshToken = filled($response->json('refresh_token')) ? (string) $response->json('refresh_token') : $freshSecret->refresh_token;
+                $expiresIn = (int) $response->json('expires_in', 0);
+
+                $freshSecret->forceFill([
+                    'access_token' => $accessToken,
+                    'refresh_token' => $refreshToken,
+                ])->save();
+
+                $freshAccount->forceFill([
+                    'token_expires_at' => $expiresIn > 0 ? Date::now()->addSeconds($expiresIn) : null,
+                    'last_refreshed_at' => Date::now(),
+                    'status' => ConnectedAccountStatus::Active->value,
+                    'refresh_failed_at' => null,
+                    'refresh_failure_reason' => null,
+                ])->save();
+
+                return ['access_token' => $accessToken];
+            });
     }
 
     /**

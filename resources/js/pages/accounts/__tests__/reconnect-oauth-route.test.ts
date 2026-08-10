@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
+import GoogleBusinessProfileConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/GoogleBusinessProfileConnectionController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import type { Account } from '@/components/accounts/types';
 import { reconnectOAuthUrl } from '@/pages/accounts/index';
@@ -68,6 +69,12 @@ describe('reconnectOAuthUrl', () => {
     it('uses the generic OAuth route for other platforms', () => {
         expect(reconnectOAuthUrl(account({ platform: 'x' }))).toBe(
             OAuthConnectionController.redirect.url({ platform: 'x' }),
+        );
+    });
+
+    it('uses the bespoke Google Business Profile route', () => {
+        expect(reconnectOAuthUrl(account({ platform: 'google_business_profile' }))).toBe(
+            GoogleBusinessProfileConnectionController.redirect.url(),
         );
     });
 });
