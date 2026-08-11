@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\ConnectedAccountStatus;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
@@ -55,8 +56,10 @@ class ReconcileGoogleBusinessProfileLocalPost implements ShouldBeUnique, ShouldQ
             return;
         }
 
+        $account = $target->account()->firstOrFail();
+
         try {
-            $credentials = $tokens->fresh($target->account()->firstOrFail());
+            $credentials = $tokens->fresh($account);
         } catch (TokenRefreshException $exception) {
             if ($exception->errorKind->isRetryable()) {
                 $this->release($exception->retryAfter ?? 30);
@@ -71,10 +74,30 @@ class ReconcileGoogleBusinessProfileLocalPost implements ShouldBeUnique, ShouldQ
         }
 
         $result = $connector->fetchState($target, $credentials);
+        if ($result->errorKind === ErrorKind::AuthExpired) {
+            try {
+                $credentials = $tokens->fresh($account, force: true);
+                $result = $connector->fetchState($target, $credentials);
+            } catch (TokenRefreshException $exception) {
+                if ($exception->errorKind->isRetryable()) {
+                    $this->release($exception->retryAfter ?? 30);
+                } else {
+                    $target->forceFill([
+                        'error_kind' => $exception->errorKind->value,
+                        'error_message' => $exception->getMessage(),
+                    ])->save();
+                }
+
+                return;
+            }
+        }
         if (! $result->isSuccessful()) {
             if (($result->errorKind ?? ErrorKind::Unknown)->isRetryable()) {
                 $this->release($result->retryAfter ?? 30);
             } else {
+                if ($result->errorKind === ErrorKind::AuthExpired) {
+                    $account->forceFill(['status' => ConnectedAccountStatus::NeedsAttention->value])->save();
+                }
                 $target->forceFill([
                     'error_kind' => $result->errorKind?->value,
                     'error_message' => $result->errorMessage,

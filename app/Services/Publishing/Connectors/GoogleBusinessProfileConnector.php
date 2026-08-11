@@ -47,11 +47,11 @@ class GoogleBusinessProfileConnector implements PublishConnector
                 ->timeout(20)
                 ->post($this->baseUrl().'/'.$location.'/localPosts', $this->payload($context));
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, 'Google Business Profile request could not be completed.');
+            return PublishResult::failure(ErrorKind::Network, 'Google Business Profile request could not be completed.', mayHaveCreatedRemote: true);
         }
 
         if ($response->failed()) {
-            return $this->failure($response);
+            return $this->failure($response, $response->serverError());
         }
 
         $name = $response->json('name');
@@ -139,7 +139,7 @@ class GoogleBusinessProfileConnector implements PublishConnector
         return $payload;
     }
 
-    private function failure(Response $response): PublishResult
+    private function failure(Response $response, bool $mayHaveCreatedRemote = false): PublishResult
     {
         $status = $response->status();
         $kind = match (true) {
@@ -150,7 +150,7 @@ class GoogleBusinessProfileConnector implements PublishConnector
             default => ErrorKind::Unknown,
         };
 
-        return PublishResult::failure($kind, 'Google Business Profile rejected the Local Post request.', $status, $this->excerpt($response), RetryAfter::seconds($response));
+        return PublishResult::failure($kind, 'Google Business Profile rejected the Local Post request.', $status, $this->excerpt($response), RetryAfter::seconds($response), $mayHaveCreatedRemote);
     }
 
     /** @return array<string, mixed> */

@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
 use App\Jobs\ReconcileGoogleBusinessProfileLocalPost;
@@ -95,4 +96,62 @@ test('reconciliation releases the current unique job while Google is still proce
 
     $job->assertReleased(30);
     expect($target->refresh()->remote_metadata['reconcile_polls'])->toBe(1);
+});
+
+test('reconciliation force-refreshes once after a lifecycle unauthorized response', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'fresh-token',
+            'refresh_token' => 'fresh-refresh-token',
+            'expires_in' => 7200,
+        ]),
+        'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts/post-one' => Http::sequence()
+            ->push([], 401)
+            ->push([
+                'name' => 'accounts/one/locations/one/localPosts/post-one',
+                'state' => 'LIVE',
+            ]),
+    ]);
+    $target = googleBusinessProfileTarget();
+    $account = $target->account()->firstOrFail();
+    $account->secret()->firstOrFail()->forceFill(['refresh_token' => 'refresh-old'])->save();
+
+    (new ReconcileGoogleBusinessProfileLocalPost($target))->handle(
+        app(GoogleBusinessProfileConnector::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+    );
+
+    expect($target->refresh()->remote_metadata['state'])->toBe('LIVE')
+        ->and($account->refresh()->status)->toBe(ConnectedAccountStatus::Active);
+    Http::assertSentCount(3);
+});
+
+test('reconciliation marks the account needs attention when lifecycle authorization remains revoked', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'fresh-token',
+            'refresh_token' => 'fresh-refresh-token',
+            'expires_in' => 7200,
+        ]),
+        'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts/post-one' => Http::sequence()
+            ->push([], 401)
+            ->push([], 401),
+    ]);
+    $target = googleBusinessProfileTarget();
+    $account = $target->account()->firstOrFail();
+    $account->secret()->firstOrFail()->forceFill(['refresh_token' => 'refresh-old'])->save();
+
+    (new ReconcileGoogleBusinessProfileLocalPost($target))->handle(
+        app(GoogleBusinessProfileConnector::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+    );
+
+    expect($target->refresh()->status)->toBe(PostTargetStatus::Published)
+        ->and($target->error_kind->value)->toBe('auth_expired')
+        ->and($account->refresh()->status)->toBe(ConnectedAccountStatus::NeedsAttention);
+    Http::assertSentCount(3);
 });

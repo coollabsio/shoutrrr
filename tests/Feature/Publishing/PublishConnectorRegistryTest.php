@@ -118,7 +118,7 @@ test('google business profile connector preserves quota retry timing', function 
         ->and($result->retryAfter)->toBe(120);
 });
 
-test('google business profile connector maps auth and server failures', function (int $status, string $kind) {
+test('google business profile connector maps auth and server failures', function (int $status, string $kind, bool $mayHaveCreatedRemote) {
     Http::fake([
         'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts' => Http::response(['error' => ['message' => 'failed']], $status),
     ]);
@@ -133,11 +133,12 @@ test('google business profile connector maps auth and server failures', function
     ));
 
     expect($result->errorKind->value)->toBe($kind)
-        ->and($result->httpStatus)->toBe($status);
+        ->and($result->httpStatus)->toBe($status)
+        ->and($result->mayHaveCreatedRemote)->toBe($mayHaveCreatedRemote);
 })->with([
-    'expired token' => [401, 'auth_expired'],
-    'permission denied' => [403, 'validation'],
-    'server failure' => [500, 'server_error'],
+    'expired token' => [401, 'auth_expired', false],
+    'permission denied' => [403, 'validation', false],
+    'server failure' => [500, 'server_error', true],
 ]);
 
 test('google business profile delete uses the canonical resource and accepts 404', function () {

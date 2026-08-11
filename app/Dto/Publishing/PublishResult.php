@@ -20,6 +20,7 @@ final readonly class PublishResult
         public ?string $responseExcerpt = null,
         public ?int $retryAfter = null,
         public ?array $remoteMetadata = null,
+        public bool $mayHaveCreatedRemote = false,
     ) {}
 
     /**
@@ -31,7 +32,7 @@ final readonly class PublishResult
         return new self(remoteIds: $remoteIds, remoteMetadata: $remoteMetadata, httpStatus: $httpStatus);
     }
 
-    public static function failure(ErrorKind $kind, string $message, ?int $httpStatus = null, ?string $excerpt = null, ?int $retryAfter = null): self
+    public static function failure(ErrorKind $kind, string $message, ?int $httpStatus = null, ?string $excerpt = null, ?int $retryAfter = null, bool $mayHaveCreatedRemote = false): self
     {
         return new self(
             remoteIds: [],
@@ -40,6 +41,7 @@ final readonly class PublishResult
             httpStatus: $httpStatus,
             responseExcerpt: $excerpt,
             retryAfter: $retryAfter,
+            mayHaveCreatedRemote: $mayHaveCreatedRemote,
         );
     }
 

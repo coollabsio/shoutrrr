@@ -435,7 +435,7 @@ class PublishPostTarget implements ShouldQueue
 
     private function onFailure(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result, BackoffSchedule $backoff): void
     {
-        if ($target->platform === Platform::GoogleBusinessProfile && $result->errorKind === ErrorKind::Network && isset(($target->remote_metadata ?? [])['create_intent'])) {
+        if ($target->platform === Platform::GoogleBusinessProfile && $result->mayHaveCreatedRemote && isset(($target->remote_metadata ?? [])['create_intent'])) {
             $metadata = $target->remote_metadata ?? [];
             $metadata['create_intent']['state'] = 'outcome_unknown';
             $metadata['create_intent']['outcome_unknown_at'] = Date::now()->toIso8601String();
