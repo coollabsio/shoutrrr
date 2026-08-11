@@ -244,13 +244,10 @@ enum Platform: string
      * branding, and phased rollout) before their connectors exist; until then
      * connecting must stay disabled even when credentials are configured. Flip a
      * platform to `true` when its publish/engagement/metrics connectors land.
-     *
-     * Google Business Profile is registered but deliberately inert until its
-     * dedicated connection and publishing flows are implemented.
      */
     public function isLaunched(): bool
     {
-        return $this !== self::GoogleBusinessProfile;
+        return true;
     }
 
     public function hasConnectionFlow(): bool

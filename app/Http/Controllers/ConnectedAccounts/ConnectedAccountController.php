@@ -152,6 +152,10 @@ class ConnectedAccountController extends Controller
                 return redirect()->route('accounts.meta.redirect');
             }
 
+            if ($account->platform === Platform::GoogleBusinessProfile) {
+                return redirect()->route('accounts.google-business-profile.redirect');
+            }
+
             return redirect()->route('accounts.connect', ['platform' => $account->platform->value]);
         }
 

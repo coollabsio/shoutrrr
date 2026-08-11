@@ -109,7 +109,7 @@ test('capabilities array exposes one entry per platform for the frontend', funct
         ->and($caps[0])->toHaveKeys(['platform', 'label', 'supportsOAuth', 'supportsAppPassword', 'supportsWebhook', 'configured', 'launched', 'enabled']);
 });
 
-test('existing platforms are launched while google business profile is inert', function () {
+test('all supported publishing platforms are launched', function () {
     expect(Platform::X->isLaunched())->toBeTrue()
         ->and(Platform::Bluesky->isLaunched())->toBeTrue()
         ->and(Platform::LinkedIn->isLaunched())->toBeTrue()
@@ -117,7 +117,11 @@ test('existing platforms are launched while google business profile is inert', f
         ->and(Platform::Instagram->isLaunched())->toBeTrue()
         ->and(Platform::Threads->isLaunched())->toBeTrue()
         ->and(Platform::Discord->isLaunched())->toBeTrue()
-        ->and(Platform::GoogleBusinessProfile->isLaunched())->toBeFalse();
+        ->and(Platform::GoogleBusinessProfile->isLaunched())->toBeTrue()
+        ->and(Platform::GoogleBusinessProfile->supportsAccountMetrics())->toBeFalse()
+        ->and(Platform::GoogleBusinessProfile->supportsPostMetrics())->toBeFalse()
+        ->and(Platform::GoogleBusinessProfile->supportsEngagement())->toBeFalse()
+        ->and(Platform::GoogleBusinessProfile->supportsRepost())->toBeFalse();
 });
 
 test('facebook scopes cover the reconciled facebook-login set', function () {

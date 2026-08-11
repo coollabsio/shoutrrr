@@ -44,12 +44,23 @@ it('404s the OAuth connect redirect for a frozen platform', function () {
         ->assertNotFound();
 });
 
-it('404s the Google Business Profile connect redirect while the platform is inert', function () {
+it('rejects Google Business Profile from the generic OAuth route', function () {
     ownerActingInFrozenTest();
     config()->set('services.google_business_profile.client_id', 'id');
     config()->set('services.google_business_profile.client_secret', 'secret');
     config()->set('services.google_business_profile.api_approved', true);
 
     test()->get(route('accounts.connect', ['platform' => 'google_business_profile']))
+        ->assertNotFound();
+});
+
+it('404s the bespoke Google Business Profile redirect when frozen', function () {
+    ownerActingInFrozenTest();
+    config()->set('services.google_business_profile.client_id', 'id');
+    config()->set('services.google_business_profile.client_secret', 'secret');
+    config()->set('services.google_business_profile.api_approved', true);
+    app(InstanceSettings::class)->update(['platforms_enabled' => ['google_business_profile' => false]]);
+
+    test()->get(route('accounts.google-business-profile.redirect'))
         ->assertNotFound();
 });

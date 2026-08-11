@@ -66,7 +66,7 @@ class GoogleBusinessProfileConnectionController extends Controller
 
     public function callback(Request $request): RedirectResponse|Response
     {
-        $request->user()->can('create', ConnectedAccount::class) ?: abort(403);
+        $this->available($request);
         $oauth = $request->session()->get(self::OAUTH_SESSION_KEY, []);
         $locationsStash = $request->session()->get(self::LOCATIONS_SESSION_KEY, []);
 
@@ -118,7 +118,7 @@ class GoogleBusinessProfileConnectionController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $request->user()->can('create', ConnectedAccount::class) ?: abort(403);
+        $this->available($request);
         $oauth = $request->session()->get(self::OAUTH_SESSION_KEY, []);
         $stash = $request->session()->get(self::LOCATIONS_SESSION_KEY, []);
         $locations = is_array($stash) ? ($stash['locations'] ?? []) : [];

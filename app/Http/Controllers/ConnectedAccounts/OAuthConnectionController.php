@@ -300,6 +300,7 @@ class OAuthConnectionController extends Controller
             || ! $resolved->supportsOAuth()
             || ! $resolved->isConfigured()
             || ! $resolved->isLaunched()
+            || $resolved->socialiteDriver() === null
             || ! app(InstanceSettings::class)->platformAvailable($resolved)
             // Facebook/Instagram always go through the dedicated
             // MetaConnectionController Page-selection flow, never this
