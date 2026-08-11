@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Publishing;
 
 use App\Enums\ConnectedAccountStatus;
+use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\UsageCategory;
 use App\Exceptions\TokenRefreshException;
@@ -13,8 +14,10 @@ use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -124,16 +127,29 @@ class TokenManager
                 }
 
                 if (RateLimiter::tooManyAttempts('google-business-profile', 10)) {
-                    throw new TokenRefreshException('Google Business Profile requests are temporarily rate limited.');
+                    throw new TokenRefreshException('Google Business Profile requests are temporarily rate limited.', ErrorKind::RateLimited, 60);
                 }
                 RateLimiter::hit('google-business-profile', 60);
 
-                $response = $this->http->asForm()->timeout(10)->connectTimeout(5)->post('https://oauth2.googleapis.com/token', [
-                    'grant_type' => 'refresh_token',
-                    'refresh_token' => $freshSecret->refresh_token,
-                    'client_id' => config('services.google_business_profile.client_id'),
-                    'client_secret' => config('services.google_business_profile.client_secret'),
-                ]);
+                try {
+                    $response = $this->http->asForm()->timeout(10)->connectTimeout(5)->post('https://oauth2.googleapis.com/token', [
+                        'grant_type' => 'refresh_token',
+                        'refresh_token' => $freshSecret->refresh_token,
+                        'client_id' => config('services.google_business_profile.client_id'),
+                        'client_secret' => config('services.google_business_profile.client_secret'),
+                    ]);
+                } catch (ConnectionException) {
+                    throw new TokenRefreshException('Google Business Profile token refresh could not be completed.', ErrorKind::Network);
+                }
+
+                if ($response->status() === 429 || $response->serverError()) {
+                    throw new TokenRefreshException(
+                        'Google Business Profile token refresh is temporarily unavailable.',
+                        $response->status() === 429 ? ErrorKind::RateLimited : ErrorKind::ServerError,
+                        RetryAfter::seconds($response),
+                        $response->status(),
+                    );
+                }
 
                 if ($response->failed() || ! filled($response->json('access_token'))) {
                     $freshAccount->forceFill([

@@ -79,7 +79,7 @@ class GoogleBusinessProfileLocationDiscovery
                 ));
             }
             RateLimiter::hit('google-business-profile', 60);
-            $response = $this->http->acceptJson()->withToken($accessToken)->get($url, [...$query, 'pageSize' => str_contains($url, 'accountmanagement') ? 20 : 100, ...($pageToken === null ? [] : ['pageToken' => $pageToken])]);
+            $response = $this->http->acceptJson()->withToken($accessToken)->connectTimeout(5)->timeout(10)->get($url, [...$query, 'pageSize' => str_contains($url, 'accountmanagement') ? 20 : 100, ...($pageToken === null ? [] : ['pageToken' => $pageToken])]);
             if ($response->failed()) {
                 throw new GoogleBusinessProfileDiscoveryException($this->issueFor($response));
             }

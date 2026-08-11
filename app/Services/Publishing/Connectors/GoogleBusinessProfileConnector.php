@@ -9,9 +9,11 @@ use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Models\PostTarget;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Support\RetryAfter;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Str;
 
 class GoogleBusinessProfileConnector implements PublishConnector
 {
@@ -33,6 +35,9 @@ class GoogleBusinessProfileConnector implements PublishConnector
         }
         if ($context->target->remote_id !== null) {
             return PublishResult::success($context->target->remote_ids ?? [$context->target->remote_id], $context->target->remote_metadata);
+        }
+        if (($context->target->remote_metadata['create_intent']['state'] ?? null) === 'outcome_unknown') {
+            return PublishResult::failure(ErrorKind::Unknown, 'Google Business Profile create outcome is unknown. Verify the Local Post before retrying.');
         }
 
         try {
@@ -63,7 +68,7 @@ class GoogleBusinessProfileConnector implements PublishConnector
         $token = (string) ($credentials['access_token'] ?? '');
         $name = $target->remote_metadata['name'] ?? $target->remote_id;
         if ($token === '' || ! is_string($name) || $name === '') {
-            return;
+            throw new \RuntimeException('Google Business Profile deletion requires an access token and canonical Local Post name.');
         }
 
         $response = $this->http->withToken($token)->connectTimeout(5)->timeout(20)->delete($this->baseUrl().'/'.$name);
@@ -72,26 +77,31 @@ class GoogleBusinessProfileConnector implements PublishConnector
         }
     }
 
-    /** @return array<string, mixed>|null */
-    public function fetchState(PostTarget $target, array $credentials): ?array
+    /** @param array<string, mixed> $credentials */
+    public function fetchState(PostTarget $target, array $credentials): PublishResult
     {
         $token = (string) ($credentials['access_token'] ?? '');
         $name = $target->remote_metadata['name'] ?? $target->remote_id;
         if ($token === '' || ! is_string($name) || $name === '') {
-            return null;
+            return PublishResult::failure(ErrorKind::AuthExpired, 'Google Business Profile access token or Local Post name is unavailable.');
         }
 
         try {
             $response = $this->http->withToken($token)->acceptJson()->connectTimeout(5)->timeout(20)->get($this->baseUrl().'/'.$name);
         } catch (ConnectionException) {
-            return null;
+            return PublishResult::failure(ErrorKind::Network, 'Google Business Profile lifecycle request could not be completed.');
         }
 
         if ($response->failed()) {
-            return null;
+            return $this->failure($response);
         }
 
-        return $this->metadata($response);
+        $name = $response->json('name');
+        if (! is_string($name) || $name === '') {
+            return PublishResult::failure(ErrorKind::ServerError, 'Google Business Profile did not return a Local Post resource name.', $response->status(), $this->excerpt($response));
+        }
+
+        return PublishResult::success([$name], $this->metadata($response), $response->status());
     }
 
     private function baseUrl(): string
@@ -140,7 +150,7 @@ class GoogleBusinessProfileConnector implements PublishConnector
             default => ErrorKind::Unknown,
         };
 
-        return PublishResult::failure($kind, 'Google Business Profile rejected the Local Post request.', $status, $this->excerpt($response), $this->retryAfter($response));
+        return PublishResult::failure($kind, 'Google Business Profile rejected the Local Post request.', $status, $this->excerpt($response), RetryAfter::seconds($response));
     }
 
     /** @return array<string, mixed> */
@@ -156,15 +166,18 @@ class GoogleBusinessProfileConnector implements PublishConnector
         ], static fn (mixed $value): bool => $value !== null);
     }
 
-    private function retryAfter(Response $response): ?int
-    {
-        $value = $response->header('Retry-After');
-
-        return is_numeric($value) ? (int) $value : null;
-    }
-
     private function excerpt(Response $response): string
     {
-        return mb_substr($response->body(), 0, 500);
+        $error = $response->json('error');
+        if (! is_array($error)) {
+            return 'Google Business Profile returned an unstructured error response.';
+        }
+
+        return (string) json_encode(array_filter([
+            'status' => $error['status'] ?? null,
+            'reason' => data_get($error, 'details.0.reason'),
+            'service' => data_get($error, 'details.0.@type'),
+            'message' => isset($error['message']) ? Str::limit((string) $error['message'], 300) : null,
+        ]), JSON_THROW_ON_ERROR);
     }
 }

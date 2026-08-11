@@ -13,23 +13,28 @@ use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\GoogleBusinessProfile\GoogleBusinessProfileLocationDiscovery;
 use App\Support\InstanceSettings;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class GoogleBusinessProfileConnectionController extends Controller
 {
     private const string OAUTH_SESSION_KEY = 'accounts.google_business_profile.oauth';
+
     private const string LOCATIONS_SESSION_KEY = 'accounts.google_business_profile.locations';
+
     private const string AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+
     private const string TOKEN_URL = 'https://oauth2.googleapis.com/token';
+
     private const string CONSENT_VERSION = '2026-08-10.google-business-profile-local-posts-v1';
 
     public function __construct(
@@ -73,13 +78,17 @@ class GoogleBusinessProfileConnectionController extends Controller
             return redirect()->route('accounts.index')->with('error', 'Google Business Profile connection was not completed.');
         }
 
-        $token = $this->http->asForm()->post(self::TOKEN_URL, [
-            'code' => $request->query('code'),
-            'client_id' => config('services.google_business_profile.client_id'),
-            'client_secret' => config('services.google_business_profile.client_secret'),
-            'redirect_uri' => route('accounts.google-business-profile.callback'),
-            'grant_type' => 'authorization_code',
-        ]);
+        try {
+            $token = $this->http->asForm()->connectTimeout(5)->timeout(10)->post(self::TOKEN_URL, [
+                'code' => $request->query('code'),
+                'client_id' => config('services.google_business_profile.client_id'),
+                'client_secret' => config('services.google_business_profile.client_secret'),
+                'redirect_uri' => route('accounts.google-business-profile.callback'),
+                'grant_type' => 'authorization_code',
+            ]);
+        } catch (ConnectionException) {
+            return redirect()->route('accounts.index')->with('error', 'Google Business Profile could not complete the authorization exchange.');
+        }
 
         if ($token->failed() || ! filled($token->json('access_token')) || ! filled($token->json('refresh_token'))) {
             return redirect()->route('accounts.index')->with('error', 'Google Business Profile did not return a reusable authorization grant.');
@@ -113,7 +122,7 @@ class GoogleBusinessProfileConnectionController extends Controller
         $oauth = $request->session()->get(self::OAUTH_SESSION_KEY, []);
         $stash = $request->session()->get(self::LOCATIONS_SESSION_KEY, []);
         $locations = is_array($stash) ? ($stash['locations'] ?? []) : [];
-        $validated = $request->validate(['selected' => ['required','array','min:1'], 'selected.*' => ['string', Rule::in(array_keys($locations))], 'consent' => ['accepted']]);
+        $validated = $request->validate(['selected' => ['required', 'array', 'min:1'], 'selected.*' => ['string', Rule::in(array_keys($locations))], 'consent' => ['accepted']]);
         $selected = array_unique($validated['selected']);
         if (! is_array($oauth) || ! is_array($oauth['tokens'] ?? null) || ! filled($oauth['tokens']['access_token'] ?? null) || ! filled($oauth['tokens']['refresh_token'] ?? null)) {
             return redirect()->route('accounts.index')->with('error', 'Google Business Profile authorization has expired. Please connect again.');
@@ -134,6 +143,7 @@ class GoogleBusinessProfileConnectionController extends Controller
             }
         });
         $request->session()->forget([self::OAUTH_SESSION_KEY, self::LOCATIONS_SESSION_KEY]);
+
         return redirect()->route('accounts.index')->with('success', count($selected).' Google Business Profile location(s) connected.');
     }
 

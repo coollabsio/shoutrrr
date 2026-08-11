@@ -75,3 +75,24 @@ test('reconciliation marks a rejected Local Post as a validation failure', funct
     expect($target->refresh()->status)->toBe(PostTargetStatus::Failed)
         ->and($target->error_kind->value)->toBe('validation');
 });
+
+test('reconciliation releases the current unique job while Google is still processing', function () {
+    Http::fake([
+        'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts/post-one' => Http::response([
+            'name' => 'accounts/one/locations/one/localPosts/post-one',
+            'state' => 'PROCESSING',
+        ]),
+    ]);
+    $target = googleBusinessProfileTarget();
+    $job = new ReconcileGoogleBusinessProfileLocalPost($target);
+    $job->withFakeQueueInteractions();
+
+    $job->handle(
+        app(GoogleBusinessProfileConnector::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+    );
+
+    $job->assertReleased(30);
+    expect($target->refresh()->remote_metadata['reconcile_polls'])->toBe(1);
+});

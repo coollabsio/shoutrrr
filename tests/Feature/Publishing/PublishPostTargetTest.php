@@ -79,6 +79,25 @@ test('retryable failure schedules a retry and re-dispatches', function () {
     expect(PostTargetAttempt::where('post_target_id', $target->id)->where('status', 'retrying')->count())->toBe(1);
 });
 
+test('an ambiguous Google Business Profile create never auto-retries', function () {
+    Bus::fake();
+    $target = publishTarget();
+    $target->forceFill(['platform' => 'google_business_profile'])->save();
+    bindConnector(PublishResult::failure(ErrorKind::Network, 'connection lost'));
+
+    (new PublishPostTarget($target))->handle(
+        app(PublishConnectorRegistry::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+        app(BackoffSchedule::class),
+    );
+
+    $target->refresh();
+    expect($target->status)->toBe(PostTargetStatus::Failed)
+        ->and($target->remote_metadata['create_intent']['state'])->toBe('outcome_unknown');
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
 test('rate limited retry honors the provider retry-after delay', function () {
     Bus::fake();
     $target = publishTarget();

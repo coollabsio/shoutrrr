@@ -7,6 +7,7 @@ namespace App\Jobs;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
+use App\Exceptions\TokenRefreshException;
 use App\Models\PostTarget;
 use App\Services\Publishing\Connectors\GoogleBusinessProfileConnector;
 use App\Services\Publishing\PostStatusRollup;
@@ -20,7 +21,7 @@ class ReconcileGoogleBusinessProfileLocalPost implements ShouldBeUnique, ShouldQ
 {
     use Queueable;
 
-    public int $tries = 3;
+    public int $tries = 8;
 
     public int $timeout = 60;
 
@@ -54,10 +55,36 @@ class ReconcileGoogleBusinessProfileLocalPost implements ShouldBeUnique, ShouldQ
             return;
         }
 
-        $metadata = $connector->fetchState($target, $tokens->fresh($target->account()->firstOrFail()));
-        if ($metadata === null) {
+        try {
+            $credentials = $tokens->fresh($target->account()->firstOrFail());
+        } catch (TokenRefreshException $exception) {
+            if ($exception->errorKind->isRetryable()) {
+                $this->release($exception->retryAfter ?? 30);
+            } else {
+                $target->forceFill([
+                    'error_kind' => $exception->errorKind->value,
+                    'error_message' => $exception->getMessage(),
+                ])->save();
+            }
+
             return;
         }
+
+        $result = $connector->fetchState($target, $credentials);
+        if (! $result->isSuccessful()) {
+            if (($result->errorKind ?? ErrorKind::Unknown)->isRetryable()) {
+                $this->release($result->retryAfter ?? 30);
+            } else {
+                $target->forceFill([
+                    'error_kind' => $result->errorKind?->value,
+                    'error_message' => $result->errorMessage,
+                ])->save();
+            }
+
+            return;
+        }
+
+        $metadata = $result->remoteMetadata ?? [];
 
         $remoteMetadata = [...($target->remote_metadata ?? []), ...$metadata];
         $polls = (int) ($remoteMetadata['reconcile_polls'] ?? 0) + 1;
@@ -76,7 +103,7 @@ class ReconcileGoogleBusinessProfileLocalPost implements ShouldBeUnique, ShouldQ
         }
 
         if (in_array($metadata['state'] ?? null, ['PROCESSING', 'SCHEDULED'], true) && $polls < self::MAX_POLLS) {
-            self::dispatch($target->fresh())->delay(30);
+            $this->release(30);
         }
     }
 }
