@@ -111,9 +111,10 @@ class GoogleBusinessProfileConnector implements PublishConnector
 
     private function locationResource(PublishContext $context): ?string
     {
-        $location = $context->account->capabilities['google_business_profile']['locationResourceName'] ?? null;
+        $capabilities = $context->account->capabilities['google_business_profile'] ?? [];
+        $location = $capabilities['locationResourceName'] ?? $capabilities['key'] ?? null;
 
-        return is_string($location) && $location !== '' ? $location : null;
+        return is_string($location) && preg_match('#^accounts/[^/]+/locations/[^/]+$#', $location) === 1 ? $location : null;
     }
 
     /** @return array<string, mixed> */

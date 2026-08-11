@@ -36,7 +36,7 @@ test('store persists each eligible selected location with encrypted credentials 
             'expires_at' => now()->addHour()->toIso8601String(),
         ]],
         'accounts.google_business_profile.locations' => ['locations' => [
-            'accounts/one/locations/one' => ['key' => 'accounts/one/locations/one', 'title' => 'Eligible', 'addressLabel' => '123 Main', 'canOperateLocalPost' => true],
+            'accounts/one/locations/one' => ['key' => 'accounts/one/locations/one', 'accountResourceName' => 'accounts/one', 'locationResourceName' => 'accounts/one/locations/one', 'title' => 'Eligible', 'addressLabel' => '123 Main', 'canOperateLocalPost' => true],
             'accounts/one/locations/two' => ['key' => 'accounts/one/locations/two', 'title' => 'Also eligible', 'addressLabel' => null, 'canOperateLocalPost' => true],
         ]],
     ]);
@@ -52,6 +52,7 @@ test('store persists each eligible selected location with encrypted credentials 
         ->and($accounts->pluck('remote_account_id')->all())->toContain('accounts/one/locations/one', 'accounts/one/locations/two')
         ->and($accounts->first()->secret->access_token)->toBe('access-token')
         ->and($accounts->first()->secret->refresh_token)->toBe('refresh-token')
+        ->and($accounts->first()->capabilities['google_business_profile']['locationResourceName'])->toBe('accounts/one/locations/one')
         ->and($accounts->first()->capabilities['google_business_profile']['consent']['granted_by_user_id'])->toBe($user->id)
         ->and(session()->has('accounts.google_business_profile.oauth'))->toBeFalse()
         ->and(session()->has('accounts.google_business_profile.locations'))->toBeFalse();
@@ -107,6 +108,8 @@ test('callback renders browser-safe locations while retaining tokens only in ses
             ->component('accounts/connect-google-business-profile', false)
             ->has('locations', 1)
             ->where('locations.0.key', 'accounts/one/locations/one')
+            ->where('locations.0.accountResourceName', 'accounts/one')
+            ->where('locations.0.locationResourceName', 'accounts/one/locations/one')
             ->missing('tokens')
             ->missing('access_token')
             ->missing('refresh_token'));

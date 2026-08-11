@@ -13,6 +13,8 @@ describe('Google Business Profile location selection', () => {
                 [
                     {
                         key: 'eligible',
+                        accountResourceName: 'accounts/one',
+                        locationResourceName: 'accounts/one/locations/eligible',
                         title: 'Eligible',
                         storeCode: null,
                         addressLabel: null,
@@ -22,6 +24,8 @@ describe('Google Business Profile location selection', () => {
                     },
                     {
                         key: 'ineligible',
+                        accountResourceName: 'accounts/one',
+                        locationResourceName: 'accounts/one/locations/ineligible',
                         title: 'Ineligible',
                         storeCode: null,
                         addressLabel: null,

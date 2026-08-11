@@ -9,6 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 export type GoogleBusinessProfileLocation = {
     key: string;
+    accountResourceName: string;
+    locationResourceName: string;
     title: string;
     storeCode: string | null;
     addressLabel: string | null;

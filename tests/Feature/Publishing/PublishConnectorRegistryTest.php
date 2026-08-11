@@ -64,6 +64,44 @@ test('google business profile connector creates a REST v4 local post', function 
     });
 });
 
+test('google business profile connector publishes with a legacy canonical location key', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts' => Http::response([
+            'name' => 'accounts/one/locations/one/localPosts/post-legacy',
+        ]),
+    ]);
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::GoogleBusinessProfile,
+        'capabilities' => ['google_business_profile' => ['key' => 'accounts/one/locations/one']],
+    ]);
+
+    $result = app(GoogleBusinessProfileConnector::class)->publish(new PublishContext(
+        target: PostTarget::factory()->create(['platform' => Platform::GoogleBusinessProfile->value]),
+        segments: ['A local post'], media: [], account: $account, credentials: ['access_token' => 'token'],
+    ));
+
+    expect($result->isSuccessful())->toBeTrue();
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts');
+});
+
+test('google business profile connector rejects a malformed location capability before sending a request', function () {
+    Http::preventStrayRequests();
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::GoogleBusinessProfile,
+        'capabilities' => ['google_business_profile' => ['locationResourceName' => 'locations/one']],
+    ]);
+
+    $result = app(GoogleBusinessProfileConnector::class)->publish(new PublishContext(
+        target: PostTarget::factory()->create(['platform' => Platform::GoogleBusinessProfile->value]),
+        segments: ['A local post'], media: [], account: $account, credentials: ['access_token' => 'token'],
+    ));
+
+    expect($result->errorKind->value)->toBe('validation')
+        ->and($result->errorMessage)->toContain('location capability');
+    Http::assertNothingSent();
+});
+
 test('google business profile connector maps Event and Offer data without media', function () {
     Http::fake([
         'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts' => Http::response([

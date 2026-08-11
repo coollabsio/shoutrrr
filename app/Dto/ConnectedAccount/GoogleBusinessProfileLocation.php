@@ -22,6 +22,6 @@ final readonly class GoogleBusinessProfileLocation
     /** @return array<string, mixed> */
     public function toBrowserArray(): array
     {
-        return ['key' => $this->key, 'title' => $this->title, 'storeCode' => $this->storeCode, 'addressLabel' => $this->addressLabel, 'mapsUri' => $this->mapsUri, 'canOperateLocalPost' => $this->canOperateLocalPost, 'readinessIssues' => array_map(fn (GoogleBusinessProfileReadinessIssue $issue): array => $issue->toArray(), $this->readinessIssues)];
+        return ['key' => $this->key, 'accountResourceName' => $this->accountResourceName, 'locationResourceName' => $this->locationResourceName, 'title' => $this->title, 'storeCode' => $this->storeCode, 'addressLabel' => $this->addressLabel, 'mapsUri' => $this->mapsUri, 'canOperateLocalPost' => $this->canOperateLocalPost, 'readinessIssues' => array_map(fn (GoogleBusinessProfileReadinessIssue $issue): array => $issue->toArray(), $this->readinessIssues)];
     }
 }

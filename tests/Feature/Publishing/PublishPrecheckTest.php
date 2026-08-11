@@ -84,6 +84,22 @@ test('blockingTargets enforces Google Business Profile policy safeguards', funct
     );
 });
 
+test('blockingTargets treats blank Google Business Profile CTA URLs as absent', function (string $ctaUrl) {
+    $post = Post::factory()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::GoogleBusinessProfile]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::GoogleBusinessProfile->value,
+        'sections' => ['A valid local post summary'],
+        'provider_options' => ['google_business_profile' => [
+            'local_post_type' => 'standard',
+            'cta_url' => $ctaUrl,
+        ]],
+    ]);
+
+    expect(app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media'])))->toBe([]);
+})->with(['empty' => '', 'whitespace' => '   ']);
+
 test('blockingTargets flags a target with no text and no media', function () {
     $post = Post::factory()->create();
     PostTarget::factory()->for($post)->create([

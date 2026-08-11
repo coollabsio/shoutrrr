@@ -171,8 +171,8 @@ export function precheckAccount({
             ...googleBusinessProfilePolicyReasons(clean.join('\n'), type),
         );
         if (
-            providerOptions?.cta_url &&
-            isInvalidGoogleBusinessProfileUrl(providerOptions.cta_url)
+            providerOptions?.cta_url?.trim() &&
+            isInvalidGoogleBusinessProfileUrl(providerOptions.cta_url.trim())
         ) {
             reasons.push('gbp_cta_url_invalid');
         }

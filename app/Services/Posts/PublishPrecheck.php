@@ -186,7 +186,7 @@ class PublishPrecheck
         }
 
         $type = $options['local_post_type'] ?? 'standard';
-        if ($this->isInvalidUrl($options['cta_url'] ?? null)) {
+        if (filled($options['cta_url'] ?? null) && $this->isInvalidUrl($options['cta_url'])) {
             $issues[] = 'gbp_cta_url_invalid';
         }
         if ($this->containsHotelPromotion($summary, $type)) {
