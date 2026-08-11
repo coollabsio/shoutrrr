@@ -9,7 +9,10 @@ use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
 use App\Models\PostTarget;
 use App\Services\Publishing\Contracts\PublishConnector;
+use App\Support\GoogleBusinessProfileLocalPostOptions;
 use App\Support\RetryAfter;
+use DateTimeImmutable;
+use Exception;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -40,12 +43,17 @@ class GoogleBusinessProfileConnector implements PublishConnector
             return PublishResult::failure(ErrorKind::Unknown, 'Google Business Profile create outcome is unknown. Verify the Local Post before retrying.');
         }
 
+        $payload = $this->payload($context);
+        if ($payload === null) {
+            return PublishResult::failure(ErrorKind::Validation, 'Google Business Profile event schedule is invalid.');
+        }
+
         try {
             $response = $this->http->withToken($token)
                 ->acceptJson()
                 ->connectTimeout(5)
                 ->timeout(20)
-                ->post($this->baseUrl().'/'.$location.'/localPosts', $this->payload($context));
+                ->post($this->baseUrl().'/'.$location.'/localPosts', $payload);
         } catch (ConnectionException $e) {
             return PublishResult::failure(ErrorKind::Network, 'Google Business Profile request could not be completed.', mayHaveCreatedRemote: true);
         }
@@ -117,27 +125,86 @@ class GoogleBusinessProfileConnector implements PublishConnector
         return is_string($location) && preg_match('#^accounts/[^/]+/locations/[^/]+$#', $location) === 1 ? $location : null;
     }
 
-    /** @return array<string, mixed> */
-    private function payload(PublishContext $context): array
+    /** @return array<string, mixed>|null */
+    private function payload(PublishContext $context): ?array
     {
-        $options = $context->target->provider_options['google_business_profile'] ?? [];
+        $options = GoogleBusinessProfileLocalPostOptions::normalize($context->target->provider_options['google_business_profile'] ?? []);
         $type = strtoupper((string) ($options['local_post_type'] ?? 'standard'));
         $payload = [
             'summary' => implode("\n", $context->segments),
             'languageCode' => $options['language'] ?? 'en',
             'topicType' => $type,
         ];
-        if (filled($options['cta_type'] ?? null)) {
-            $payload['callToAction'] = array_filter(['actionType' => $options['cta_type'], 'url' => $options['cta_type'] === 'CALL' ? null : ($options['cta_url'] ?? null)]);
+        $ctaType = GoogleBusinessProfileLocalPostOptions::ctaType($options);
+        $ctaUrl = GoogleBusinessProfileLocalPostOptions::ctaUrl($options);
+        if ($ctaType !== null) {
+            $payload['callToAction'] = ['actionType' => $ctaType];
+            if ($ctaType !== 'CALL' && $ctaUrl !== null) {
+                $payload['callToAction']['url'] = $ctaUrl;
+            }
         }
-        if ($type === 'EVENT') {
-            $payload['event'] = ['title' => $options['title'] ?? null, 'schedule' => ['startDateTime' => $options['start_at'] ?? null, 'endDateTime' => $options['end_at'] ?? null]];
+        if (in_array($type, ['EVENT', 'OFFER'], true)) {
+            $event = $this->eventPayload($options);
+            if ($event === null) {
+                return null;
+            }
+
+            $payload['event'] = $event;
         }
         if ($type === 'OFFER') {
             $payload['offer'] = array_filter(['couponCode' => $options['coupon_code'] ?? null, 'redeemOnlineUrl' => $options['redemption_url'] ?? null, 'termsConditions' => $options['terms'] ?? null]);
         }
 
         return $payload;
+    }
+
+    /** @param array<string, mixed> $options
+     * @return array{title: string, schedule: array{startDate: array{year: int, month: int, day: int}, startTime: array{hours: int, minutes: int, seconds: int}, endDate: array{year: int, month: int, day: int}, endTime: array{hours: int, minutes: int, seconds: int}}}|null
+     */
+    private function eventPayload(array $options): ?array
+    {
+        $title = trim((string) ($options['title'] ?? ''));
+        $schedule = $this->schedulePayload($options['start_at'] ?? null, $options['end_at'] ?? null);
+
+        return $title !== '' && $schedule !== null ? ['title' => $title, 'schedule' => $schedule] : null;
+    }
+
+    /** @return array{startDate: array{year: int, month: int, day: int}, startTime: array{hours: int, minutes: int, seconds: int}, endDate: array{year: int, month: int, day: int}, endTime: array{hours: int, minutes: int, seconds: int}}|null */
+    private function schedulePayload(mixed $startAt, mixed $endAt): ?array
+    {
+        if (! is_string($startAt) || ! is_string($endAt)) {
+            return null;
+        }
+
+        try {
+            $start = new DateTimeImmutable($startAt);
+            $end = new DateTimeImmutable($endAt);
+        } catch (Exception) {
+            return null;
+        }
+
+        if ($end <= $start) {
+            return null;
+        }
+
+        return [
+            'startDate' => $this->datePayload($start),
+            'startTime' => $this->timePayload($start),
+            'endDate' => $this->datePayload($end),
+            'endTime' => $this->timePayload($end),
+        ];
+    }
+
+    /** @return array{year: int, month: int, day: int} */
+    private function datePayload(DateTimeImmutable $date): array
+    {
+        return ['year' => (int) $date->format('Y'), 'month' => (int) $date->format('n'), 'day' => (int) $date->format('j')];
+    }
+
+    /** @return array{hours: int, minutes: int, seconds: int} */
+    private function timePayload(DateTimeImmutable $date): array
+    {
+        return ['hours' => (int) $date->format('G'), 'minutes' => (int) $date->format('i'), 'seconds' => (int) $date->format('s')];
     }
 
     private function failure(Response $response, bool $mayHaveCreatedRemote = false): PublishResult

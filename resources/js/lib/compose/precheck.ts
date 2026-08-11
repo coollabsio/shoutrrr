@@ -81,6 +81,22 @@ function isInvalidGoogleBusinessProfileUrl(value: string | undefined): boolean {
     );
 }
 
+function normalizedGoogleBusinessProfileCtaType(
+    value: string | undefined,
+): string | undefined {
+    const trimmed = value?.trim();
+
+    return trimmed ? trimmed.toUpperCase() : undefined;
+}
+
+function normalizedGoogleBusinessProfileCtaUrl(
+    value: string | undefined,
+): string | undefined {
+    const trimmed = value?.trim();
+
+    return trimmed || undefined;
+}
+
 function googleBusinessProfilePolicyReasons(
     text: string,
     localPostType: GoogleBusinessProfileLocalPostOptions['local_post_type'],
@@ -170,9 +186,15 @@ export function precheckAccount({
         reasons.push(
             ...googleBusinessProfilePolicyReasons(clean.join('\n'), type),
         );
+        const ctaType = normalizedGoogleBusinessProfileCtaType(
+            providerOptions?.cta_type,
+        );
+        const ctaUrl = normalizedGoogleBusinessProfileCtaUrl(
+            providerOptions?.cta_url,
+        );
         if (
-            providerOptions?.cta_url?.trim() &&
-            isInvalidGoogleBusinessProfileUrl(providerOptions.cta_url.trim())
+            (ctaType && ctaType !== 'CALL' && !ctaUrl) ||
+            (ctaUrl && isInvalidGoogleBusinessProfileUrl(ctaUrl))
         ) {
             reasons.push('gbp_cta_url_invalid');
         }

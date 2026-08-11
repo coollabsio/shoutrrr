@@ -100,6 +100,52 @@ test('blockingTargets treats blank Google Business Profile CTA URLs as absent', 
     expect(app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media'])))->toBe([]);
 })->with(['empty' => '', 'whitespace' => '   ']);
 
+test('blockingTargets requires a URL for non-call Google Business Profile CTAs', function (?string $ctaUrl) {
+    $post = Post::factory()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::GoogleBusinessProfile]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::GoogleBusinessProfile->value,
+        'sections' => ['A valid local post summary'],
+        'provider_options' => ['google_business_profile' => [
+            'local_post_type' => 'standard',
+            'cta_type' => 'LEARN_MORE',
+            'cta_url' => $ctaUrl,
+        ]],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked[0]['issues'])->toContain('gbp_cta_url_invalid');
+})->with(['missing' => null, 'empty' => '', 'whitespace' => '   ']);
+
+test('blockingTargets allows a call CTA without a URL and trims valid URL-based CTAs', function () {
+    $post = Post::factory()->create();
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::GoogleBusinessProfile]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::GoogleBusinessProfile->value,
+        'sections' => ['A valid local post summary'],
+        'provider_options' => ['google_business_profile' => [
+            'local_post_type' => 'standard',
+            'cta_type' => 'CALL',
+            'cta_url' => '   ',
+        ]],
+    ]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => ConnectedAccount::factory()->create(['platform' => Platform::GoogleBusinessProfile])->id,
+        'platform' => Platform::GoogleBusinessProfile->value,
+        'sections' => ['Another valid local post summary'],
+        'provider_options' => ['google_business_profile' => [
+            'local_post_type' => 'standard',
+            'cta_type' => 'LEARN_MORE',
+            'cta_url' => ' https://example.test/learn ',
+        ]],
+    ]);
+
+    expect(app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media'])))->toBe([]);
+});
+
 test('blockingTargets flags a target with no text and no media', function () {
     $post = Post::factory()->create();
     PostTarget::factory()->for($post)->create([

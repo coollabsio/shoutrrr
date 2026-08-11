@@ -10,6 +10,7 @@ use App\Models\PostMedia;
 use App\Models\PostMediaPlacement;
 use App\Models\PostTarget;
 use App\Services\Publishing\SegmentMediaResolver;
+use App\Support\GoogleBusinessProfileLocalPostOptions;
 use Illuminate\Support\Collection;
 
 class PublishPrecheck
@@ -180,13 +181,13 @@ class PublishPrecheck
             $issues[] = 'gbp_repetitive_content';
         }
 
-        $options = $target->provider_options['google_business_profile'] ?? [];
-        if (! is_array($options)) {
-            return $issues;
-        }
+        $options = GoogleBusinessProfileLocalPostOptions::normalize($target->provider_options['google_business_profile'] ?? []);
 
         $type = $options['local_post_type'] ?? 'standard';
-        if (filled($options['cta_url'] ?? null) && $this->isInvalidUrl($options['cta_url'])) {
+        $ctaType = GoogleBusinessProfileLocalPostOptions::ctaType($options);
+        $ctaUrl = GoogleBusinessProfileLocalPostOptions::ctaUrl($options);
+        if (($ctaType !== null && $ctaType !== 'CALL' && $ctaUrl === null)
+            || ($ctaUrl !== null && $this->isInvalidUrl($ctaUrl))) {
             $issues[] = 'gbp_cta_url_invalid';
         }
         if ($this->containsHotelPromotion($summary, $type)) {

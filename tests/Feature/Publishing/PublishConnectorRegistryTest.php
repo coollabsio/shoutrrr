@@ -102,7 +102,53 @@ test('google business profile connector rejects a malformed location capability 
     Http::assertNothingSent();
 });
 
-test('google business profile connector maps Event and Offer data without media', function () {
+test('google business profile connector maps an Event payload with a trimmed CTA URL', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts' => Http::response([
+            'name' => 'accounts/one/locations/one/localPosts/post-event',
+        ]),
+    ]);
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::GoogleBusinessProfile,
+        'capabilities' => ['google_business_profile' => ['locationResourceName' => 'accounts/one/locations/one']],
+    ]);
+    $target = PostTarget::factory()->create([
+        'platform' => Platform::GoogleBusinessProfile->value,
+        'provider_options' => ['google_business_profile' => [
+            'local_post_type' => 'event',
+            'title' => 'Open House',
+            'start_at' => '2026-08-17T17:30:00Z',
+            'end_at' => '2026-08-17T19:00:00Z',
+            'cta_type' => 'learn_more',
+            'cta_url' => ' https://example.test/event ',
+        ]],
+    ]);
+
+    $result = app(GoogleBusinessProfileConnector::class)->publish(new PublishContext(
+        target: $target, segments: ['A local event'], media: [], account: $account, credentials: ['access_token' => 'token'],
+    ));
+
+    expect($result->isSuccessful())->toBeTrue();
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts'
+        && $request['topicType'] === 'EVENT'
+        && $request['callToAction'] === ['actionType' => 'LEARN_MORE', 'url' => 'https://example.test/event']
+        && $request['event'] === [
+            'title' => 'Open House',
+            'schedule' => [
+                'startDate' => ['year' => 2026, 'month' => 8, 'day' => 17],
+                'startTime' => ['hours' => 17, 'minutes' => 30, 'seconds' => 0],
+                'endDate' => ['year' => 2026, 'month' => 8, 'day' => 17],
+                'endTime' => ['hours' => 19, 'minutes' => 0, 'seconds' => 0],
+            ],
+        ]
+        && ! isset($request['event']['schedule']['startDateTime'])
+        && ! isset($request['event']['schedule']['endDateTime'])
+        && ! isset($request['offer']));
+});
+
+test('google business profile connector maps an Offer payload with its required Event schedule', function () {
+    Http::preventStrayRequests();
     Http::fake([
         'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts' => Http::response([
             'name' => 'accounts/one/locations/one/localPosts/post-two',
@@ -116,13 +162,16 @@ test('google business profile connector maps Event and Offer data without media'
         'platform' => Platform::GoogleBusinessProfile->value,
         'provider_options' => ['google_business_profile' => [
             'local_post_type' => 'offer',
+            'title' => 'Summer savings',
+            'start_at' => '2026-08-17T17:30:00Z',
+            'end_at' => '2026-08-17T19:00:00Z',
             'coupon_code' => 'SAVE20',
             'redemption_url' => 'https://example.test/redeem',
             'terms' => 'New customers only',
         ]],
     ]);
 
-    app(GoogleBusinessProfileConnector::class)->publish(new PublishContext(
+    $result = app(GoogleBusinessProfileConnector::class)->publish(new PublishContext(
         target: $target,
         segments: ['Offer summary'],
         media: [],
@@ -130,9 +179,22 @@ test('google business profile connector maps Event and Offer data without media'
         credentials: ['access_token' => 'token'],
     ));
 
-    Http::assertSent(fn (Request $request): bool => $request['topicType'] === 'OFFER'
+    expect($result->isSuccessful())->toBeTrue();
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts'
+        && $request['topicType'] === 'OFFER'
+        && $request['event'] === [
+            'title' => 'Summer savings',
+            'schedule' => [
+                'startDate' => ['year' => 2026, 'month' => 8, 'day' => 17],
+                'startTime' => ['hours' => 17, 'minutes' => 30, 'seconds' => 0],
+                'endDate' => ['year' => 2026, 'month' => 8, 'day' => 17],
+                'endTime' => ['hours' => 19, 'minutes' => 0, 'seconds' => 0],
+            ],
+        ]
         && $request['offer']['couponCode'] === 'SAVE20'
         && $request['offer']['redeemOnlineUrl'] === 'https://example.test/redeem'
+        && ! isset($request['event']['schedule']['startDateTime'])
+        && ! isset($request['event']['schedule']['endDateTime'])
         && ! isset($request['media']));
 });
 

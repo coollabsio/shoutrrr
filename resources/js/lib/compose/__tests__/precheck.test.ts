@@ -174,6 +174,41 @@ describe('precheckAccount', () => {
             'gbp_cta_url_invalid',
         ]);
     });
+
+    it('keeps Google Business Profile CTA validation aligned with server rules', () => {
+        const input = {
+            account: accountFor({ platform: 'google_business_profile' }),
+            segments: ['Local post summary'],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
+            limits: limitsFor({ platform: 'google_business_profile' }),
+        };
+
+        expect(
+            precheckAccount({
+                ...input,
+                providerOptions: { cta_type: 'LEARN_MORE', cta_url: '   ' },
+            }),
+        ).toContain('gbp_cta_url_invalid');
+        expect(
+            precheckAccount({
+                ...input,
+                providerOptions: { cta_type: 'CALL', cta_url: '   ' },
+            }),
+        ).not.toContain('gbp_cta_url_invalid');
+        expect(
+            precheckAccount({
+                ...input,
+                providerOptions: {
+                    cta_type: 'LEARN_MORE',
+                    cta_url: ' https://example.test/learn ',
+                },
+            }),
+        ).not.toContain('gbp_cta_url_invalid');
+    });
 });
 
 function mediaItem(over: Partial<MediaView> & { id: string }): MediaView {
