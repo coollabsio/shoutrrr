@@ -274,8 +274,13 @@ export function PlatformPreviewPanel({
                                 {googleBusinessProfileOptions.start_at &&
                                     googleBusinessProfileOptions.end_at && (
                                         <p className="mt-1 text-muted-foreground">
-                                            {googleBusinessProfileOptions.start_at} –{' '}
-                                            {googleBusinessProfileOptions.end_at}
+                                            {
+                                                googleBusinessProfileOptions.start_at
+                                            }{' '}
+                                            –{' '}
+                                            {
+                                                googleBusinessProfileOptions.end_at
+                                            }
                                         </p>
                                     )}
                             </div>

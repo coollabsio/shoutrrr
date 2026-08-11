@@ -19,6 +19,7 @@ function capability(overrides: Partial<Capability>): Capability {
         supportsWebhook: false,
         configured: true,
         launched: false,
+        connectable: true,
         enabled: true,
         ...overrides,
     };

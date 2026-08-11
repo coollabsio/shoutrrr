@@ -22,7 +22,10 @@ export function buildGoogleBusinessProfileSelection(
     locations: GoogleBusinessProfileLocation[],
 ): string[] {
     return locations
-        .filter((location) => location.canOperateLocalPost && selected[location.key])
+        .filter(
+            (location) =>
+                location.canOperateLocalPost && selected[location.key],
+        )
         .map((location) => location.key);
 }
 
@@ -42,24 +45,78 @@ export default function ConnectGoogleBusinessProfile({
     const [selected, setSelected] = useState<Record<string, boolean>>({});
     const [consent, setConsent] = useState(false);
     const selection = buildGoogleBusinessProfileSelection(selected, locations);
-    const canConnect = canConnectGoogleBusinessProfileLocations(selection, consent);
+    const canConnect = canConnectGoogleBusinessProfileLocations(
+        selection,
+        consent,
+    );
 
     return (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-6 pb-16 sm:px-6">
             <Head title="Connect Google Business Profile" />
-            <Heading title="Choose locations to connect" description="Only locations that Google allows to manage Local Posts can be connected." />
+            <Heading
+                title="Choose locations to connect"
+                description="Only locations that Google allows to manage Local Posts can be connected."
+            />
             <div className="flex flex-col gap-3">
                 {locations.map((location) => (
-                    <label key={location.key} className="flex gap-3 rounded-xl border p-4">
-                        <Checkbox disabled={!location.canOperateLocalPost} checked={!!selected[location.key]} onCheckedChange={() => setSelected((current) => ({ ...current, [location.key]: !current[location.key] }))} />
-                        <span className="flex flex-col gap-1"><span className="font-medium">{location.title}</span><span className="text-sm text-muted-foreground">{location.addressLabel ?? location.key}</span>{!location.canOperateLocalPost && <span className="text-sm text-destructive">{location.readinessIssues[0]?.message ?? 'Google does not allow Local Posts for this location.'}</span>}</span>
+                    <label
+                        key={location.key}
+                        className="flex gap-3 rounded-xl border p-4"
+                    >
+                        <Checkbox
+                            disabled={!location.canOperateLocalPost}
+                            checked={!!selected[location.key]}
+                            onCheckedChange={() =>
+                                setSelected((current) => ({
+                                    ...current,
+                                    [location.key]: !current[location.key],
+                                }))
+                            }
+                        />
+                        <span className="flex flex-col gap-1">
+                            <span className="font-medium">
+                                {location.title}
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                                {location.addressLabel ?? location.key}
+                            </span>
+                            {!location.canOperateLocalPost && (
+                                <span className="text-sm text-destructive">
+                                    {location.readinessIssues[0]?.message ??
+                                        'Google does not allow Local Posts for this location.'}
+                                </span>
+                            )}
+                        </span>
                     </label>
                 ))}
             </div>
-            <label className="flex items-start gap-3 rounded-xl border p-4"><Checkbox checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} /><span className="text-sm">I confirm that I am authorized to connect these locations and allow Shoutrrr to manage Local Posts for them.</span></label>
-            <Button disabled={!canConnect} onClick={() => router.post(GoogleBusinessProfileConnectionController.store.url(), { selected: selection, consent: true })}>Connect selected locations</Button>
+            <label className="flex items-start gap-3 rounded-xl border p-4">
+                <Checkbox
+                    checked={consent}
+                    onCheckedChange={(checked) => setConsent(checked === true)}
+                />
+                <span className="text-sm">
+                    I confirm that I am authorized to connect these locations
+                    and allow Shoutrrr to manage Local Posts for them.
+                </span>
+            </label>
+            <Button
+                disabled={!canConnect}
+                onClick={() =>
+                    router.post(
+                        GoogleBusinessProfileConnectionController.store.url(),
+                        { selected: selection, consent: true },
+                    )
+                }
+            >
+                Connect selected locations
+            </Button>
         </div>
     );
 }
 
-ConnectGoogleBusinessProfile.layout = { breadcrumbs: [{ title: 'Accounts', href: ConnectedAccountController.index().url }] };
+ConnectGoogleBusinessProfile.layout = {
+    breadcrumbs: [
+        { title: 'Accounts', href: ConnectedAccountController.index().url },
+    ],
+};

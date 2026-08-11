@@ -93,7 +93,9 @@ function googleBusinessProfilePolicyReasons(
     if ((text.match(/(?:\+?\d[\d().\-\s]{6,}\d)/g) ?? []).length > 1) {
         reasons.push('gbp_phone_stuffing');
     }
-    const promotional = /\b(discount|deal|offer|promotion|sale|coupon)\b/i.test(text);
+    const promotional = /\b(discount|deal|offer|promotion|sale|coupon)\b/i.test(
+        text,
+    );
     if (
         promotional &&
         /\b(alcohol|cannabis|marijuana|tobacco|vape|gambling|casino|firearm|weapon|adult)\b/i.test(
@@ -178,7 +180,10 @@ export function precheckAccount({
             if (!providerOptions?.title?.trim()) {
                 reasons.push(`gbp_${type}_title_required` as BlockReason);
             }
-            if (!providerOptions || !hasValidGoogleBusinessProfileSchedule(providerOptions)) {
+            if (
+                !providerOptions ||
+                !hasValidGoogleBusinessProfileSchedule(providerOptions)
+            ) {
                 reasons.push(`gbp_${type}_schedule_required` as BlockReason);
             }
             if (

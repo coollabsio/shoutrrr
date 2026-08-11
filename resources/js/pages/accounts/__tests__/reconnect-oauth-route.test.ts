@@ -73,8 +73,8 @@ describe('reconnectOAuthUrl', () => {
     });
 
     it('uses the bespoke Google Business Profile route', () => {
-        expect(reconnectOAuthUrl(account({ platform: 'google_business_profile' }))).toBe(
-            GoogleBusinessProfileConnectionController.redirect.url(),
-        );
+        expect(
+            reconnectOAuthUrl(account({ platform: 'google_business_profile' })),
+        ).toBe(GoogleBusinessProfileConnectionController.redirect.url());
     });
 });

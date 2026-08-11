@@ -514,8 +514,8 @@ function connectHref(capability: Capability): string {
         : capability.platform === 'google_business_profile'
           ? GoogleBusinessProfileConnectionController.redirect.url()
           : OAuthConnectionController.redirect.url({
-              platform: capability.platform,
-          });
+                platform: capability.platform,
+            });
 }
 
 /**

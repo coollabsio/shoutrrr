@@ -71,7 +71,9 @@ export function GoogleBusinessProfileOptions({
                             id="gbp-post-title"
                             value={options.title ?? ''}
                             disabled={disabled}
-                            onChange={(event) => update({ title: event.target.value })}
+                            onChange={(event) =>
+                                update({ title: event.target.value })
+                            }
                             placeholder={
                                 options.local_post_type === 'event'
                                     ? 'Event title'
@@ -86,7 +88,9 @@ export function GoogleBusinessProfileOptions({
                         id="gbp-language"
                         value={options.language ?? ''}
                         disabled={disabled}
-                        onChange={(event) => update({ language: event.target.value })}
+                        onChange={(event) =>
+                            update({ language: event.target.value })
+                        }
                         placeholder="en"
                     />
                 </div>
@@ -97,7 +101,9 @@ export function GoogleBusinessProfileOptions({
                         type="url"
                         value={options.cta_url ?? ''}
                         disabled={disabled}
-                        onChange={(event) => update({ cta_url: event.target.value })}
+                        onChange={(event) =>
+                            update({ cta_url: event.target.value })
+                        }
                         placeholder="https://…"
                     />
                 </div>
@@ -110,7 +116,9 @@ export function GoogleBusinessProfileOptions({
                                 type="datetime-local"
                                 value={options.start_at ?? ''}
                                 disabled={disabled}
-                                onChange={(event) => update({ start_at: event.target.value })}
+                                onChange={(event) =>
+                                    update({ start_at: event.target.value })
+                                }
                             />
                         </div>
                         <div className="space-y-1.5">
@@ -120,7 +128,9 @@ export function GoogleBusinessProfileOptions({
                                 type="datetime-local"
                                 value={options.end_at ?? ''}
                                 disabled={disabled}
-                                onChange={(event) => update({ end_at: event.target.value })}
+                                onChange={(event) =>
+                                    update({ end_at: event.target.value })
+                                }
                             />
                         </div>
                     </>
@@ -133,17 +143,25 @@ export function GoogleBusinessProfileOptions({
                                 id="gbp-coupon-code"
                                 value={options.coupon_code ?? ''}
                                 disabled={disabled}
-                                onChange={(event) => update({ coupon_code: event.target.value })}
+                                onChange={(event) =>
+                                    update({ coupon_code: event.target.value })
+                                }
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="gbp-redemption-url">Redemption URL</Label>
+                            <Label htmlFor="gbp-redemption-url">
+                                Redemption URL
+                            </Label>
                             <Input
                                 id="gbp-redemption-url"
                                 type="url"
                                 value={options.redemption_url ?? ''}
                                 disabled={disabled}
-                                onChange={(event) => update({ redemption_url: event.target.value })}
+                                onChange={(event) =>
+                                    update({
+                                        redemption_url: event.target.value,
+                                    })
+                                }
                                 placeholder="https://…"
                             />
                         </div>
@@ -153,7 +171,9 @@ export function GoogleBusinessProfileOptions({
                                 id="gbp-terms"
                                 value={options.terms ?? ''}
                                 disabled={disabled}
-                                onChange={(event) => update({ terms: event.target.value })}
+                                onChange={(event) =>
+                                    update({ terms: event.target.value })
+                                }
                                 placeholder="Offer terms and conditions"
                             />
                         </div>

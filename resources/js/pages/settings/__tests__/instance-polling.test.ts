@@ -22,6 +22,7 @@ const settings: PollingSettings = {
         instagram: 15,
         threads: 15,
         discord: 15,
+        google_business_profile: 15,
         enabled: {
             x: true,
             bluesky: true,
@@ -30,6 +31,7 @@ const settings: PollingSettings = {
             instagram: true,
             threads: true,
             discord: false,
+            google_business_profile: false,
         },
     },
     post_metrics: {
@@ -40,6 +42,7 @@ const settings: PollingSettings = {
         instagram: 15,
         threads: 15,
         discord: 15,
+        google_business_profile: 15,
         enabled: {
             x: true,
             bluesky: false,
@@ -48,6 +51,7 @@ const settings: PollingSettings = {
             instagram: true,
             threads: true,
             discord: true,
+            google_business_profile: false,
         },
     },
     account_metrics: {
@@ -58,6 +62,7 @@ const settings: PollingSettings = {
         instagram: 15,
         threads: 15,
         discord: 15,
+        google_business_profile: 15,
         enabled: {
             x: false,
             bluesky: true,
@@ -66,6 +71,7 @@ const settings: PollingSettings = {
             instagram: true,
             threads: true,
             discord: true,
+            google_business_profile: false,
         },
     },
 };
