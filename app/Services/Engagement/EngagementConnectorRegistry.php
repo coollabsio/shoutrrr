@@ -26,6 +26,7 @@ class EngagementConnectorRegistry
             Platform::Instagram => app(InstagramEngagementConnector::class),
             Platform::Threads => app(ThreadsEngagementConnector::class),
             Platform::Discord => throw new RuntimeException('Discord does not support engagement (webhooks are write-only).'),
+            Platform::GoogleBusinessProfile => throw new RuntimeException('Google Business Profile does not support engagement in this release.'),
         };
     }
 }

@@ -148,6 +148,10 @@ class PublishPrecheck
     }
 
     /** @return list<string> */
+    /**
+     * @param  Collection<int, PostMedia>  $media
+     * @return list<string>
+     */
     private function googleBusinessProfileIssues(PostTarget $target, Collection $media): array
     {
         $issues = [];

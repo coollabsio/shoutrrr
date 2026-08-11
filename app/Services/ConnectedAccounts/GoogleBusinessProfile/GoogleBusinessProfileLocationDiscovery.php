@@ -63,9 +63,13 @@ class GoogleBusinessProfileLocationDiscovery
         return $this->paginate(self::BUSINESS_INFORMATION_BASE.'/'.$accountName.'/locations', $accessToken, 'locations', ['readMask' => self::LOCATION_READ_MASK]);
     }
 
-    /** @param array<string, string> $query @return list<array<string, mixed>> */
+    /**
+     * @param  array<string, string>  $query
+     * @return list<array<string, mixed>>
+     */
     private function paginate(string $url, string $accessToken, string $key, array $query): array
     {
+        /** @var list<array<string, mixed>> $items */
         $items = [];
         $pageToken = null;
 

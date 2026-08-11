@@ -24,8 +24,8 @@ final readonly class PublishResult
 
     /**
      * @param  list<string>  $remoteIds
+     * @param  array<string, mixed>|null  $remoteMetadata
      */
-    /** @param array<string, mixed>|null $remoteMetadata */
     public static function success(array $remoteIds, ?array $remoteMetadata = null, ?int $httpStatus = null): self
     {
         return new self(remoteIds: $remoteIds, remoteMetadata: $remoteMetadata, httpStatus: $httpStatus);
