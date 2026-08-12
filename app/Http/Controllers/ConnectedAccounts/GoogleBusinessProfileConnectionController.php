@@ -139,7 +139,7 @@ class GoogleBusinessProfileConnectionController extends Controller
                 $location = $locations[$key];
                 $location['consent'] = ['version' => self::CONSENT_VERSION, 'granted_at' => Date::now()->toIso8601String(), 'granted_by_user_id' => $request->user()->id];
                 $expiresAt = filled($oauth['tokens']['expires_at'] ?? null) ? Date::parse($oauth['tokens']['expires_at'])->toImmutable() : null;
-                $this->connections->store(new ConnectedAccountData(Platform::GoogleBusinessProfile, $key, $location['title'], $location['addressLabel'] ? $location['title'].' — '.$location['addressLabel'] : $location['title'], null, 'oauth', $oauth['tokens']['access_token'], $oauth['tokens']['refresh_token'], session: ['scope' => 'business.manage'], capabilities: ['google_business_profile' => $location], tokenExpiresAt: $expiresAt), $request->user());
+                $this->connections->store(new ConnectedAccountData(Platform::GoogleBusinessProfile, $key, $location['title'], $location['addressLabel'] ? $location['title'].' — '.$location['addressLabel'] : $location['title'], null, 'oauth', $oauth['tokens']['access_token'], $oauth['tokens']['refresh_token'], session: ['scope' => implode(' ', Platform::GoogleBusinessProfile->scopes())], capabilities: ['google_business_profile' => $location], tokenExpiresAt: $expiresAt), $request->user());
             }
         });
         $request->session()->forget([self::OAUTH_SESSION_KEY, self::LOCATIONS_SESSION_KEY]);

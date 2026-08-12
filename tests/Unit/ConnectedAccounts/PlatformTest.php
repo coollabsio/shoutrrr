@@ -89,7 +89,7 @@ test('google business profile requires separate approved credentials', function 
     expect(Platform::GoogleBusinessProfile->label())->toBe('Google Business Profile')
         ->and(Platform::GoogleBusinessProfile->configKey())->toBe('services.google_business_profile')
         ->and(Platform::GoogleBusinessProfile->socialiteDriver())->toBeNull()
-        ->and(Platform::GoogleBusinessProfile->scopes())->toBe(['business.manage'])
+        ->and(Platform::GoogleBusinessProfile->scopes())->toBe(['https://www.googleapis.com/auth/business.manage'])
         ->and(Platform::GoogleBusinessProfile->isConfigured())->toBeFalse();
 
     config()->set('services.google_business_profile.api_approved', true);

@@ -71,7 +71,7 @@ enum Platform: string
             // Graph returns 403 and the post remains on Threads.
             self::Threads => ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights', 'threads_delete'],
             self::Discord => [],
-            self::GoogleBusinessProfile => ['business.manage'],
+            self::GoogleBusinessProfile => ['https://www.googleapis.com/auth/business.manage'],
         };
     }
 

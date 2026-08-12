@@ -20,7 +20,9 @@ test('redirect starts a Google authorization request with offline consent', func
 
     $location = $response->headers->get('Location');
 
-    expect($location)->toContain('scope=business.manage')
+    parse_str((string) parse_url((string) $location, PHP_URL_QUERY), $query);
+
+    expect($query['scope'] ?? null)->toBe('https://www.googleapis.com/auth/business.manage')
         ->and($location)->toContain('access_type=offline')
         ->and($location)->toContain('prompt=consent')
         ->and(session('accounts.google_business_profile.oauth.state'))->toBeString();
