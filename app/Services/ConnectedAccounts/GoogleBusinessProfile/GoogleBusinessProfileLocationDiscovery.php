@@ -20,6 +20,8 @@ class GoogleBusinessProfileLocationDiscovery
 
     public const string BUSINESS_INFORMATION_BASE = 'https://mybusinessbusinessinformation.googleapis.com/v1';
 
+    public const string LOCAL_POSTS_BASE = 'https://mybusiness.googleapis.com/v4';
+
     public const string LOCATION_READ_MASK = 'name,title,storeCode,storefrontAddress,metadata';
 
     public function __construct(private readonly HttpFactory $http) {}
@@ -35,7 +37,7 @@ class GoogleBusinessProfileLocationDiscovery
                 }
 
                 foreach ($this->locations($accessToken, $accountName) as $location) {
-                    $locations[] = $this->location($accountName, $location);
+                    $locations[] = $this->location($accessToken, $accountName, $location);
                 }
             }
         } catch (ConnectionException) {
@@ -110,17 +112,16 @@ class GoogleBusinessProfileLocationDiscovery
     }
 
     /** @param array<string, mixed> $location */
-    private function location(string $accountName, array $location): GoogleBusinessProfileLocation
+    private function location(string $accessToken, string $accountName, array $location): GoogleBusinessProfileLocation
     {
         $name = $location['name'] ?? null;
         if (! is_string($name) || $name === '') {
             throw $this->malformed('Google returned a location without a resource name.');
         }
         $resourceName = str_starts_with($name, 'accounts/') ? $name : $accountName.'/'.$name;
-        $metadata = is_array($location['metadata'] ?? null) ? $location['metadata'] : [];
         $address = is_array($location['storefrontAddress'] ?? null) ? $location['storefrontAddress'] : [];
         $addressLabel = isset($address['addressLines']) && is_array($address['addressLines']) ? implode(', ', array_filter($address['addressLines'], 'is_string')) : null;
-        $eligible = ($metadata['canOperateLocalPost'] ?? false) === true;
+        $localPostIssue = $this->localPostsReadinessIssue($accessToken, $resourceName);
 
         return new GoogleBusinessProfileLocation(
             $resourceName,
@@ -129,9 +130,36 @@ class GoogleBusinessProfileLocationDiscovery
             is_string($location['title'] ?? null) ? $location['title'] : $resourceName,
             is_string($location['storeCode'] ?? null) ? $location['storeCode'] : null,
             $addressLabel,
-            is_string($metadata['mapsUri'] ?? null) ? $metadata['mapsUri'] : null,
-            $eligible,
-            $eligible ? [] : [new GoogleBusinessProfileReadinessIssue(GoogleBusinessProfileReadinessIssueCode::IneligibleLocation, 'This location cannot operate Local Posts.')],
+            is_string($location['metadata']['mapsUri'] ?? null) ? $location['metadata']['mapsUri'] : null,
+            $localPostIssue === null,
+            $localPostIssue === null ? [] : [$localPostIssue],
+        );
+    }
+
+    private function localPostsReadinessIssue(string $accessToken, string $locationResourceName): ?GoogleBusinessProfileReadinessIssue
+    {
+        if (RateLimiter::tooManyAttempts('google-business-profile', 10)) {
+            return new GoogleBusinessProfileReadinessIssue(
+                GoogleBusinessProfileReadinessIssueCode::QuotaExceeded,
+                'Google Business Profile requests are temporarily rate limited.',
+            );
+        }
+
+        RateLimiter::hit('google-business-profile', 60);
+        $response = $this->http->acceptJson()->withToken($accessToken)->connectTimeout(5)->timeout(10)->get(self::LOCAL_POSTS_BASE.'/'.$locationResourceName.'/localPosts', ['pageSize' => 1]);
+
+        if ($response->successful()) {
+            return null;
+        }
+
+        $issue = $this->issueFor($response);
+
+        return new GoogleBusinessProfileReadinessIssue(
+            $issue->code,
+            'Google rejected the read-only Local Posts check for this location. '.$issue->message,
+            $issue->service,
+            $issue->reason,
+            $issue->httpStatus,
         );
     }
 

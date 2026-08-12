@@ -103,6 +103,7 @@ test('callback renders browser-safe locations while retaining tokens only in ses
                 'metadata' => ['canOperateLocalPost' => true],
             ]],
         ]),
+        'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts*' => Http::response(['localPosts' => []]),
     ]);
 
     test()->get(route('accounts.google-business-profile.callback', ['code' => 'code', 'state' => 'expected-state']))
