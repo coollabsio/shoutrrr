@@ -368,8 +368,7 @@ enum Platform: string
             self::X, self::Bluesky => 4,
             self::LinkedIn => 9,
             self::Facebook, self::Instagram, self::Threads => 10,
-            self::Discord => 10,
-            self::GoogleBusinessProfile => 0,
+            self::Discord, self::GoogleBusinessProfile => 10,
         };
     }
 
@@ -435,7 +434,7 @@ enum Platform: string
             self::Facebook => 4_194_304,
             self::Instagram, self::Threads => 8_388_608,
             self::Discord => 10_485_760, // 10 MiB (Discord's default webhook attachment cap)
-            self::GoogleBusinessProfile => 0,
+            self::GoogleBusinessProfile => 5_242_880, // 5 MiB (Google Business Profile image cap)
         };
     }
 
@@ -451,7 +450,7 @@ enum Platform: string
             self::Instagram => ['image/jpeg'],
             self::Threads => ['image/jpeg', 'image/png'],
             self::Discord => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-            self::GoogleBusinessProfile => [],
+            self::GoogleBusinessProfile => ['image/jpeg', 'image/png'],
         };
     }
 
@@ -477,7 +476,7 @@ enum Platform: string
     public function allowedVideoMime(): array
     {
         // mp4 (H.264/AAC) is the common denominator all three accept directly.
-        return $this === self::GoogleBusinessProfile ? [] : ['video/mp4'];
+        return ['video/mp4'];
     }
 
     public function maxVideoBytes(): int
@@ -488,7 +487,7 @@ enum Platform: string
             self::Bluesky => 100_000_000,
             self::Facebook, self::Instagram, self::Threads => 1_073_741_824,
             self::Discord => 10_485_760, // 10 MiB (Discord's default webhook attachment cap)
-            self::GoogleBusinessProfile => 0,
+            self::GoogleBusinessProfile => 78_643_200, // 75 MiB (Google Business Profile video cap)
         };
     }
 
@@ -505,7 +504,7 @@ enum Platform: string
             self::Instagram => 900,
             self::Threads => 300,
             self::Discord => 600,
-            self::GoogleBusinessProfile => 0,
+            self::GoogleBusinessProfile => 30,
         };
     }
 

@@ -88,7 +88,6 @@ class PublishPrecheck
             'unplaced_media' => "Some attached media isn't placed in this post — remove it or add it to a thread section.",
             'gbp_summary_required' => 'Google Business Profile requires a post summary.',
             'gbp_threads_not_supported' => 'Google Business Profile does not support threaded posts.',
-            'gbp_media_not_supported' => 'Google Business Profile media is not supported in this release.',
             'gbp_event_title_required' => 'Google Business Profile events require a title.',
             'gbp_event_schedule_required' => 'Google Business Profile events require a valid start and end time.',
             'gbp_offer_title_required' => 'Google Business Profile offers require a title.',
@@ -163,10 +162,6 @@ class PublishPrecheck
         if (count($target->sections) > 1) {
             $issues[] = 'gbp_threads_not_supported';
         }
-        if ($media->isNotEmpty()) {
-            $issues[] = 'gbp_media_not_supported';
-        }
-
         $summary = implode("\n", $target->sections);
         if ($this->containsUnsafeUrl($summary)) {
             $issues[] = 'gbp_unsafe_url';

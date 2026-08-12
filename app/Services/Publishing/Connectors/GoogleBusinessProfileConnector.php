@@ -7,7 +7,11 @@ namespace App\Services\Publishing\Connectors;
 use App\Dto\Publishing\PublishContext;
 use App\Dto\Publishing\PublishResult;
 use App\Enums\ErrorKind;
+use App\Enums\Platform;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
+use App\Services\Media\ImageConversionFailed;
+use App\Services\Media\PublicMediaUrl;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Support\GoogleBusinessProfileLocalPostOptions;
 use App\Support\RetryAfter;
@@ -20,7 +24,10 @@ use Illuminate\Support\Str;
 
 class GoogleBusinessProfileConnector implements PublishConnector
 {
-    public function __construct(private readonly HttpFactory $http) {}
+    public function __construct(
+        private readonly HttpFactory $http,
+        private readonly PublicMediaUrl $publicMediaUrl,
+    ) {}
 
     public function publish(PublishContext $context): PublishResult
     {
@@ -33,9 +40,6 @@ class GoogleBusinessProfileConnector implements PublishConnector
         if ($location === null) {
             return PublishResult::failure(ErrorKind::Validation, 'Google Business Profile location capability is unavailable. Reconnect the location.');
         }
-        if ($context->media !== []) {
-            return PublishResult::failure(ErrorKind::Validation, 'Google Business Profile media is not supported in this release.');
-        }
         if ($context->target->remote_id !== null) {
             return PublishResult::success($context->target->remote_ids ?? [$context->target->remote_id], $context->target->remote_metadata);
         }
@@ -43,7 +47,11 @@ class GoogleBusinessProfileConnector implements PublishConnector
             return PublishResult::failure(ErrorKind::Unknown, 'Google Business Profile create outcome is unknown. Verify the Local Post before retrying.');
         }
 
-        $payload = $this->payload($context);
+        try {
+            $payload = $this->payload($context);
+        } catch (ImageConversionFailed $exception) {
+            return PublishResult::failure(ErrorKind::Unsupported, $exception->getMessage());
+        }
         if ($payload === null) {
             return PublishResult::failure(ErrorKind::Validation, 'Google Business Profile event schedule is invalid.');
         }
@@ -153,6 +161,12 @@ class GoogleBusinessProfileConnector implements PublishConnector
         }
         if ($type === 'OFFER') {
             $payload['offer'] = array_filter(['couponCode' => $options['coupon_code'] ?? null, 'redeemOnlineUrl' => $options['redemption_url'] ?? null, 'termsConditions' => $options['terms'] ?? null]);
+        }
+        if ($context->media !== []) {
+            $payload['media'] = array_map(
+                fn (PostMedia $media): array => ['sourceUrl' => $this->publicMediaUrl->for($media, Platform::GoogleBusinessProfile)],
+                $context->media,
+            );
         }
 
         return $payload;

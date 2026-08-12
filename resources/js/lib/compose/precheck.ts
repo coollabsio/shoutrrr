@@ -25,7 +25,6 @@ export type BlockReason =
     | 'story_requires_media'
     | 'gbp_summary_required'
     | 'gbp_threads_not_supported'
-    | 'gbp_media_not_supported'
     | 'gbp_event_title_required'
     | 'gbp_event_schedule_required'
     | 'gbp_offer_title_required'
@@ -178,8 +177,8 @@ export function precheckAccount({
         if (clean.length > 1) {
             reasons.push('gbp_threads_not_supported');
         }
-        if (mediaCount > 0) {
-            reasons.push('gbp_media_not_supported');
+        if (mediaCount > limits.maxMedia) {
+            reasons.push('too_many_media');
         }
 
         const type = providerOptions?.local_post_type ?? 'standard';
@@ -383,8 +382,6 @@ export function describeReason(
             return 'Google Business Profile requires a post summary';
         case 'gbp_threads_not_supported':
             return 'Google Business Profile does not support threaded posts';
-        case 'gbp_media_not_supported':
-            return 'Google Business Profile media is not supported in this release';
         case 'gbp_event_title_required':
         case 'gbp_offer_title_required':
             return 'this local post needs a title';

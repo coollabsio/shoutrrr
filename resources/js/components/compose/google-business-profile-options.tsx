@@ -14,6 +14,16 @@ const DEFAULT_OPTIONS: GoogleBusinessProfileLocalPostOptions = {
     local_post_type: 'standard',
 };
 
+const CTA_TYPES = [
+    ['', 'No button'],
+    ['BOOK', 'Book'],
+    ['ORDER', 'Order online'],
+    ['SHOP', 'Shop'],
+    ['LEARN_MORE', 'Learn more'],
+    ['SIGN_UP', 'Sign up'],
+    ['CALL', 'Call now'],
+] as const;
+
 type Props = {
     value: GoogleBusinessProfileLocalPostOptions | undefined;
     disabled: boolean;
@@ -93,6 +103,26 @@ export function GoogleBusinessProfileOptions({
                         }
                         placeholder="en"
                     />
+                </div>
+                <div className="space-y-1.5">
+                    <Label htmlFor="gbp-cta-type">Button</Label>
+                    <select
+                        id="gbp-cta-type"
+                        value={options.cta_type ?? ''}
+                        disabled={disabled}
+                        onChange={(event) =>
+                            update({
+                                cta_type: event.target.value || undefined,
+                            })
+                        }
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {CTA_TYPES.map(([value, label]) => (
+                            <option key={value} value={value}>
+                                {label}
+                            </option>
+                        ))}
+                    </select>
                 </div>
                 <div className="space-y-1.5">
                     <Label htmlFor="gbp-cta-url">CTA URL</Label>

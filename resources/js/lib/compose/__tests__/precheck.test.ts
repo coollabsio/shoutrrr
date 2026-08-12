@@ -190,19 +190,28 @@ describe('precheckAccount', () => {
         expect(
             precheckAccount({
                 ...input,
-                providerOptions: { cta_type: 'LEARN_MORE', cta_url: '   ' },
+                providerOptions: {
+                    local_post_type: 'standard',
+                    cta_type: 'LEARN_MORE',
+                    cta_url: '   ',
+                },
             }),
         ).toContain('gbp_cta_url_invalid');
         expect(
             precheckAccount({
                 ...input,
-                providerOptions: { cta_type: 'CALL', cta_url: '   ' },
+                providerOptions: {
+                    local_post_type: 'standard',
+                    cta_type: 'CALL',
+                    cta_url: '   ',
+                },
             }),
         ).not.toContain('gbp_cta_url_invalid');
         expect(
             precheckAccount({
                 ...input,
                 providerOptions: {
+                    local_post_type: 'standard',
                     cta_type: 'LEARN_MORE',
                     cta_url: ' https://example.test/learn ',
                 },

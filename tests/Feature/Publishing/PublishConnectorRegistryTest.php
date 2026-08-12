@@ -3,6 +3,7 @@
 use App\Dto\Publishing\PublishContext;
 use App\Enums\Platform;
 use App\Models\ConnectedAccount;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Services\Publishing\Connectors\BlueskyPublishConnector;
 use App\Services\Publishing\Connectors\DiscordPublishConnector;
@@ -62,6 +63,38 @@ test('google business profile connector creates a REST v4 local post', function 
             && $request['summary'] === 'A local post'
             && $request['topicType'] === 'STANDARD';
     });
+});
+
+test('google business profile connector sends public media source URLs', function () {
+    config([
+        'filesystems.default' => 'public',
+        'filesystems.disks.public.url' => 'https://media.example.test',
+    ]);
+    Http::preventStrayRequests();
+    Http::fake([
+        'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts' => Http::response([
+            'name' => 'accounts/one/locations/one/localPosts/post-media',
+        ]),
+    ]);
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::GoogleBusinessProfile,
+        'capabilities' => ['google_business_profile' => ['locationResourceName' => 'accounts/one/locations/one']],
+    ]);
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/example.jpg',
+        'mime' => 'image/jpeg',
+    ]);
+
+    $result = app(GoogleBusinessProfileConnector::class)->publish(new PublishContext(
+        target: PostTarget::factory()->create(['platform' => Platform::GoogleBusinessProfile->value]),
+        segments: ['A local post'], media: [$media], account: $account, credentials: ['access_token' => 'token'],
+    ));
+
+    expect($result->isSuccessful())->toBeTrue();
+    Http::assertSent(fn (Request $request): bool => $request['media'] === [
+        ['sourceUrl' => 'https://media.example.test/media/example.jpg'],
+    ]);
 });
 
 test('google business profile connector publishes with a legacy canonical location key', function () {

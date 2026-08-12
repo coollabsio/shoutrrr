@@ -76,6 +76,12 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if (! $target->platform->supportsPostMetrics()) {
+            $this->record($target, MetricsStatus::Unsupported);
+
+            return;
+        }
+
         $account = $target->account()->withoutGlobalScopes()->first();
 
         if ($account === null || $account->isDisabled()) {
