@@ -46,6 +46,10 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 | **Instagram**    | OAuth 2.0 (Facebook Login)     | ✅ (media required, ≤2,200 chars, up to 10 images or 1 video/Reel) | — (single post) | likes, comments, shares, views       |
 | **Threads**      | OAuth 2.0                      | ✅ (≤500 chars, up to 10 images or 1 video)               | ✅              | likes, replies, reposts, views       |
 | **Discord**      | Channel webhook URL            | ✅ (≤2000 chars, up to 10 files ≤10 MiB)                  | ✅              | reactions                            |
+| **Google Business Profile** | OAuth 2.0              | ✅ Local Posts: Standard, Event, and Offer (up to 10 images or 1 video) | — (single post) | not available                        |
+
+Google Business Profile requires Google API approval in addition to OAuth
+credentials. See [Google Business Profile setup](docs/google-business-profile.md).
 
 ## Features
 
