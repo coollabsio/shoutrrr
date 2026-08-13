@@ -27,9 +27,10 @@ test('media constraints match each platform', function () {
         ->and(Platform::Bluesky->maxMediaBytes())->toBe(2_000_000)
         ->and(Platform::Bluesky->allowedMime())->toContain('image/webp')
         ->and(Platform::LinkedIn->allowedMime())->toContain('image/gif')
-        ->and(Platform::GoogleBusinessProfile->maxMedia())->toBe(0)
-        ->and(Platform::GoogleBusinessProfile->allowedMime())->toBe([])
-        ->and(Platform::GoogleBusinessProfile->maxVideoBytes())->toBe(0);
+        ->and(Platform::GoogleBusinessProfile->maxMedia())->toBe(10)
+        ->and(Platform::GoogleBusinessProfile->allowedMime())->toBe(['image/jpeg', 'image/png'])
+        ->and(Platform::GoogleBusinessProfile->maxVideoBytes())->toBe(78_643_200)
+        ->and(Platform::GoogleBusinessProfile->maxVideoDurationSeconds())->toBe(30);
 });
 
 test('measure counts plain ascii uniformly across platforms', function () {

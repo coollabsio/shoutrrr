@@ -60,6 +60,10 @@ class InstanceSettings
 
     public function accountMetricsPollingEnabled(?Platform $platform = null): bool
     {
+        if ($platform !== null && ! $platform->supportsAccountMetrics()) {
+            return false;
+        }
+
         return $this->platformAvailable($platform)
             && $this->platformEnabled('account_metrics_polling_enabled', $platform);
     }
