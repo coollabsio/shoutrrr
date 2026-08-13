@@ -4,6 +4,7 @@ use App\Http\Controllers\CommandSearchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Gifs\GifBrowserController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Posts\PublishedMediaController;
 use App\Http\Controllers\PublicShareController;
 use App\Http\Controllers\WorkspaceMentionController;
 use App\Http\Middleware\NoIndex;
@@ -18,6 +19,13 @@ Route::get('/share/{token}', [PublicShareController::class, 'show'])
     ->middleware([NoIndex::class, 'throttle:30,1'])
     ->name('share.show')
     ->where('token', '[A-Za-z0-9\-]+');
+
+// Provider-facing media URLs are signed capabilities rather than session-bound
+// browser routes. Google validates a Local Post source URL with HEAD before it
+// fetches the media, which S3-compatible temporary GET URLs do not always allow.
+Route::get('published-media/{publicMedia}', [PublishedMediaController::class, 'show'])
+    ->middleware([NoIndex::class, 'signed', 'throttle:120,1'])
+    ->name('media.external');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');

@@ -92,9 +92,13 @@ test('google business profile connector sends public media source URLs', functio
     ));
 
     expect($result->isSuccessful())->toBeTrue();
-    Http::assertSent(fn (Request $request): bool => $request['media'] === [
-        ['sourceUrl' => 'https://media.example.test/media/example.jpg'],
-    ]);
+    Http::assertSent(function (Request $request) use ($media): bool {
+        $sourceUrl = $request['media'][0]['sourceUrl'] ?? null;
+
+        return is_string($sourceUrl)
+            && str_contains($sourceUrl, '/published-media/'.$media->id)
+            && str_contains($sourceUrl, 'signature=');
+    });
 });
 
 test('google business profile connector publishes with a legacy canonical location key', function () {
