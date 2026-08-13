@@ -97,8 +97,31 @@ test('google business profile connector sends public media source URLs', functio
 
         return is_string($sourceUrl)
             && str_contains($sourceUrl, '/published-media/'.$media->id)
-            && str_contains($sourceUrl, 'signature=');
+            && str_contains($sourceUrl, 'signature=')
+            && $request['media'][0]['mediaFormat'] === 'PHOTO';
     });
+});
+
+test('google business profile connector identifies video media to Google', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        'https://mybusiness.googleapis.com/v4/accounts/one/locations/one/localPosts' => Http::response([
+            'name' => 'accounts/one/locations/one/localPosts/post-video',
+        ]),
+    ]);
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::GoogleBusinessProfile,
+        'capabilities' => ['google_business_profile' => ['locationResourceName' => 'accounts/one/locations/one']],
+    ]);
+    $video = PostMedia::factory()->video()->create();
+
+    $result = app(GoogleBusinessProfileConnector::class)->publish(new PublishContext(
+        target: PostTarget::factory()->create(['platform' => Platform::GoogleBusinessProfile->value]),
+        segments: ['A local post'], media: [$video], account: $account, credentials: ['access_token' => 'token'],
+    ));
+
+    expect($result->isSuccessful())->toBeTrue();
+    Http::assertSent(fn (Request $request): bool => $request['media'][0]['mediaFormat'] === 'VIDEO');
 });
 
 test('google business profile connector publishes with a legacy canonical location key', function () {

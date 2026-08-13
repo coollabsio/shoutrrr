@@ -164,7 +164,10 @@ class GoogleBusinessProfileConnector implements PublishConnector
         }
         if ($context->media !== []) {
             $payload['media'] = array_map(
-                fn (PostMedia $media): array => ['sourceUrl' => $this->publicMediaUrl->for($media, Platform::GoogleBusinessProfile)],
+                fn (PostMedia $media): array => [
+                    'mediaFormat' => $media->isVideo() ? 'VIDEO' : 'PHOTO',
+                    'sourceUrl' => $this->publicMediaUrl->for($media, Platform::GoogleBusinessProfile),
+                ],
                 $context->media,
             );
         }
