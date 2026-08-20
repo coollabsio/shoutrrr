@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\LogMcpOAuthRegistration;
 use App\Http\Middleware\RecordApiUsage;
 use App\Mcp\Servers\ShoutrrrServer;
 use Illuminate\Http\Request;
@@ -11,7 +12,7 @@ use Laravel\Mcp\Facades\Mcp;
 
 // Throttle the OAuth authorize/token endpoints so consent and token-exchange
 // can't be hammered (credential/consent abuse).
-Route::middleware('throttle:20,1')->group(function (): void {
+Route::middleware(['throttle:20,1', LogMcpOAuthRegistration::class])->group(function (): void {
     Mcp::oauthRoutes();
 });
 
