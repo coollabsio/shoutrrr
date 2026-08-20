@@ -4,6 +4,7 @@ import { useState } from 'react';
 import BlueskyConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyConnectionController';
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
 import DiscordConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/DiscordConnectionController';
+import GoogleBusinessProfileConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/GoogleBusinessProfileConnectionController';
 import MetaConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/MetaConnectionController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import InputError from '@/components/common/input-error';
@@ -54,6 +55,7 @@ const SUPPORTED_PLATFORM_ICONS = [
     'instagram',
     'threads',
     'discord',
+    'google_business_profile',
 ];
 
 export function isSupportedPlatformIcon(
@@ -509,9 +511,11 @@ export function metaConnectLabel(capabilities: Capability[]): string {
 function connectHref(capability: Capability): string {
     return capability.platform === 'facebook'
         ? MetaConnectionController.redirect.url()
-        : OAuthConnectionController.redirect.url({
-              platform: capability.platform,
-          });
+        : capability.platform === 'google_business_profile'
+          ? GoogleBusinessProfileConnectionController.redirect.url()
+          : OAuthConnectionController.redirect.url({
+                platform: capability.platform,
+            });
 }
 
 /**
@@ -589,7 +593,7 @@ export function ConnectButtons({
                             );
                         }
 
-                        if (!capability.launched || !capability.configured) {
+                        if (!capability.connectable || !capability.configured) {
                             return (
                                 <DropdownMenuItem
                                     key={capability.platform}

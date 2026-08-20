@@ -63,6 +63,31 @@ test('updateDraft applies a per-account override and re-splits only that target'
         ->and($target->content_override)->toBe(['segments' => ['custom for x'], 'media_ids' => []]);
 });
 
+test('updateDraft stores provider options only for the selected target', function () {
+    [$user, $workspace, $accounts] = draftSetup(2);
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['shared']);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'shared',
+        'destination' => ['kind' => 'all'],
+        'targets' => [[
+            'connected_account_id' => $accounts[0]->id,
+            'provider_options' => [
+                'google_business_profile' => [
+                    'local_post_type' => 'event',
+                    'title' => 'Open house',
+                ],
+            ],
+        ]],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->targets->firstWhere('connected_account_id', $accounts[0]->id)->provider_options)
+        ->toBe(['google_business_profile' => ['local_post_type' => 'event', 'title' => 'Open house']])
+        ->and($updated->targets->firstWhere('connected_account_id', $accounts[1]->id)->provider_options)
+        ->toBeNull();
+});
+
 test('switching destination preserves surviving accounts edits (smart merge)', function () {
     [$user, $workspace, $accounts] = draftSetup(3);
     $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['base']);

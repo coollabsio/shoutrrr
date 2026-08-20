@@ -1,11 +1,14 @@
 <?php
 
+use App\Enums\Platform;
 use App\Enums\WorkspaceRole;
 use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Services\Media\PublicMediaUrl;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 
 function mediaContentMember(): array
 {
@@ -121,4 +124,46 @@ test('GET media/{media}/raw redirects a guest to login', function () {
     ]);
 
     test()->get(route('media.raw', $media))->assertRedirect(route('login'));
+});
+
+test('signed published media URL streams through the application for provider GET and HEAD validation', function () {
+    Storage::fake('public');
+    $workspace = Workspace::factory()->create();
+    Storage::disk('public')->put('media/ws/pic.jpg', 'PUBLIC-BYTES');
+    $media = PostMedia::factory()->create([
+        'workspace_id' => $workspace->id,
+        'disk' => 'public',
+        'path' => 'media/ws/pic.jpg',
+        'mime' => 'image/jpeg',
+    ]);
+
+    $url = app(PublicMediaUrl::class)->for($media, Platform::GoogleBusinessProfile);
+
+    test()->get($url)
+        ->assertOk()
+        ->assertHeader('Content-Type', 'image/jpeg')
+        ->assertHeader('X-Robots-Tag', 'noindex, nofollow');
+    expect(test()->get($url)->streamedContent())->toBe('PUBLIC-BYTES');
+    test()->head($url)->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+});
+
+test('published media URL rejects a modified path even when it has a valid signature', function () {
+    Storage::fake('public');
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/ws/pic.jpg',
+    ]);
+
+    $url = URL::temporarySignedRoute('media.external', now()->addHour(), [
+        'publicMedia' => $media,
+        'path' => 'media/other/private.jpg',
+    ]);
+
+    test()->get($url)->assertNotFound();
+});
+
+test('published media URL rejects an unsigned request', function () {
+    $media = PostMedia::factory()->create();
+
+    test()->get(route('media.external', ['publicMedia' => $media, 'path' => $media->path]))->assertForbidden();
 });

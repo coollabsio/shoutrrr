@@ -44,6 +44,13 @@ class PublicMediaUrl
             $path = $converted->path;
         }
 
+        if ($platform === Platform::GoogleBusinessProfile) {
+            return URL::temporarySignedRoute('media.external', now()->addHours(6), [
+                'publicMedia' => $media,
+                'path' => $path,
+            ]);
+        }
+
         return $this->absolute(FileStorage::url($path, $disk));
     }
 

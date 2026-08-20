@@ -8,6 +8,7 @@ const PLATFORM_LABELS: Record<string, string> = {
     instagram: 'Instagram',
     threads: 'Threads',
     discord: 'Discord',
+    google_business_profile: 'Google Business Profile',
 };
 
 export function platformLabel(platform: string): string {

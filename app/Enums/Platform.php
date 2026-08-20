@@ -15,6 +15,7 @@ enum Platform: string
     case Instagram = 'instagram';
     case Threads = 'threads';
     case Discord = 'discord';
+    case GoogleBusinessProfile = 'google_business_profile';
 
     public function label(): string
     {
@@ -26,6 +27,7 @@ enum Platform: string
             self::Instagram => 'Instagram',
             self::Threads => 'Threads',
             self::Discord => 'Discord',
+            self::GoogleBusinessProfile => 'Google Business Profile',
         };
     }
 
@@ -38,6 +40,7 @@ enum Platform: string
             self::Facebook, self::Instagram => 'facebook',
             self::Threads => 'threads',
             self::Discord => null,
+            self::GoogleBusinessProfile => null,
         };
     }
 
@@ -68,6 +71,7 @@ enum Platform: string
             // Graph returns 403 and the post remains on Threads.
             self::Threads => ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_manage_insights', 'threads_delete'],
             self::Discord => [],
+            self::GoogleBusinessProfile => ['https://www.googleapis.com/auth/business.manage'],
         };
     }
 
@@ -80,12 +84,13 @@ enum Platform: string
             self::Facebook, self::Instagram => 'services.facebook',
             self::Threads => 'services.threads',
             self::Discord => null,
+            self::GoogleBusinessProfile => 'services.google_business_profile',
         };
     }
 
     public function supportsOAuth(): bool
     {
-        return $this->socialiteDriver() !== null;
+        return $this === self::GoogleBusinessProfile || $this->socialiteDriver() !== null;
     }
 
     public function supportsAppPassword(): bool
@@ -106,7 +111,7 @@ enum Platform: string
      */
     public function supportsEngagement(): bool
     {
-        return $this !== self::Discord;
+        return $this !== self::Discord && $this !== self::GoogleBusinessProfile;
     }
 
     /**
@@ -165,7 +170,7 @@ enum Platform: string
      */
     public function supportsPostMetrics(): bool
     {
-        return true;
+        return $this !== self::GoogleBusinessProfile;
     }
 
     /**
@@ -176,7 +181,7 @@ enum Platform: string
      */
     public function supportsAccountMetrics(): bool
     {
-        return $this !== self::Discord;
+        return $this !== self::Discord && $this !== self::GoogleBusinessProfile;
     }
 
     /**
@@ -187,7 +192,7 @@ enum Platform: string
      */
     public function supportsReplyLikes(): bool
     {
-        return $this !== self::Threads;
+        return $this !== self::Threads && $this !== self::GoogleBusinessProfile;
     }
 
     /**
@@ -229,7 +234,8 @@ enum Platform: string
         // filled() so a blank value in .env isn't treated as configured.
         return $key !== null
             && filled(config($key.'.client_id'))
-            && filled(config($key.'.client_secret'));
+            && filled(config($key.'.client_secret'))
+            && ($this !== self::GoogleBusinessProfile || config($key.'.api_approved') === true);
     }
 
     /**
@@ -238,13 +244,15 @@ enum Platform: string
      * branding, and phased rollout) before their connectors exist; until then
      * connecting must stay disabled even when credentials are configured. Flip a
      * platform to `true` when its publish/engagement/metrics connectors land.
-     *
-     * All seven platforms (X, Bluesky, LinkedIn, Facebook, Instagram, Threads,
-     * Discord) are launched.
      */
     public function isLaunched(): bool
     {
         return true;
+    }
+
+    public function hasConnectionFlow(): bool
+    {
+        return $this->isLaunched() || $this === self::GoogleBusinessProfile;
     }
 
     /**
@@ -294,7 +302,7 @@ enum Platform: string
     }
 
     /**
-     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, supportsWebhook: bool, configured: bool, launched: bool, enabled: bool}>
+     * @return list<array{platform: string, label: string, supportsOAuth: bool, supportsAppPassword: bool, supportsWebhook: bool, configured: bool, launched: bool, connectable: bool, enabled: bool}>
      */
     public static function capabilities(): array
     {
@@ -308,6 +316,7 @@ enum Platform: string
             'supportsWebhook' => $platform->supportsWebhook(),
             'configured' => $platform->isConfigured(),
             'launched' => $platform->isLaunched(),
+            'connectable' => $platform->hasConnectionFlow(),
             'enabled' => $enabled[$platform->value] ?? true,
         ], self::cases());
     }
@@ -327,6 +336,7 @@ enum Platform: string
             self::Instagram => 2_200,
             self::Threads => 500,
             self::Discord => 2000,
+            self::GoogleBusinessProfile => 1500,
         };
     }
 
@@ -347,7 +357,7 @@ enum Platform: string
     public function threadMax(): ?int
     {
         return match ($this) {
-            self::LinkedIn, self::Facebook, self::Instagram => 1,
+            self::LinkedIn, self::Facebook, self::Instagram, self::GoogleBusinessProfile => 1,
             default => null,
         };
     }
@@ -358,7 +368,7 @@ enum Platform: string
             self::X, self::Bluesky => 4,
             self::LinkedIn => 9,
             self::Facebook, self::Instagram, self::Threads => 10,
-            self::Discord => 10,
+            self::Discord, self::GoogleBusinessProfile => 10,
         };
     }
 
@@ -383,7 +393,7 @@ enum Platform: string
     {
         return match ($this) {
             self::Instagram, self::Threads, self::Discord => true,
-            self::X, self::Bluesky, self::Facebook, self::LinkedIn => false,
+            self::X, self::Bluesky, self::Facebook, self::LinkedIn, self::GoogleBusinessProfile => false,
         };
     }
 
@@ -397,7 +407,7 @@ enum Platform: string
     {
         return match ($this) {
             self::X, self::LinkedIn, self::Bluesky => true,
-            self::Facebook, self::Instagram, self::Threads, self::Discord => false,
+            self::Facebook, self::Instagram, self::Threads, self::Discord, self::GoogleBusinessProfile => false,
         };
     }
 
@@ -424,6 +434,7 @@ enum Platform: string
             self::Facebook => 4_194_304,
             self::Instagram, self::Threads => 8_388_608,
             self::Discord => 10_485_760, // 10 MiB (Discord's default webhook attachment cap)
+            self::GoogleBusinessProfile => 5_242_880, // 5 MiB (Google Business Profile image cap)
         };
     }
 
@@ -439,6 +450,7 @@ enum Platform: string
             self::Instagram => ['image/jpeg'],
             self::Threads => ['image/jpeg', 'image/png'],
             self::Discord => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            self::GoogleBusinessProfile => ['image/jpeg', 'image/png'],
         };
     }
 
@@ -454,6 +466,7 @@ enum Platform: string
             self::Facebook => ['width' => 8192, 'height' => 8192],
             self::Instagram, self::Threads => ['width' => 1440, 'height' => 1800],
             self::Discord => ['width' => 8192, 'height' => 8192],
+            self::GoogleBusinessProfile => ['width' => 0, 'height' => 0],
         };
     }
 
@@ -474,6 +487,7 @@ enum Platform: string
             self::Bluesky => 100_000_000,
             self::Facebook, self::Instagram, self::Threads => 1_073_741_824,
             self::Discord => 10_485_760, // 10 MiB (Discord's default webhook attachment cap)
+            self::GoogleBusinessProfile => 78_643_200, // 75 MiB (Google Business Profile video cap)
         };
     }
 
@@ -490,6 +504,7 @@ enum Platform: string
             self::Instagram => 900,
             self::Threads => 300,
             self::Discord => 600,
+            self::GoogleBusinessProfile => 30,
         };
     }
 
@@ -510,7 +525,7 @@ enum Platform: string
             // UTF-16 code units: 2 bytes each in UTF-16LE.
             self::X => intdiv(strlen((string) mb_convert_encoding($text, 'UTF-16LE', 'UTF-8')), 2),
             self::Bluesky => grapheme_strlen($text) ?: 0,
-            self::LinkedIn, self::Facebook, self::Instagram, self::Threads, self::Discord => mb_strlen($text),
+            self::LinkedIn, self::Facebook, self::Instagram, self::Threads, self::Discord, self::GoogleBusinessProfile => mb_strlen($text),
         };
     }
 

@@ -17,4 +17,10 @@ describe('platform preview panel', () => {
         expect(source()).toContain('wrap-anywhere');
         expect(source()).toContain('whitespace-pre-wrap');
     });
+
+    it('uses a Local Post-specific preview instead of generic social actions', () => {
+        expect(source()).toContain('GoogleBusinessProfilePreview');
+        expect(source()).toContain('View offer');
+        expect(source()).toContain('Google may review this Local Post');
+    });
 });

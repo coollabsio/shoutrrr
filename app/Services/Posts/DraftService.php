@@ -183,6 +183,9 @@ class DraftService
 
             $currentFormat = $current instanceof PostTarget ? $current->format->value : null;
             $format = $formatByAccount[$accountId] ?? $currentFormat ?? 'feed';
+            $providerOptions = $data instanceof DraftData && $data->hasProviderOptionsFor($accountId)
+                ? $data->providerOptionsFor($accountId)
+                : ($current instanceof PostTarget ? $current->provider_options : null);
 
             $effectiveSegments = $override['segments'] ?? $segments;
             $resolvedSegments = array_map(
@@ -223,6 +226,7 @@ class DraftService
                     'content_override' => $override,
                     'auto_split' => $autoSplit,
                     'format' => $format,
+                    'provider_options' => $providerOptions,
                 ],
             );
 

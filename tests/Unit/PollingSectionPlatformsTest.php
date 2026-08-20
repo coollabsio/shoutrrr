@@ -2,15 +2,15 @@
 
 use App\Enums\Platform;
 
-test('post metrics is supported by every platform', function () {
+test('post metrics excludes google business profile while it is inert', function () {
     foreach (Platform::cases() as $platform) {
-        expect($platform->supportsPostMetrics())->toBeTrue();
+        expect($platform->supportsPostMetrics())->toBe($platform !== Platform::GoogleBusinessProfile);
     }
 });
 
-test('account metrics is supported by every platform except Discord', function () {
+test('account metrics excludes Discord and Google Business Profile', function () {
     foreach (Platform::cases() as $platform) {
-        expect($platform->supportsAccountMetrics())->toBe($platform !== Platform::Discord);
+        expect($platform->supportsAccountMetrics())->toBe(! in_array($platform, [Platform::Discord, Platform::GoogleBusinessProfile], true));
     }
 });
 

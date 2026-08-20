@@ -22,6 +22,7 @@ const MAX_CONSECUTIVE_NEWLINES: Record<PlatformName, number> = {
     instagram: 2,
     threads: 2,
     discord: Number.POSITIVE_INFINITY,
+    google_business_profile: 2,
 };
 
 /**

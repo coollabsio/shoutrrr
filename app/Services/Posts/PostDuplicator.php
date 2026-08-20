@@ -163,6 +163,7 @@ class PostDuplicator
                 'content_override' => $this->remapOverride($target->content_override, $mediaIdMap),
                 'auto_split' => $target->auto_split,
                 'format' => $target->format->value,
+                'provider_options' => $target->provider_options,
             ]);
         }
     }

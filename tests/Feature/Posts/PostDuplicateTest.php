@@ -108,8 +108,12 @@ test('cloned media is a new file that survives deleting the original post', func
     expect(Storage::disk('public')->exists($copy->path))->toBeTrue();
 });
 
-test('cloned target is pending with overrides preserved and media ids remapped', function (): void {
+test('cloned target is pending with options preserved, metadata cleared, and media ids remapped', function (): void {
     $post = publishedPostWithMediaAndTarget($this->workspace, $this->user);
+    $post->targets()->firstOrFail()->update([
+        'provider_options' => ['google_business_profile' => ['local_post_type' => 'offer']],
+        'remote_metadata' => ['state' => 'LIVE'],
+    ]);
 
     $this->actingAs($this->user)->post(route('posts.duplicate', $post));
 
@@ -120,6 +124,8 @@ test('cloned target is pending with overrides preserved and media ids remapped',
     expect($target->status)->toBe(PostTargetStatus::Pending)
         ->and($target->remote_id)->toBeNull()
         ->and($target->posted_at)->toBeNull()
+        ->and($target->provider_options)->toBe(['google_business_profile' => ['local_post_type' => 'offer']])
+        ->and($target->remote_metadata)->toBeNull()
         ->and($target->content_override['text'])->toBe('Custom')
         ->and($target->content_override['media_ids'])->toBe([$newMedia->id]);
 });

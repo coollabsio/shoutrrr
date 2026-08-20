@@ -68,6 +68,7 @@ import { ComposerToolbar } from './composer-toolbar';
 import { ConflictDialog } from './conflict-dialog';
 import DestinationSelector from './destination-selector';
 import EditorBody, { type EditorBodyHandle } from './editor-body';
+import { GoogleBusinessProfileOptions } from './google-business-profile-options';
 import { ImageEditor } from './image-editor';
 import { PlatformPreviewPanel } from './platform-preview-panel';
 import PlatformTabs from './platform-tabs';
@@ -1032,6 +1033,7 @@ export default function Composer({
         autoSplitByAccount: state.autoSplitByAccount,
         overrideByAccount: state.overrideByAccount,
         formatByAccount: state.formatByAccount,
+        providerOptionsByAccount: state.providerOptionsByAccount,
         media: state.media,
         limits,
     });
@@ -1418,6 +1420,20 @@ export default function Composer({
                     />
                 )}
 
+                {activeAccount?.platform === 'google_business_profile' && (
+                    <GoogleBusinessProfileOptions
+                        value={state.providerOptionsByAccount[activeAccount.id]}
+                        disabled={readOnly}
+                        onChange={(options) =>
+                            dispatch({
+                                type: 'setGoogleBusinessProfileOptions',
+                                accountId: activeAccount.id,
+                                options,
+                            })
+                        }
+                    />
+                )}
+
                 {!readOnly && (
                     <ImageEditor
                         open={
@@ -1587,7 +1603,17 @@ export default function Composer({
                 >
                     <div className="min-h-0 w-full overflow-hidden">
                         <div className="xl:min-w-[340px]">
-                            <PlatformPreviewPanel preview={platformPreview} />
+                            <PlatformPreviewPanel
+                                preview={platformPreview}
+                                googleBusinessProfileOptions={
+                                    previewAccount?.platform ===
+                                    'google_business_profile'
+                                        ? state.providerOptionsByAccount[
+                                              previewAccount.id
+                                          ]
+                                        : undefined
+                                }
+                            />
                         </div>
                     </div>
                 </div>

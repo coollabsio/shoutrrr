@@ -33,6 +33,23 @@ test('post job writes latest totals and ok status for bluesky', function () {
     expect($target->metrics_captured_at)->not->toBeNull();
 });
 
+test('post job marks Google Business Profile metrics unsupported without calling Google', function () {
+    Http::preventStrayRequests();
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::GoogleBusinessProfile,
+    ]);
+    $target = PostTarget::factory()->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::GoogleBusinessProfile,
+        'remote_id' => 'accounts/one/locations/one/localPosts/post-one',
+    ]);
+
+    CapturePostTargetMetrics::dispatchSync($target);
+
+    expect($target->refresh()->metrics_status)->toBe(MetricsStatus::Unsupported);
+    Http::assertNothingSent();
+});
+
 test('account job appends a snapshot row', function () {
     Http::fake(['public.api.bsky.app/*' => Http::response(['followersCount' => 99, 'followsCount' => 5, 'postsCount' => 3])]);
 

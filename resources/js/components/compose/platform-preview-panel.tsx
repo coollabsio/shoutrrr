@@ -14,7 +14,10 @@ import type {
 } from '@/lib/compose/platform-preview';
 import { LinkedText } from '@/lib/linked-text';
 import { cn } from '@/lib/utils';
-import type { PlatformName } from '@/types/compose';
+import type {
+    GoogleBusinessProfileLocalPostOptions,
+    PlatformName,
+} from '@/types/compose';
 
 import { FacebookPreview } from './preview/facebook-preview';
 import { InstagramPreview } from './preview/instagram-preview';
@@ -28,6 +31,7 @@ const PLATFORM_LABELS: Record<PlatformName, string> = {
     instagram: 'Instagram',
     threads: 'Threads',
     discord: 'Discord',
+    google_business_profile: 'Google Business Profile',
 };
 
 const PLATFORM_GLYPH_CLASS: Record<PlatformName, string> = {
@@ -38,6 +42,7 @@ const PLATFORM_GLYPH_CLASS: Record<PlatformName, string> = {
     instagram: 'text-[#E4405F]',
     threads: 'text-foreground',
     discord: 'text-[#5865F2]',
+    google_business_profile: 'text-[#4285F4]',
 };
 
 function initials(name: string): string {
@@ -107,6 +112,97 @@ function PlatformPreviewMedia({ item }: { item: PlatformPreviewItem }) {
                     )}
                 </div>
             ))}
+        </div>
+    );
+}
+
+const GOOGLE_BUSINESS_PROFILE_CTA_LABELS: Record<string, string> = {
+    BOOK: 'Book',
+    ORDER: 'Order online',
+    SHOP: 'Shop',
+    LEARN_MORE: 'Learn more',
+    SIGN_UP: 'Sign up',
+    CALL: 'Call now',
+};
+
+function GoogleBusinessProfilePreview({
+    preview,
+    options,
+}: {
+    preview: PlatformPreview;
+    options: GoogleBusinessProfileLocalPostOptions;
+}) {
+    const item = preview.items[0];
+    const type = options.local_post_type ?? 'standard';
+    const ctaType = options.cta_type?.trim().toUpperCase();
+    const ctaLabel = ctaType
+        ? GOOGLE_BUSINESS_PROFILE_CTA_LABELS[ctaType]
+        : undefined;
+
+    if (!item) {
+        return null;
+    }
+
+    return (
+        <div className="p-4">
+            <article className="overflow-hidden rounded-xl border bg-background shadow-xs">
+                <PlatformPreviewMedia item={item} />
+                <div className="space-y-3 p-4">
+                    <div>
+                        <p className="text-[12px] font-medium text-muted-foreground">
+                            {type === 'standard'
+                                ? 'Update'
+                                : type === 'event'
+                                  ? 'Event'
+                                  : 'Offer'}
+                        </p>
+                        <p className="mt-1 font-semibold text-foreground">
+                            {preview.accountName}
+                        </p>
+                    </div>
+                    {(type === 'event' || type === 'offer') &&
+                        options.title && (
+                            <p className="font-semibold text-foreground">
+                                {options.title}
+                            </p>
+                        )}
+                    {options.start_at && options.end_at && (
+                        <p className="text-[12px] text-muted-foreground">
+                            {options.start_at} – {options.end_at}
+                        </p>
+                    )}
+                    <p className="text-[14px] leading-5 wrap-anywhere whitespace-pre-wrap text-foreground">
+                        <LinkedText
+                            text={item.text}
+                            platform={preview.platform}
+                            linkExclusions={item.linkExclusions}
+                            discordLabels={preview.discordLabels}
+                            emptyFallback="Start writing to preview your Google Business Profile post."
+                        />
+                    </p>
+                    {type === 'offer' && (
+                        <div className="space-y-1 text-[12px] text-muted-foreground">
+                            {options.coupon_code && (
+                                <p>Code: {options.coupon_code}</p>
+                            )}
+                            {options.terms && <p>{options.terms}</p>}
+                        </div>
+                    )}
+                    {(ctaLabel || type === 'offer') && (
+                        <button
+                            type="button"
+                            className="rounded-md border px-3 py-1.5 text-[12px] font-medium text-foreground"
+                            disabled
+                        >
+                            {type === 'offer' ? 'View offer' : ctaLabel}
+                        </button>
+                    )}
+                </div>
+            </article>
+            <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
+                Google may review this Local Post before it appears on Search
+                and Maps.
+            </p>
         </div>
     );
 }
@@ -192,8 +288,10 @@ function PlatformPreviewPost({
 
 export function PlatformPreviewPanel({
     preview,
+    googleBusinessProfileOptions,
 }: {
     preview: PlatformPreview | null;
+    googleBusinessProfileOptions?: GoogleBusinessProfileLocalPostOptions;
 }) {
     const label = preview ? PLATFORM_LABELS[preview.platform] : null;
 
@@ -248,6 +346,12 @@ export function PlatformPreviewPanel({
                 <FacebookPreview preview={preview} />
             ) : preview.platform === 'threads' ? (
                 <ThreadsPreview preview={preview} />
+            ) : preview.platform === 'google_business_profile' &&
+              googleBusinessProfileOptions ? (
+                <GoogleBusinessProfilePreview
+                    preview={preview}
+                    options={googleBusinessProfileOptions}
+                />
             ) : (
                 <div className="p-4">
                     <div className="rounded-3xl border border-border bg-background px-4 pt-4 shadow-xs">

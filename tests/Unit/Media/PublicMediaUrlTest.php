@@ -96,3 +96,20 @@ it('signs the url for media on a private disk so Meta can fetch it over a real H
     expect($url)->toContain('media/ws/clip.mp4')
         ->and($url)->toContain('signature=');
 });
+
+it('uses an application signed URL for Google Business Profile media so Google can validate it with HEAD', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/ws/pic.jpg', 'jpg-bytes');
+
+    $media = PostMedia::factory()->create([
+        'disk' => 'public',
+        'path' => 'media/ws/pic.jpg',
+        'mime' => 'image/jpeg',
+    ]);
+
+    $url = app(PublicMediaUrl::class)->for($media, Platform::GoogleBusinessProfile);
+
+    expect($url)->toContain('/published-media/'.$media->id)
+        ->and($url)->toContain('signature=')
+        ->and($url)->not->toContain('/storage/');
+});

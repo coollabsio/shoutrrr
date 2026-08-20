@@ -6,6 +6,7 @@ use App\Http\Controllers\ConnectedAccounts\BlueskyConnectionController;
 use App\Http\Controllers\ConnectedAccounts\BlueskyOAuthController;
 use App\Http\Controllers\ConnectedAccounts\ConnectedAccountController;
 use App\Http\Controllers\ConnectedAccounts\DiscordConnectionController;
+use App\Http\Controllers\ConnectedAccounts\GoogleBusinessProfileConnectionController;
 use App\Http\Controllers\ConnectedAccounts\LinkedInPageConnectionController;
 use App\Http\Controllers\ConnectedAccounts\MetaConnectionController;
 use App\Http\Controllers\ConnectedAccounts\OAuthConnectionController;
@@ -68,6 +69,18 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('accounts/connect/linkedin/pages', [LinkedInPageConnectionController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('accounts.linkedin.store');
+
+    Route::get('accounts/connect/google-business-profile', [GoogleBusinessProfileConnectionController::class, 'redirect'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.google-business-profile.redirect');
+
+    Route::get('accounts/callback/google-business-profile', [GoogleBusinessProfileConnectionController::class, 'callback'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.google-business-profile.callback');
+
+    Route::post('accounts/connect/google-business-profile', [GoogleBusinessProfileConnectionController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.google-business-profile.store');
 
     Route::get('accounts/connect/{platform}', [OAuthConnectionController::class, 'redirect'])
         ->middleware('throttle:10,1')
