@@ -212,6 +212,38 @@ test('linkedin token refresh sends credentials in the body', function () {
         && ! $request->hasHeader('Authorization'));
 });
 
+test('linkedin page token refresh uses the dedicated community management app credentials', function () {
+    // Org accounts are minted by the separate pages app, so their refresh must
+    // send THAT app's credentials — the personal `linkedin-openid` client would
+    // be rejected by LinkedIn as a mismatched client for the refresh token.
+    config()->set('services.linkedin-openid.client_id', 'personal-id');
+    config()->set('services.linkedin-openid.client_secret', 'personal-secret');
+    config()->set('services.linkedin-pages.client_id', 'pages-id');
+    config()->set('services.linkedin-pages.client_secret', 'pages-secret');
+
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::LinkedIn->value,
+        'token_expires_at' => now()->subMinute(),
+        'capabilities' => ['linkedin_account_type' => 'organization'],
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'refresh_token' => 'refresh-old',
+    ]);
+
+    Http::fake([
+        'https://www.linkedin.com/oauth/v2/accessToken' => Http::response([
+            'access_token' => 'new-access',
+            'expires_in' => 3600,
+        ]),
+    ]);
+
+    app(TokenManager::class)->fresh($account->fresh());
+
+    Http::assertSent(fn ($request) => $request['client_id'] === 'pages-id'
+        && $request['client_secret'] === 'pages-secret');
+});
+
 test('fresh refreshes the bluesky session before publishing and persists the new tokens', function () {
     $account = ConnectedAccount::factory()->bluesky()->create(['token_expires_at' => null]);
     ConnectedAccountSecret::factory()->create([
