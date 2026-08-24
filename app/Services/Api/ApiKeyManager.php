@@ -115,6 +115,12 @@ class ApiKeyManager
      * Passport only registers its console commands when runningInConsole(), so
      * under FrankenPHP/Octane the web worker has no `passport:keys` command and
      * `Artisan::call('passport:keys')` throws CommandNotFoundException.
+     *
+     * A partial write would leave a truncated key file on disk that passes the
+     * file_exists() guard above, so the corrupt pair would never be regenerated
+     * and Passport would reject every future token. To avoid that, verify both
+     * writes and delete any partial output before failing loudly. Writes are
+     * already serialized by the surrounding Cache::lock, so no LOCK_EX is needed.
      */
     private function generateEncryptionKeys(): void
     {
@@ -123,8 +129,18 @@ class ApiKeyManager
 
         $key = RSA::createKey(4096);
 
-        file_put_contents($publicKeyPath, (string) $key->getPublicKey());
-        file_put_contents($privateKeyPath, (string) $key);
+        $publicKey = (string) $key->getPublicKey();
+        $privateKey = (string) $key;
+
+        $publicBytes = file_put_contents($publicKeyPath, $publicKey);
+        $privateBytes = file_put_contents($privateKeyPath, $privateKey);
+
+        if ($publicBytes !== strlen($publicKey) || $privateBytes !== strlen($privateKey)) {
+            @unlink($publicKeyPath);
+            @unlink($privateKeyPath);
+
+            throw new RuntimeException('Failed to write Passport encryption keys ('.$privateKeyPath.').');
+        }
 
         if (! windows_os()) {
             chmod($publicKeyPath, 0660);
