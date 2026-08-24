@@ -79,6 +79,8 @@ export type PlatformLimits = {
     allowedVideoMime: string[];
     maxVideoBytes: number;
     maxVideoDurationSeconds: number;
+    /** Allowed width:height ratio bounds for a video, or null when unconstrained. */
+    videoAspectRatioRange: { min: number; max: number } | null;
 };
 
 export type MediaView = {
