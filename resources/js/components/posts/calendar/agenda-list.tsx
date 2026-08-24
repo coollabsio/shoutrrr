@@ -117,14 +117,15 @@ export function AgendaList({ anchor, view, posts, onEmptyDayClick }: Props) {
                         </div>
 
                         <div className="min-w-0 flex-1 space-y-1 border-l border-border/60 py-0.5 pl-3">
-                            {dayPosts.length > 0 ? (
-                                dayPosts.map((post) => (
-                                    <AgendaItem key={post.id} post={post} />
-                                ))
-                            ) : isPast ? (
-                                <p className="px-1 py-2.5 text-[12.5px] text-muted-foreground/45">
-                                    No posts
-                                </p>
+                            {dayPosts.map((post) => (
+                                <AgendaItem key={post.id} post={post} />
+                            ))}
+                            {isPast ? (
+                                dayPosts.length === 0 && (
+                                    <p className="px-1 py-2.5 text-[12.5px] text-muted-foreground/45">
+                                        No posts
+                                    </p>
+                                )
                             ) : (
                                 <button
                                     type="button"

@@ -32,11 +32,8 @@ export function computeMonthDrop(
         .format('YYYY-MM-DDTHH:mm:ss[Z]');
 }
 
-export function shouldOpenEmptyMonthDay(
-    empty: boolean,
-    isPast: boolean,
-): boolean {
-    return empty && !isPast;
+export function shouldOpenMonthDay(isPast: boolean): boolean {
+    return !isPast;
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -119,12 +116,11 @@ function DayCell({
     });
     const visible = posts.slice(0, 3);
     const overflow = posts.length - visible.length;
-    const empty = posts.length === 0;
     const dimmed = !inMonth || isPast;
-    const canOpenEmptyDay = shouldOpenEmptyMonthDay(empty, isPast);
+    const canCreatePost = shouldOpenMonthDay(isPast);
 
     const handleActivate = () => {
-        if (canOpenEmptyDay) onEmptyClick();
+        if (canCreatePost) onEmptyClick();
     };
 
     return (
@@ -136,7 +132,7 @@ function DayCell({
             aria-label={`Day ${day.format('YYYY-MM-DD')}`}
             onClick={(e) => {
                 if (
-                    canOpenEmptyDay &&
+                    canCreatePost &&
                     !(e.target as HTMLElement).closest('button')
                 )
                     onEmptyClick();
@@ -152,7 +148,7 @@ function DayCell({
                 'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
                 isPast && 'bg-muted/40',
                 isToday && 'bg-primary/5',
-                canOpenEmptyDay && 'cursor-pointer hover:bg-accent/40',
+                canCreatePost && 'cursor-pointer hover:bg-accent/40',
                 isOver && 'ring-2 ring-primary/60 ring-inset',
             )}
         >
@@ -168,7 +164,7 @@ function DayCell({
                     >
                         {day.date()}
                     </span>
-                    {canOpenEmptyDay && (
+                    {canCreatePost && (
                         <span
                             aria-hidden
                             className="text-[14px] leading-none text-muted-foreground opacity-0 transition-opacity group-hover/day:opacity-60"
