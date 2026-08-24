@@ -22,6 +22,7 @@ function limitsFor(
         allowedVideoMime: [],
         maxVideoBytes: 1,
         maxVideoDurationSeconds: 1,
+        videoAspectRatioRange: null,
         ...over,
     };
 }

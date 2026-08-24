@@ -83,6 +83,7 @@ class PublishPrecheck
             'mixed_video_and_images' => 'A post can contain one video or images, not both.',
             'video_too_long' => "The video is longer than {$label} allows.",
             'video_too_large' => "The video is larger than {$label} allows.",
+            'video_bad_aspect_ratio' => "The video's aspect ratio is outside {$label}'s allowed range (widest 3:1, tallest 1:3).",
             'gif_not_mixable' => "{$label} allows only one GIF and won't mix it with other media.",
             'unplaced_media' => "Some attached media isn't placed in this post — remove it or add it to a thread section.",
             default => "{$label} can't publish this post yet.",
@@ -181,6 +182,14 @@ class PublishPrecheck
 
             if ($video->size_bytes > $platform->maxVideoBytes()) {
                 $issues[] = 'video_too_large';
+            }
+
+            $range = $platform->videoAspectRatioRange();
+            if ($range !== null && $video->width > 0 && $video->height > 0) {
+                $ratio = $video->width / $video->height;
+                if ($ratio < $range['min'] || $ratio > $range['max']) {
+                    $issues[] = 'video_bad_aspect_ratio';
+                }
             }
         }
 

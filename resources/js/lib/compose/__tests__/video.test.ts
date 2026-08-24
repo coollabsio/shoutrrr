@@ -25,6 +25,7 @@ function limits(
         allowedVideoMime: ['video/mp4'],
         maxVideoBytes: 100_000_000,
         maxVideoDurationSeconds: 180,
+        videoAspectRatioRange: null,
         ...over,
     };
 }
@@ -72,6 +73,30 @@ describe('validateVideo', () => {
             limits({ platform: 'bluesky', maxVideoBytes: 100_000_000 }),
         ]);
         expect(result.ok).toBe(false);
+    });
+
+    it('rejects a video wider than a platform aspect-ratio bound', () => {
+        const result = validateVideo({ ...meta, width: 4000, height: 1000 }, [
+            limits({
+                platform: 'x',
+                videoAspectRatioRange: { min: 1 / 3, max: 3 },
+            }),
+        ]);
+        expect(result).toEqual({
+            ok: false,
+            reason: expect.stringContaining('shape'),
+        });
+    });
+
+    it('accepts an in-range video and ignores platforms with no ratio bound', () => {
+        const result = validateVideo({ ...meta, width: 1920, height: 1080 }, [
+            limits({
+                platform: 'x',
+                videoAspectRatioRange: { min: 1 / 3, max: 3 },
+            }),
+            limits({ platform: 'bluesky' }),
+        ]);
+        expect(result.ok).toBe(true);
     });
 });
 

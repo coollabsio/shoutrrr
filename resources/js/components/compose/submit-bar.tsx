@@ -77,6 +77,7 @@ function limitsFor(
             allowedVideoMime: [],
             maxVideoBytes: 0,
             maxVideoDurationSeconds: 0,
+            videoAspectRatioRange: null,
         }
     );
 }

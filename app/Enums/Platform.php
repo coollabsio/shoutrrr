@@ -494,6 +494,21 @@ enum Platform: string
     }
 
     /**
+     * Allowed width:height ratio bounds for an uploaded video, or null when the
+     * platform does not constrain it. X rejects anything outside 1:3–3:1 with
+     * an "aspect ratio too large" error, so we catch it before publishing.
+     *
+     * @return array{min: float, max: float}|null
+     */
+    public function videoAspectRatioRange(): ?array
+    {
+        return match ($this) {
+            self::X => ['min' => 1 / 3, 'max' => 3.0],
+            default => null,
+        };
+    }
+
+    /**
      * Largest video byte cap across all platforms — the server-side upload ceiling.
      */
     public static function maxVideoBytesCeiling(): int
@@ -515,7 +530,7 @@ enum Platform: string
     }
 
     /**
-     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}
+     * @return array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int, videoAspectRatioRange: array{min: float, max: float}|null}
      */
     public function limits(): array
     {
@@ -532,11 +547,12 @@ enum Platform: string
             'allowedVideoMime' => $this->allowedVideoMime(),
             'maxVideoBytes' => $this->maxVideoBytes(),
             'maxVideoDurationSeconds' => $this->maxVideoDurationSeconds(),
+            'videoAspectRatioRange' => $this->videoAspectRatioRange(),
         ];
     }
 
     /**
-     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int}>
+     * @return list<array{platform: string, maxLength: int, maxBytes: int|null, maxMedia: int, requiresMedia: bool, maxMediaBytes: int, allowedMime: list<string>, threadMax: int|null, maxImageDimensions: array{width: int, height: int}, allowedVideoMime: list<string>, maxVideoBytes: int, maxVideoDurationSeconds: int, videoAspectRatioRange: array{min: float, max: float}|null}>
      */
     public static function allLimits(): array
     {

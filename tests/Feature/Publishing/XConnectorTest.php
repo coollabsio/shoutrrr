@@ -247,6 +247,34 @@ test('x uploads gifs through the async tweet_gif flow', function () {
         && ($request['media']['media_ids'] ?? null) === ['gif123']);
 });
 
+test('x surfaces the real reason when video processing fails', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/result.mp4', 'video-bytes');
+
+    $media = PostMedia::factory()->video()->create([
+        'disk' => 'public',
+        'path' => 'media/result.mp4',
+        'mime' => 'video/mp4',
+        'size_bytes' => strlen('video-bytes'),
+    ]);
+
+    Http::fake([
+        'https://api.x.com/2/media/upload/initialize' => Http::response(['data' => ['id' => 'vid123']], 200),
+        'https://api.x.com/2/media/upload/vid123/append' => Http::response([], 200),
+        'https://api.x.com/2/media/upload/vid123/finalize' => Http::response([], 200),
+        'https://api.x.com/2/media/upload*' => Http::response(['data' => ['processing_info' => [
+            'state' => 'failed',
+            'error' => ['message' => 'The aspect ratio of the video you tried to upload was too large.'],
+        ]]], 200),
+    ]);
+
+    $result = app(XConnector::class)->publish(xContext(['watch this'], [$media]));
+
+    expect($result->isSuccessful())->toBeFalse()
+        ->and($result->errorKind)->toBe(ErrorKind::ServerError)
+        ->and($result->errorMessage)->toContain('aspect ratio of the video');
+});
+
 test('x rejects mixing a gif with other media before calling the api', function () {
     Storage::fake('public');
     Storage::disk('public')->put('media/animation.gif', 'gif-bytes');

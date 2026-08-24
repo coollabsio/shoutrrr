@@ -1,3 +1,4 @@
+import { platformLabel } from '@/lib/platforms';
 import type { PlatformLimits, PlatformName } from '@/types/compose';
 
 export type VideoMeta = {
@@ -93,6 +94,21 @@ export function validateVideo(
             ok: false,
             reason: `Video is too long; the limit is ${maxDuration}s for the selected platforms.`,
         };
+    }
+
+    // Aspect-ratio bounds are per-platform (only X constrains them today). X rejects
+    // anything outside 1:3–3:1 at upload, so block it here against the tightest range.
+    if (meta.height > 0) {
+        const ratio = meta.width / meta.height;
+        for (const limit of limits) {
+            const range = limit.videoAspectRatioRange;
+            if (range && (ratio < range.min || ratio > range.max)) {
+                return {
+                    ok: false,
+                    reason: `This video's shape isn't supported by ${platformLabel(limit.platform)} (must be between 3:1 wide and 1:3 tall).`,
+                };
+            }
+        }
     }
 
     return { ok: true };

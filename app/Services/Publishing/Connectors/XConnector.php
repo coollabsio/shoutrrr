@@ -332,7 +332,14 @@ class XConnector implements PublishConnector, RepostConnector
             $stateName = (string) ($info['state'] ?? 'succeeded');
 
             if ($stateName === 'failed') {
-                return PublishResult::failure(ErrorKind::ServerError, "X failed to process the {$label}.");
+                // X puts the real reason (e.g. "The aspect ratio of the video you tried to upload
+                // was too large.") in processing_info.error — surface it instead of a generic string.
+                $reason = trim((string) ($info['error']['message'] ?? ''));
+
+                return PublishResult::failure(
+                    ErrorKind::ServerError,
+                    $reason !== '' ? "X rejected the {$label}: {$reason}" : "X failed to process the {$label}.",
+                );
             }
 
             if ($stateName !== 'succeeded') {
