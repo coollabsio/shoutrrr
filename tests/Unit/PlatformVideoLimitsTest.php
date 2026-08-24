@@ -19,7 +19,14 @@ test('video byte ceiling is the largest per-platform cap', function (): void {
 
 test('limits payload exposes video fields', function (): void {
     expect(Platform::X->limits())
-        ->toHaveKeys(['allowedVideoMime', 'maxVideoBytes', 'maxVideoDurationSeconds']);
+        ->toHaveKeys(['allowedVideoMime', 'maxVideoBytes', 'maxVideoDurationSeconds', 'videoAspectRatioRange']);
+});
+
+test('only X constrains the video aspect ratio', function (): void {
+    expect(Platform::X->videoAspectRatioRange())->toBe(['min' => 1 / 3, 'max' => 3.0])
+        ->and(Platform::LinkedIn->videoAspectRatioRange())->toBeNull()
+        ->and(Platform::Bluesky->videoAspectRatioRange())->toBeNull()
+        ->and(Platform::Instagram->videoAspectRatioRange())->toBeNull();
 });
 
 test('meta platform video limits are set', function (): void {

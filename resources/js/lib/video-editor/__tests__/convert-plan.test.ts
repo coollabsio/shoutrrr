@@ -27,6 +27,7 @@ function limits(
             allowedVideoMime: ['video/mp4'],
             maxVideoBytes: 536_870_912,
             maxVideoDurationSeconds: 140,
+            videoAspectRatioRange: { min: 1 / 3, max: 3 },
             ...overrides,
         },
     ];

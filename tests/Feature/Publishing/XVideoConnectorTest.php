@@ -97,7 +97,7 @@ test('transient 503 on status poll returns MediaProcessing (not ServerError)', f
         ->and($result->errorKind)->toBe(ErrorKind::MediaProcessing);
 });
 
-test('STATUS=failed returns a terminal ServerError', function (): void {
+test('STATUS=failed returns a terminal Validation error', function (): void {
     $account = ConnectedAccount::factory()->state(['platform' => 'x'])->create();
     $media = PostMedia::factory()->video()->create(['disk' => 'public', 'path' => 'media/ws/v.mp4']);
     Storage::disk('public')->put('media/ws/v.mp4', str_repeat('x', 2048));
@@ -114,5 +114,5 @@ test('STATUS=failed returns a terminal ServerError', function (): void {
     $result = app(XConnector::class)->publish($ctx);
 
     expect($result->isSuccessful())->toBeFalse()
-        ->and($result->errorKind)->toBe(ErrorKind::ServerError);
+        ->and($result->errorKind)->toBe(ErrorKind::Validation);
 });
