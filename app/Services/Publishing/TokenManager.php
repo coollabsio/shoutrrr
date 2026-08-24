@@ -176,6 +176,8 @@ class TokenManager
     {
         try {
             $refreshed = $this->threadsExchanger->refresh((string) $secret->access_token);
+        } catch (TransientTokenRefreshException $exception) {
+            throw $exception;
         } catch (Throwable $exception) {
             $account->forceFill([
                 'status' => ConnectedAccountStatus::NeedsAttention->value,
@@ -254,8 +256,12 @@ class TokenManager
         $session = $secret->session ?? [];
         $pds = (string) ($session['pds'] ?? self::BLUESKY_DEFAULT_PDS);
 
-        $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''), $account)
-            ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password, $account);
+        try {
+            $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''), $account)
+                ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password, $account);
+        } catch (ConnectionException $exception) {
+            throw new TransientTokenRefreshException("Token refresh failed for account {$account->id}.", previous: $exception);
+        }
 
         if ($tokens === null) {
             $account->forceFill([
@@ -300,6 +306,10 @@ class TokenManager
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
 
+        if ($this->isTransientStatus($response->status())) {
+            throw new TransientTokenRefreshException("Token refresh failed for account {$account->id}.");
+        }
+
         return $this->blueskyTokens($response);
     }
 
@@ -322,6 +332,10 @@ class TokenManager
             ]);
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
+
+        if ($this->isTransientStatus($response->status())) {
+            throw new TransientTokenRefreshException("Token refresh failed for account {$account->id}.");
+        }
 
         return $this->blueskyTokens($response);
     }

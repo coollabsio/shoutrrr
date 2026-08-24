@@ -81,21 +81,20 @@ test('a connection timeout keeps the account active and does not abort the sweep
         'platform' => Platform::X->value,
         'token_expires_at' => now()->addMinutes(5),
     ]);
-    ConnectedAccountSecret::factory()->create(['connected_account_id' => $failing->id, 'refresh_token' => 'r']);
+    ConnectedAccountSecret::factory()->create(['connected_account_id' => $failing->id, 'refresh_token' => 'timeout-token']);
 
     $healthy = ConnectedAccount::factory()->create([
         'platform' => Platform::X->value,
         'token_expires_at' => now()->addMinutes(10),
     ]);
-    ConnectedAccountSecret::factory()->create(['connected_account_id' => $healthy->id, 'refresh_token' => 'r']);
+    ConnectedAccountSecret::factory()->create(['connected_account_id' => $healthy->id, 'refresh_token' => 'healthy-token']);
 
-    $calls = 0;
-    Http::fake(['https://api.twitter.com/2/oauth2/token' => function () use (&$calls) {
-        $calls++;
+    Http::fake(['https://api.twitter.com/2/oauth2/token' => function ($request) {
+        if ($request['refresh_token'] === 'timeout-token') {
+            throw new ConnectionException('cURL error 28: Operation timed out');
+        }
 
-        return $calls === 1
-            ? throw new ConnectionException('cURL error 28: Operation timed out')
-            : Http::response(['access_token' => 'fresh', 'expires_in' => 7200]);
+        return Http::response(['access_token' => 'fresh', 'expires_in' => 7200]);
     }]);
 
     $this->artisan('accounts:refresh-tokens')->assertExitCode(0);
