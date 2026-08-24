@@ -14,10 +14,11 @@ test('only bluesky carries a byte limit', function () {
         ->and(Platform::LinkedIn->maxBytes())->toBeNull();
 });
 
-test('only linkedin caps the thread length', function () {
+test('linkedin and google business profile cap the thread length', function () {
     expect(Platform::LinkedIn->threadMax())->toBe(1)
         ->and(Platform::X->threadMax())->toBeNull()
-        ->and(Platform::Bluesky->threadMax())->toBeNull();
+        ->and(Platform::Bluesky->threadMax())->toBeNull()
+        ->and(Platform::GoogleBusinessProfile->threadMax())->toBe(1);
 });
 
 test('media constraints match each platform', function () {
@@ -25,7 +26,11 @@ test('media constraints match each platform', function () {
         ->and(Platform::LinkedIn->maxMedia())->toBe(9)
         ->and(Platform::Bluesky->maxMediaBytes())->toBe(2_000_000)
         ->and(Platform::Bluesky->allowedMime())->toContain('image/webp')
-        ->and(Platform::LinkedIn->allowedMime())->toContain('image/gif');
+        ->and(Platform::LinkedIn->allowedMime())->toContain('image/gif')
+        ->and(Platform::GoogleBusinessProfile->maxMedia())->toBe(10)
+        ->and(Platform::GoogleBusinessProfile->allowedMime())->toBe(['image/jpeg', 'image/png'])
+        ->and(Platform::GoogleBusinessProfile->maxVideoBytes())->toBe(78_643_200)
+        ->and(Platform::GoogleBusinessProfile->maxVideoDurationSeconds())->toBe(30);
 });
 
 test('measure counts plain ascii uniformly across platforms', function () {
@@ -37,6 +42,6 @@ test('measure counts plain ascii uniformly across platforms', function () {
 test('the limits array exposes one descriptor per platform for the frontend', function () {
     $limits = Platform::allLimits();
 
-    expect($limits)->toHaveCount(7)
+    expect($limits)->toHaveCount(8)
         ->and($limits[0])->toHaveKeys(['platform', 'maxLength', 'maxBytes', 'maxMedia', 'maxMediaBytes', 'allowedMime', 'threadMax']);
 });

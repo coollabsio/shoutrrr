@@ -21,3 +21,8 @@ test('linkedin reports unsupported for account fetch', function () {
     $r = app(LinkedInMetricsConnector::class)->fetchAccount($account, []);
     expect($r->status)->toBe(MetricsStatus::Unsupported);
 });
+
+test('google business profile metrics are unsupported in this release', function () {
+    expect(fn () => app(MetricsConnectorRegistry::class)->for(Platform::GoogleBusinessProfile))
+        ->toThrow(RuntimeException::class, 'does not support metrics');
+});

@@ -8,6 +8,7 @@ use App\Enums\Platform;
 use App\Services\Publishing\Connectors\BlueskyPublishConnector;
 use App\Services\Publishing\Connectors\DiscordPublishConnector;
 use App\Services\Publishing\Connectors\FacebookConnector;
+use App\Services\Publishing\Connectors\GoogleBusinessProfileConnector;
 use App\Services\Publishing\Connectors\InstagramConnector;
 use App\Services\Publishing\Connectors\LinkedInConnector;
 use App\Services\Publishing\Connectors\ThreadsConnector;
@@ -26,6 +27,7 @@ class PublishConnectorRegistry
             Platform::Instagram => app(InstagramConnector::class),
             Platform::Threads => app(ThreadsConnector::class),
             Platform::Discord => app(DiscordPublishConnector::class),
+            Platform::GoogleBusinessProfile => app(GoogleBusinessProfileConnector::class),
         };
     }
 }

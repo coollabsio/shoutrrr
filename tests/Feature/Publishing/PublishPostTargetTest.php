@@ -7,6 +7,7 @@ use App\Enums\ErrorKind;
 use App\Enums\PostStatus;
 use App\Enums\PostTargetStatus;
 use App\Jobs\PublishPostTarget;
+use App\Jobs\ReconcileGoogleBusinessProfileLocalPost;
 use App\Models\PostTargetAttempt;
 use App\Services\Publishing\BackoffSchedule;
 use App\Services\Publishing\PostStatusRollup;
@@ -15,6 +16,7 @@ use App\Services\Publishing\TokenManager;
 use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Http;
 
 test('successful publish marks the target published with remote ids', function () {
     $target = publishTarget(['one', 'two']);
@@ -37,6 +39,26 @@ test('successful publish marks the target published with remote ids', function (
     expect($target->post->refresh()->status)->toBe(PostStatus::Published);
 });
 
+test('accepted Google Business Profile post schedules bounded reconciliation', function () {
+    Bus::fake();
+    $target = publishTarget();
+    $target->forceFill(['platform' => 'google_business_profile'])->save();
+    bindConnector(PublishResult::success(['accounts/one/locations/one/localPosts/post-one'], [
+        'name' => 'accounts/one/locations/one/localPosts/post-one',
+        'state' => 'PROCESSING',
+    ]));
+
+    (new PublishPostTarget($target))->handle(
+        app(PublishConnectorRegistry::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+        app(BackoffSchedule::class),
+    );
+
+    expect($target->refresh()->remote_metadata['state'])->toBe('PROCESSING');
+    Bus::assertDispatched(ReconcileGoogleBusinessProfileLocalPost::class);
+});
+
 test('retryable failure schedules a retry and re-dispatches', function () {
     Bus::fake();
     $target = publishTarget();
@@ -56,6 +78,53 @@ test('retryable failure schedules a retry and re-dispatches', function () {
 
     Bus::assertDispatched(PublishPostTarget::class);
     expect(PostTargetAttempt::where('post_target_id', $target->id)->where('status', 'retrying')->count())->toBe(1);
+});
+
+test('an ambiguous Google Business Profile create never auto-retries', function () {
+    Bus::fake();
+    $target = publishTarget();
+    $target->forceFill(['platform' => 'google_business_profile'])->save();
+    bindConnector(PublishResult::failure(ErrorKind::Network, 'connection lost', mayHaveCreatedRemote: true));
+
+    (new PublishPostTarget($target))->handle(
+        app(PublishConnectorRegistry::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+        app(BackoffSchedule::class),
+    );
+
+    $target->refresh();
+    expect($target->status)->toBe(PostTargetStatus::Failed)
+        ->and($target->remote_metadata['create_intent']['state'])->toBe('outcome_unknown');
+    Bus::assertNotDispatched(PublishPostTarget::class);
+});
+
+test('a Google Business Profile token refresh network failure retries without marking the create outcome unknown', function () {
+    Bus::fake();
+    Http::preventStrayRequests();
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::failedConnection(),
+    ]);
+    $target = publishTarget();
+    $target->forceFill(['platform' => 'google_business_profile'])->save();
+    $account = $target->account()->firstOrFail();
+    $account->forceFill(['platform' => 'google_business_profile', 'token_expires_at' => now()->subMinute()])->save();
+    $account->secret()->firstOrFail()->forceFill(['refresh_token' => 'refresh-old'])->save();
+    bindConnector(fn () => throw new RuntimeException('connector should not be called before token refresh succeeds'));
+
+    (new PublishPostTarget($target))->handle(
+        app(PublishConnectorRegistry::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+        app(BackoffSchedule::class),
+    );
+
+    $target->refresh();
+    expect($target->status)->toBe(PostTargetStatus::Publishing)
+        ->and($target->remote_metadata['create_intent']['state'])->toBe('creating')
+        ->and($target->next_attempt_at)->not->toBeNull();
+    Bus::assertDispatched(PublishPostTarget::class);
+    Http::assertSentCount(1);
 });
 
 test('rate limited retry honors the provider retry-after delay', function () {

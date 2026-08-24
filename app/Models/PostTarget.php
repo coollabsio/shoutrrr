@@ -30,6 +30,8 @@ use Override;
  * @property array{text?: string|null, media_ids?: list<string>}|null $content_override
  * @property bool $auto_split
  * @property PostFormat $format
+ * @property array<string, mixed>|null $provider_options
+ * @property array<string, mixed>|null $remote_metadata
  * @property PostTargetStatus $status
  * @property string|null $remote_id
  * @property list<string>|null $remote_ids
@@ -62,6 +64,8 @@ use Override;
     'content_override',
     'auto_split',
     'format',
+    'provider_options',
+    'remote_metadata',
     'status',
     'remote_id',
     'remote_ids',
@@ -104,6 +108,8 @@ class PostTarget extends Model
             'content_override' => 'array',
             'auto_split' => 'boolean',
             'format' => PostFormat::class,
+            'provider_options' => 'array',
+            'remote_metadata' => 'array',
             'remote_ids' => 'array',
             'media_upload_state' => 'array',
             'error_kind' => ErrorKind::class,

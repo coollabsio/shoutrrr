@@ -43,6 +43,13 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    'google_business_profile' => [
+        'client_id' => env('GOOGLE_BUSINESS_PROFILE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_BUSINESS_PROFILE_CLIENT_SECRET'),
+        'api_approved' => env('GOOGLE_BUSINESS_PROFILE_API_APPROVED', false),
+        'base_url' => env('GOOGLE_BUSINESS_PROFILE_BASE_URL', 'https://mybusiness.googleapis.com/v4'),
+    ],
+
     'x' => [
         'client_id' => env('X_CLIENT_ID'),
         'client_secret' => env('X_CLIENT_SECRET'),

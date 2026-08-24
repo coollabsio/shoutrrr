@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
 import ConnectedAccountController from '@/actions/App/Http/Controllers/ConnectedAccounts/ConnectedAccountController';
+import GoogleBusinessProfileConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/GoogleBusinessProfileConnectionController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import { AccountCard } from '@/components/accounts/account-card';
 import { ConnectButtons } from '@/components/accounts/connect-buttons';
@@ -28,6 +29,10 @@ export const ACCOUNT_GRID_CLASS = 'grid grid-cols-1 gap-4 lg:grid-cols-2';
  * authorization server instead of falling back to the bsky.social default.
  */
 export function reconnectOAuthUrl(account: Account): string {
+    if (account.platform === 'google_business_profile') {
+        return GoogleBusinessProfileConnectionController.redirect.url();
+    }
+
     if (account.platform !== 'bluesky') {
         return OAuthConnectionController.redirect.url({
             platform: account.platform,

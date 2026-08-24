@@ -121,6 +121,104 @@ describe('precheckAccount', () => {
         });
         expect(reasons).toEqual([]);
     });
+
+    it('enforces Google Business Profile event and offer fields', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'google_business_profile' }),
+            segments: ['Local event summary'],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 0,
+            hasVideo: false,
+            format: 'feed',
+            limits: limitsFor({ platform: 'google_business_profile' }),
+            providerOptions: {
+                local_post_type: 'offer',
+                title: '',
+                start_at: '2026-08-17T17:00',
+                end_at: '2026-08-10T09:00',
+                redemption_url: 'not-a-url',
+            },
+        });
+
+        expect(reasons).toEqual([
+            'gbp_offer_title_required',
+            'gbp_offer_schedule_required',
+            'gbp_offer_redemption_url_required',
+        ]);
+    });
+
+    it('enforces Google Business Profile policy safeguards', () => {
+        const reasons = precheckAccount({
+            account: accountFor({ platform: 'google_business_profile' }),
+            segments: [
+                'Hotel deal today! Hotel deal today! Cannabis discount. Call 555-111-2222 or 555-333-4444. Visit http://127.0.0.1.',
+            ],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 0,
+            hasVideo: false,
+            format: 'feed',
+            limits: limitsFor({ platform: 'google_business_profile' }),
+            providerOptions: {
+                local_post_type: 'standard',
+                cta_url: 'http://example.test',
+            },
+        });
+
+        expect(reasons).toEqual([
+            'gbp_unsafe_url',
+            'gbp_phone_stuffing',
+            'gbp_regulated_promotion',
+            'gbp_hotel_promotion',
+            'gbp_repetitive_content',
+            'gbp_cta_url_invalid',
+        ]);
+    });
+
+    it('keeps Google Business Profile CTA validation aligned with server rules', () => {
+        const input = {
+            account: accountFor({ platform: 'google_business_profile' }),
+            segments: ['Local post summary'],
+            autoSplit: true,
+            mentions: [],
+            mediaCount: 0,
+            hasVideo: false,
+            format: 'feed' as const,
+            limits: limitsFor({ platform: 'google_business_profile' }),
+        };
+
+        expect(
+            precheckAccount({
+                ...input,
+                providerOptions: {
+                    local_post_type: 'standard',
+                    cta_type: 'LEARN_MORE',
+                    cta_url: '   ',
+                },
+            }),
+        ).toContain('gbp_cta_url_invalid');
+        expect(
+            precheckAccount({
+                ...input,
+                providerOptions: {
+                    local_post_type: 'standard',
+                    cta_type: 'CALL',
+                    cta_url: '   ',
+                },
+            }),
+        ).not.toContain('gbp_cta_url_invalid');
+        expect(
+            precheckAccount({
+                ...input,
+                providerOptions: {
+                    local_post_type: 'standard',
+                    cta_type: 'LEARN_MORE',
+                    cta_url: ' https://example.test/learn ',
+                },
+            }),
+        ).not.toContain('gbp_cta_url_invalid');
+    });
 });
 
 function mediaItem(over: Partial<MediaView> & { id: string }): MediaView {

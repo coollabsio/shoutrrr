@@ -50,6 +50,7 @@ const PLATFORM_ACCENT: Record<PlatformName, string> = {
     instagram: 'text-[#E4405F]',
     threads: 'text-foreground',
     discord: 'text-[#5865F2]',
+    google_business_profile: 'text-[#4285F4]',
 };
 
 const METRIC_ICON: Record<EngagementKey, typeof Heart> = {

@@ -182,6 +182,9 @@ test('analytics polling settings are keyed by platform enum values', function ()
     $expectedPlatforms = collect(Platform::cases())
         ->mapWithKeys(fn (Platform $platform): array => [$platform->value => true])
         ->all();
+    $expectedAccountMetricPlatforms = collect(Platform::cases())
+        ->mapWithKeys(fn (Platform $platform): array => [$platform->value => $platform->supportsAccountMetrics()])
+        ->all();
 
     $this->actingAs($this->user)
         ->get(route('analytics.index'))
@@ -190,9 +193,10 @@ test('analytics polling settings are keyed by platform enum values', function ()
             ->where('polling.post_metrics_enabled', [
                 ...$expectedPlatforms,
                 Platform::X->value => false,
+                Platform::GoogleBusinessProfile->value => false,
             ])
             ->where('polling.account_metrics_enabled', [
-                ...$expectedPlatforms,
+                ...$expectedAccountMetricPlatforms,
                 Platform::Bluesky->value => false,
             ]));
 });

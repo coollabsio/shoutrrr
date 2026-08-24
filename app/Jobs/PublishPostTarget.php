@@ -28,6 +28,7 @@ use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -67,6 +68,14 @@ class PublishPostTarget implements ShouldQueue
     ];
 
     public function __construct(public PostTarget $target) {}
+
+    /** @return array<int, object> */
+    public function middleware(): array
+    {
+        return $this->target->platform === Platform::GoogleBusinessProfile
+            ? [new RateLimited('google-business-profile')]
+            : [];
+    }
 
     public function handle(
         PublishConnectorRegistry $registry,
@@ -114,13 +123,23 @@ class PublishPostTarget implements ShouldQueue
         }
 
         $attempt = DB::transaction(function () use ($target): PostTargetAttempt {
+            $idempotencyKey = $target->idempotency_key ?? (string) Str::uuid();
+            $remoteMetadata = $target->remote_metadata ?? [];
+            if ($target->platform === Platform::GoogleBusinessProfile && $target->remote_id === null && ! isset($remoteMetadata['create_intent'])) {
+                $remoteMetadata['create_intent'] = [
+                    'key' => $idempotencyKey,
+                    'state' => 'creating',
+                    'started_at' => Date::now()->toIso8601String(),
+                ];
+            }
             $target->forceFill([
                 'status' => PostTargetStatus::Publishing->value,
                 'attempts' => $target->attempts + 1,
                 // Real duplicate-prevention relies on incremental remote_ids resume (spec §4.3)
                 // plus the terminal-status guard above; idempotency_key is reserved for providers
                 // that support an idempotency header (X/Bluesky/LinkedIn do not uniformly today).
-                'idempotency_key' => $target->idempotency_key ?? (string) Str::uuid(),
+                'idempotency_key' => $idempotencyKey,
+                'remote_metadata' => $remoteMetadata,
             ])->save();
 
             return PostTargetAttempt::create([
@@ -174,7 +193,7 @@ class PublishPostTarget implements ShouldQueue
                 // off and retries instead of flipping the account to needs-attention.
                 $result = PublishResult::failure(ErrorKind::ServerError, $e->getMessage());
             } catch (TokenRefreshException $e) {
-                $result = PublishResult::failure(ErrorKind::AuthExpired, $e->getMessage());
+                $result = PublishResult::failure($e->errorKind, $e->getMessage(), $e->httpStatus, retryAfter: $e->retryAfter);
             }
         }
 
@@ -394,10 +413,13 @@ class PublishPostTarget implements ShouldQueue
 
     private function onSuccess(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result): void
     {
+        $remoteMetadata = [...($target->remote_metadata ?? []), ...($result->remoteMetadata ?? [])];
+        unset($remoteMetadata['create_intent']);
         $target->forceFill([
             'status' => PostTargetStatus::Published->value,
             'remote_id' => $result->remoteIds[0] ?? null,
             'remote_ids' => $result->remoteIds,
+            'remote_metadata' => $remoteMetadata,
             'posted_at' => Date::now(),
             'error_kind' => null,
             'error_message' => null,
@@ -410,11 +432,22 @@ class PublishPostTarget implements ShouldQueue
             'finished_at' => Date::now(),
         ])->save();
 
+        if (in_array($result->remoteMetadata['state'] ?? null, ['PROCESSING', 'SCHEDULED'], true)) {
+            ReconcileGoogleBusinessProfileLocalPost::dispatch($target->fresh())->delay(30);
+        }
+
         $this->notifyPublished($target);
     }
 
     private function onFailure(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result, BackoffSchedule $backoff): void
     {
+        if ($target->platform === Platform::GoogleBusinessProfile && $result->mayHaveCreatedRemote && isset(($target->remote_metadata ?? [])['create_intent'])) {
+            $metadata = $target->remote_metadata ?? [];
+            $metadata['create_intent']['state'] = 'outcome_unknown';
+            $metadata['create_intent']['outcome_unknown_at'] = Date::now()->toIso8601String();
+            $target->forceFill(['remote_metadata' => $metadata])->save();
+            $result = PublishResult::failure(ErrorKind::Unknown, 'Google Business Profile create outcome is unknown. Verify the Local Post before retrying.');
+        }
         if (($result->errorKind ?? null) === ErrorKind::MediaProcessing) {
             $this->onMediaProcessing($target, $attempt, $result);
 

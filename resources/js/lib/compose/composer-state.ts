@@ -3,6 +3,7 @@ import {
     type Account,
     BASE_TAB,
     type Destination,
+    type GoogleBusinessProfileLocalPostOptions,
     type MediaView,
     type MentionPlaceholder,
     type Placement,
@@ -48,6 +49,10 @@ export type ComposerState = {
     destination: Destination;
     autoSplitByAccount: Record<string, boolean>;
     formatByAccount: Record<string, PostFormat>;
+    providerOptionsByAccount: Record<
+        string,
+        GoogleBusinessProfileLocalPostOptions | undefined
+    >;
     overrideByAccount: Record<string, string[] | undefined>;
     media: MediaView[];
     /** Ordered ids of tiptap segment breaks; segment refs are derived from these. */
@@ -72,6 +77,11 @@ export type ComposerAction =
     | { type: 'setAutoRepost'; value: boolean | null }
     | { type: 'toggleAutoSplit'; accountId: string }
     | { type: 'setFormat'; accountId: string; format: PostFormat }
+    | {
+          type: 'setGoogleBusinessProfileOptions';
+          accountId: string;
+          options: GoogleBusinessProfileLocalPostOptions;
+      }
     | { type: 'disableAutoSplit'; accountIds: string[] }
     | { type: 'setOverrideSegments'; accountId: string; segments: string[] }
     | { type: 'discardOverride'; accountId: string }
@@ -149,6 +159,7 @@ export function initialComposerState(
         destination: initialDestination ?? { kind: 'all' },
         autoSplitByAccount: {},
         formatByAccount: {},
+        providerOptionsByAccount: {},
         overrideByAccount: {},
         media: [],
         segmentBreaks: [],
@@ -344,6 +355,10 @@ function withOrphanMediaOnHead(
 function hydrate(post: PostView): ComposerState {
     const autoSplitByAccount: Record<string, boolean> = {};
     const formatByAccount: Record<string, PostFormat> = {};
+    const providerOptionsByAccount: Record<
+        string,
+        GoogleBusinessProfileLocalPostOptions | undefined
+    > = {};
     const overrideByAccount: Record<string, string[] | undefined> = {};
     const placementsByAccount: Record<string, Record<string, string[]>> = {};
     // Raw canonical grouping drives the per-account divergence check below;
@@ -357,6 +372,12 @@ function hydrate(post: PostView): ComposerState {
     for (const target of post.targets) {
         autoSplitByAccount[target.connected_account_id] = target.auto_split;
         formatByAccount[target.connected_account_id] = target.format;
+        const googleBusinessProfileOptions =
+            target.provider_options?.google_business_profile;
+        if (googleBusinessProfileOptions !== undefined) {
+            providerOptionsByAccount[target.connected_account_id] =
+                googleBusinessProfileOptions;
+        }
         const overrideSegments = target.content_override?.segments;
         if (overrideSegments !== undefined && overrideSegments !== null) {
             overrideByAccount[target.connected_account_id] = overrideSegments;
@@ -396,6 +417,7 @@ function hydrate(post: PostView): ComposerState {
                       : { kind: 'all' },
         autoSplitByAccount,
         formatByAccount,
+        providerOptionsByAccount,
         overrideByAccount,
         media: post.media,
         segmentBreaks: post.segment_breaks ?? [],
@@ -513,6 +535,16 @@ export function composerReducer(
                 formatByAccount: {
                     ...state.formatByAccount,
                     [action.accountId]: action.format,
+                },
+                saveState: 'dirty',
+            };
+
+        case 'setGoogleBusinessProfileOptions':
+            return {
+                ...state,
+                providerOptionsByAccount: {
+                    ...state.providerOptionsByAccount,
+                    [action.accountId]: action.options,
                 },
                 saveState: 'dirty',
             };
@@ -843,6 +875,9 @@ export type PutTarget = {
     auto_split: boolean;
     format: PostFormat;
     content_override: { segments: string[]; media_ids: string[] } | null;
+    provider_options?: {
+        google_business_profile: GoogleBusinessProfileLocalPostOptions;
+    };
     segment_breaks?: string[];
     placements?: Placement[];
 };
@@ -904,12 +939,20 @@ export function buildPutBody(
                 : null;
 
         const divergedPlacements = state.placementsByAccount[accountId];
+        const providerOptions = state.providerOptionsByAccount[accountId];
 
         return {
             connected_account_id: accountId,
             auto_split: state.autoSplitByAccount[accountId] ?? true,
             format: state.formatByAccount[accountId] ?? 'feed',
             content_override,
+            ...(providerOptions !== undefined
+                ? {
+                      provider_options: {
+                          google_business_profile: providerOptions,
+                      },
+                  }
+                : {}),
             ...(divergedPlacements !== undefined
                 ? {
                       segment_breaks: state.segmentBreaks,

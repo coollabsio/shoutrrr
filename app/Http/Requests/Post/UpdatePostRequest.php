@@ -41,6 +41,7 @@ class UpdatePostRequest extends FormRequest
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
             'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
+            'targets.*.provider_options' => ['nullable', 'array'],
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.segments' => ['array'],

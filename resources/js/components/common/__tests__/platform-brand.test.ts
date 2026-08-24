@@ -16,6 +16,7 @@ const opaquePlatformStyles = [
     "facebook: { tile: 'bg-[#1877F2]', glyph: 'text-white!' }",
     "instagram: { tile: 'bg-[#E4405F]', glyph: 'text-white!' }",
     "threads: { tile: 'bg-black', glyph: 'text-white!' }",
+    "google_business_profile: { tile: 'bg-[#4285F4]', glyph: 'text-white!' }",
 ];
 
 describe('platform badge styles', () => {

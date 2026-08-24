@@ -968,6 +968,30 @@ describe('composer format state', () => {
         });
         expect(body.targets[1].format).toBe('feed');
     });
+
+    it('round-trips Google Business Profile options in the per-target payload', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setGoogleBusinessProfileOptions',
+            accountId: 'gbp-1',
+            options: {
+                local_post_type: 'offer',
+                title: 'August savings',
+                start_at: '2026-08-10T09:00',
+                end_at: '2026-08-17T17:00',
+                redemption_url: 'https://example.test/redeem',
+            },
+        });
+
+        expect(state.saveState).toBe('dirty');
+        expect(buildPutBody(state, ['gbp-1']).targets[0]).toMatchObject({
+            provider_options: {
+                google_business_profile: {
+                    local_post_type: 'offer',
+                    title: 'August savings',
+                },
+            },
+        });
+    });
 });
 
 describe('per-segment placements', () => {

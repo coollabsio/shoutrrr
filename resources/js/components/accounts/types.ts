@@ -31,5 +31,6 @@ export type Capability = {
     supportsWebhook: boolean;
     configured: boolean;
     launched: boolean;
+    connectable: boolean;
     enabled: boolean;
 };

@@ -50,12 +50,20 @@ class InstanceSettings
 
     public function postMetricsPollingEnabled(?Platform $platform = null): bool
     {
+        if ($platform !== null && ! $platform->supportsPostMetrics()) {
+            return false;
+        }
+
         return $this->platformAvailable($platform)
             && $this->platformEnabled('post_metrics_polling_enabled', $platform);
     }
 
     public function accountMetricsPollingEnabled(?Platform $platform = null): bool
     {
+        if ($platform !== null && ! $platform->supportsAccountMetrics()) {
+            return false;
+        }
+
         return $this->platformAvailable($platform)
             && $this->platformEnabled('account_metrics_polling_enabled', $platform);
     }

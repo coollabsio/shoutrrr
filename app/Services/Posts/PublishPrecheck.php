@@ -10,6 +10,7 @@ use App\Models\PostMedia;
 use App\Models\PostMediaPlacement;
 use App\Models\PostTarget;
 use App\Services\Publishing\SegmentMediaResolver;
+use App\Support\GoogleBusinessProfileLocalPostOptions;
 use Illuminate\Support\Collection;
 
 class PublishPrecheck
@@ -44,7 +45,7 @@ class PublishPrecheck
 
         foreach ($post->targets as $target) {
             /** @var PostTarget $target */
-            $issues = $this->hasContent($target, $mediaCount)
+            $issues = $target->platform === Platform::GoogleBusinessProfile || $this->hasContent($target, $mediaCount)
                 ? $this->targetIssues($target, $media)
                 : ['empty'];
 
@@ -86,6 +87,19 @@ class PublishPrecheck
             'video_bad_aspect_ratio' => "The video's aspect ratio is outside {$label}'s allowed range (widest 3:1, tallest 1:3).",
             'gif_not_mixable' => "{$label} allows only one GIF and won't mix it with other media.",
             'unplaced_media' => "Some attached media isn't placed in this post — remove it or add it to a thread section.",
+            'gbp_summary_required' => 'Google Business Profile requires a post summary.',
+            'gbp_threads_not_supported' => 'Google Business Profile does not support threaded posts.',
+            'gbp_event_title_required' => 'Google Business Profile events require a title.',
+            'gbp_event_schedule_required' => 'Google Business Profile events require a valid start and end time.',
+            'gbp_offer_title_required' => 'Google Business Profile offers require a title.',
+            'gbp_offer_schedule_required' => 'Google Business Profile offers require a valid start and end time.',
+            'gbp_offer_redemption_url_required' => 'Google Business Profile offers require a valid redemption URL.',
+            'gbp_cta_url_invalid' => 'Google Business Profile CTA URLs must be safe HTTPS URLs.',
+            'gbp_unsafe_url' => 'Google Business Profile post text contains an unsafe URL.',
+            'gbp_phone_stuffing' => 'Google Business Profile post text contains too many phone numbers.',
+            'gbp_regulated_promotion' => 'Google Business Profile promotional content cannot advertise regulated products or services.',
+            'gbp_hotel_promotion' => 'Google Business Profile hotels cannot publish offers, deals, or promotions.',
+            'gbp_repetitive_content' => 'Google Business Profile post text appears repetitive or spam-like.',
             default => "{$label} can't publish this post yet.",
         }, $issues);
 
@@ -127,7 +141,132 @@ class PublishPrecheck
             $issues[] = $issue;
         }
 
+        if ($platform === Platform::GoogleBusinessProfile) {
+            $issues = [...$issues, ...$this->googleBusinessProfileIssues($target, $media)];
+        }
+
         return array_values(array_unique($issues));
+    }
+
+    /** @return list<string> */
+    /**
+     * @param  Collection<int, PostMedia>  $media
+     * @return list<string>
+     */
+    private function googleBusinessProfileIssues(PostTarget $target, Collection $media): array
+    {
+        $issues = [];
+
+        if (trim(implode('', $target->sections)) === '') {
+            $issues[] = 'gbp_summary_required';
+        }
+        if (count($target->sections) > 1) {
+            $issues[] = 'gbp_threads_not_supported';
+        }
+        $summary = implode("\n", $target->sections);
+        if ($this->containsUnsafeUrl($summary)) {
+            $issues[] = 'gbp_unsafe_url';
+        }
+        if ($this->phoneNumberCount($summary) > 1) {
+            $issues[] = 'gbp_phone_stuffing';
+        }
+        if ($this->containsRegulatedPromotion($summary)) {
+            $issues[] = 'gbp_regulated_promotion';
+        }
+        if ($this->containsRepetitiveContent($summary)) {
+            $issues[] = 'gbp_repetitive_content';
+        }
+
+        $options = GoogleBusinessProfileLocalPostOptions::normalize($target->provider_options['google_business_profile'] ?? []);
+
+        $type = $options['local_post_type'] ?? 'standard';
+        $ctaType = GoogleBusinessProfileLocalPostOptions::ctaType($options);
+        $ctaUrl = GoogleBusinessProfileLocalPostOptions::ctaUrl($options);
+        if (($ctaType !== null && $ctaType !== 'CALL' && $ctaUrl === null)
+            || ($ctaUrl !== null && $this->isInvalidUrl($ctaUrl))) {
+            $issues[] = 'gbp_cta_url_invalid';
+        }
+        if ($this->containsHotelPromotion($summary, $type)) {
+            $issues[] = 'gbp_hotel_promotion';
+        }
+        if (! in_array($type, ['event', 'offer'], true)) {
+            return $issues;
+        }
+
+        $prefix = 'gbp_'.$type;
+        if (! filled($options['title'] ?? null)) {
+            $issues[] = $prefix.'_title_required';
+        }
+        if (! $this->hasValidSchedule($options)) {
+            $issues[] = $prefix.'_schedule_required';
+        }
+        if ($type === 'offer' && $this->isInvalidUrl($options['redemption_url'] ?? null)) {
+            $issues[] = 'gbp_offer_redemption_url_required';
+        }
+
+        return $issues;
+    }
+
+    /** @param array<string, mixed> $options */
+    private function hasValidSchedule(array $options): bool
+    {
+        $start = strtotime((string) ($options['start_at'] ?? ''));
+        $end = strtotime((string) ($options['end_at'] ?? ''));
+
+        return $start !== false && $end !== false && $end > $start;
+    }
+
+    private function isInvalidUrl(mixed $url): bool
+    {
+        if (! is_string($url) || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return true;
+        }
+
+        $parts = parse_url($url);
+        $host = $parts['host'] ?? null;
+
+        return ($parts['scheme'] ?? null) !== 'https'
+            || ! is_string($host)
+            || filter_var($host, FILTER_VALIDATE_IP) !== false
+            || in_array(strtolower($host), ['bit.ly', 'tinyurl.com', 't.co'], true);
+    }
+
+    private function containsUnsafeUrl(string $text): bool
+    {
+        preg_match_all('/https?:\/\/[^\s<]+/i', $text, $matches);
+
+        foreach ($matches[0] as $url) {
+            if ($this->isInvalidUrl($url)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function phoneNumberCount(string $text): int
+    {
+        return preg_match_all('/(?:\+?\d[\d().\-\s]{6,}\d)/', $text) ?: 0;
+    }
+
+    private function containsRegulatedPromotion(string $text): bool
+    {
+        return preg_match('/\b(discount|deal|offer|promotion|sale|coupon)\b/i', $text) === 1
+            && preg_match('/\b(alcohol|cannabis|marijuana|tobacco|vape|gambling|casino|firearm|weapon|adult)\b/i', $text) === 1;
+    }
+
+    private function containsHotelPromotion(string $text, mixed $type): bool
+    {
+        return preg_match('/\b(hotel|motel|resort|inn)\b/i', $text) === 1
+            && ($type === 'offer' || preg_match('/\b(discount|deal|offer|promotion|sale|coupon)\b/i', $text) === 1);
+    }
+
+    private function containsRepetitiveContent(string $text): bool
+    {
+        preg_match_all('/[^.!?]+[.!?]?/', strtolower($text), $matches);
+        $sentences = array_filter(array_map('trim', $matches[0]), static fn (string $sentence): bool => $sentence !== '');
+
+        return count($sentences) !== count(array_unique($sentences));
     }
 
     /**

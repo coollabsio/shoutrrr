@@ -100,6 +100,53 @@ test('fresh refreshes an expired oauth token and persists it', function () {
         ->and($account->last_refreshed_at)->not->toBeNull();
 });
 
+test('fresh refreshes a Google Business Profile token and preserves the grant when Google omits a replacement', function () {
+    config()->set('services.google_business_profile.client_id', 'google-client');
+    config()->set('services.google_business_profile.client_secret', 'google-secret');
+
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::GoogleBusinessProfile->value,
+        'token_expires_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'old-access',
+        'refresh_token' => 'original-grant',
+    ]);
+
+    Http::fake(['https://oauth2.googleapis.com/token' => Http::response([
+        'access_token' => 'fresh-access',
+        'expires_in' => 3600,
+    ])]);
+
+    expect(app(TokenManager::class)->fresh($account->fresh())['access_token'])->toBe('fresh-access');
+
+    expect($account->fresh()->secret->refresh_token)->toBe('original-grant')
+        ->and($account->fresh()->status)->toBe(ConnectedAccountStatus::Active);
+    Http::assertSent(fn ($request) => $request->url() === 'https://oauth2.googleapis.com/token'
+        && $request['grant_type'] === 'refresh_token'
+        && $request['refresh_token'] === 'original-grant'
+        && $request['client_id'] === 'google-client'
+        && $request['client_secret'] === 'google-secret');
+});
+
+test('fresh flags a Google Business Profile account when its refresh fails', function () {
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::GoogleBusinessProfile->value,
+        'token_expires_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'refresh_token' => 'revoked-grant',
+    ]);
+
+    Http::fake(['https://oauth2.googleapis.com/token' => Http::response(['error' => 'invalid_grant'], 400)]);
+
+    expect(fn () => app(TokenManager::class)->fresh($account->fresh()))->toThrow(TokenRefreshException::class);
+
+    expect($account->fresh()->status)->toBe(ConnectedAccountStatus::NeedsAttention);
+});
+
 test('fresh uses a token refreshed by another worker instead of refreshing again', function () {
     $account = ConnectedAccount::factory()->create([
         'platform' => Platform::X->value,

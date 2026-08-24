@@ -29,6 +29,8 @@ class PostTargetFactory extends Factory
             'content_override' => null,
             'auto_split' => true,
             'format' => PostFormat::Feed->value,
+            'provider_options' => null,
+            'remote_metadata' => null,
             'status' => PostTargetStatus::Pending->value,
         ];
     }
