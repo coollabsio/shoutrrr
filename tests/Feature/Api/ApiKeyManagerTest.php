@@ -118,6 +118,30 @@ test('issue generates the encryption keypair when none exists and auto-generatio
     }
 });
 
+test('issue generates keys without invoking the passport console command (octane-safe)', function () {
+    // Under FrankenPHP/Octane the web worker is not runningInConsole(), so Passport never
+    // registers its `passport:keys` command there and Artisan::call() would throw. Key
+    // generation must therefore happen in-process, never through the console layer. See #167.
+    $emptyDir = storage_path('framework/testing/passport-keys-'.uniqid());
+    File::ensureDirectoryExists($emptyDir);
+    Passport::loadKeysFrom($emptyDir);
+    config(['passport.auto_generate_keys' => true, 'passport.private_key' => null, 'passport.public_key' => null]);
+
+    try {
+        Artisan::spy();
+
+        [$apiKey] = $this->manager->issue($this->workspace, $this->user, 'octane', 'read', null);
+
+        Artisan::shouldNotHaveReceived('call');
+        expect(file_exists($emptyDir.'/oauth-private.key'))->toBeTrue();
+        expect(file_exists($emptyDir.'/oauth-public.key'))->toBeTrue();
+        expect(Token::find($apiKey->access_token_id))->not->toBeNull();
+    } finally {
+        Passport::loadKeysFrom(storage_path());
+        File::deleteDirectory($emptyDir);
+    }
+});
+
 test('issue does not generate keys and fails loudly when auto-generation is disabled', function () {
     $emptyDir = storage_path('framework/testing/passport-keys-'.uniqid());
     File::ensureDirectoryExists($emptyDir);
