@@ -98,7 +98,7 @@ export function validateVideo(
 
     // Aspect-ratio bounds are per-platform (only X constrains them today). X rejects
     // anything outside 1:3–3:1 at upload, so block it here against the tightest range.
-    if (meta.height > 0) {
+    if (meta.width > 0 && meta.height > 0) {
         const ratio = meta.width / meta.height;
         for (const limit of limits) {
             const range = limit.videoAspectRatioRange;

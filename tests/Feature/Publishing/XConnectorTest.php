@@ -271,7 +271,7 @@ test('x surfaces the real reason when video processing fails', function () {
     $result = app(XConnector::class)->publish(xContext(['watch this'], [$media]));
 
     expect($result->isSuccessful())->toBeFalse()
-        ->and($result->errorKind)->toBe(ErrorKind::ServerError)
+        ->and($result->errorKind)->toBe(ErrorKind::Validation)
         ->and($result->errorMessage)->toContain('aspect ratio of the video');
 });
 

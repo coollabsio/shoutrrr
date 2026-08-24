@@ -174,22 +174,40 @@ class PublishPrecheck
             }
         }
 
-        $videos = $media->filter(fn (PostMedia $item): bool => $item->isVideo());
-        foreach ($videos as $video) {
-            if ($video->duration_seconds !== null && $video->duration_seconds > $platform->maxVideoDurationSeconds()) {
-                $issues[] = 'video_too_long';
+        foreach ($media->filter(fn (PostMedia $item): bool => $item->isVideo()) as $video) {
+            foreach ($this->videoIssues($platform, $video) as $issue) {
+                $issues[] = $issue;
             }
+        }
 
-            if ($video->size_bytes > $platform->maxVideoBytes()) {
-                $issues[] = 'video_too_large';
-            }
+        return $issues;
+    }
 
-            $range = $platform->videoAspectRatioRange();
-            if ($range !== null && $video->width > 0 && $video->height > 0) {
-                $ratio = $video->width / $video->height;
-                if ($ratio < $range['min'] || $ratio > $range['max']) {
-                    $issues[] = 'video_bad_aspect_ratio';
-                }
+    /**
+     * Per-video limit rules — duration, byte size, and aspect ratio — for a
+     * single attached video. Aspect ratio is only bounded on some platforms (X
+     * rejects anything outside 1:3–3:1); incomplete client metadata (a missing
+     * width or height) is left to publish time rather than blocked here.
+     *
+     * @return list<string>
+     */
+    private function videoIssues(Platform $platform, PostMedia $video): array
+    {
+        $issues = [];
+
+        if ($video->duration_seconds !== null && $video->duration_seconds > $platform->maxVideoDurationSeconds()) {
+            $issues[] = 'video_too_long';
+        }
+
+        if ($video->size_bytes > $platform->maxVideoBytes()) {
+            $issues[] = 'video_too_large';
+        }
+
+        $range = $platform->videoAspectRatioRange();
+        if ($range !== null && $video->width > 0 && $video->height > 0) {
+            $ratio = $video->width / $video->height;
+            if ($ratio < $range['min'] || $ratio > $range['max']) {
+                $issues[] = 'video_bad_aspect_ratio';
             }
         }
 
