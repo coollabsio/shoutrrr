@@ -8,13 +8,13 @@ use App\Models\ApiKey;
 use App\Models\User;
 use App\Models\Workspace;
 use Carbon\CarbonInterface;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 use Laravel\Passport\Client;
 use Laravel\Passport\ClientRepository;
 use Laravel\Passport\Passport;
 use Laravel\Passport\Token;
+use phpseclib3\Crypt\RSA;
 use RuntimeException;
 
 class ApiKeyManager
@@ -104,8 +104,48 @@ class ApiKeyManager
                 return;
             }
 
-            Artisan::call('passport:keys', ['--no-interaction' => true]);
+            $this->generateEncryptionKeys();
         });
+    }
+
+    /**
+     * Write a fresh Passport RSA keypair to disk in-process. This mirrors
+     * Passport's `passport:keys` console command exactly (4096-bit key, same
+     * paths and file permissions) without going through the Artisan layer:
+     * Passport only registers its console commands when runningInConsole(), so
+     * under FrankenPHP/Octane the web worker has no `passport:keys` command and
+     * `Artisan::call('passport:keys')` throws CommandNotFoundException.
+     *
+     * A partial write would leave a truncated key file on disk that passes the
+     * file_exists() guard above, so the corrupt pair would never be regenerated
+     * and Passport would reject every future token. To avoid that, verify both
+     * writes and delete any partial output before failing loudly. Writes are
+     * already serialized by the surrounding Cache::lock, so no LOCK_EX is needed.
+     */
+    private function generateEncryptionKeys(): void
+    {
+        $publicKeyPath = Passport::keyPath('oauth-public.key');
+        $privateKeyPath = Passport::keyPath('oauth-private.key');
+
+        $key = RSA::createKey(4096);
+
+        $publicKey = (string) $key->getPublicKey();
+        $privateKey = (string) $key;
+
+        $publicBytes = file_put_contents($publicKeyPath, $publicKey);
+        $privateBytes = file_put_contents($privateKeyPath, $privateKey);
+
+        if ($publicBytes !== strlen($publicKey) || $privateBytes !== strlen($privateKey)) {
+            @unlink($publicKeyPath);
+            @unlink($privateKeyPath);
+
+            throw new RuntimeException('Failed to write Passport encryption keys ('.$privateKeyPath.').');
+        }
+
+        if (! windows_os()) {
+            chmod($publicKeyPath, 0660);
+            chmod($privateKeyPath, 0600);
+        }
     }
 
     /**

@@ -118,6 +118,34 @@ test('issue generates the encryption keypair when none exists and auto-generatio
     }
 });
 
+test('issue generates keys without invoking the passport console command (octane-safe)', function () {
+    // Passport only registers `passport:keys` when runningInConsole(), so under Octane the
+    // web worker must generate the keypair in-process, never via Artisan::call(). See #167.
+    $emptyDir = storage_path('framework/testing/passport-keys-'.uniqid());
+    File::ensureDirectoryExists($emptyDir);
+    Passport::loadKeysFrom($emptyDir);
+    config(['passport.auto_generate_keys' => true, 'passport.private_key' => null, 'passport.public_key' => null]);
+    $this->workspace->members()->create(['user_id' => $this->user->id, 'role' => 'admin']);
+
+    try {
+        Artisan::spy();
+
+        [$apiKey, $plain] = $this->manager->issue($this->workspace, $this->user, 'octane', 'read', null);
+
+        Artisan::shouldNotHaveReceived('call');
+        expect(file_exists($emptyDir.'/oauth-private.key'))->toBeTrue();
+        expect(file_exists($emptyDir.'/oauth-public.key'))->toBeTrue();
+        expect(Token::find($apiKey->access_token_id))->not->toBeNull();
+
+        // The generated public key must verify a JWT signed by the generated private key:
+        // authenticate the freshly issued token through the real resource-server guard.
+        $this->withToken($plain)->getJson('/api/v1/connected-accounts')->assertOk();
+    } finally {
+        Passport::loadKeysFrom(storage_path());
+        File::deleteDirectory($emptyDir);
+    }
+});
+
 test('issue does not generate keys and fails loudly when auto-generation is disabled', function () {
     $emptyDir = storage_path('framework/testing/passport-keys-'.uniqid());
     File::ensureDirectoryExists($emptyDir);
