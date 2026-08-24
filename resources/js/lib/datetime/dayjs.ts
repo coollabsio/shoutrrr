@@ -55,6 +55,20 @@ export function ymKey(d: Dayjs): string {
     return d.format('YYYY-MM');
 }
 
+/**
+ * Today/past flags for a calendar cell, compared by calendar-date key rather
+ * than by instant, so the result is independent of whether `day` carries a UTC
+ * or zoned offset. `todayKey` is the current day in the scheduling tz, as
+ * `YYYY-MM-DD` (its string ordering is chronological, so `<` means "is past").
+ */
+export function dayFlags(
+    day: Dayjs,
+    todayKey: string,
+): { isToday: boolean; isPast: boolean } {
+    const key = day.format('YYYY-MM-DD');
+    return { isToday: key === todayKey, isPast: key < todayKey };
+}
+
 /** Parse a YYYY-MM string into a Dayjs at the 1st of that month (UTC). */
 export function parseYm(ym: string): Dayjs | null {
     const d = dayjs.utc(`${ym}-01`, 'YYYY-MM-DD', true);

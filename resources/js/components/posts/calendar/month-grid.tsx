@@ -9,7 +9,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
-import { dayjs, monthRange, toUserTz } from '@/lib/datetime/dayjs';
+import { dayFlags, dayjs, monthRange, toUserTz } from '@/lib/datetime/dayjs';
 import type { Dayjs } from '@/lib/datetime/dayjs';
 import { cn } from '@/lib/utils';
 
@@ -51,7 +51,7 @@ export function MonthGrid({
     onEmptyDayClick: (day: Dayjs) => void;
 }) {
     const tz = useSchedulingTimezone();
-    const today = dayjs().tz(tz).startOf('day');
+    const todayKey = dayjs().tz(tz).format('YYYY-MM-DD');
     const { days } = monthRange(anchor);
 
     const byDay = new Map<string, PostRowData[]>();
@@ -73,18 +73,23 @@ export function MonthGrid({
                 ))}
             </div>
             <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-border bg-border">
-                {days.map((d) => (
-                    <DayCell
-                        key={d.format('YYYY-MM-DD')}
-                        day={d}
-                        tz={tz}
-                        inMonth={d.month() === anchor.month()}
-                        isToday={d.isSame(today, 'day')}
-                        isPast={d.isBefore(today, 'day')}
-                        posts={byDay.get(d.format('YYYY-MM-DD')) ?? []}
-                        onEmptyClick={() => onEmptyDayClick(d)}
-                    />
-                ))}
+                {days.map((d) => {
+                    const key = d.format('YYYY-MM-DD');
+                    const { isToday, isPast } = dayFlags(d, todayKey);
+
+                    return (
+                        <DayCell
+                            key={key}
+                            day={d}
+                            tz={tz}
+                            inMonth={d.month() === anchor.month()}
+                            isToday={isToday}
+                            isPast={isPast}
+                            posts={byDay.get(key) ?? []}
+                            onEmptyClick={() => onEmptyDayClick(d)}
+                        />
+                    );
+                })}
             </div>
         </div>
     );
