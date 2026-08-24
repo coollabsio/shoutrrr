@@ -119,8 +119,12 @@ function DayCell({
     const dimmed = !inMonth || isPast;
     const canCreatePost = shouldOpenMonthDay(isPast);
 
-    const handleActivate = () => {
-        if (canCreatePost) onEmptyClick();
+    // Only the cell itself creates a post — clicks/keys on a nested control
+    // (a post chip, the "+N more" button) must not bubble into create.
+    const createFromCell = (e: { target: EventTarget | null }) => {
+        if (canCreatePost && !(e.target as HTMLElement).closest('button')) {
+            onEmptyClick();
+        }
     };
 
     return (
@@ -130,17 +134,12 @@ function DayCell({
             role="button"
             tabIndex={isPast ? -1 : 0}
             aria-label={`Day ${day.format('YYYY-MM-DD')}`}
-            onClick={(e) => {
-                if (
-                    canCreatePost &&
-                    !(e.target as HTMLElement).closest('button')
-                )
-                    onEmptyClick();
-            }}
+            onClick={createFromCell}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
+                    if ((e.target as HTMLElement).closest('button')) return;
                     e.preventDefault();
-                    handleActivate();
+                    createFromCell(e);
                 }
             }}
             className={cn(

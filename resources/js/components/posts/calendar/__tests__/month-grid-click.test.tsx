@@ -19,9 +19,9 @@ vi.mock('@inertiajs/react', () => ({
 const anchor = dayjs.utc('2099-06-01');
 const dayWithPost = '2099-06-15';
 
-function post(): PostRowData {
+function post(id = 'post-1'): PostRowData {
     return {
-        id: 'post-1',
+        id,
         base_text: 'Existing post',
         status: 'scheduled',
         status_label: 'Scheduled',
@@ -37,12 +37,15 @@ function post(): PostRowData {
     };
 }
 
-function renderGrid(onEmptyDayClick: () => void) {
+function renderGrid(
+    onEmptyDayClick: () => void,
+    posts: PostRowData[] = [post()],
+) {
     return render(
         <DndContext>
             <MonthGrid
                 anchor={anchor}
-                posts={[post()]}
+                posts={posts}
                 onEmptyDayClick={onEmptyDayClick}
             />
         </DndContext>,
@@ -77,5 +80,22 @@ describe('MonthGrid — click a day that already has a post', () => {
 
         expect(onEmptyDayClick).not.toHaveBeenCalled();
         expect(routerVisit).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT create a post when activating the "+N more" button with the keyboard', () => {
+        const onEmptyDayClick = vi.fn();
+        // >3 posts renders the overflow "+N more" <button> inside the cell.
+        renderGrid(onEmptyDayClick, [
+            post('a'),
+            post('b'),
+            post('c'),
+            post('d'),
+        ]);
+
+        const moreButton = screen.getByText(/\+1 more/);
+        fireEvent.keyDown(moreButton, { key: 'Enter' });
+        fireEvent.keyDown(moreButton, { key: ' ' });
+
+        expect(onEmptyDayClick).not.toHaveBeenCalled();
     });
 });
