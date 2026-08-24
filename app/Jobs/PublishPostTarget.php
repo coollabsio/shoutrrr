@@ -12,6 +12,7 @@ use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
 use App\Exceptions\TokenRefreshException;
+use App\Exceptions\TransientTokenRefreshException;
 use App\Models\PostMediaPlacement;
 use App\Models\PostTarget;
 use App\Models\PostTargetAttempt;
@@ -167,6 +168,11 @@ class PublishPostTarget implements ShouldQueue
                     $credentials = $tokens->fresh($account, force: true);
                     $result = $connector->publish($this->context($target, $credentials));
                 }
+            } catch (TransientTokenRefreshException $e) {
+                // A transient token-endpoint failure (429/5xx/timeout) is not a bad
+                // credential — treat it as a retryable server error so the publish backs
+                // off and retries instead of flipping the account to needs-attention.
+                $result = PublishResult::failure(ErrorKind::ServerError, $e->getMessage());
             } catch (TokenRefreshException $e) {
                 $result = PublishResult::failure(ErrorKind::AuthExpired, $e->getMessage());
             }

@@ -270,7 +270,7 @@ test('bluesky app-password refresh serializes under the per-account lock', funct
         ->with(10, Mockery::type('Closure'))
         ->andReturnUsing(fn (int $seconds, Closure $callback) => $callback());
     Cache::partialMock()->shouldReceive('lock')->once()
-        ->with("connected-account-token-refresh:{$account->id}", 60)
+        ->with("connected-account-token-refresh:{$account->id}", 120)
         ->andReturn($lock);
 
     $creds = app(TokenManager::class)->fresh($account->fresh());
@@ -313,7 +313,7 @@ test('fresh re-reads the rotated bluesky session under the lock before refreshin
             return $callback();
         });
     Cache::partialMock()->shouldReceive('lock')->once()
-        ->with("connected-account-token-refresh:{$account->id}", 60)
+        ->with("connected-account-token-refresh:{$account->id}", 120)
         ->andReturn($lock);
 
     app(TokenManager::class)->fresh($staleAccount);

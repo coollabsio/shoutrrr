@@ -7,11 +7,13 @@ namespace App\Console\Commands;
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Exceptions\TokenRefreshException;
+use App\Exceptions\TransientTokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Log;
 
 class RefreshExpiringTokens extends Command
 {
@@ -43,6 +45,13 @@ class RefreshExpiringTokens extends Command
                     // Force the refresh: these accounts are inside the health-check window
                     // but typically still outside the just-in-time skew band.
                     $tokens->fresh($account, force: true);
+                } catch (TransientTokenRefreshException $e) {
+                    // Provider hiccup (429/5xx/timeout). The account is left Active and the
+                    // next sweep retries, so this is expected noise — log it, don't report.
+                    Log::info('Token sweep: transient refresh failure, will retry next run', [
+                        'account_id' => $account->id,
+                        'reason' => $e->getMessage(),
+                    ]);
                 } catch (TokenRefreshException $e) {
                     // TokenManager already flipped the account to needs-attention;
                     // report the swallowed sweep failure so it stays observable.

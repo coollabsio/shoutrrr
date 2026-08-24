@@ -2,6 +2,7 @@
 
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
+use App\Exceptions\TokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
@@ -188,6 +189,80 @@ it('refreshes a bluesky app-password session under the lock and returns the rota
 
     Http::assertSent(fn (Request $request): bool => $request->hasHeader('Authorization', 'Bearer stale-refresh')
         && str_ends_with($request->url(), '/xrpc/com.atproto.server.refreshSession'));
+});
+
+it('retries the bluesky refresh once to complete the dpop nonce handshake', function () {
+    $key = app(DPoP::class)->generateKey();
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Bluesky->value,
+        'auth_method' => 'oauth',
+        'token_expires_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'old-access',
+        'refresh_token' => 'old-refresh',
+        'session' => [
+            'token_endpoint' => 'https://auth.example/oauth/token',
+            'client_id' => 'https://app.example/oauth/bluesky/client-metadata.json',
+            'dpop_private_jwk' => $key,
+        ],
+    ]);
+
+    // atproto answers the first token request with 400 use_dpop_nonce and a server
+    // nonce, WITHOUT consuming the refresh token, then accepts the re-POST.
+    Http::fake([
+        'https://auth.example/oauth/token' => Http::sequence()
+            ->push(['error' => 'use_dpop_nonce'], 400, ['DPoP-Nonce' => 'server-nonce'])
+            ->push(['access_token' => 'new-access', 'refresh_token' => 'new-refresh', 'expires_in' => 3600], 200, ['DPoP-Nonce' => 'final-nonce']),
+    ]);
+
+    $credentials = app(TokenManager::class)->fresh($account);
+
+    expect($credentials['session']['accessJwt'])->toBe('new-access')
+        ->and($account->secret->refresh()->refresh_token)->toBe('new-refresh')
+        ->and($account->fresh()->status)->toBe(ConnectedAccountStatus::Active);
+
+    Http::assertSentCount(2);
+});
+
+it('does not re-send a bluesky refresh token when the failure is not a nonce challenge', function () {
+    // Regression for "Refresh token replayed": retrying on any failure could re-POST a
+    // single-use token the server already rotated. Only the use_dpop_nonce handshake is
+    // safe to retry; a genuine rejection must flip the account and stop, not re-send.
+    $key = app(DPoP::class)->generateKey();
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Bluesky->value,
+        'auth_method' => 'oauth',
+        'token_expires_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'old-access',
+        'refresh_token' => 'old-refresh',
+        'session' => [
+            'token_endpoint' => 'https://auth.example/oauth/token',
+            'client_id' => 'https://app.example/oauth/bluesky/client-metadata.json',
+            'dpop_private_jwk' => $key,
+            'dpop_nonce' => 'old-nonce',
+        ],
+    ]);
+
+    // A real rejection that still carries a DPoP-Nonce header — the old code would have
+    // re-POSTed the token on the strength of that header alone.
+    Http::fake([
+        'https://auth.example/oauth/token' => Http::response(
+            ['error' => 'invalid_grant', 'error_description' => 'Refresh token replayed'],
+            400,
+            ['DPoP-Nonce' => 'server-nonce'],
+        ),
+    ]);
+
+    expect(fn () => app(TokenManager::class)->fresh($account))->toThrow(TokenRefreshException::class);
+
+    Http::assertSentCount(1);
+    expect($account->fresh()->status)->toBe(ConnectedAccountStatus::NeedsAttention)
+        ->and($account->fresh()->refresh_failure_reason)->toContain('Refresh token replayed');
 });
 
 it('falls back to the persisted bluesky session when the refresh lock times out', function () {
