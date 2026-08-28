@@ -122,7 +122,8 @@ test('it skips accounts that expire outside the proactive refresh window', funct
     Http::assertNothingSent();
 });
 
-test('it proactively refreshes expiring bluesky oauth accounts', function () {
+test('it does not proactively rotate bluesky oauth accounts', function () {
+    // Bluesky is excluded from the sweep; the JIT path rotates its single-use token.
     $key = app(DPoP::class)->generateKey();
     $account = ConnectedAccount::factory()->create([
         'platform' => Platform::Bluesky->value,
@@ -150,15 +151,11 @@ test('it proactively refreshes expiring bluesky oauth accounts', function () {
 
     $this->artisan('accounts:refresh-tokens')->assertExitCode(0);
 
+    // The single-use token is left untouched — no rotation request was sent.
+    Http::assertNothingSent();
     $account->refresh();
-    expect($account->secret->access_token)->toBe('fresh-access')
-        ->and($account->secret->refresh_token)->toBe('fresh-refresh')
-        ->and($account->secret->session['dpop_nonce'])->toBe('fresh-nonce')
-        ->and($account->refresh_failed_at)->toBeNull();
-
-    Http::assertSent(fn ($request): bool => $request->url() === 'https://auth.bsky.test/oauth/token'
-        && $request->hasHeader('DPoP')
-        && $request['grant_type'] === 'refresh_token');
+    expect($account->secret->access_token)->toBe('old-access')
+        ->and($account->secret->refresh_token)->toBe('old-refresh');
 });
 
 test('token refresh health check is scheduled every fifteen minutes', function () {

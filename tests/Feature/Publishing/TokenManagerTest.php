@@ -354,6 +354,52 @@ test('fresh falls back to an app-password login when the refresh token has lapse
         && $request['password'] === 'app-pass');
 });
 
+test('fresh reuses a recently refreshed bluesky session instead of rotating again', function () {
+    // The interval floor stops a burst of pollers each rotating the single-use token.
+    $account = ConnectedAccount::factory()->bluesky()->create([
+        'token_expires_at' => null,
+        'last_refreshed_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'app_password' => 'app-pass',
+        'session' => ['accessJwt' => 'current-jwt', 'refreshJwt' => 'rjwt', 'pds' => 'https://bsky.social'],
+    ]);
+
+    Http::fake();
+
+    $creds = app(TokenManager::class)->fresh($account->fresh());
+
+    expect($creds['session']['accessJwt'])->toBe('current-jwt')
+        ->and($creds['app_password'])->toBe('app-pass');
+    Http::assertNothingSent();
+});
+
+test('fresh forces a bluesky refresh past the interval floor when the publish retries', function () {
+    // The publish retry after a 401 must bypass the floor, not reuse the rejected session.
+    $account = ConnectedAccount::factory()->bluesky()->create([
+        'token_expires_at' => null,
+        'last_refreshed_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'app_password' => 'app-pass',
+        'session' => ['accessJwt' => 'stale-jwt', 'refreshJwt' => 'rjwt', 'pds' => 'https://bsky.social'],
+    ]);
+
+    Http::fake([
+        'https://bsky.social/xrpc/com.atproto.server.refreshSession' => Http::response([
+            'accessJwt' => 'fresh-jwt',
+            'refreshJwt' => 'fresh-rjwt',
+        ]),
+    ]);
+
+    $creds = app(TokenManager::class)->fresh($account->fresh(), force: true);
+
+    expect($creds['session']['accessJwt'])->toBe('fresh-jwt');
+    Http::assertSent(fn ($request) => $request->url() === 'https://bsky.social/xrpc/com.atproto.server.refreshSession');
+});
+
 test('fresh refreshes a threads token via refresh_access_token and persists the new expiry', function () {
     $account = ConnectedAccount::factory()->create([
         'platform' => Platform::Threads->value,
