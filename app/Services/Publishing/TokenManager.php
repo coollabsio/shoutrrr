@@ -39,6 +39,10 @@ class TokenManager
      */
     private const int REFRESH_LOCK_SECONDS = 120;
 
+    // Skip a Bluesky refresh if we rotated the single-use token within this window.
+    // Keeps a burst of pollers from each rotating again; 600s ≪ the accessJwt life.
+    private const int BLUESKY_REFRESH_MIN_INTERVAL_SECONDS = 600;
+
     private const string BLUESKY_DEFAULT_PDS = 'https://bsky.social';
 
     public function __construct(
@@ -59,7 +63,7 @@ class TokenManager
         $secret = $account->secret()->firstOrFail();
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'app_password') {
-            return $this->blueskyCredentials($account);
+            return $this->blueskyCredentials($account, $force);
         }
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'oauth') {
@@ -112,6 +116,12 @@ class TokenManager
         }
 
         return $account->token_expires_at->lte(Date::now()->addSeconds(self::SKEW_SECONDS));
+    }
+
+    private function refreshedRecently(ConnectedAccount $account): bool
+    {
+        return $account->last_refreshed_at !== null
+            && $account->last_refreshed_at->gt(Date::now()->subSeconds(self::BLUESKY_REFRESH_MIN_INTERVAL_SECONDS));
     }
 
     /**
@@ -216,22 +226,30 @@ class TokenManager
      * churn hammers Bluesky's login rate limit until the account flips to
      * needs-attention. ATProto's guidance is to serialize refreshes per session
      * (see the XRPC spec and bluesky-social/atproto#3637); do so per account and
-     * re-read the rotated session under the lock. We refresh unconditionally rather
-     * than skipping while "still valid": the tokens are opaque per spec (their JWT
-     * fields "are not a stable part of the specification"), there is no
-     * server-provided expiry to gate on as the OAuth path has, and the spec expects
-     * a new access JWT to be fetched freely — refreshSession is cheap and, unlike
-     * createSession, not the rate-limited endpoint.
+     * re-read the rotated session under the lock. Tokens are opaque per spec, so we
+     * gate the refresh on our own last_refreshed_at, not the accessJwt's expiry;
+     * `force` (the publish's post-401 retry) skips that floor.
      *
      * @return array<string, mixed>
      */
-    private function blueskyCredentials(ConnectedAccount $account): array
+    private function blueskyCredentials(ConnectedAccount $account, bool $force): array
     {
+        if (! $force && $this->refreshedRecently($account)) {
+            $secret = $account->secret()->firstOrFail();
+
+            return ['session' => $secret->session ?? [], 'app_password' => $secret->app_password];
+        }
+
         try {
             return Cache::lock("connected-account-token-refresh:{$account->id}", self::REFRESH_LOCK_SECONDS)
-                ->block(10, function () use ($account): array {
+                ->block(10, function () use ($account, $force): array {
                     $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
                     $freshSecret = $freshAccount->secret()->firstOrFail();
+
+                    // Re-check under the lock: the winner rotated, so everyone else reuses it.
+                    if (! $force && $this->refreshedRecently($freshAccount)) {
+                        return ['session' => $freshSecret->session ?? [], 'app_password' => $freshSecret->app_password];
+                    }
 
                     return $this->refreshBlueskyCredentials($freshAccount, $freshSecret);
                 });

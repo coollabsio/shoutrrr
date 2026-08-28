@@ -30,13 +30,9 @@ class RefreshExpiringTokens extends Command
         ConnectedAccount::query()
             ->withoutGlobalScopes()
             ->whereIn('platform', $availablePlatforms)
-            ->where(function ($query): void {
-                $query->where('platform', '!=', Platform::Bluesky->value)
-                    ->orWhere(function ($query): void {
-                        $query->where('platform', Platform::Bluesky->value)
-                            ->where('auth_method', 'oauth');
-                    });
-            })
+            // Exclude Bluesky: its single-use tokens + ~15-30 min access tokens would
+            // rotate on every sweep. The just-in-time path refreshes it when needed.
+            ->where('platform', '!=', Platform::Bluesky->value)
             ->where('status', ConnectedAccountStatus::Active->value)
             ->whereNotNull('token_expires_at')
             ->where('token_expires_at', '<=', Date::now()->addHours(6))
