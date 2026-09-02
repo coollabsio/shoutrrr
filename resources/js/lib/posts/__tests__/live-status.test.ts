@@ -5,14 +5,19 @@ import { dayjs } from '@/lib/datetime/dayjs';
 import { postLiveStatus } from '../live-status';
 
 describe('postLiveStatus', () => {
-    it('counts down to a scheduled post going live', () => {
-        const scheduled_at = dayjs().add(3, 'hour').toISOString();
-        const label = postLiveStatus({
-            status: 'scheduled',
-            scheduled_at,
-            published_at: null,
-        });
-        expect(label).toMatch(/^Going live in /);
+    it('shows the exact date/time plus a countdown for a scheduled post', () => {
+        const scheduled_at = '2026-09-05T14:30:00Z';
+        const label = postLiveStatus(
+            {
+                status: 'scheduled',
+                scheduled_at,
+                published_at: null,
+            },
+            'UTC',
+        );
+        // Exact date/time in the given tz, then a relative hint. The relative
+        // fragment depends on "now", so it is matched loosely.
+        expect(label).toMatch(/^Going live Sep 5, 2026 at 2:30 PM · .+$/);
     });
 
     it('reports how long ago a post was published', () => {
