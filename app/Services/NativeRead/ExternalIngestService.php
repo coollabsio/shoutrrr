@@ -19,6 +19,8 @@ use App\Models\Workspace;
 use App\Services\Posts\MediaStorageService;
 use App\Services\Publishing\TokenManager;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ExternalIngestService
 {
@@ -103,8 +105,20 @@ class ExternalIngestService
                     if ($m->kind !== 'image') {
                         continue;
                     }
-                    $stored = $this->media->storeFromUrl($account->workspace_id, $m->url);
-                    $stored->forceFill(['post_id' => $post->id, 'position' => $position++])->save();
+                    try {
+                        $stored = $this->media->storeFromUrl($account->workspace_id, $m->url);
+                        $stored->forceFill(['post_id' => $post->id, 'position' => $position++])->save();
+                    } catch (Throwable $e) {
+                        // A single bad image (oversized/dead/non-image/blocked-host URL) must not
+                        // wedge the whole account: skip it and keep the External post + cursor advancing.
+                        Log::warning('native media download failed', [
+                            'account' => $account->id,
+                            'url' => $m->url,
+                            'error' => $e->getMessage(),
+                        ]);
+
+                        continue;
+                    }
                 }
             }
 

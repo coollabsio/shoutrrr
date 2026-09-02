@@ -10,6 +10,7 @@ use App\Models\ConnectedAccountNativeWatch;
 use App\Models\ConnectedAccountSecret;
 use App\Models\Post;
 use App\Models\PostTarget;
+use App\Models\SyncPipeline;
 use App\Services\NativeRead\ExternalIngestService;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
@@ -64,6 +65,38 @@ test('does not re-ingest a native post we already have (anti-loop + dedup)', fun
     app(ExternalIngestService::class)->ingest($account);
 
     expect(Post::where('origin', PostOrigin::External->value)->count())->toBe(0);
+});
+
+test('a failed image download does not wedge the account (post still created, cursor still advances)', function () {
+    [, $workspace] = ownerActingIn();
+    $account = watchBluesky($workspace->id);
+    // Pipeline source so createExternalPost attempts the full media download.
+    SyncPipeline::factory()->create([
+        'workspace_id' => $workspace->id,
+        'source_connected_account_id' => $account->id,
+        'enabled' => true,
+    ]);
+    Http::fake([
+        'public.api.bsky.app/*' => Http::response(['feed' => [
+            ['post' => [
+                'uri' => 'at://did/1',
+                'record' => ['text' => 'native with image', 'createdAt' => '2026-09-02T10:00:00Z'],
+                'embed' => ['images' => [
+                    ['fullsize' => 'https://example.com/broken.jpg'],
+                ]],
+            ]],
+        ]]),
+        'https://example.com/*' => Http::response('', 404),
+    ]);
+
+    app(ExternalIngestService::class)->ingest($account);
+
+    $post = Post::where('origin', PostOrigin::External->value)->first();
+    expect($post)->not->toBeNull()
+        ->and($post->targets)->toHaveCount(1)
+        ->and($post->media)->toHaveCount(0)
+        ->and($post->external_media[0]['url'])->toBe('https://example.com/broken.jpg');
+    expect($account->nativeWatch->fresh()->last_seen_remote_id)->toBe('at://did/1');
 });
 
 test('is inert when sync.enabled is false', function () {

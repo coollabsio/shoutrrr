@@ -23,7 +23,7 @@ class FacebookNativeReadConnector implements NativeReadConnector
         try {
             $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
                 ->get($this->baseUrl().'/'.$account->remote_account_id.'/feed', [
-                    'fields' => 'id,message,created_time,full_picture',
+                    'fields' => 'id,message,created_time,full_picture,from',
                     'since' => $cursor->watermark->timestamp,
                     'limit' => 50,
                     'access_token' => (string) ($credentials['access_token'] ?? ''),
@@ -44,6 +44,10 @@ class FacebookNativeReadConnector implements NativeReadConnector
             $id = (string) ($row['id'] ?? '');
             $createdAt = Carbon::parse((string) ($row['created_time'] ?? 'now'))->toImmutable();
             if ($id === '' || $createdAt < $cursor->watermark) {
+                continue;
+            }
+            // Only the page's own posts — never visitor/other-admin wall posts.
+            if (($row['from']['id'] ?? null) !== (string) $account->remote_account_id) {
                 continue;
             }
             $media = [];
