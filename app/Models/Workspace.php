@@ -200,6 +200,14 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<SyncPipeline, $this>
+     */
+    public function syncPipelines(): HasMany
+    {
+        return $this->hasMany(SyncPipeline::class);
+    }
+
+    /**
      * @return HasMany<WorkspaceMention, $this>
      */
     public function mentions(): HasMany
