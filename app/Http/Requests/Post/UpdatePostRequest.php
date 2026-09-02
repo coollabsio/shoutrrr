@@ -62,6 +62,7 @@ class UpdatePostRequest extends FormRequest
             'placements.*.segment_ref' => ['required', 'string'],
             'placements.*.position' => ['required', 'integer'],
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
+            'skip_sync' => ['sometimes', 'boolean'],
             'expected_updated_at' => ['nullable', 'string'],
         ];
     }

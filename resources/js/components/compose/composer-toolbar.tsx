@@ -8,6 +8,7 @@ import { GifPopover } from '@/components/compose/gif-popover';
 import {
     ImagePlay,
     Paperclip,
+    Share2,
     Shuffle,
     Smile,
     Split,
@@ -58,6 +59,14 @@ type Props = {
         onChange: (value: BoostValue) => void;
         accounts: Account[];
     };
+    /**
+     * Per-post sync-pipeline opt-out; absent hides the button (read-only, or no
+     * pipeline sources are selected).
+     */
+    syncPipeline?: {
+        skip: boolean;
+        onChange: (skip: boolean) => void;
+    };
     /** Insert a chosen emoji at the editor caret. */
     onInsertEmoji: (emoji: string) => void;
     /** Recently-used emoji, newest first. */
@@ -82,6 +91,7 @@ export function ComposerToolbar({
     pending,
     handleFiles,
     boost,
+    syncPipeline,
     onInsertEmoji,
     emojiRecents,
     emojiSkinTone,
@@ -272,6 +282,18 @@ export function ComposerToolbar({
                     onChange={boost.onChange}
                     accounts={boost.accounts}
                 />
+            )}
+
+            {!readOnly && syncPipeline !== undefined && (
+                <EToolButton
+                    label="Skip sync pipelines"
+                    tooltip="Don't auto-repost this post through sync pipelines"
+                    active={syncPipeline.skip}
+                    onClick={() => syncPipeline.onChange(!syncPipeline.skip)}
+                    iconOnly
+                >
+                    <Share2 className="size-4" />
+                </EToolButton>
             )}
         </div>
     );
