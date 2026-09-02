@@ -11,6 +11,7 @@ use App\Enums\ConnectedAccountStatus;
 use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
+use App\Events\PostTargetPublished;
 use App\Exceptions\TokenRefreshException;
 use App\Exceptions\TransientTokenRefreshException;
 use App\Models\PostMediaPlacement;
@@ -268,6 +269,7 @@ class PublishPostTarget implements ShouldQueue
         app(PostStatusRollup::class)->recompute($target->post()->firstOrFail());
 
         $this->notifyPublished($target);
+        PostTargetPublished::dispatch($target);
     }
 
     /**
@@ -411,6 +413,7 @@ class PublishPostTarget implements ShouldQueue
         ])->save();
 
         $this->notifyPublished($target);
+        PostTargetPublished::dispatch($target);
     }
 
     private function onFailure(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result, BackoffSchedule $backoff): void
