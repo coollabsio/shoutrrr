@@ -285,7 +285,7 @@ class OAuthConnectionController extends Controller
     {
         return match ($platform) {
             Platform::X => ['dm.read', 'dm.write'],
-            Platform::Instagram => ['instagram_business_manage_messages'],
+            Platform::Instagram => ['instagram_manage_messages'],
             Platform::Facebook => ['pages_messaging'],
             default => [],
         };
