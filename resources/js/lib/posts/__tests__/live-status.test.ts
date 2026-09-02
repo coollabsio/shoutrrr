@@ -1,11 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { dayjs } from '@/lib/datetime/dayjs';
 
 import { postLiveStatus } from '../live-status';
 
+afterEach(() => vi.useRealTimers());
+
 describe('postLiveStatus', () => {
     it('shows the exact date/time plus a countdown for a scheduled post', () => {
+        // Freeze "now" so fromNow() is deterministic, and use a non-UTC tz so
+        // the assertion proves the scheduled instant is converted (14:30 UTC →
+        // 07:30 PDT), not just echoed.
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-09-02T14:30:00Z'));
+
         const scheduled_at = '2026-09-05T14:30:00Z';
         const label = postLiveStatus(
             {
@@ -13,11 +21,9 @@ describe('postLiveStatus', () => {
                 scheduled_at,
                 published_at: null,
             },
-            'UTC',
+            'America/Los_Angeles',
         );
-        // Exact date/time in the given tz, then a relative hint. The relative
-        // fragment depends on "now", so it is matched loosely.
-        expect(label).toMatch(/^Going live Sep 5, 2026 at 2:30 PM · .+$/);
+        expect(label).toBe('Going live Sep 5, 2026 at 7:30 AM · in 3 days');
     });
 
     it('reports how long ago a post was published', () => {
