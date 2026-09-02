@@ -30,3 +30,10 @@ test('a composer post reports composer origin and no source', function () {
     expect($item['origin'])->toBe('composer')
         ->and($item['source_post_id'])->toBeNull();
 });
+
+test('the post list item reports external origin', function () {
+    [, $workspace] = ownerActingIn();
+    $post = Post::factory()->create(['workspace_id' => $workspace->id, 'origin' => PostOrigin::External->value]);
+    $item = PostListItem::make($post->load(['author', 'targets', 'media']));
+    expect($item['origin'])->toBe('external');
+});

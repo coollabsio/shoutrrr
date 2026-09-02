@@ -248,6 +248,9 @@ export function PostRow({ post }: { post: PostRowData }) {
                     {post.origin === 'sync' && (
                         <Badge variant="secondary">Synced</Badge>
                     )}
+                    {post.origin === 'external' && (
+                        <Badge variant="outline">External</Badge>
+                    )}
                     <StatusBadge status={post.status} />
                     <PostRowActions post={post} />
                 </div>

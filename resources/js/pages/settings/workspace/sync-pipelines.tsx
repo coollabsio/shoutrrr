@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { toast } from 'sonner';
 
+import NativeTrackingController from '@/actions/App/Http/Controllers/Settings/NativeTrackingController';
 import SyncPipelinesController from '@/actions/App/Http/Controllers/Settings/SyncPipelinesController';
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import { useConfirm } from '@/components/common/confirm-dialog';
@@ -37,6 +38,10 @@ type Props = {
     pipelines: Pipeline[];
     maxPipelines: number;
     canCreate: boolean;
+    trackableAccounts: SyncAccount[];
+    trackedAccountIds: string[];
+    canTrack: boolean;
+    maxTracked: number;
 };
 
 export default function SyncPipelines({
@@ -44,6 +49,10 @@ export default function SyncPipelines({
     pipelines,
     maxPipelines,
     canCreate,
+    trackableAccounts,
+    trackedAccountIds,
+    canTrack,
+    maxTracked,
 }: Props) {
     const confirm = useConfirm();
 
@@ -60,6 +69,20 @@ export default function SyncPipelines({
             { enabled },
             { preserveScroll: true },
         );
+    }
+
+    function toggleTracking(accountId: string, enabled: boolean) {
+        if (enabled) {
+            router.post(
+                NativeTrackingController.store(accountId).url,
+                {},
+                { preserveScroll: true },
+            );
+        } else {
+            router.delete(NativeTrackingController.destroy(accountId).url, {
+                preserveScroll: true,
+            });
+        }
     }
 
     async function remove(pipeline: Pipeline) {
@@ -141,6 +164,61 @@ export default function SyncPipelines({
                                     </div>
                                 </div>
                             ))
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Native tracking</CardTitle>
+                        <CardDescription>
+                            Watch an account for posts made directly on the
+                            platform so they can sync too.{' '}
+                            {trackedAccountIds.length}/{maxTracked} used.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-3">
+                        {trackableAccounts.length === 0 ? (
+                            <Empty>
+                                <EmptyHeader>
+                                    <EmptyTitle>
+                                        No trackable accounts
+                                    </EmptyTitle>
+                                    <EmptyDescription>
+                                        Connect an account on a platform that
+                                        supports native tracking.
+                                    </EmptyDescription>
+                                </EmptyHeader>
+                            </Empty>
+                        ) : (
+                            trackableAccounts.map((account) => {
+                                const tracked = trackedAccountIds.includes(
+                                    account.id,
+                                );
+                                return (
+                                    <div
+                                        key={account.id}
+                                        className="flex items-center justify-between rounded-lg border p-4"
+                                    >
+                                        <div>
+                                            <p className="font-medium">
+                                                {account.display_name ??
+                                                    account.handle}
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {account.platform}
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={tracked}
+                                            disabled={!canTrack && !tracked}
+                                            onCheckedChange={(v) =>
+                                                toggleTracking(account.id, v)
+                                            }
+                                        />
+                                    </div>
+                                );
+                            })
                         )}
                     </CardContent>
                 </Card>

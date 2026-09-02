@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Settings;
 
+use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
+use App\Models\ConnectedAccountNativeWatch;
 use App\Models\SyncPipeline;
 use App\Models\User;
 use App\Services\Billing\WorkspaceSubscriptionGate;
@@ -60,6 +62,11 @@ class SyncPipelinesController extends Controller
             'pipelines' => $pipelines,
             'maxPipelines' => (int) config('subscriptions.max_sync_pipelines'),
             'canCreate' => $this->gate->canCreateSyncPipeline($workspace),
+            'trackableAccounts' => $accounts->filter(fn (array $a): bool => Platform::from($a['platform'])->supportsNativeRead())->values(),
+            'trackedAccountIds' => ConnectedAccountNativeWatch::query()
+                ->where('workspace_id', $workspace->id)->pluck('connected_account_id'),
+            'canTrack' => $this->gate->canTrackNativeAccount($workspace),
+            'maxTracked' => (int) config('subscriptions.max_native_tracked'),
         ]);
     }
 

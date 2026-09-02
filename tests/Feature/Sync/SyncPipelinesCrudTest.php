@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\Platform;
 use App\Enums\WorkspaceRole;
 use App\Models\ConnectedAccount;
 use App\Models\SyncPipeline;
@@ -83,4 +84,16 @@ test('the settings page renders', function () {
     $this->get('/settings/workspace/sync-pipelines')
         ->assertOk()
         ->assertInertia(fn ($page) => $page->component('settings/workspace/sync-pipelines')->has('accounts'));
+});
+
+test('the settings page exposes native tracking data', function () {
+    [, $workspace] = ownerActingIn();
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky]);
+
+    $this->get('/settings/workspace/sync-pipelines')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('trackableAccounts')
+            ->has('trackedAccountIds')
+            ->has('canTrack'));
 });
