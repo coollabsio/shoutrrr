@@ -18,6 +18,8 @@ final class PostListItem
         return [
             'id' => $post->id,
             'base_text' => $post->base_text,
+            'origin' => $post->origin->value,
+            'source_post_id' => $post->source_post_id,
             'status' => $post->status->value,
             'status_label' => $post->status->label(),
             'author' => $post->author?->name,

@@ -19,6 +19,8 @@ export type { PostStatus } from '@/types/compose';
 export type PostRowData = {
     id: string;
     base_text: string;
+    origin?: 'composer' | 'sync' | 'external';
+    source_post_id?: string | null;
     status: PostStatus;
     status_label: string;
     author: string | null;
@@ -243,6 +245,9 @@ export function PostRow({ post }: { post: PostRowData }) {
 
                 {/* Right: badge + actions */}
                 <div className="flex items-center gap-1.5">
+                    {post.origin === 'sync' && (
+                        <Badge variant="secondary">Synced</Badge>
+                    )}
                     <StatusBadge status={post.status} />
                     <PostRowActions post={post} />
                 </div>
