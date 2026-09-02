@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Concerns\HasWorkspaceScope;
+use App\Enums\PostOrigin;
 use App\Enums\PostStatus;
 use Carbon\CarbonImmutable;
 use Database\Factories\PostFactory;
@@ -41,6 +42,10 @@ use Override;
     'segments',
     'mentions',
     'status',
+    'origin',
+    'sync_pipeline_id',
+    'source_post_id',
+    'skip_sync',
     'auto_repost',
     'scheduled_at',
     'published_at',
@@ -51,11 +56,21 @@ class Post extends Model
     /** @use HasFactory<PostFactory> */
     use HasFactory, HasUuids, HasWorkspaceScope;
 
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'origin' => 'composer',
+        'skip_sync' => false,
+    ];
+
     #[Override]
     protected function casts(): array
     {
         return [
             'status' => PostStatus::class,
+            'origin' => PostOrigin::class,
+            'skip_sync' => 'boolean',
             'auto_repost' => 'boolean',
             'mentions' => 'array',
             'segments' => 'array',
@@ -122,6 +137,22 @@ class Post extends Model
     public function replies(): HasManyThrough
     {
         return $this->hasManyThrough(PostTargetReply::class, PostTarget::class);
+    }
+
+    /**
+     * @return BelongsTo<SyncPipeline, $this>
+     */
+    public function syncPipeline(): BelongsTo
+    {
+        return $this->belongsTo(SyncPipeline::class);
+    }
+
+    /**
+     * @return BelongsTo<Post, $this>
+     */
+    public function sourcePost(): BelongsTo
+    {
+        return $this->belongsTo(Post::class, 'source_post_id');
     }
 
     /**
