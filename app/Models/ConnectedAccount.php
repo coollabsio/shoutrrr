@@ -284,6 +284,14 @@ class ConnectedAccount extends Model
         return $this->hasOne(ConnectedAccountSecret::class, 'connected_account_id');
     }
 
+    /**
+     * @return HasOne<ConnectedAccountNativeWatch, $this>
+     */
+    public function nativeWatch(): HasOne
+    {
+        return $this->hasOne(ConnectedAccountNativeWatch::class, 'connected_account_id');
+    }
+
     /** @return HasMany<AccountMetric, $this> */
     public function metrics(): HasMany
     {
