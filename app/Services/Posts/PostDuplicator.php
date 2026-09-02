@@ -64,6 +64,29 @@ class PostDuplicator
     }
 
     /**
+     * Copy every media file + row from $source into an existing $target post.
+     * Cleans up any copied storage files if a later step throws.
+     */
+    public function copyMediaInto(Post $target, Post $source): void
+    {
+        $source->loadMissing('media');
+
+        /** @var list<array{0: string, 1: string}> $copiedPaths */
+        $copiedPaths = [];
+
+        try {
+            $plan = $this->copyMediaFiles($source, $copiedPaths);
+            $this->createMediaRows($target, $plan);
+        } catch (Throwable $e) {
+            foreach ($copiedPaths as [$disk, $path]) {
+                FileStorage::disk($disk)->delete($path);
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
      * Copy each media file (and any retained pre-edit source) to a fresh path,
      * recording every written path in $copiedPaths for rollback cleanup.
      *
