@@ -208,6 +208,14 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<ConnectedAccountNativeWatch, $this>
+     */
+    public function nativeWatches(): HasMany
+    {
+        return $this->hasMany(ConnectedAccountNativeWatch::class);
+    }
+
+    /**
      * @return HasMany<WorkspaceMention, $this>
      */
     public function mentions(): HasMany
