@@ -38,6 +38,7 @@ class StorePostRequest extends FormRequest
             'destination.ids' => ['array', 'required_if:destination.kind,accounts'],
             'destination.ids.*' => ['string'],
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
+            'skip_sync' => ['sometimes', 'boolean'],
             'segment_breaks' => ['array'],
             'segment_breaks.*' => ['string'],
             'placements' => ['array'],

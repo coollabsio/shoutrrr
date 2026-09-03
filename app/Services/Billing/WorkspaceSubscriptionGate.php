@@ -48,6 +48,32 @@ class WorkspaceSubscriptionGate
         return $workspace->is_initial || $workspace->subscribed('default');
     }
 
+    public function canCreateSyncPipeline(Workspace $workspace): bool
+    {
+        if (! $this->isEnabled() || $workspace->is_initial) {
+            return true;
+        }
+
+        if (! $workspace->subscribed('default')) {
+            return false;
+        }
+
+        return $workspace->syncPipelines()->count() < (int) config('subscriptions.max_sync_pipelines');
+    }
+
+    public function canTrackNativeAccount(Workspace $workspace): bool
+    {
+        if (! $this->isEnabled() || $workspace->is_initial) {
+            return true;
+        }
+
+        if (! $workspace->subscribed('default')) {
+            return false;
+        }
+
+        return $workspace->nativeWatches()->count() < (int) config('subscriptions.max_native_tracked');
+    }
+
     public function canPublishX(Workspace $workspace): bool
     {
         if (! $this->isEnabled() || $this->isXUnlimited($workspace)) {

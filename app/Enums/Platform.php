@@ -401,6 +401,14 @@ enum Platform: string
         };
     }
 
+    public function supportsNativeRead(): bool
+    {
+        return match ($this) {
+            self::X, self::Bluesky, self::Threads, self::Facebook, self::Instagram => true,
+            self::LinkedIn, self::Discord => false,
+        };
+    }
+
     /**
      * Whether the platform permits an animated GIF alongside other media. X and
      * Bluesky treat a GIF as a video-like embed: at most one per post, never

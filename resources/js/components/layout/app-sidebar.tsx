@@ -79,6 +79,7 @@ const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, IconComponent> = {
     overview: Settings,
     members: Users,
     apiKeys: KeyRound,
+    syncPipelines: Share2,
     subscription: CreditCard,
 };
 

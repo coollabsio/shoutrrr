@@ -4,9 +4,11 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\Settings\ApiKeysController;
 use App\Http\Controllers\Settings\ConnectionsController;
 use App\Http\Controllers\Settings\InstanceSettingsController;
+use App\Http\Controllers\Settings\NativeTrackingController;
 use App\Http\Controllers\Settings\NotificationPreferencesController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\Settings\SyncPipelinesController;
 use App\Http\Controllers\Settings\WorkspaceSettingsController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
@@ -29,6 +31,14 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/workspace/api-keys', [ApiKeysController::class, 'index'])->name('settings.workspace.api-keys');
     Route::post('settings/workspace/api-keys', [ApiKeysController::class, 'store'])->name('settings.workspace.api-keys.store');
     Route::delete('settings/workspace/api-keys/{apiKey}', [ApiKeysController::class, 'destroy'])->name('settings.workspace.api-keys.destroy');
+
+    Route::get('settings/workspace/sync-pipelines', [SyncPipelinesController::class, 'index'])->name('settings.workspace.sync-pipelines');
+    Route::post('settings/workspace/sync-pipelines', [SyncPipelinesController::class, 'store'])->name('settings.workspace.sync-pipelines.store');
+    Route::patch('settings/workspace/sync-pipelines/{syncPipeline}', [SyncPipelinesController::class, 'update'])->name('settings.workspace.sync-pipelines.update');
+    Route::delete('settings/workspace/sync-pipelines/{syncPipeline}', [SyncPipelinesController::class, 'destroy'])->name('settings.workspace.sync-pipelines.destroy');
+
+    Route::post('settings/workspace/native-tracking/{account}', [NativeTrackingController::class, 'store'])->name('settings.workspace.native-tracking.store');
+    Route::delete('settings/workspace/native-tracking/{account}', [NativeTrackingController::class, 'destroy'])->name('settings.workspace.native-tracking.destroy');
 
     Route::get('settings/connections', [ConnectionsController::class, 'edit'])->name('connections.edit');
     Route::delete('settings/connections/{socialAccount}', [ConnectionsController::class, 'destroy'])->name('connections.destroy');

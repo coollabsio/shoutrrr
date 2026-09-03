@@ -1385,6 +1385,18 @@ export default function Composer({
                                   }
                                 : undefined
                         }
+                        syncPipeline={
+                            tabAccounts.length > 0
+                                ? {
+                                      skip: state.skipSync,
+                                      onChange: (skip) =>
+                                          dispatch({
+                                              type: 'setSkipSync',
+                                              value: skip,
+                                          }),
+                                  }
+                                : undefined
+                        }
                         media={state.media}
                         onToggleAutoSplit={() =>
                             activeAccount &&
