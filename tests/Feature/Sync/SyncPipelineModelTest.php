@@ -7,6 +7,7 @@ use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\SyncPipeline;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 
 test('a post defaults to composer origin', function () {
     $post = Post::factory()->create();
@@ -31,7 +32,9 @@ test('a sync pipeline has a source and destinations and cascades on delete', fun
         ->and($pipeline->destinations->pluck('id')->all())->toEqualCanonicalizing([$destA->id, $destB->id]);
 
     $pipeline->delete();
-    $this->assertDatabaseMissing('sync_pipeline_destinations', ['sync_pipeline_id' => $pipeline->id]);
+    expect(
+        DB::table('sync_pipeline_destinations')->where('sync_pipeline_id', $pipeline->id)->exists(),
+    )->toBeFalse();
 });
 
 test('two synced posts cannot share the same source post and pipeline', function () {

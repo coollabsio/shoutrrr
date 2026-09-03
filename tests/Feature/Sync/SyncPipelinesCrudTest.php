@@ -47,6 +47,60 @@ test('creation is blocked at the cap of 3 when subscriptions are enabled', funct
     expect(SyncPipeline::count())->toBe(3);
 });
 
+test('creation rejects more than three destinations', function () {
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $dests = ConnectedAccount::factory()->count(4)->create(['workspace_id' => $workspace->id]);
+
+    $this->post('/settings/workspace/sync-pipelines', [
+        'name' => 'Too many',
+        'source_connected_account_id' => $source->id,
+        'destination_connected_account_ids' => $dests->pluck('id')->all(),
+    ])->assertSessionHasErrors('destination_connected_account_ids');
+
+    expect(SyncPipeline::count())->toBe(0);
+});
+
+test('creation rejects the source as its own destination', function () {
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+
+    $this->post('/settings/workspace/sync-pipelines', [
+        'name' => 'Self',
+        'source_connected_account_id' => $source->id,
+        'destination_connected_account_ids' => [$source->id],
+    ])->assertSessionHasErrors('destination_connected_account_ids.0');
+
+    expect(SyncPipeline::count())->toBe(0);
+});
+
+test('update rejects making the source one of the retained destinations', function () {
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $dest = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $pipeline = SyncPipeline::factory()->create([
+        'workspace_id' => $workspace->id,
+        'source_connected_account_id' => $source->id,
+    ]);
+    $pipeline->destinations()->sync([$dest->id]);
+
+    // Only the source changes; destinations are omitted and retain [$dest].
+    $this->patch("/settings/workspace/sync-pipelines/{$pipeline->id}", [
+        'source_connected_account_id' => $dest->id,
+    ])->assertSessionHasErrors('destination_connected_account_ids');
+
+    expect($pipeline->fresh()->source_connected_account_id)->toBe($source->id);
+});
+
+test('update rejects an empty destination list', function () {
+    [, $workspace] = ownerActingIn();
+    $pipeline = SyncPipeline::factory()->create(['workspace_id' => $workspace->id]);
+
+    $this->patch("/settings/workspace/sync-pipelines/{$pipeline->id}", [
+        'destination_connected_account_ids' => [],
+    ])->assertSessionHasErrors('destination_connected_account_ids');
+});
+
 test('a member without settings.manage cannot create a pipeline', function () {
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create();

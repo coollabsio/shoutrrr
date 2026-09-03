@@ -67,12 +67,14 @@ class PostDuplicator
      * Copy every media file + row from $source into an existing $target post.
      * Cleans up any copied storage files if a later step throws.
      */
-    public function copyMediaInto(Post $target, Post $source): void
+    /**
+     * @param  list<array{0: string, 1: string}>  $copiedPaths  Receives every written [disk, path]
+     *                                                          so a caller can clean them up if a
+     *                                                          later step (outside this method) fails.
+     */
+    public function copyMediaInto(Post $target, Post $source, array &$copiedPaths = []): void
     {
         $source->loadMissing('media');
-
-        /** @var list<array{0: string, 1: string}> $copiedPaths */
-        $copiedPaths = [];
 
         try {
             $plan = $this->copyMediaFiles($source, $copiedPaths);

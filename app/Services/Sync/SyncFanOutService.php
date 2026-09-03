@@ -16,6 +16,7 @@ use App\Services\Posts\PostDuplicator;
 use App\Services\Publishing\PublishDispatcher;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class SyncFanOutService
@@ -90,15 +91,22 @@ class SyncFanOutService
             return; // Another run already fanned this out.
         }
 
+        // Track copied storage paths outside the transaction: a DB rollback drops the
+        // media rows but leaves the physical files behind, so we delete them ourselves.
+        /** @var list<array{0: string, 1: string}> $copiedPaths */
+        $copiedPaths = [];
         try {
-            DB::transaction(function () use ($synced, $source, $destinationIds): void {
-                $this->duplicator->copyMediaInto($synced, $source);
+            DB::transaction(function () use ($synced, $source, $destinationIds, &$copiedPaths): void {
+                $this->duplicator->copyMediaInto($synced, $source, $copiedPaths);
                 // No DraftData => no per-segment placements; all media rides the head
                 // section (SegmentMediaResolver falls back to [0 => allMedia]).
                 $this->drafts->syncTargets($synced, array_values($destinationIds), $source->segments ?? [], [], [], $source->mentions ?? [], []);
                 $synced->forceFill(['status' => PostStatus::Publishing->value])->save();
             });
         } catch (Throwable $e) {
+            foreach ($copiedPaths as [$disk, $path]) {
+                Storage::disk($disk)->delete($path);
+            }
             $synced->delete(); // Let the backstop retry a clean fan-out.
 
             throw $e;

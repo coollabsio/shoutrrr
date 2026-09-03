@@ -151,6 +151,7 @@ export default function SyncPipelines({
                                     <div className="flex items-center gap-3">
                                         <Switch
                                             checked={pipeline.enabled}
+                                            aria-label={`Enable sync pipeline ${pipeline.name}`}
                                             onCheckedChange={(v) =>
                                                 toggle(pipeline, v)
                                             }
@@ -212,6 +213,7 @@ export default function SyncPipelines({
                                         <Switch
                                             checked={tracked}
                                             disabled={!canTrack && !tracked}
+                                            aria-label={`Track ${account.display_name ?? account.handle}`}
                                             onCheckedChange={(v) =>
                                                 toggleTracking(account.id, v)
                                             }

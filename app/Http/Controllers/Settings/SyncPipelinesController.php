@@ -88,9 +88,11 @@ class SyncPipelinesController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'enabled' => ['sometimes', 'boolean'],
             'source_connected_account_id' => ['required', 'string', $this->accountRule($workspace->id)],
-            'destination_connected_account_ids' => ['required', 'array', 'min:1'],
+            'destination_connected_account_ids' => ['required', 'array', 'min:1', 'max:3'],
             'destination_connected_account_ids.*' => [$this->accountRule($workspace->id), 'different:source_connected_account_id'],
         ]);
+
+        $this->assertSourceNotDestination($validated['source_connected_account_id'], $validated['destination_connected_account_ids']);
 
         $pipeline = SyncPipeline::create([
             'workspace_id' => $workspace->id,
@@ -115,9 +117,17 @@ class SyncPipelinesController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'enabled' => ['sometimes', 'boolean'],
             'source_connected_account_id' => ['sometimes', 'string', $this->accountRule($syncPipeline->workspace_id)],
-            'destination_connected_account_ids' => ['sometimes', 'array'],
+            'destination_connected_account_ids' => ['sometimes', 'array', 'min:1', 'max:3'],
             'destination_connected_account_ids.*' => [$this->accountRule($syncPipeline->workspace_id)],
         ]);
+
+        // Enforce the source∉destinations invariant against the *final* config,
+        // since either field may be omitted and retain its stored value.
+        $finalSource = $validated['source_connected_account_id'] ?? $syncPipeline->source_connected_account_id;
+        $finalDestinations = array_key_exists('destination_connected_account_ids', $validated)
+            ? $validated['destination_connected_account_ids']
+            : $syncPipeline->destinations()->pluck('connected_accounts.id')->all();
+        $this->assertSourceNotDestination((string) $finalSource, $finalDestinations);
 
         $syncPipeline->update(array_intersect_key($validated, array_flip(['name', 'enabled', 'source_connected_account_id'])));
         if (array_key_exists('destination_connected_account_ids', $validated)) {
@@ -137,6 +147,18 @@ class SyncPipelinesController extends Controller
         $syncPipeline->delete();
 
         return back()->with('success', 'Sync pipeline deleted.');
+    }
+
+    /**
+     * @param  array<int, mixed>  $destinations
+     */
+    private function assertSourceNotDestination(string $source, array $destinations): void
+    {
+        if (in_array($source, array_map(static fn (mixed $id): string => (string) $id, $destinations), true)) {
+            throw ValidationException::withMessages([
+                'destination_connected_account_ids' => 'The source account cannot also be a destination.',
+            ]);
+        }
     }
 
     private function accountRule(string $workspaceId): Exists

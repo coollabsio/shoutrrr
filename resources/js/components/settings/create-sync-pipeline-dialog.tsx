@@ -41,6 +41,11 @@ export default function CreateSyncPipelineDialog({
     const [source, setSource] = useState<string>('');
     const [destinations, setDestinations] = useState<string[]>([]);
 
+    function selectSource(id: string) {
+        setSource(id);
+        setDestinations((current) => current.filter((d) => d !== id));
+    }
+
     function toggleDestination(id: string) {
         setDestinations((current) =>
             current.includes(id)
@@ -105,7 +110,7 @@ export default function CreateSyncPipelineDialog({
                                             value={account.id}
                                             checked={source === account.id}
                                             onChange={() =>
-                                                setSource(account.id)
+                                                selectSource(account.id)
                                             }
                                         />
                                         {accountLabel(account)}

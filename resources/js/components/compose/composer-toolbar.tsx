@@ -289,6 +289,7 @@ export function ComposerToolbar({
                     label="Skip sync pipelines"
                     tooltip="Don't auto-repost this post through sync pipelines"
                     active={syncPipeline.skip}
+                    pressed={syncPipeline.skip}
                     onClick={() => syncPipeline.onChange(!syncPipeline.skip)}
                     iconOnly
                 >
@@ -307,6 +308,8 @@ function EToolButton({
     label,
     /** Rich hover label. Replaces the native `title` when supplied. */
     tooltip,
+    /** When set, exposes the on/off state of a toggle button via `aria-pressed`. */
+    pressed,
     iconOnly = false,
     onClick,
 }: {
@@ -315,6 +318,7 @@ function EToolButton({
     title?: string;
     label?: string;
     tooltip?: ReactNode;
+    pressed?: boolean;
     iconOnly?: boolean;
     onClick?: () => void;
 }) {
@@ -323,6 +327,7 @@ function EToolButton({
             type="button"
             title={tooltip === undefined ? title : undefined}
             aria-label={label}
+            aria-pressed={pressed}
             onClick={onClick}
             data-active={active}
             className={cn(

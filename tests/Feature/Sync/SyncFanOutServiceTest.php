@@ -9,10 +9,13 @@ use App\Enums\PostTargetStatus;
 use App\Jobs\PublishPostTarget;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
+use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\SyncPipeline;
+use App\Services\Posts\DraftService;
 use App\Services\Sync\SyncFanOutService;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * A composer post already published to $source, plus a pipeline source->[dests].
@@ -152,6 +155,34 @@ test('fan-out is inert when sync.enabled is false', function () {
     app(SyncFanOutService::class)->fanOut($target);
 
     expect(Post::where('source_post_id', $post->id)->count())->toBe(0);
+});
+
+test('copied media files are cleaned up when a later fan-out step fails', function () {
+    Storage::fake('public');
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
+    $dest = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
+    [$post, $target] = publishedSourceWithPipeline($source, [$dest], $workspace->id);
+
+    $mediaPath = 'media/source.jpg';
+    Storage::disk('public')->put($mediaPath, 'jpeg-bytes');
+    PostMedia::factory()->create([
+        'workspace_id' => $workspace->id,
+        'post_id' => $post->id,
+        'disk' => 'public',
+        'path' => $mediaPath,
+    ]);
+
+    // Blow up after copyMediaInto has already written the copied file.
+    $this->mock(DraftService::class, function ($mock) {
+        $mock->shouldReceive('syncTargets')->andThrow(new RuntimeException('boom'));
+    });
+
+    expect(fn () => app(SyncFanOutService::class)->fanOut($target))
+        ->toThrow(RuntimeException::class);
+
+    expect(Post::where('source_post_id', $post->id)->count())->toBe(0)
+        ->and(Storage::disk('public')->allFiles())->toBe([$mediaPath]);
 });
 
 test('disabled destination accounts are excluded', function () {
