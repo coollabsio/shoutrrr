@@ -3,7 +3,6 @@ import { toast } from 'sonner';
 
 import NativeTrackingController from '@/actions/App/Http/Controllers/Settings/NativeTrackingController';
 import SyncPipelinesController from '@/actions/App/Http/Controllers/Settings/SyncPipelinesController';
-import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
 import { AccountAvatar } from '@/components/common/account-avatar';
 import { useConfirm } from '@/components/common/confirm-dialog';
 import CreateSyncPipelineDialog, {
@@ -296,10 +295,6 @@ export default function SyncPipelines({
 
 SyncPipelines.layout = {
     breadcrumbs: [
-        {
-            title: 'Workspace settings',
-            href: WorkspaceSettingsController.showOverview().url,
-        },
         {
             title: 'Sync pipelines',
             href: SyncPipelinesController.index().url,

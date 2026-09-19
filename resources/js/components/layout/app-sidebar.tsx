@@ -2,6 +2,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
+import SyncPipelinesController from '@/actions/App/Http/Controllers/Settings/SyncPipelinesController';
 import AppLogo from '@/components/layout/app-logo';
 import { NavUser } from '@/components/layout/nav-user';
 import { SidebarFooterCard } from '@/components/layout/sidebar-footer-card';
@@ -79,7 +80,6 @@ const workspaceSettingsIcons: Record<WorkspaceSettingsNavKey, IconComponent> = {
     overview: Settings,
     members: Users,
     apiKeys: KeyRound,
-    syncPipelines: Share2,
     subscription: CreditCard,
 };
 
@@ -136,6 +136,10 @@ export function AppSidebar() {
 
     const composeHref = dashboard();
     const showWorkspaceSettings = workspaces.enabled && workspaces.current;
+    const canManageWorkspace = (workspaces.current?.permissions ?? []).includes(
+        'workspace.settings.manage',
+    );
+    const showSyncPipelines = !!showWorkspaceSettings && canManageWorkspace;
     const showInstanceSettings = instance.isOwner;
     const settingsItems = showWorkspaceSettings
         ? workspaceSettingsNavItems({
@@ -296,6 +300,24 @@ export function AppSidebar() {
                                     >
                                         <ChartColumn aria-hidden="true" />
                                         <span>Analytics</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            )}
+                            {showSyncPipelines && (
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton
+                                        tooltip="Sync pipelines"
+                                        isActive={isCurrentOrParentUrl(
+                                            SyncPipelinesController.index().url,
+                                        )}
+                                        render={
+                                            <Link
+                                                href={SyncPipelinesController.index()}
+                                            />
+                                        }
+                                    >
+                                        <RefreshCw aria-hidden="true" />
+                                        <span>Sync pipelines</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             )}

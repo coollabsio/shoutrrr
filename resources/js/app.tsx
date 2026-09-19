@@ -43,6 +43,10 @@ void createInertiaApp({
                 name === 'settings/instance-usage' ||
                 name === 'settings/instance-admins':
                 return [AppLayout, InstanceSettingsLayout];
+            // Sync pipelines is a Posts feature, not a workspace-settings page,
+            // so it uses the plain app shell rather than the workspace header.
+            case name === 'settings/workspace/sync-pipelines':
+                return AppLayout;
             case name.startsWith('settings/workspace'):
                 return [AppLayout, WorkspaceSettingsLayout];
             case name.startsWith('settings/'):
