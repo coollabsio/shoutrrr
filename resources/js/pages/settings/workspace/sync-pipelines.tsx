@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import NativeTrackingController from '@/actions/App/Http/Controllers/Settings/NativeTrackingController';
 import SyncPipelinesController from '@/actions/App/Http/Controllers/Settings/SyncPipelinesController';
 import WorkspaceSettingsController from '@/actions/App/Http/Controllers/Settings/WorkspaceSettingsController';
+import { AccountAvatar } from '@/components/common/account-avatar';
 import { useConfirm } from '@/components/common/confirm-dialog';
 import CreateSyncPipelineDialog, {
     type SyncAccount,
@@ -33,6 +34,27 @@ type Pipeline = {
     destination_connected_account_ids: string[];
 };
 
+/** Avatar + name with the @handle in muted, so same-named accounts are distinguishable. */
+function AccountChip({ account }: { account: SyncAccount }) {
+    const name = account.display_name ?? account.handle;
+    return (
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+            <AccountAvatar
+                platform={account.platform}
+                handle={account.handle}
+                avatarUrl={account.avatar_url}
+                ringClassName="ring-card"
+            />
+            <span className="truncate font-medium text-foreground">{name}</span>
+            {account.handle !== name && (
+                <span className="truncate text-muted-foreground">
+                    {account.handle}
+                </span>
+            )}
+        </span>
+    );
+}
+
 type Props = {
     accounts: SyncAccount[];
     pipelines: Pipeline[];
@@ -56,11 +78,12 @@ export default function SyncPipelines({
 }: Props) {
     const confirm = useConfirm();
 
-    function accountLabel(id: string): string {
-        const account = accounts.find((a) => a.id === id);
-        return account
-            ? `${account.display_name ?? account.handle} (${account.platform})`
-            : id;
+    function accountById(id: string): SyncAccount | undefined {
+        return accounts.find((a) => a.id === id);
+    }
+
+    function accountName(account: SyncAccount): string {
+        return account.display_name ?? account.handle;
     }
 
     function toggle(pipeline: Pipeline, enabled: boolean) {
@@ -129,42 +152,76 @@ export default function SyncPipelines({
                                 </EmptyHeader>
                             </Empty>
                         ) : (
-                            pipelines.map((pipeline) => (
-                                <div
-                                    key={pipeline.id}
-                                    className="flex items-center justify-between rounded-lg border p-4"
-                                >
-                                    <div>
-                                        <p className="font-medium">
-                                            {pipeline.name}
-                                        </p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {accountLabel(
-                                                pipeline.source_connected_account_id,
-                                            )}{' '}
-                                            →{' '}
-                                            {pipeline.destination_connected_account_ids
-                                                .map(accountLabel)
-                                                .join(', ')}
-                                        </p>
+                            pipelines.map((pipeline) => {
+                                const source = accountById(
+                                    pipeline.source_connected_account_id,
+                                );
+                                return (
+                                    <div
+                                        key={pipeline.id}
+                                        className="flex items-center justify-between rounded-lg border p-4"
+                                    >
+                                        <div className="grid min-w-0 gap-2.5">
+                                            <p className="font-medium">
+                                                {pipeline.name}
+                                            </p>
+                                            <div className="grid gap-1.5 text-sm">
+                                                <div className="flex items-center gap-2.5">
+                                                    <span className="w-8 shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                                                        From
+                                                    </span>
+                                                    {source && (
+                                                        <AccountChip
+                                                            account={source}
+                                                        />
+                                                    )}
+                                                </div>
+                                                <div className="flex items-start gap-2.5">
+                                                    <span className="mt-1 w-8 shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                                                        To
+                                                    </span>
+                                                    <div className="flex min-w-0 flex-col gap-1.5">
+                                                        {pipeline.destination_connected_account_ids
+                                                            .map((id) =>
+                                                                accountById(id),
+                                                            )
+                                                            .filter(
+                                                                (dest) =>
+                                                                    dest !==
+                                                                    undefined,
+                                                            )
+                                                            .map((dest) => (
+                                                                <AccountChip
+                                                                    key={
+                                                                        dest.id
+                                                                    }
+                                                                    account={
+                                                                        dest
+                                                                    }
+                                                                />
+                                                            ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <Switch
+                                                checked={pipeline.enabled}
+                                                aria-label={`Enable sync pipeline ${pipeline.name}`}
+                                                onCheckedChange={(v) =>
+                                                    toggle(pipeline, v)
+                                                }
+                                            />
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => remove(pipeline)}
+                                            >
+                                                Delete
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <Switch
-                                            checked={pipeline.enabled}
-                                            aria-label={`Enable sync pipeline ${pipeline.name}`}
-                                            onCheckedChange={(v) =>
-                                                toggle(pipeline, v)
-                                            }
-                                        />
-                                        <Button
-                                            variant="ghost"
-                                            onClick={() => remove(pipeline)}
-                                        >
-                                            Delete
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </CardContent>
                 </Card>
@@ -201,14 +258,22 @@ export default function SyncPipelines({
                                         key={account.id}
                                         className="flex items-center justify-between rounded-lg border p-4"
                                     >
-                                        <div>
-                                            <p className="font-medium">
-                                                {account.display_name ??
-                                                    account.handle}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground">
-                                                {account.platform}
-                                            </p>
+                                        <div className="flex items-center gap-3">
+                                            <AccountAvatar
+                                                platform={account.platform}
+                                                handle={account.handle}
+                                                avatarUrl={account.avatar_url}
+                                                size="md"
+                                                ringClassName="ring-card"
+                                            />
+                                            <div className="min-w-0">
+                                                <p className="truncate font-medium">
+                                                    {accountName(account)}
+                                                </p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {account.handle}
+                                                </p>
+                                            </div>
                                         </div>
                                         <Switch
                                             checked={tracked}
