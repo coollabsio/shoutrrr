@@ -10,6 +10,7 @@ use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountNativeWatch;
 use App\Models\SyncPipeline;
 use App\Models\User;
+use App\Models\Workspace;
 use App\Services\Billing\WorkspaceSubscriptionGate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,6 +43,7 @@ class SyncPipelinesController extends Controller
                 'display_name' => $account->display_name,
                 'avatar_url' => $account->avatar_url,
                 'status' => $account->status->value,
+                'supports_native' => $account->platform->supportsNativeRead(),
             ])->values();
 
         $pipelines = SyncPipeline::query()
@@ -57,7 +59,7 @@ class SyncPipelinesController extends Controller
                 'destination_connected_account_ids' => $pipeline->destinations->pluck('id')->all(),
             ]);
 
-        return Inertia::render('settings/workspace/sync-pipelines', [
+        return Inertia::render('sync', [
             'accounts' => $accounts,
             'pipelines' => $pipelines,
             'maxPipelines' => (int) config('subscriptions.max_sync_pipelines'),
@@ -79,8 +81,9 @@ class SyncPipelinesController extends Controller
         $this->authorizeManage($user, $workspace->id);
 
         if (! $this->gate->canCreateSyncPipeline($workspace)) {
+            $max = (int) config('subscriptions.max_sync_pipelines');
             throw ValidationException::withMessages([
-                'name' => 'You have reached your plan\'s sync pipeline limit.',
+                'name' => "You've reached your plan's limit of {$max} sync pipelines. Delete one to create another.",
             ]);
         }
 
@@ -90,6 +93,7 @@ class SyncPipelinesController extends Controller
             'source_connected_account_id' => ['required', 'string', $this->accountRule($workspace->id)],
             'destination_connected_account_ids' => ['required', 'array', 'min:1', 'max:3'],
             'destination_connected_account_ids.*' => [$this->accountRule($workspace->id), 'different:source_connected_account_id'],
+            'track_source' => ['sometimes', 'boolean'],
         ]);
 
         $this->assertSourceNotDestination($validated['source_connected_account_id'], $validated['destination_connected_account_ids']);
@@ -103,7 +107,47 @@ class SyncPipelinesController extends Controller
         ]);
         $pipeline->destinations()->sync($validated['destination_connected_account_ids']);
 
-        return back()->with('success', 'Sync pipeline created.');
+        $trackedSource = $this->maybeTrackSource(
+            $workspace,
+            $user,
+            $validated['source_connected_account_id'],
+            (bool) ($validated['track_source'] ?? false),
+        );
+
+        return back()->with('success', $trackedSource
+            ? 'Sync pipeline created and now tracking the source account.'
+            : 'Sync pipeline created.');
+    }
+
+    /**
+     * Enable native tracking on the pipeline's source when the user opted in and
+     * the account is eligible (native-read platform, and either already tracked
+     * or within the tracking cap). Best-effort: never blocks pipeline creation.
+     */
+    private function maybeTrackSource(Workspace $workspace, User $user, string $sourceId, bool $optedIn): bool
+    {
+        if (! $optedIn) {
+            return false;
+        }
+
+        $source = ConnectedAccount::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereKey($sourceId)
+            ->first();
+
+        if ($source === null || ! $source->platform->supportsNativeRead()) {
+            return false;
+        }
+        if (! $source->nativeWatch()->exists() && ! $this->gate->canTrackNativeAccount($workspace)) {
+            return false;
+        }
+
+        ConnectedAccountNativeWatch::firstOrCreate(
+            ['connected_account_id' => $source->id],
+            ['workspace_id' => $workspace->id, 'enabled_at' => now(), 'enabled_by' => $user->id],
+        );
+
+        return true;
     }
 
     public function update(Request $request, SyncPipeline $syncPipeline): RedirectResponse

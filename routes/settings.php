@@ -32,13 +32,13 @@ Route::middleware(['auth'])->group(function () {
     Route::post('settings/workspace/api-keys', [ApiKeysController::class, 'store'])->name('settings.workspace.api-keys.store');
     Route::delete('settings/workspace/api-keys/{apiKey}', [ApiKeysController::class, 'destroy'])->name('settings.workspace.api-keys.destroy');
 
-    Route::get('settings/workspace/sync-pipelines', [SyncPipelinesController::class, 'index'])->name('settings.workspace.sync-pipelines');
-    Route::post('settings/workspace/sync-pipelines', [SyncPipelinesController::class, 'store'])->name('settings.workspace.sync-pipelines.store');
-    Route::patch('settings/workspace/sync-pipelines/{syncPipeline}', [SyncPipelinesController::class, 'update'])->name('settings.workspace.sync-pipelines.update');
-    Route::delete('settings/workspace/sync-pipelines/{syncPipeline}', [SyncPipelinesController::class, 'destroy'])->name('settings.workspace.sync-pipelines.destroy');
+    Route::get('sync', [SyncPipelinesController::class, 'index'])->name('sync.index');
+    Route::post('sync', [SyncPipelinesController::class, 'store'])->name('sync.store');
+    Route::patch('sync/{syncPipeline}', [SyncPipelinesController::class, 'update'])->name('sync.update');
+    Route::delete('sync/{syncPipeline}', [SyncPipelinesController::class, 'destroy'])->name('sync.destroy');
 
-    Route::post('settings/workspace/native-tracking/{account}', [NativeTrackingController::class, 'store'])->name('settings.workspace.native-tracking.store');
-    Route::delete('settings/workspace/native-tracking/{account}', [NativeTrackingController::class, 'destroy'])->name('settings.workspace.native-tracking.destroy');
+    Route::post('sync/native-tracking/{account}', [NativeTrackingController::class, 'store'])->name('sync.native-tracking.store');
+    Route::delete('sync/native-tracking/{account}', [NativeTrackingController::class, 'destroy'])->name('sync.native-tracking.destroy');
 
     Route::get('settings/connections', [ConnectionsController::class, 'edit'])->name('connections.edit');
     Route::delete('settings/connections/{socialAccount}', [ConnectionsController::class, 'destroy'])->name('connections.destroy');

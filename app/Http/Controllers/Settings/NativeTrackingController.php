@@ -31,10 +31,15 @@ class NativeTrackingController extends Controller
         $this->authorizeManage($user, $workspace->id);
 
         if (! $account->platform->supportsNativeRead()) {
-            throw ValidationException::withMessages(['account' => 'This platform does not support native tracking.']);
+            throw ValidationException::withMessages([
+                'account' => ucfirst($account->platform->value).' does not support native tracking, so its posts can only sync when published through Shoutrrr.',
+            ]);
         }
         if (! $account->nativeWatch()->exists() && ! $this->gate->canTrackNativeAccount($workspace)) {
-            throw ValidationException::withMessages(['account' => 'You have reached your plan\'s native tracking limit.']);
+            $max = (int) config('subscriptions.max_native_tracked');
+            throw ValidationException::withMessages([
+                'account' => "You've reached your plan's limit of {$max} tracked accounts. Untrack one to track another.",
+            ]);
         }
 
         ConnectedAccountNativeWatch::firstOrCreate(

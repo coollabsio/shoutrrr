@@ -26,12 +26,30 @@ export type SyncAccount = {
     display_name: string | null;
     avatar_url: string | null;
     status: string;
+    supports_native: boolean;
 };
 
 type Props = {
     accounts: SyncAccount[];
     disabled: boolean;
+    trackedAccountIds: string[];
+    canTrack: boolean;
+    maxTracked: number;
 };
+
+const PLATFORM_LABEL: Record<string, string> = {
+    x: 'X',
+    bluesky: 'Bluesky',
+    linkedin: 'LinkedIn',
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    threads: 'Threads',
+    discord: 'Discord',
+};
+
+function platformLabel(platform: string): string {
+    return PLATFORM_LABEL[platform] ?? platform;
+}
 
 function accountName(account: SyncAccount): string {
     return account.display_name ?? account.handle;
@@ -63,14 +81,19 @@ function AccountRow({ account }: { account: SyncAccount }) {
 export default function CreateSyncPipelineDialog({
     accounts,
     disabled,
+    trackedAccountIds,
+    canTrack,
+    maxTracked,
 }: Props) {
     const [open, setOpen] = useState(false);
     const [source, setSource] = useState<string>('');
     const [destinations, setDestinations] = useState<string[]>([]);
+    const [trackSource, setTrackSource] = useState(true);
 
     function selectSource(id: string) {
         setSource(id);
         setDestinations((current) => current.filter((d) => d !== id));
+        setTrackSource(true);
     }
 
     function toggleDestination(id: string) {
@@ -84,7 +107,16 @@ export default function CreateSyncPipelineDialog({
     function reset() {
         setSource('');
         setDestinations([]);
+        setTrackSource(true);
     }
+
+    const sourceAccount = accounts.find((account) => account.id === source);
+    const sourceTracked =
+        sourceAccount !== undefined && trackedAccountIds.includes(source);
+    const canOfferTracking =
+        sourceAccount?.supports_native === true && !sourceTracked && canTrack;
+    // Only submit track_source=1 when the offer is actually shown and checked.
+    const willTrackSource = canOfferTracking && trackSource;
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -205,6 +237,56 @@ export default function CreateSyncPipelineDialog({
                                         message={
                                             errors.destination_connected_account_ids
                                         }
+                                    />
+                                </div>
+                            )}
+
+                            {sourceAccount && (
+                                <div className="rounded-lg border bg-muted/30 p-3">
+                                    {canOfferTracking ? (
+                                        <div className="flex items-start gap-3">
+                                            <Checkbox
+                                                id="track_source"
+                                                checked={trackSource}
+                                                onCheckedChange={(checked) =>
+                                                    setTrackSource(
+                                                        checked === true,
+                                                    )
+                                                }
+                                                className="mt-0.5"
+                                            />
+                                            <Label
+                                                htmlFor="track_source"
+                                                className="cursor-pointer font-normal"
+                                            >
+                                                <span className="block text-sm">
+                                                    Also track native posts from
+                                                    this source
+                                                </span>
+                                                <span className="block text-sm text-muted-foreground">
+                                                    Sync posts you make directly
+                                                    on{' '}
+                                                    {platformLabel(
+                                                        sourceAccount.platform,
+                                                    )}
+                                                    , not just ones published
+                                                    through Shoutrrr.
+                                                </span>
+                                            </Label>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">
+                                            {!sourceAccount.supports_native
+                                                ? `${platformLabel(sourceAccount.platform)} posts only sync when published through Shoutrrr — native posts can't be tracked.`
+                                                : sourceTracked
+                                                  ? 'Native posts from this account are already tracked.'
+                                                  : `Native tracking is full (${maxTracked} accounts). This pipeline will only sync posts published through Shoutrrr until you untrack an account.`}
+                                        </p>
+                                    )}
+                                    <input
+                                        type="hidden"
+                                        name="track_source"
+                                        value={willTrackSource ? '1' : '0'}
                                     />
                                 </div>
                             )}

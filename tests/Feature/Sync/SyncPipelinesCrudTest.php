@@ -15,7 +15,7 @@ test('an owner can create a pipeline', function () {
     $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
     $dest = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
 
-    $this->post('/settings/workspace/sync-pipelines', [
+    $this->post('/sync', [
         'name' => 'X to LinkedIn',
         'source_connected_account_id' => $source->id,
         'destination_connected_account_ids' => [$dest->id],
@@ -24,6 +24,57 @@ test('an owner can create a pipeline', function () {
     $pipeline = SyncPipeline::first();
     expect($pipeline->name)->toBe('X to LinkedIn')
         ->and($pipeline->destinations->pluck('id')->all())->toBe([$dest->id]);
+});
+
+test('creating a pipeline can enable native tracking on the source', function () {
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky]);
+    $dest = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
+
+    $this->post('/sync', [
+        'name' => 'Bluesky to LinkedIn',
+        'source_connected_account_id' => $source->id,
+        'destination_connected_account_ids' => [$dest->id],
+        'track_source' => true,
+    ])->assertRedirect();
+
+    $this->assertDatabaseHas('connected_account_native_watches', [
+        'connected_account_id' => $source->id,
+        'workspace_id' => $workspace->id,
+    ]);
+});
+
+test('opting into tracking is ignored for a source on an unsupported platform', function () {
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
+    $dest = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky]);
+
+    $this->post('/sync', [
+        'name' => 'LinkedIn to Bluesky',
+        'source_connected_account_id' => $source->id,
+        'destination_connected_account_ids' => [$dest->id],
+        'track_source' => true,
+    ])->assertRedirect();
+
+    $this->assertDatabaseMissing('connected_account_native_watches', [
+        'connected_account_id' => $source->id,
+    ]);
+});
+
+test('a pipeline created without opting in does not track the source', function () {
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky]);
+    $dest = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
+
+    $this->post('/sync', [
+        'name' => 'No tracking',
+        'source_connected_account_id' => $source->id,
+        'destination_connected_account_ids' => [$dest->id],
+    ])->assertRedirect();
+
+    $this->assertDatabaseMissing('connected_account_native_watches', [
+        'connected_account_id' => $source->id,
+    ]);
 });
 
 test('creation is blocked at the cap of 3 when subscriptions are enabled', function () {
@@ -38,7 +89,7 @@ test('creation is blocked at the cap of 3 when subscriptions are enabled', funct
     $dest = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
     SyncPipeline::factory()->count(3)->create(['workspace_id' => $workspace->id]);
 
-    $this->post('/settings/workspace/sync-pipelines', [
+    $this->post('/sync', [
         'name' => 'Over cap',
         'source_connected_account_id' => $source->id,
         'destination_connected_account_ids' => [$dest->id],
@@ -52,7 +103,7 @@ test('creation rejects more than three destinations', function () {
     $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
     $dests = ConnectedAccount::factory()->count(4)->create(['workspace_id' => $workspace->id]);
 
-    $this->post('/settings/workspace/sync-pipelines', [
+    $this->post('/sync', [
         'name' => 'Too many',
         'source_connected_account_id' => $source->id,
         'destination_connected_account_ids' => $dests->pluck('id')->all(),
@@ -65,7 +116,7 @@ test('creation rejects the source as its own destination', function () {
     [, $workspace] = ownerActingIn();
     $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
 
-    $this->post('/settings/workspace/sync-pipelines', [
+    $this->post('/sync', [
         'name' => 'Self',
         'source_connected_account_id' => $source->id,
         'destination_connected_account_ids' => [$source->id],
@@ -85,7 +136,7 @@ test('update rejects making the source one of the retained destinations', functi
     $pipeline->destinations()->sync([$dest->id]);
 
     // Only the source changes; destinations are omitted and retain [$dest].
-    $this->patch("/settings/workspace/sync-pipelines/{$pipeline->id}", [
+    $this->patch("/sync/{$pipeline->id}", [
         'source_connected_account_id' => $dest->id,
     ])->assertSessionHasErrors('destination_connected_account_ids');
 
@@ -96,7 +147,7 @@ test('update rejects an empty destination list', function () {
     [, $workspace] = ownerActingIn();
     $pipeline = SyncPipeline::factory()->create(['workspace_id' => $workspace->id]);
 
-    $this->patch("/settings/workspace/sync-pipelines/{$pipeline->id}", [
+    $this->patch("/sync/{$pipeline->id}", [
         'destination_connected_account_ids' => [],
     ])->assertSessionHasErrors('destination_connected_account_ids');
 });
@@ -108,7 +159,7 @@ test('a member without settings.manage cannot create a pipeline', function () {
     $user->forceFill(['current_workspace_id' => $workspace->id])->save();
     $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
 
-    $this->actingAs($user)->post('/settings/workspace/sync-pipelines', [
+    $this->actingAs($user)->post('/sync', [
         'name' => 'x', 'source_connected_account_id' => $source->id, 'destination_connected_account_ids' => [],
     ])->assertForbidden();
 });
@@ -117,10 +168,10 @@ test('an owner can toggle and delete a pipeline', function () {
     [, $workspace] = ownerActingIn();
     $pipeline = SyncPipeline::factory()->create(['workspace_id' => $workspace->id, 'enabled' => true]);
 
-    $this->patch("/settings/workspace/sync-pipelines/{$pipeline->id}", ['enabled' => false])->assertRedirect();
+    $this->patch("/sync/{$pipeline->id}", ['enabled' => false])->assertRedirect();
     expect($pipeline->fresh()->enabled)->toBeFalse();
 
-    $this->delete("/settings/workspace/sync-pipelines/{$pipeline->id}")->assertRedirect();
+    $this->delete("/sync/{$pipeline->id}")->assertRedirect();
     $this->assertDatabaseMissing('sync_pipelines', ['id' => $pipeline->id]);
 });
 
@@ -128,23 +179,23 @@ test('pipelines from another workspace are not manageable', function () {
     ownerActingIn();
     $foreign = SyncPipeline::factory()->create();
 
-    $this->delete("/settings/workspace/sync-pipelines/{$foreign->id}")->assertNotFound();
+    $this->delete("/sync/{$foreign->id}")->assertNotFound();
 });
 
 test('the settings page renders', function () {
     [, $workspace] = ownerActingIn();
     ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
 
-    $this->get('/settings/workspace/sync-pipelines')
+    $this->get('/sync')
         ->assertOk()
-        ->assertInertia(fn ($page) => $page->component('settings/workspace/sync-pipelines')->has('accounts'));
+        ->assertInertia(fn ($page) => $page->component('sync')->has('accounts'));
 });
 
 test('the settings page exposes native tracking data', function () {
     [, $workspace] = ownerActingIn();
     ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky]);
 
-    $this->get('/settings/workspace/sync-pipelines')
+    $this->get('/sync')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->has('trackableAccounts')
