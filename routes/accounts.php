@@ -7,6 +7,7 @@ use App\Http\Controllers\ConnectedAccounts\BlueskyOAuthController;
 use App\Http\Controllers\ConnectedAccounts\ConnectedAccountController;
 use App\Http\Controllers\ConnectedAccounts\DiscordConnectionController;
 use App\Http\Controllers\ConnectedAccounts\LinkedInPageConnectionController;
+use App\Http\Controllers\ConnectedAccounts\LinkedInPageOAuthController;
 use App\Http\Controllers\ConnectedAccounts\MetaConnectionController;
 use App\Http\Controllers\ConnectedAccounts\OAuthConnectionController;
 use App\Http\Controllers\OAuth\BlueskyClientMetadataController;
@@ -63,8 +64,17 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware('throttle:10,1')
         ->name('accounts.meta.store');
 
-    // Same registration-order requirement as the Meta routes above: this must
-    // come before the generic `{platform}` wildcard route.
+    // Same registration-order requirement as the Meta routes above: these must
+    // come before the generic `{platform}` wildcard route (Platform::tryFrom
+    // ('linkedin-pages') is null, so the wildcard would 404 first).
+    Route::get('accounts/connect/linkedin-pages', [LinkedInPageOAuthController::class, 'redirect'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.linkedin-pages.redirect');
+
+    Route::get('accounts/callback/linkedin-pages', [LinkedInPageOAuthController::class, 'callback'])
+        ->middleware('throttle:10,1')
+        ->name('accounts.linkedin-pages.callback');
+
     Route::post('accounts/connect/linkedin/pages', [LinkedInPageConnectionController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('accounts.linkedin.store');

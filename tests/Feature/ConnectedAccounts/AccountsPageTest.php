@@ -8,6 +8,7 @@ use App\Models\ConnectedAccountSecret;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Support\InstanceSettings;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -55,6 +56,26 @@ test('the accounts page lists accounts and exposes capabilities and canManage to
             ->where('accounts.0.max_video_duration_seconds', 14_400)
             ->where('accounts.0.is_default', false)
             ->missing('accounts.0.secret'),
+        );
+});
+
+test('the accounts page exposes the linkedin pages availability flags', function () {
+    $owner = viewerInWorkspace(WorkspaceRole::Owner);
+
+    test()->actingAs($owner)->get('/accounts')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('linkedinPagesEnabled', false)
+            ->where('linkedinPagesConfigured', false),
+        );
+
+    app(InstanceSettings::class)->update(['linkedin_community_management_enabled' => true]);
+    config()->set('services.linkedin-pages.client_id', 'pages-cid');
+    config()->set('services.linkedin-pages.client_secret', 'pages-secret');
+
+    test()->actingAs($owner)->get('/accounts')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('linkedinPagesEnabled', true)
+            ->where('linkedinPagesConfigured', true),
         );
 });
 

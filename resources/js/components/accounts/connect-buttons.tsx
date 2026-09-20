@@ -4,6 +4,7 @@ import { useState } from 'react';
 import BlueskyConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyConnectionController';
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
 import DiscordConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/DiscordConnectionController';
+import LinkedInPageOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/LinkedInPageOAuthController';
 import MetaConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/MetaConnectionController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import InputError from '@/components/common/input-error';
@@ -522,8 +523,12 @@ function connectHref(capability: Capability): string {
  */
 export function ConnectButtons({
     capabilities,
+    linkedinPagesEnabled = false,
+    linkedinPagesConfigured = false,
 }: {
     capabilities: Capability[];
+    linkedinPagesEnabled?: boolean;
+    linkedinPagesConfigured?: boolean;
 }) {
     const [blueskyOpen, setBlueskyOpen] = useState(false);
     const [discordOpen, setDiscordOpen] = useState(false);
@@ -618,6 +623,34 @@ export function ConnectButtons({
                             </DropdownMenuItem>
                         );
                     })}
+                    {/* LinkedIn Pages connect through a separate Community
+                        Management app, so they're a distinct entry — shown only
+                        once the operator opts in, and dimmed until that app's
+                        credentials are configured. */}
+                    {linkedinPagesEnabled &&
+                        (linkedinPagesConfigured ? (
+                            <DropdownMenuItem
+                                className="gap-2.5"
+                                render={
+                                    <a
+                                        href={LinkedInPageOAuthController.redirect.url()}
+                                    />
+                                }
+                            >
+                                {platformIcon('linkedin')}
+                                LinkedIn Page
+                            </DropdownMenuItem>
+                        ) : (
+                            <DropdownMenuItem disabled className="gap-2.5">
+                                {platformIcon('linkedin')}
+                                <span className="flex-1 truncate">
+                                    LinkedIn Page
+                                </span>
+                                <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                    Not set up
+                                </span>
+                            </DropdownMenuItem>
+                        ))}
                 </DropdownMenuContent>
             </DropdownMenu>
             <BlueskyConnectDialog

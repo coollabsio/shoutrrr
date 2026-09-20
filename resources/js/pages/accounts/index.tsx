@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
 import ConnectedAccountController from '@/actions/App/Http/Controllers/ConnectedAccounts/ConnectedAccountController';
+import LinkedInPageOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/LinkedInPageOAuthController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import { AccountCard } from '@/components/accounts/account-card';
 import { ConnectButtons } from '@/components/accounts/connect-buttons';
@@ -28,6 +29,12 @@ export const ACCOUNT_GRID_CLASS = 'grid grid-cols-1 gap-4 lg:grid-cols-2';
  * authorization server instead of falling back to the bsky.social default.
  */
 export function reconnectOAuthUrl(account: Account): string {
+    // LinkedIn Pages reconnect through the dedicated Community Management app,
+    // not the personal LinkedIn OAuth flow that its member token can't reach.
+    if (account.is_linkedin_page) {
+        return LinkedInPageOAuthController.redirect.url();
+    }
+
     if (account.platform !== 'bluesky') {
         return OAuthConnectionController.redirect.url({
             platform: account.platform,
@@ -46,12 +53,16 @@ type Props = {
     accounts: Account[];
     capabilities: Capability[];
     canManage: boolean;
+    linkedinPagesEnabled: boolean;
+    linkedinPagesConfigured: boolean;
 };
 
 export default function ConnectedAccounts({
     accounts,
     capabilities,
     canManage,
+    linkedinPagesEnabled,
+    linkedinPagesConfigured,
 }: Props) {
     const disabledPlatforms = new Set(
         capabilities.filter((c) => !c.enabled).map((c) => c.platform),
@@ -159,7 +170,13 @@ export default function ConnectedAccounts({
                     title="Connected accounts"
                     description="Workspace-owned social accounts shared by every member."
                 />
-                {canManage && <ConnectButtons capabilities={capabilities} />}
+                {canManage && (
+                    <ConnectButtons
+                        capabilities={capabilities}
+                        linkedinPagesEnabled={linkedinPagesEnabled}
+                        linkedinPagesConfigured={linkedinPagesConfigured}
+                    />
+                )}
             </div>
 
             {connectError && (
@@ -193,7 +210,13 @@ export default function ConnectedAccounts({
                     </EmptyHeader>
                     {canManage && (
                         <div className="mt-4 flex justify-center">
-                            <ConnectButtons capabilities={capabilities} />
+                            <ConnectButtons
+                                capabilities={capabilities}
+                                linkedinPagesEnabled={linkedinPagesEnabled}
+                                linkedinPagesConfigured={
+                                    linkedinPagesConfigured
+                                }
+                            />
                         </div>
                     )}
                 </Empty>
