@@ -5,6 +5,7 @@ use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Services\Publishing\Connectors\BlueskyPublishConnector;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 test('Bluesky repost creates a repost record with the subject strongRef', function (): void {
@@ -61,7 +62,7 @@ test('Bluesky repost fails when createRecord returns no uri (never marks reposte
 });
 
 test('Bluesky repost maps a connection failure to a retryable network result', function (): void {
-    Http::fake(fn () => throw new Illuminate\Http\Client\ConnectionException('offline'));
+    Http::fake(fn () => throw new ConnectionException('offline'));
 
     $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky, 'remote_account_id' => 'did:plc:abc']);
     $target = PostTarget::factory()->create([

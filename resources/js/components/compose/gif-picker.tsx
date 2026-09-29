@@ -163,7 +163,10 @@ export function GifPicker({ onSelect }: Props) {
                     value={search.query}
                     onChange={(event) => search.setQuery(event.target.value)}
                     aria-label={`Search ${noun}`}
-                    placeholder={`Search ${noun}…`}
+                    // "Search KLIPY" is a required Klipy attribution — the
+                    // placeholder must name the content source verbatim, so it
+                    // stays fixed across catalogs rather than following `noun`.
+                    placeholder="Search KLIPY"
                     className="h-8 w-full appearance-none rounded-md bg-muted px-2.5 text-sm outline-none placeholder:text-muted-foreground"
                 />
             </div>
@@ -272,6 +275,17 @@ export function GifPicker({ onSelect }: Props) {
 
                 <div ref={sentinel} className="h-px" />
             </div>
+
+            {/* Required Klipy content-area attribution. Always visible below
+                the results, linking back to the source. */}
+            <a
+                href="https://klipy.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex shrink-0 items-center justify-end px-2.5 py-1.5 text-[10px] font-medium tracking-wide text-muted-foreground/70 transition-colors hover:text-muted-foreground"
+            >
+                Powered by KLIPY
+            </a>
         </div>
     );
 }

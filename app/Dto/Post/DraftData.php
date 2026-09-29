@@ -38,6 +38,13 @@ final class DraftData
          * silently reset a user's per-post choice.
          */
         public readonly bool $autoRepostProvided = false,
+        public readonly bool $skipSync = false,
+        /**
+         * Whether the payload carried a `skip_sync` key at all, so a partial
+         * update that never mentions it doesn't reset the stored opt-out. See
+         * {@see $autoRepostProvided}.
+         */
+        public readonly bool $skipSyncProvided = false,
         public readonly array $segmentBreaks = [],
         public readonly array $placements = [],
         /**
@@ -100,6 +107,8 @@ final class DraftData
             expectedUpdatedAt: $payload['expected_updated_at'] ?? null,
             autoRepost: $payload['auto_repost'] ?? null,
             autoRepostProvided: array_key_exists('auto_repost', $payload),
+            skipSync: (bool) ($payload['skip_sync'] ?? false),
+            skipSyncProvided: array_key_exists('skip_sync', $payload),
             segmentBreaks: isset($payload['segment_breaks']) && is_array($payload['segment_breaks'])
                 ? array_values(array_map(static fn (mixed $b): string => (string) $b, $payload['segment_breaks']))
                 : [],

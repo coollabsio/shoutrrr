@@ -25,6 +25,7 @@ function limits(
         allowedVideoMime: ['video/mp4'],
         maxVideoBytes: 100_000_000,
         maxVideoDurationSeconds: 180,
+        videoAspectRatioRange: null,
         ...over,
     };
 }
@@ -72,6 +73,48 @@ describe('validateVideo', () => {
             limits({ platform: 'bluesky', maxVideoBytes: 100_000_000 }),
         ]);
         expect(result.ok).toBe(false);
+    });
+
+    it('rejects a video wider than a platform aspect-ratio bound', () => {
+        const result = validateVideo({ ...meta, width: 4000, height: 1000 }, [
+            limits({
+                platform: 'x',
+                videoAspectRatioRange: { min: 1 / 3, max: 3 },
+            }),
+        ]);
+        expect(result).toEqual({
+            ok: false,
+            reason: expect.stringContaining('shape'),
+        });
+    });
+
+    it('accepts an in-range video against a platform that bounds the ratio', () => {
+        const result = validateVideo({ ...meta, width: 1920, height: 1080 }, [
+            limits({
+                platform: 'x',
+                videoAspectRatioRange: { min: 1 / 3, max: 3 },
+            }),
+        ]);
+        expect(result.ok).toBe(true);
+    });
+
+    it('does not apply a ratio bound to a platform that has none', () => {
+        // 4000x1000 (4:1) is outside X's range, but Bluesky sets no bound.
+        const result = validateVideo({ ...meta, width: 4000, height: 1000 }, [
+            limits({ platform: 'bluesky', videoAspectRatioRange: null }),
+        ]);
+        expect(result.ok).toBe(true);
+    });
+
+    it('does not reject when metadata is missing a dimension', () => {
+        // Incomplete metadata (width 0) must defer to publish time, matching the server.
+        const result = validateVideo({ ...meta, width: 0, height: 1080 }, [
+            limits({
+                platform: 'x',
+                videoAspectRatioRange: { min: 1 / 3, max: 3 },
+            }),
+        ]);
+        expect(result.ok).toBe(true);
     });
 });
 

@@ -22,11 +22,14 @@ describe('media chips', () => {
         expect(chips).toContain('<Film');
     });
 
-    it('never marks a gif as editable (the beautifier would flatten it)', () => {
+    it('never marks an animated image as editable (the beautifier would flatten it)', () => {
         const chips = source();
 
-        // Image chips are editable only when the item is not a GIF.
-        expect(chips).toContain('Boolean(onImageClick) && !isGif');
+        // Animated images (GIF, or a GIF-browser WebP) are attach-only, decided by
+        // the shared isAttachOnlyImage() rule (mime + edit_settings).
+        expect(chips).toContain(
+            'Boolean(onImageClick) && !isAttachOnlyImage(m)',
+        );
     });
 
     it("CornerButton's always-visible variant does not override display (would break the icon's centering against the base grid layout)", () => {

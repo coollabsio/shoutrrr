@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
     createMention,
+    discordMentionLabels,
+    discordMentionMarkup,
     extractLinkedInOrgRef,
     hasEmptyActiveHandle,
     mentionInputValue,
     mentionToken,
     normalizeLinkedInUrn,
+    parseDiscordMention,
     platformSupportsMention,
     replaceMentionLabel,
     replaceMentionTokens,
@@ -529,6 +532,98 @@ describe('extractLinkedInOrgRef', () => {
 
         expect(next.handles.linkedin).toBe('Acme Corp');
         expect(next.handles.linkedin_urn).toBe('urn:li:organization:123');
+    });
+});
+
+describe('discord mentions', () => {
+    it('composes native markup per kind', () => {
+        expect(discordMentionMarkup('user', '123')).toBe('<@123>');
+        expect(discordMentionMarkup('role', '456')).toBe('<@&456>');
+        expect(discordMentionMarkup('channel', '789')).toBe('<#789>');
+        expect(discordMentionMarkup('user', '  123  ')).toBe('<@123>');
+    });
+
+    it('returns empty markup for a blank id so the label is used', () => {
+        expect(discordMentionMarkup('user', '')).toBe('');
+        expect(discordMentionMarkup('role', '   ')).toBe('');
+    });
+
+    it('parses stored markup back into a kind and id', () => {
+        expect(parseDiscordMention('<@123>')).toEqual({
+            kind: 'user',
+            id: '123',
+        });
+        expect(parseDiscordMention('<@&456>')).toEqual({
+            kind: 'role',
+            id: '456',
+        });
+        expect(parseDiscordMention('<#789>')).toEqual({
+            kind: 'channel',
+            id: '789',
+        });
+        // Legacy nickname form collapses to a plain user mention.
+        expect(parseDiscordMention('<@!123>')).toEqual({
+            kind: 'user',
+            id: '123',
+        });
+    });
+
+    it('treats plain display text as not an id mention', () => {
+        expect(parseDiscordMention('Guest')).toBeNull();
+        expect(parseDiscordMention('')).toBeNull();
+        expect(parseDiscordMention(undefined)).toBeNull();
+        expect(parseDiscordMention('<@abc>')).toBeNull();
+    });
+
+    it('round-trips composed markup through parse', () => {
+        const markup = discordMentionMarkup('role', '42');
+        expect(parseDiscordMention(markup)).toEqual({ kind: 'role', id: '42' });
+    });
+
+    it('emits the stored Discord markup verbatim at publish time', () => {
+        const mention: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { discord: '<@&123>' },
+        };
+
+        expect(
+            replaceMentionTokens(
+                'Ping {{mention:guest}}',
+                [mention],
+                'discord',
+            ),
+        ).toBe('Ping <@&123>');
+    });
+
+    it('falls back to the label when no Discord handle is set', () => {
+        const mention: MentionPlaceholder = {
+            id: 'guest',
+            label: '@guest',
+            handles: { x: '@guest_x' },
+        };
+
+        expect(
+            replaceMentionTokens(
+                'Ping {{mention:guest}}',
+                [mention],
+                'discord',
+            ),
+        ).toBe('Ping @guest');
+    });
+
+    it('builds a snowflake-id → label map for rendering resolved markup', () => {
+        const mentions: MentionPlaceholder[] = [
+            { id: 'a', label: '@adiology', handles: { discord: '<@1>' } },
+            { id: 'm', label: '@mods', handles: { discord: '<@&2>' } },
+            // Non-Discord and plain-text handles contribute nothing to the map.
+            { id: 'x', label: '@xonly', handles: { x: '@xonly' } },
+        ];
+
+        expect(discordMentionLabels(mentions)).toEqual({
+            '1': '@adiology',
+            '2': '@mods',
+        });
     });
 });
 

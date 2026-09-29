@@ -32,6 +32,11 @@ class ReplyImageEditController extends Controller
     public function update(UpdateReplyImageEditRequest $request, PostTargetReply $reply, PostMedia $media): JsonResponse
     {
         abort_unless($media->workspace_id === $reply->workspace_id, 404);
+        // Animated media (GIF, or a GIF-browser WebP) has no editor client-side;
+        // replacing one with a raster beautified frame would silently flatten the
+        // animation. A WebP is editable only when it is a beautifier output (it
+        // carries edit_settings) — a WebP without them is a GIF-browser animation.
+        abort_if($media->isAttachOnlyImage(), 422, 'Animated images cannot be edited.');
 
         $updated = $this->media->replaceBeautified(
             $media,

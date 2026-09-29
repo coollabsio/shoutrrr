@@ -139,6 +139,39 @@ test('POST /posts rejects an over-long linkedin_urn handle', function () {
     ])->assertInvalid(['mentions.0.handles.linkedin_urn']);
 });
 
+test('PUT /posts/{post} keeps a Discord mention handle through request validation', function () {
+    // Regression: `validated()` strips any mentions.*.handles.* key without an
+    // explicit rule (excludeUnvalidatedArrayKeys), which dropped the Discord
+    // markup so it posted as the plain label instead of a native mention.
+    [$user, $workspace] = actingMember(0);
+    $discord = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::Discord->value,
+    ]);
+
+    $created = test()->postJson('/posts', [
+        'destination' => ['kind' => 'all'],
+        'segments' => ['Ping @adiology'],
+        'mentions' => [],
+    ])->json('post');
+
+    $response = test()->putJson("/posts/{$created['id']}", [
+        'segments' => ['Ping @adiology'],
+        'destination' => ['kind' => 'accounts', 'ids' => [$discord->id]],
+        'targets' => [['connected_account_id' => $discord->id, 'auto_split' => true]],
+        'mentions' => [[
+            'id' => 'adiology',
+            'label' => '@adiology',
+            'handles' => ['discord' => '<@136549806079344640>'],
+        ]],
+        'expected_updated_at' => $created['updated_at'],
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('post.mentions.0.handles.discord', '<@136549806079344640>')
+        ->assertJsonPath('post.targets.0.sections', ['Ping <@136549806079344640>']);
+});
+
 test('PUT /posts/{post} accepts the real buildPutBody payload with no base_text', function () {
     [$user, $workspace, $accounts] = actingMember(1);
     $created = test()->postJson('/posts', [

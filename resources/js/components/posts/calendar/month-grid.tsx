@@ -9,7 +9,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
-import { dayjs, monthRange, toUserTz } from '@/lib/datetime/dayjs';
+import { dayFlags, dayjs, monthRange, toUserTz } from '@/lib/datetime/dayjs';
 import type { Dayjs } from '@/lib/datetime/dayjs';
 import { cn } from '@/lib/utils';
 
@@ -32,11 +32,8 @@ export function computeMonthDrop(
         .format('YYYY-MM-DDTHH:mm:ss[Z]');
 }
 
-export function shouldOpenEmptyMonthDay(
-    empty: boolean,
-    isPast: boolean,
-): boolean {
-    return empty && !isPast;
+export function shouldOpenMonthDay(isPast: boolean): boolean {
+    return !isPast;
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -51,7 +48,7 @@ export function MonthGrid({
     onEmptyDayClick: (day: Dayjs) => void;
 }) {
     const tz = useSchedulingTimezone();
-    const today = dayjs().tz(tz).startOf('day');
+    const todayKey = dayjs().tz(tz).format('YYYY-MM-DD');
     const { days } = monthRange(anchor);
 
     const byDay = new Map<string, PostRowData[]>();
@@ -73,18 +70,23 @@ export function MonthGrid({
                 ))}
             </div>
             <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-border bg-border">
-                {days.map((d) => (
-                    <DayCell
-                        key={d.format('YYYY-MM-DD')}
-                        day={d}
-                        tz={tz}
-                        inMonth={d.month() === anchor.month()}
-                        isToday={d.isSame(today, 'day')}
-                        isPast={d.isBefore(today, 'day')}
-                        posts={byDay.get(d.format('YYYY-MM-DD')) ?? []}
-                        onEmptyClick={() => onEmptyDayClick(d)}
-                    />
-                ))}
+                {days.map((d) => {
+                    const key = d.format('YYYY-MM-DD');
+                    const { isToday, isPast } = dayFlags(d, todayKey);
+
+                    return (
+                        <DayCell
+                            key={key}
+                            day={d}
+                            tz={tz}
+                            inMonth={d.month() === anchor.month()}
+                            isToday={isToday}
+                            isPast={isPast}
+                            posts={byDay.get(key) ?? []}
+                            onEmptyClick={() => onEmptyDayClick(d)}
+                        />
+                    );
+                })}
             </div>
         </div>
     );
@@ -114,12 +116,15 @@ function DayCell({
     });
     const visible = posts.slice(0, 3);
     const overflow = posts.length - visible.length;
-    const empty = posts.length === 0;
     const dimmed = !inMonth || isPast;
-    const canOpenEmptyDay = shouldOpenEmptyMonthDay(empty, isPast);
+    const canCreatePost = shouldOpenMonthDay(isPast);
 
-    const handleActivate = () => {
-        if (canOpenEmptyDay) onEmptyClick();
+    // Only the cell itself creates a post — clicks/keys on a nested control
+    // (a post chip, the "+N more" button) must not bubble into create.
+    const createFromCell = (e: { target: EventTarget | null }) => {
+        if (canCreatePost && !(e.target as HTMLElement).closest('button')) {
+            onEmptyClick();
+        }
     };
 
     return (
@@ -129,17 +134,12 @@ function DayCell({
             role="button"
             tabIndex={isPast ? -1 : 0}
             aria-label={`Day ${day.format('YYYY-MM-DD')}`}
-            onClick={(e) => {
-                if (
-                    canOpenEmptyDay &&
-                    !(e.target as HTMLElement).closest('button')
-                )
-                    onEmptyClick();
-            }}
+            onClick={createFromCell}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
+                    if ((e.target as HTMLElement).closest('button')) return;
                     e.preventDefault();
-                    handleActivate();
+                    createFromCell(e);
                 }
             }}
             className={cn(
@@ -147,7 +147,7 @@ function DayCell({
                 'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
                 isPast && 'bg-muted/40',
                 isToday && 'bg-primary/5',
-                canOpenEmptyDay && 'cursor-pointer hover:bg-accent/40',
+                canCreatePost && 'cursor-pointer hover:bg-accent/40',
                 isOver && 'ring-2 ring-primary/60 ring-inset',
             )}
         >
@@ -163,7 +163,7 @@ function DayCell({
                     >
                         {day.date()}
                     </span>
-                    {canOpenEmptyDay && (
+                    {canCreatePost && (
                         <span
                             aria-hidden
                             className="text-[14px] leading-none text-muted-foreground opacity-0 transition-opacity group-hover/day:opacity-60"

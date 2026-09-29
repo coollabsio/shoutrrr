@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    isAttachOnlyImage,
     wouldMixVideoAndImages,
     wouldViolateBlueskyGif,
 } from '@/lib/compose/media-rules';
@@ -102,5 +103,37 @@ describe('wouldMixVideoAndImages', () => {
         expect(wouldMixVideoAndImages([attached('video')], [mp4()])).toBe(
             false,
         );
+    });
+});
+
+describe('isAttachOnlyImage', () => {
+    const withSettings = (
+        mime: string,
+        editSettings: MediaView['edit_settings'],
+    ): Pick<MediaView, 'mime' | 'edit_settings'> => ({
+        mime,
+        edit_settings: editSettings,
+    });
+    // A beautifier output always carries edit_settings; the shape doesn't matter
+    // to the rule, only its non-null presence.
+    const beautified = { version: 1 } as MediaView['edit_settings'];
+
+    it('treats a GIF as attach-only', () => {
+        expect(isAttachOnlyImage(withSettings('image/gif', null))).toBe(true);
+    });
+
+    it('treats a WebP without edit_settings (GIF-browser attach) as attach-only', () => {
+        expect(isAttachOnlyImage(withSettings('image/webp', null))).toBe(true);
+    });
+
+    it('treats a beautified WebP (has edit_settings) as editable', () => {
+        expect(isAttachOnlyImage(withSettings('image/webp', beautified))).toBe(
+            false,
+        );
+    });
+
+    it('treats JPEG and PNG as editable', () => {
+        expect(isAttachOnlyImage(withSettings('image/jpeg', null))).toBe(false);
+        expect(isAttachOnlyImage(withSettings('image/png', null))).toBe(false);
     });
 });

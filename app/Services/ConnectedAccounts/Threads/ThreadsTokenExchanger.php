@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Services\ConnectedAccounts\Threads;
 
 use App\Exceptions\TokenRefreshException;
+use App\Exceptions\TransientTokenRefreshException;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Date;
@@ -47,13 +49,23 @@ class ThreadsTokenExchanger
      */
     public function refresh(string $longToken): array
     {
-        $response = $this->http->get(self::BASE_URL.'/refresh_access_token', [
-            'grant_type' => 'th_refresh_token',
-            'access_token' => $longToken,
-        ]);
+        try {
+            $response = $this->http->get(self::BASE_URL.'/refresh_access_token', [
+                'grant_type' => 'th_refresh_token',
+                'access_token' => $longToken,
+            ]);
+        } catch (ConnectionException $exception) {
+            throw new TransientTokenRefreshException('Threads token refresh failed: '.$exception->getMessage(), previous: $exception);
+        }
 
         if ($response->failed()) {
-            throw new TokenRefreshException('Threads token refresh failed: '.$this->errorDetail($response));
+            $message = 'Threads token refresh failed: '.$this->errorDetail($response);
+
+            if ($response->status() === 429 || $response->status() >= 500) {
+                throw new TransientTokenRefreshException($message);
+            }
+
+            throw new TokenRefreshException($message);
         }
 
         return $this->tokenPayload($response);

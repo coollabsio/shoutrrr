@@ -7,6 +7,7 @@ import { MediaChips } from '@/components/compose/media-chips';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { postGifAttachment } from '@/lib/compose/gifs/attach';
 import {
+    isAttachOnlyImage,
     wouldMixVideoAndImages,
     wouldViolateBlueskyGif,
 } from '@/lib/compose/media-rules';
@@ -373,7 +374,10 @@ export function useAttachments({
 
     function openEditor(mediaId: string) {
         const m = media.find((x) => x.id === mediaId);
-        if (!m || m.kind === 'video') {
+        // Animated images (GIF, or a GIF-browser WebP) have no editor — the
+        // beautifier would flatten them to a still frame — so they're attach-only,
+        // matching composer.tsx `openImage`.
+        if (!m || m.kind === 'video' || isAttachOnlyImage(m)) {
             return;
         }
         if (m.edit_settings && m.source_url) {

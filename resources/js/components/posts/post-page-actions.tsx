@@ -68,7 +68,7 @@ export function PostPageActions({ post }: Props) {
         return () => clearInterval(id);
     }, []);
 
-    const liveStatus = postLiveStatus(post);
+    const liveStatus = postLiveStatus(post, tz);
 
     function refresh() {
         router.visit(ComposerController.show(post.id).url, {

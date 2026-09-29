@@ -210,6 +210,33 @@ test('auth expired after the recovery refresh marks the target failed without re
     Bus::assertNotDispatched(PublishPostTarget::class);
 });
 
+test('a transient refresh failure retries the publish without flipping the account', function () {
+    Bus::fake();
+    $target = publishTarget();
+    $target->account()->firstOrFail()->secret()->firstOrFail()->forceFill([
+        'refresh_token' => 'refresh-old',
+    ])->save();
+    Http::fake([
+        'https://api.twitter.com/2/oauth2/token' => Http::response([], 503),
+    ]);
+    bindConnector(PublishResult::failure(ErrorKind::AuthExpired, 'Unauthorized', 401));
+
+    (new PublishPostTarget($target))->handle(
+        app(PublishConnectorRegistry::class),
+        app(TokenManager::class),
+        app(PostStatusRollup::class),
+        app(BackoffSchedule::class),
+    );
+
+    $target->refresh();
+    expect($target->status)->toBe(PostTargetStatus::Publishing)
+        ->and($target->error_kind)->toBe(ErrorKind::ServerError)
+        ->and($target->next_attempt_at)->not->toBeNull();
+    expect($target->account()->firstOrFail()->status)->toBe(ConnectedAccountStatus::Active);
+
+    Bus::assertDispatched(PublishPostTarget::class);
+});
+
 test('retry stops after five attempts', function () {
     Bus::fake();
     $target = publishTarget();

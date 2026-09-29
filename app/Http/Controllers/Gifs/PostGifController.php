@@ -24,20 +24,21 @@ class PostGifController extends Controller
 
         $validated = $request->validated();
 
-        // Composer media rows stay orphaned (`post_id` null) until
-        // DraftService::attachMedia() associates them on the next draft save,
-        // so media()->get() is empty for an unsaved draft and the mixing-rule
-        // guard below would have nothing to check. The composer therefore
-        // declares the media ids it currently holds, exactly as the reply box
-        // does — re-resolved here scoped to the post's workspace, so the ids
-        // cannot reach media the caller has no access to. Merged with the
-        // saved relation and de-duplicated, since a saved draft has both.
-        $declared = PostMedia::query()
+        // The mixing rules (one video OR images, a GIF on its own) apply per
+        // thread *segment*, not per post — a GIF in one segment must not be
+        // blocked by media the user placed in another. Segment membership lives
+        // in client state (composer.tsx `mediaForSegment`), so the composer
+        // declares exactly the target segment's media ids here, and we scope the
+        // guard to those alone rather than to the whole post's media() relation
+        // (which spans every segment). This mirrors ReplyGifController /
+        // ConversationGifController, whose surfaces have no segments. Ids are
+        // re-resolved workspace-scoped so they cannot reach media the caller has
+        // no access to; draft rows stay orphaned (`post_id` null) until the next
+        // save, so the client-declared set is the only reliable source anyway.
+        $existing = PostMedia::query()
             ->where('workspace_id', $post->workspace_id)
             ->whereIn('id', $validated['media_ids'] ?? [])
             ->get();
-
-        $existing = $post->media()->get()->concat($declared)->unique('id');
 
         try {
             $media = $this->attacher->attach(

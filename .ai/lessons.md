@@ -39,3 +39,26 @@ for tasks with real design risk — and say up front which tasks get it and why.
 
 **Rule:** Watch wall-clock, not just correctness. If a mechanical task is heading past
 ~10 minutes of tool time, stop and ask whether the process is the bottleneck.
+
+## Keep code comments short
+User: "stop writing these huge paragraphs for comments, keep it simple."
+**Rule:** Comments are 1-2 lines. State the why, not a full narrative. No multi-
+sentence docblocks explaining background/history — that belongs in the PR or memory.
+
+## Dependency-update gate breaks: separate runtime breaks from linter strictness
+**Pattern:** Bumping deps produced three break classes at once: (1) a real runtime
+break — phpseclib 3→4 renamed `phpseclib3\`→`phpseclib4\` and made private-JWK export
+throw unless `->withPassword()` first (broke Bluesky OAuth); (2) linter-tooling that got
+stricter on *existing* code (phpstan 2.2.2→2.2.14 flagged legit defensive guards, oxlint
+1.68→1.82 added `set-state-in-effect` across ~10 components); (3) test-isolation
+artifacts exposed by library timing changes (sonner store leaking across tests).
+
+**Rule:** First fix vendor ownership — `sudo chown -R aditya:aditya vendor node_modules
+storage bootstrap/cache` clears the Docker root-owned files that make `composer update`
+and the test suite fail with "Could not delete"/"Permission denied" (unrelated to the
+bump). Then take a clean baseline on main tooling (larastan/oxlint/tsc were all 0) so any
+new failure is provably update-induced. Runtime breaks → adapt our code (mechanical
+namespace/API fixes are fine). Linter-tooling that only reddens the gate on pre-existing
+code and needs risky refactors (set-state-in-effect) → pin it back, report the findings
+as a follow-up; don't bulk-refactor prod effects right before a release. Fix findings
+that are clean and safe (dead-code removal, honest PHPDoc widening, test isolation).

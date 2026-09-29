@@ -76,12 +76,13 @@ test('next-slot reports full when every slot in the horizon is occupied', functi
     [$user, $workspace] = nextSlotMember();
     nextSlotSchedule($workspace, 'UTC', [[1, 9]]); // only Monday 09:00
 
-    // Occupy every Monday-09:00 instant inside the 14-day horizon (2 Mondays).
-    foreach (['2026-05-18T09:00:00+00:00', '2026-05-25T09:00:00+00:00'] as $at) {
+    // Occupy every Monday-09:00 instant inside the 90-day horizon.
+    $monday = CarbonImmutable::parse('2026-05-18T09:00:00+00:00');
+    for ($week = 0; $week < 13; $week++) {
         Post::factory()->create([
             'workspace_id' => $workspace->id,
             'status' => PostStatus::Scheduled,
-            'scheduled_at' => $at,
+            'scheduled_at' => $monday->addWeeks($week)->toIso8601String(),
         ]);
     }
 

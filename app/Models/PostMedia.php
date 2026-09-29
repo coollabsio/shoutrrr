@@ -165,4 +165,22 @@ class PostMedia extends Model
     {
         return $this->kind === 'video';
     }
+
+    /**
+     * Whether this image is attach-only rather than editable. The raster
+     * beautifier would flatten an animation to a single frame, so animated media
+     * must never open the editor. Animation isn't visible from the mime alone —
+     * the GIF browser stores a "GIF" as the larger `image/webp` variant, the same
+     * mime the beautifier emits — so a WebP is treated as editable only when it is
+     * a beautifier output (it carries edit_settings). GIFs are always animated.
+     * Mirrors the client's isAttachOnlyImage() (resources/js/lib/compose/media-rules.ts).
+     */
+    public function isAttachOnlyImage(): bool
+    {
+        if ($this->mime === 'image/gif') {
+            return true;
+        }
+
+        return $this->mime === 'image/webp' && $this->edit_settings === null;
+    }
 }

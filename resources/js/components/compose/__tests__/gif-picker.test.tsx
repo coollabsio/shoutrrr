@@ -275,6 +275,33 @@ describe('GifPicker', () => {
         ).toBeInTheDocument();
     });
 
+    it('carries the required Klipy attribution', () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(
+                async () =>
+                    new Response(
+                        JSON.stringify({ items: [], has_next: false }),
+                    ),
+            ),
+        );
+
+        render(<GifPicker onSelect={vi.fn()} />);
+
+        // Search-bar attribution: the placeholder must name KLIPY verbatim and
+        // stay fixed across catalogs.
+        expect(screen.getByRole('searchbox')).toHaveAttribute(
+            'placeholder',
+            'Search KLIPY',
+        );
+
+        // Content-area attribution: a "Powered by KLIPY" link back to source.
+        const attribution = screen.getByRole('link', {
+            name: 'Powered by KLIPY',
+        });
+        expect(attribution).toHaveAttribute('href', 'https://klipy.com');
+    });
+
     it('continues to the next page automatically when a settled page does not fill the viewport', async () => {
         vi.stubGlobal(
             'fetch',

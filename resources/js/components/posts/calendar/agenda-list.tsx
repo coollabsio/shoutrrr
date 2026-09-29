@@ -5,7 +5,7 @@ import { PlatformGlyphStack } from '@/components/common/platform-glyph-stack';
 import type { PostRowData, PostStatus } from '@/components/posts/post-row';
 import { Plus } from '@/components/ui/icons';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
-import { dayjs, toUserTz, weekRange } from '@/lib/datetime/dayjs';
+import { dayFlags, dayjs, toUserTz, weekRange } from '@/lib/datetime/dayjs';
 import type { Dayjs } from '@/lib/datetime/dayjs';
 import { cn } from '@/lib/utils';
 
@@ -72,7 +72,7 @@ type Props = {
  */
 export function AgendaList({ anchor, view, posts, onEmptyDayClick }: Props) {
     const tz = useSchedulingTimezone();
-    const today = dayjs().tz(tz).startOf('day');
+    const todayKey = dayjs().tz(tz).format('YYYY-MM-DD');
     const days = windowDays(anchor, view);
     const byDay = postsByDay(posts, tz);
 
@@ -87,8 +87,7 @@ export function AgendaList({ anchor, view, posts, onEmptyDayClick }: Props) {
                             b.scheduled_at ?? b.published_at ?? '',
                         ),
                     );
-                const isToday = day.isSame(today, 'day');
-                const isPast = day.isBefore(today, 'day');
+                const { isToday, isPast } = dayFlags(day, todayKey);
 
                 return (
                     <li key={key} className="flex gap-3 py-1">
@@ -118,14 +117,15 @@ export function AgendaList({ anchor, view, posts, onEmptyDayClick }: Props) {
                         </div>
 
                         <div className="min-w-0 flex-1 space-y-1 border-l border-border/60 py-0.5 pl-3">
-                            {dayPosts.length > 0 ? (
-                                dayPosts.map((post) => (
-                                    <AgendaItem key={post.id} post={post} />
-                                ))
-                            ) : isPast ? (
-                                <p className="px-1 py-2.5 text-[12.5px] text-muted-foreground/45">
-                                    No posts
-                                </p>
+                            {dayPosts.map((post) => (
+                                <AgendaItem key={post.id} post={post} />
+                            ))}
+                            {isPast ? (
+                                dayPosts.length === 0 && (
+                                    <p className="px-1 py-2.5 text-[12.5px] text-muted-foreground/45">
+                                        No posts
+                                    </p>
+                                )
                             ) : (
                                 <button
                                     type="button"

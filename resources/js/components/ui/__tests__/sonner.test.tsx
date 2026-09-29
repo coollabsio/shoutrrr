@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { toast } from 'sonner';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { Toaster } from '@/components/ui/sonner';
 
@@ -28,9 +28,17 @@ const INTENTS = [
     { fire: toast.loading, message: 'Publishing', type: 'loading' },
 ] as const;
 
+// sonner's toast store is a module singleton, so toasts can survive across
+// tests. Dismiss + unmount between tests, and match the most recently rendered
+// toast for a message so any not-yet-removed duplicate never breaks the query.
+afterEach(() => {
+    toast.dismiss();
+    cleanup();
+});
+
 async function toastElement(message: string): Promise<HTMLElement> {
-    const el = await screen.findByText(message);
-    const li = el.closest('li');
+    const matches = await screen.findAllByText(message);
+    const li = matches[matches.length - 1]?.closest('li');
 
     if (!li) {
         throw new Error(`No toast element found for message "${message}"`);

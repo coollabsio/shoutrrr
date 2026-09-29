@@ -239,3 +239,37 @@ describe('linkedin mention field', () => {
         expect(source).not.toContain('LinkedIn company URL or org URN');
     });
 });
+
+describe('discord mention field', () => {
+    const source = readFileSync(
+        resolve(
+            process.cwd(),
+            'resources/js/components/compose/mention-picker.tsx',
+        ),
+        'utf8',
+    );
+
+    it('renders a dedicated Discord field routed from the platform map', () => {
+        expect(source).toContain('function DiscordMentionField');
+        expect(source).toContain("platform === 'discord'");
+        expect(source).toContain('key={`discord-${activeMention.id}`}');
+    });
+
+    it('exposes a plain-text ⇄ mention toggle plus a User/Role/Channel picker', () => {
+        expect(source).toContain('DISCORD_KIND_OPTIONS');
+        expect(source).toContain("{ value: 'user', label: 'User' }");
+        expect(source).toContain("{ value: 'role', label: 'Role' }");
+        expect(source).toContain("{ value: 'channel', label: 'Channel' }");
+    });
+
+    it('composes the chosen kind + id into native Discord markup', () => {
+        expect(source).toContain('discordMentionMarkup(nextKind, nextId)');
+        expect(source).toContain('parseDiscordMention(stored)');
+    });
+
+    it('keeps the id field numeric and previews the posted markup', () => {
+        expect(source).toContain("inputMode={idMode ? 'numeric' : undefined}");
+        expect(source).toContain('Posts as');
+        expect(source).toContain('Copy ID');
+    });
+});

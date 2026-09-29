@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Enums\Platform;
+use App\Events\PostTargetPublished;
 use App\Listeners\BindWorkspaceToAccessToken;
 use App\Listeners\SetCurrentWorkspaceOnLogin;
 use App\Listeners\SetSentryUserContext;
+use App\Listeners\TriggerSyncPipelines;
 use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
@@ -118,6 +120,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(Login::class, SetCurrentWorkspaceOnLogin::class);
         Event::listen(AccessTokenCreated::class, BindWorkspaceToAccessToken::class);
         Event::listen(Authenticated::class, SetSentryUserContext::class);
+        Event::listen(PostTargetPublished::class, TriggerSyncPipelines::class);
 
         Passport::authorizationView(
             /** @param array<string, mixed> $parameters */

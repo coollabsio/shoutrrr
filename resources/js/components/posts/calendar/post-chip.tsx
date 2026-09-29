@@ -70,11 +70,12 @@ export function PostChip({
         : {};
 
     function openPost(e: MouseEvent) {
-        // Ignore the synthetic click dnd fires at the end of a drag.
+        // A chip click must never bubble to the day cell's create-post handler,
+        // including the synthetic click dnd fires at the end of a drag.
+        e.stopPropagation();
         if (isDragging) {
             return;
         }
-        e.stopPropagation();
         router.visit(ComposerController.show(post.id).url);
     }
 

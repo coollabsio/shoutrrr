@@ -47,6 +47,7 @@ export function makePreview(
         limit: 2200,
         autoSplit: false,
         format,
+        discordLabels: {},
         items: [
             {
                 id: `${platform}-preview-1`,

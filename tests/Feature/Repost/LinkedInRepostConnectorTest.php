@@ -5,6 +5,7 @@ use App\Enums\Platform;
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Services\Publishing\Connectors\LinkedInConnector;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 test('LinkedIn repost posts a reshare referencing the parent urn', function (): void {
@@ -30,7 +31,7 @@ test('LinkedIn repost posts a reshare referencing the parent urn', function (): 
 });
 
 test('LinkedIn repost maps a connection failure to a retryable network result', function (): void {
-    Http::fake(fn () => throw new Illuminate\Http\Client\ConnectionException('offline'));
+    Http::fake(fn () => throw new ConnectionException('offline'));
 
     $account = ConnectedAccount::factory()->create(['platform' => Platform::LinkedIn, 'remote_account_id' => 'PERSON1']);
     $target = PostTarget::factory()->create([

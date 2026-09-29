@@ -11,9 +11,9 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use phpseclib3\Crypt\EC;
-use phpseclib3\Crypt\EC\PrivateKey;
-use phpseclib3\Crypt\PublicKeyLoader;
+use phpseclib4\Crypt\EC;
+use phpseclib4\Crypt\EC\PrivateKey;
+use phpseclib4\Crypt\PublicKeyLoader;
 use RuntimeException;
 use Throwable;
 
@@ -26,7 +26,8 @@ class DPoP
      */
     public function generateKey(): array
     {
-        $jwkSet = json_decode(EC::createKey('secp256r1')->toString('JWK'), true, flags: JSON_THROW_ON_ERROR);
+        // phpseclib 4 refuses to export a private JWK unless the password is reset to null first.
+        $jwkSet = json_decode(EC::createKey('secp256r1')->withPassword()->toString('JWK'), true, flags: JSON_THROW_ON_ERROR);
         $jwk = $jwkSet['keys'][0] ?? null;
 
         if (! is_array($jwk)) {

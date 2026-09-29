@@ -359,6 +359,52 @@ test('updateDraft routes an org reference typed into the LinkedIn name field to 
         ->toBe(['Hi @[Coolify](urn:li:organization:12345)']);
 });
 
+test('updateDraft emits Discord id mention markup verbatim per kind', function () {
+    [$user, $workspace] = draftSetup(0);
+    $discord = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::Discord->value,
+    ]);
+
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['Ping @team and @lead in @general']);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'Ping @team and @lead in @general',
+        'mentions' => [
+            ['id' => 'team', 'label' => '@team', 'handles' => ['discord' => '<@&123>']],
+            ['id' => 'lead', 'label' => '@lead', 'handles' => ['discord' => '<@456>']],
+            ['id' => 'general', 'label' => '@general', 'handles' => ['discord' => '<#789>']],
+        ],
+        'destination' => ['kind' => 'accounts', 'ids' => [$discord->id]],
+        'targets' => [['connected_account_id' => $discord->id, 'auto_split' => true]],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->targets->firstWhere('connected_account_id', $discord->id)->sections)
+        ->toBe(['Ping <@&123> and <@456> in <#789>']);
+});
+
+test('updateDraft falls back to the label when a Discord mention has no handle', function () {
+    [$user, $workspace] = draftSetup(0);
+    $discord = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::Discord->value,
+    ]);
+
+    $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['Ping @guest']);
+
+    $updated = app(DraftService::class)->updateDraft($post, DraftData::fromArray([
+        'base_text' => 'Ping @guest',
+        'mentions' => [['id' => 'guest', 'label' => '@guest', 'handles' => ['x' => '@guest_x']]],
+        'destination' => ['kind' => 'accounts', 'ids' => [$discord->id]],
+        'targets' => [['connected_account_id' => $discord->id, 'auto_split' => true]],
+        'expected_updated_at' => $post->updated_at->toIso8601String(),
+    ]));
+
+    expect($updated->targets->firstWhere('connected_account_id', $discord->id)->sections)
+        ->toBe(['Ping @guest']);
+});
+
 test('updateDraft sets the auto_repost override when the payload carries it', function () {
     [$user, $workspace, $accounts] = draftSetup(1);
     $post = app(DraftService::class)->createDraft($workspace->id, $user, ['kind' => 'all'], ['hi'], [], true);

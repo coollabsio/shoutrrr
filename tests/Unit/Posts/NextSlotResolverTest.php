@@ -156,21 +156,75 @@ test('interprets slots as wall-clock in the schedule timezone (DST spring-forwar
     expect($slot->toIso8601String())->toBe('2026-03-08T13:00:00+00:00');
 });
 
-test('returns null when no slot is free within the 14-day horizon', function () {
+test('returns null when every slot within the max horizon is occupied', function () {
     CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00');
     $workspace = Workspace::factory()->create();
-    // Single weekly slot Mon 09:00; occupy the two Mondays inside the 14-day horizon.
+    // Single weekly slot Mon 09:00; occupy every Monday inside the 90-day horizon.
     scheduleWith($workspace, 'UTC', [[1, 9]]);
 
-    foreach (['2026-05-18T09:00:00+00:00', '2026-05-25T09:00:00+00:00'] as $taken) {
+    $monday = CarbonImmutable::parse('2026-05-18T09:00:00+00:00');
+    for ($week = 0; $week < 13; $week++) {
         Post::factory()->create([
             'workspace_id' => $workspace->id,
             'status' => PostStatus::Scheduled,
-            'scheduled_at' => $taken,
+            'scheduled_at' => $monday->addWeeks($week)->toIso8601String(),
         ]);
     }
 
     expect(app(NextSlotResolver::class)->resolve($workspace))->toBeNull();
+});
+
+test('surfaces a full runway of open slots for a sparse schedule (issue #143)', function () {
+    // Regression: two slots/week must still yield a rolling runway that reaches
+    // well past a two-week window, not the ~4 slots a 14-day horizon would give.
+    CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00'); // Monday 08:30 UTC
+    $workspace = Workspace::factory()->create();
+    scheduleWith($workspace, 'UTC', [[1, 9], [4, 15]]); // Mon 09:00, Thu 15:00
+
+    $slots = app(NextSlotResolver::class)->availableSlots($workspace);
+
+    expect($slots)->toHaveCount(NextSlotResolver::TARGET_SLOTS);
+    expect($slots[0]->toIso8601String())->toBe('2026-05-18T09:00:00+00:00');
+    // The runway must extend beyond the old fixed 14-day window.
+    expect($slots[NextSlotResolver::TARGET_SLOTS - 1]->greaterThan(
+        CarbonImmutable::now()->addDays(14),
+    ))->toBeTrue();
+});
+
+test('caps a dense schedule at the target slot count, ascending', function () {
+    CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00');
+    $workspace = Workspace::factory()->create();
+    // A slot every weekday at 09:00.
+    scheduleWith($workspace, 'UTC', [[0, 9], [1, 9], [2, 9], [3, 9], [4, 9], [5, 9], [6, 9]]);
+
+    $slots = app(NextSlotResolver::class)->availableSlots($workspace);
+
+    expect($slots)->toHaveCount(NextSlotResolver::TARGET_SLOTS);
+    expect($slots[0]->toIso8601String())->toBe('2026-05-18T09:00:00+00:00');
+    // Ten consecutive daily slots ending ten days out, strictly ascending.
+    expect($slots[NextSlotResolver::TARGET_SLOTS - 1]->toIso8601String())->toBe('2026-05-27T09:00:00+00:00');
+    $sorted = $slots;
+    usort($sorted, fn ($a, $b) => $a <=> $b);
+    expect($slots)->toEqual($sorted);
+});
+
+test('backfills the runway from further out when early slots are occupied', function () {
+    CarbonImmutable::setTestNow('2026-05-18T08:30:00+00:00');
+    $workspace = Workspace::factory()->create();
+    scheduleWith($workspace, 'UTC', [[0, 9], [1, 9], [2, 9], [3, 9], [4, 9], [5, 9], [6, 9]]);
+
+    // Occupy the very next slot; the runway must stay full and start one day later.
+    Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'status' => PostStatus::Scheduled,
+        'scheduled_at' => '2026-05-18T09:00:00+00:00',
+    ]);
+
+    $slots = app(NextSlotResolver::class)->availableSlots($workspace);
+
+    expect($slots)->toHaveCount(NextSlotResolver::TARGET_SLOTS);
+    expect($slots[0]->toIso8601String())->toBe('2026-05-19T09:00:00+00:00');
+    expect($slots[NextSlotResolver::TARGET_SLOTS - 1]->toIso8601String())->toBe('2026-05-28T09:00:00+00:00');
 });
 
 test('resolves a slot with a non-zero minute', function () {

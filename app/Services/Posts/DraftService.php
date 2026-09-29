@@ -50,6 +50,7 @@ class DraftService
                 'mentions' => $this->normalizeMentions($mentions),
                 'status' => PostStatus::Draft->value,
                 'auto_repost' => $autoRepost,
+                'skip_sync' => $data instanceof DraftData ? $data->skipSync : false,
             ]);
 
             $accountIds = $this->resolveDestinationAccountIds($workspaceId, $destination);
@@ -372,6 +373,9 @@ class DraftService
             // a partial update that omits `auto_repost` must not reset it to null.
             if ($data->autoRepostProvided) {
                 $attributes['auto_repost'] = $data->autoRepost;
+            }
+            if ($data->skipSyncProvided) {
+                $attributes['skip_sync'] = $data->skipSync;
             }
 
             $post->forceFill($attributes)->save();

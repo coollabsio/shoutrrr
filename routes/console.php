@@ -5,9 +5,11 @@ use App\Console\Commands\DispatchDueMessageFetches;
 use App\Console\Commands\DispatchDuePosts;
 use App\Console\Commands\DispatchDueReplyFetches;
 use App\Console\Commands\DispatchDueReposts;
+use App\Console\Commands\PollNativePosts;
 use App\Console\Commands\PruneAbandonedUploads;
 use App\Console\Commands\PruneMcpBindings;
 use App\Console\Commands\PruneUsageEvents;
+use App\Console\Commands\ReconcileSyncFanOut;
 use App\Console\Commands\ReconcileUsageCounters;
 use App\Console\Commands\RefreshCommunityStats;
 use App\Console\Commands\RefreshExpiringTokens;
@@ -38,6 +40,11 @@ if (config('messages.enabled')) {
 
 if (config('repost.enabled')) {
     Schedule::command(DispatchDueReposts::class)->everyFifteenMinutes()->withoutOverlapping();
+}
+
+if (config('sync.enabled')) {
+    Schedule::command(ReconcileSyncFanOut::class)->everyFiveMinutes()->withoutOverlapping();
+    Schedule::command(PollNativePosts::class)->everyFifteenMinutes()->withoutOverlapping();
 }
 
 Schedule::command(ReconcileUsageCounters::class)->dailyAt('02:10')->withoutOverlapping();

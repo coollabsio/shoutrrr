@@ -4,9 +4,11 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\Settings\ApiKeysController;
 use App\Http\Controllers\Settings\ConnectionsController;
 use App\Http\Controllers\Settings\InstanceSettingsController;
+use App\Http\Controllers\Settings\NativeTrackingController;
 use App\Http\Controllers\Settings\NotificationPreferencesController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\Settings\SyncPipelinesController;
 use App\Http\Controllers\Settings\WorkspaceSettingsController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
@@ -29,6 +31,14 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/workspace/api-keys', [ApiKeysController::class, 'index'])->name('settings.workspace.api-keys');
     Route::post('settings/workspace/api-keys', [ApiKeysController::class, 'store'])->name('settings.workspace.api-keys.store');
     Route::delete('settings/workspace/api-keys/{apiKey}', [ApiKeysController::class, 'destroy'])->name('settings.workspace.api-keys.destroy');
+
+    Route::get('sync', [SyncPipelinesController::class, 'index'])->name('sync.index');
+    Route::post('sync', [SyncPipelinesController::class, 'store'])->name('sync.store');
+    Route::patch('sync/{syncPipeline}', [SyncPipelinesController::class, 'update'])->name('sync.update');
+    Route::delete('sync/{syncPipeline}', [SyncPipelinesController::class, 'destroy'])->name('sync.destroy');
+
+    Route::post('sync/native-tracking/{account}', [NativeTrackingController::class, 'store'])->name('sync.native-tracking.store');
+    Route::delete('sync/native-tracking/{account}', [NativeTrackingController::class, 'destroy'])->name('sync.native-tracking.destroy');
 
     Route::get('settings/connections', [ConnectionsController::class, 'edit'])->name('connections.edit');
     Route::delete('settings/connections/{socialAccount}', [ConnectionsController::class, 'destroy'])->name('connections.destroy');

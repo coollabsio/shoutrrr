@@ -290,6 +290,48 @@ test('blockingTargets flags a video larger than the platform allows', function (
         ->and($blocked[0]['issues'])->toContain('video_too_large');
 });
 
+test('blockingTargets flags an X video whose aspect ratio is too wide', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->video()->create(['width' => 4000, 'height' => 1000]);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toHaveCount(1)
+        ->and($blocked[0]['issues'])->toContain('video_bad_aspect_ratio');
+});
+
+test('blockingTargets passes an X video within the allowed aspect ratio', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->video()->create(['width' => 1920, 'height' => 1080]);
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
+test('blockingTargets ignores aspect ratio on platforms that do not constrain it', function () {
+    $post = Post::factory()->create();
+    PostMedia::factory()->for($post)->video()->create(['width' => 4000, 'height' => 1000]);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $account->id,
+        'platform' => Platform::Bluesky->value,
+        'sections' => ['hello'],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked)->toBe([]);
+});
+
 test('blockingTargets flags a GIF mixed with another image on X', function () {
     $post = Post::factory()->create();
     PostMedia::factory()->for($post)->create(['mime' => 'image/gif']);

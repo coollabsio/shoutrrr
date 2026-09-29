@@ -43,4 +43,6 @@ final class UsageOperation
     public const string DM_FETCH = 'dm_fetch';
 
     public const string DM_SEND = 'dm_send';
+
+    public const string X_READ = 'x_read';
 }

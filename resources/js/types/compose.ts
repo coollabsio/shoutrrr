@@ -79,6 +79,8 @@ export type PlatformLimits = {
     allowedVideoMime: string[];
     maxVideoBytes: number;
     maxVideoDurationSeconds: number;
+    /** Allowed width:height ratio bounds for a video, or null when unconstrained. */
+    videoAspectRatioRange: { min: number; max: number } | null;
 };
 
 export type MediaView = {
@@ -170,6 +172,7 @@ export type PostView = {
     updated_at: string;
     scheduled_at: string | null;
     auto_repost: boolean | null;
+    skip_sync?: boolean;
     destination: { kind: string; id: string | null; ids?: string[] };
     targets: TargetView[];
     media: MediaView[];

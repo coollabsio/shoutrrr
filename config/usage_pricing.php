@@ -25,6 +25,7 @@ return [
                 UsageOperation::DM_FETCH => 'posts_read',
                 UsageOperation::METRICS_FETCH_POST => 'owned_read',
                 UsageOperation::METRICS_FETCH_ACCOUNT => 'owned_read',
+                UsageOperation::X_READ => 'owned_read',
                 // Intentionally unmapped (X does not meter these): MEDIA_UPLOAD,
                 // MEDIA_STATUS_POLL, DELETE, REPLY_DELETE, REPLY_LIKE, REPLY_UNLIKE,
                 // REPLY_SEND, DM_SEND, TOKEN_REFRESH. They are still recorded as

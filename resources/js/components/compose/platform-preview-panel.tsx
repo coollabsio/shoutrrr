@@ -161,6 +161,7 @@ function PlatformPreviewPost({
                         text={item.text}
                         platform={preview.platform}
                         linkExclusions={item.linkExclusions}
+                        discordLabels={preview.discordLabels}
                         emptyFallback={`Start writing to preview your ${label} post.`}
                     />
                 </p>

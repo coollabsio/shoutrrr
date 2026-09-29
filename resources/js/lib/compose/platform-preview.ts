@@ -1,4 +1,5 @@
 import {
+    discordMentionLabels,
     mentionInputValue,
     replaceMentionTokens,
 } from '@/lib/compose/mentions';
@@ -36,6 +37,8 @@ export type PlatformPreview = {
      */
     format: PostFormat;
     items: PlatformPreviewItem[];
+    /** Discord snowflake id → display label, for rendering `<@id>` as a pill. */
+    discordLabels: Record<string, string>;
 };
 
 type BuildPlatformPreviewInput = {
@@ -200,6 +203,7 @@ export function buildPlatformPreview({
         limit,
         autoSplit,
         format,
+        discordLabels: discordMentionLabels(mentions),
         items: built.map((section, index) => ({
             id: `${account.platform}-preview-${index + 1}`,
             // Show the spacing the platform will actually render; the character

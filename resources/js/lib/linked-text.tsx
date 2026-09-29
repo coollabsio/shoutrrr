@@ -4,13 +4,15 @@ import type { PlatformName } from '@/types/compose';
 
 export type LinkedTextPart =
     | { type: 'text'; text: string }
-    | { type: 'link'; text: string; href: string };
+    | { type: 'link'; text: string; href: string }
+    | { type: 'mention'; text: string };
 
 type LinkCandidate = {
     start: number;
     end: number;
     text: string;
-    href: string;
+    /** A linkable target. Omitted for non-link spans (e.g. Discord mentions). */
+    href?: string;
 };
 
 const URL_PATTERN =
@@ -31,6 +33,17 @@ const INSTAGRAM_MENTION_PATTERN = /(?<![A-Za-z0-9._@])@([A-Za-z0-9._]{1,30})/g;
 // letters/numbers/underscores. The lookbehind skips `#` inside a word (e.g.
 // `C#`) or an HTML entity (`&#39;`), matching how the apps detect tags.
 const HASHTAG_PATTERN = /(?<![A-Za-z0-9_&])#([A-Za-z0-9_]+)/g;
+
+// Discord's native mention markup: `<@id>`/`<@!id>` (user), `<@&id>` (role),
+// `<#id>` (channel). The published/preview text stores the raw markup because
+// that is what Discord receives; we render it as a friendly pill.
+const DISCORD_MENTION_PATTERN = /<(@&|@!?|#)(\d+)>/g;
+
+// LinkedIn's inline company annotation `@[Name](urn:li:organization:ID)` — the
+// form baked into a published section. Render the name as a link to the company
+// page (numeric org ids resolve at linkedin.com/company/<id>).
+const LINKEDIN_ANNOTATION_PATTERN =
+    /@\[([^\]]+)\]\(urn:li:organization:(\d+)\)/g;
 
 function urlCandidates(
     text: string,
@@ -57,7 +70,45 @@ function urlCandidates(
 function mentionCandidates(
     text: string,
     platform?: PlatformName,
+    discordLabels: Record<string, string> = {},
 ): LinkCandidate[] {
+    // Discord mentions resolve `<@id>`/`<@&id>`/`<#id>` back to the friendly
+    // name via the post's mention map. An id with no known label is left as raw
+    // text rather than shown as a fake handle.
+    if (platform === 'discord') {
+        return [...text.matchAll(DISCORD_MENTION_PATTERN)].flatMap((match) => {
+            const prefix = match[1] ?? '';
+            const label = discordLabels[match[2] ?? ''];
+            if (label === undefined) {
+                return [];
+            }
+            const start = match.index ?? 0;
+
+            return [
+                {
+                    start,
+                    end: start + (match[0]?.length ?? 0),
+                    text:
+                        (prefix === '#' ? '#' : '@') +
+                        label.replace(/^[@#]/, ''),
+                },
+            ];
+        });
+    }
+
+    if (platform === 'linkedin') {
+        return [...text.matchAll(LINKEDIN_ANNOTATION_PATTERN)].map((match) => {
+            const start = match.index ?? 0;
+
+            return {
+                start,
+                end: start + (match[0]?.length ?? 0),
+                text: match[1] ?? '',
+                href: `https://www.linkedin.com/company/${match[2]}`,
+            };
+        });
+    }
+
     if (platform === 'x') {
         return [...text.matchAll(X_MENTION_PATTERN)].map((match) => {
             const handle = match[0] ?? '';
@@ -149,11 +200,12 @@ export function linkedTextParts(
     text: string,
     platform?: PlatformName,
     linkExclusions: readonly string[] = [],
+    discordLabels: Record<string, string> = {},
 ): LinkedTextPart[] {
     const parts: LinkedTextPart[] = [];
     const candidates = [
         ...urlCandidates(text, linkExclusions),
-        ...mentionCandidates(text, platform),
+        ...mentionCandidates(text, platform, discordLabels),
         ...hashtagCandidates(text, platform),
     ]
         .filter((candidate) => candidate.text !== '')
@@ -172,11 +224,11 @@ export function linkedTextParts(
             });
         }
 
-        parts.push({
-            type: 'link',
-            text: candidate.text,
-            href: candidate.href,
-        });
+        parts.push(
+            candidate.href !== undefined
+                ? { type: 'link', text: candidate.text, href: candidate.href }
+                : { type: 'mention', text: candidate.text },
+        );
 
         cursor = candidate.end;
     }
@@ -192,12 +244,19 @@ export function LinkedText({
     text,
     platform,
     linkExclusions = [],
+    discordLabels = {},
     emptyFallback = null,
     linkClassName = 'font-medium text-primary underline underline-offset-2 hover:text-primary/80',
+    mentionClassName = 'rounded bg-[#5865F2]/15 px-1 font-medium text-[#5865F2]',
 }: {
     text: string;
     platform?: PlatformName;
     linkExclusions?: readonly string[];
+    /**
+     * Maps a Discord snowflake id to the mention's display label so `<@id>`
+     * markup renders as a friendly pill instead of the raw id.
+     */
+    discordLabels?: Record<string, string>;
     emptyFallback?: ReactNode;
     /**
      * Overrides the styling of every linked span. Defaults to the app's
@@ -205,15 +264,25 @@ export function LinkedText({
      * un-underlined blue so captions read like the real feeds.
      */
     linkClassName?: string;
+    /** Styling for non-link mention pills (Discord). Defaults to a blurple pill. */
+    mentionClassName?: string;
 }) {
     if (text === '') {
         return emptyFallback;
     }
 
-    return linkedTextParts(text, platform, linkExclusions).map(
+    return linkedTextParts(text, platform, linkExclusions, discordLabels).map(
         (part, index) => {
             if (part.type === 'text') {
                 return part.text;
+            }
+
+            if (part.type === 'mention') {
+                return (
+                    <span key={`mention-${index}`} className={mentionClassName}>
+                        {part.text}
+                    </span>
+                );
             }
 
             return (

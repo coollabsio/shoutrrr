@@ -8,12 +8,15 @@ use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Enums\UsageCategory;
 use App\Exceptions\TokenRefreshException;
+use App\Exceptions\TransientTokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -25,6 +28,20 @@ class TokenManager
     use TracksUsage;
 
     private const int SKEW_SECONDS = 120;
+
+    /**
+     * Lease held while refreshing a single account. Single-use refresh tokens
+     * (X, Bluesky) rotate on every call, so a refresh that loses the lock
+     * mid-flight lets a second worker rotate concurrently and replay the
+     * consumed token. The lease must comfortably exceed one refresh — two 10s
+     * HTTP timeouts (the request plus the DPoP-nonce retry) plus metering and
+     * DB writes under load — so it never expires while a holder is still working.
+     */
+    private const int REFRESH_LOCK_SECONDS = 120;
+
+    // Skip a Bluesky refresh if we rotated the single-use token within this window.
+    // Keeps a burst of pollers from each rotating again; 600s ≪ the accessJwt life.
+    private const int BLUESKY_REFRESH_MIN_INTERVAL_SECONDS = 600;
 
     private const string BLUESKY_DEFAULT_PDS = 'https://bsky.social';
 
@@ -46,7 +63,7 @@ class TokenManager
         $secret = $account->secret()->firstOrFail();
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'app_password') {
-            return $this->blueskyCredentials($account, $secret);
+            return $this->blueskyCredentials($account, $force);
         }
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'oauth') {
@@ -79,7 +96,7 @@ class TokenManager
             return ['access_token' => $secret->access_token];
         }
 
-        return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
+        return Cache::lock("connected-account-token-refresh:{$account->id}", self::REFRESH_LOCK_SECONDS)
             ->block(10, function () use ($account, $force): array {
                 $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
                 $freshSecret = $freshAccount->secret()->firstOrFail();
@@ -101,6 +118,12 @@ class TokenManager
         return $account->token_expires_at->lte(Date::now()->addSeconds(self::SKEW_SECONDS));
     }
 
+    private function refreshedRecently(ConnectedAccount $account): bool
+    {
+        return $account->last_refreshed_at !== null
+            && $account->last_refreshed_at->gt(Date::now()->subSeconds(self::BLUESKY_REFRESH_MIN_INTERVAL_SECONDS));
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -117,7 +140,7 @@ class TokenManager
         // one and 400s with invalid_grant, flipping the account to needs-attention.
         // Serialize per account and re-read the rotated state under the lock, exactly
         // as the generic OAuth path below does.
-        return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
+        return Cache::lock("connected-account-token-refresh:{$account->id}", self::REFRESH_LOCK_SECONDS)
             ->block(10, function () use ($account, $force): array {
                 $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
                 $freshSecret = $freshAccount->secret()->firstOrFail();
@@ -143,7 +166,7 @@ class TokenManager
             return ['access_token' => $secret->access_token];
         }
 
-        return Cache::lock("connected-account-token-refresh:{$account->id}", 60)
+        return Cache::lock("connected-account-token-refresh:{$account->id}", self::REFRESH_LOCK_SECONDS)
             ->block(10, function () use ($account, $force): array {
                 $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
                 $freshSecret = $freshAccount->secret()->firstOrFail();
@@ -163,6 +186,8 @@ class TokenManager
     {
         try {
             $refreshed = $this->threadsExchanger->refresh((string) $secret->access_token);
+        } catch (TransientTokenRefreshException $exception) {
+            throw $exception;
         } catch (Throwable $exception) {
             $account->forceFill([
                 'status' => ConnectedAccountStatus::NeedsAttention->value,
@@ -194,15 +219,67 @@ class TokenManager
      * also lapsed. Only when both fail do we surface the account as needing
      * attention and return the stale session (the publish then fails cleanly).
      *
+     * `refreshSession` rotates the single-use refreshJwt on every call, so
+     * concurrent callers — the publish, engagement, DM-poll, and repost jobs that
+     * all call fresh() — would otherwise race: the winner rotates the token, the
+     * loser POSTs the now-revoked one, 400s, falls back to createSession, and the
+     * churn hammers Bluesky's login rate limit until the account flips to
+     * needs-attention. ATProto's guidance is to serialize refreshes per session
+     * (see the XRPC spec and bluesky-social/atproto#3637); do so per account and
+     * re-read the rotated session under the lock. Tokens are opaque per spec, so we
+     * gate the refresh on our own last_refreshed_at, not the accessJwt's expiry;
+     * `force` (the publish's post-401 retry) skips that floor.
+     *
      * @return array<string, mixed>
      */
-    private function blueskyCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret): array
+    private function blueskyCredentials(ConnectedAccount $account, bool $force): array
+    {
+        if (! $force && $this->refreshedRecently($account)) {
+            $secret = $account->secret()->firstOrFail();
+
+            return ['session' => $secret->session ?? [], 'app_password' => $secret->app_password];
+        }
+
+        try {
+            return Cache::lock("connected-account-token-refresh:{$account->id}", self::REFRESH_LOCK_SECONDS)
+                ->block(10, function () use ($account, $force): array {
+                    $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
+                    $freshSecret = $freshAccount->secret()->firstOrFail();
+
+                    // Re-check under the lock: the winner rotated, so everyone else reuses it.
+                    if (! $force && $this->refreshedRecently($freshAccount)) {
+                        return ['session' => $freshSecret->session ?? [], 'app_password' => $freshSecret->app_password];
+                    }
+
+                    return $this->refreshBlueskyCredentials($freshAccount, $freshSecret);
+                });
+        } catch (LockTimeoutException) {
+            // Another worker already holds the lock and is refreshing this session. Rather
+            // than throw — which would fail the tries=1 publish job and risk flipping the
+            // account to needs-attention — degrade to the concurrently-persisted session,
+            // restoring the never-throw contract this path had before it was serialized.
+            // The holder saves the rotated tokens before releasing, so the re-read is at
+            // worst marginally stale and the publish proceeds with a valid session.
+            $freshSecret = $account->secret()->firstOrFail();
+
+            return ['session' => $freshSecret->session ?? [], 'app_password' => $freshSecret->app_password];
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function refreshBlueskyCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret): array
     {
         $session = $secret->session ?? [];
         $pds = (string) ($session['pds'] ?? self::BLUESKY_DEFAULT_PDS);
 
-        $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''), $account)
-            ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password, $account);
+        try {
+            $tokens = $this->refreshBlueskySession($pds, (string) ($session['refreshJwt'] ?? ''), $account)
+                ?? $this->createBlueskySession($pds, (string) $account->remote_account_id, (string) $secret->app_password, $account);
+        } catch (ConnectionException $exception) {
+            throw new TransientTokenRefreshException("Token refresh failed for account {$account->id}.", previous: $exception);
+        }
 
         if ($tokens === null) {
             $account->forceFill([
@@ -239,10 +316,17 @@ class TokenManager
         }
 
         // refreshSession authenticates with the refreshJwt as the bearer token.
-        $response = $this->http->withToken($refreshJwt)->acceptJson()
+        // Bound the request so a hung PDS cannot outlast the refresh lock's lease
+        // (which would let a second worker refresh concurrently and race the
+        // single-use refreshJwt); mirrors the timeouts used across the connectors.
+        $response = $this->http->timeout(10)->connectTimeout(5)->withToken($refreshJwt)->acceptJson()
             ->post($pds.'/xrpc/com.atproto.server.refreshSession');
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
+
+        if ($this->isTransientStatus($response->status())) {
+            throw new TransientTokenRefreshException("Token refresh failed for account {$account->id}.");
+        }
 
         return $this->blueskyTokens($response);
     }
@@ -259,13 +343,17 @@ class TokenManager
             return null;
         }
 
-        $response = $this->http->acceptJson()
+        $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
             ->post($pds.'/xrpc/com.atproto.server.createSession', [
                 'identifier' => $identifier,
                 'password' => $appPassword,
             ]);
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
+
+        if ($this->isTransientStatus($response->status())) {
+            throw new TransientTokenRefreshException("Token refresh failed for account {$account->id}.");
+        }
 
         return $this->blueskyTokens($response);
     }
@@ -313,7 +401,9 @@ class TokenManager
             : (string) config($configKey.'.client_id');
         $clientSecret = (string) config($configKey.'.client_secret');
 
-        $request = $this->http->asForm();
+        // Bound the token request so a hung endpoint cannot outlast the refresh
+        // lock's lease and let a second worker race the single-use refresh token.
+        $request = $this->http->asForm()->timeout(10)->connectTimeout(5);
 
         $body = [
             'grant_type' => 'refresh_token',
@@ -332,10 +422,17 @@ class TokenManager
             if ($key === null || $endpoint === '') {
                 throw new TokenRefreshException("Token refresh failed for account {$account->id}.");
             }
-            // Confidential clients authenticate with a private_key_jwt assertion; the
-            // loopback dev client (the synthesized `http://localhost/?…` id) is public
-            // and must not send one.
-            $usesAssertion = $clientId === route('oauth.bluesky.metadata');
+            // Confidential clients authenticate every token request — including refresh
+            // (atproto OAuth spec: refresh must reuse the connect-time auth method) —
+            // with a private_key_jwt assertion; the loopback dev client (the synthesized
+            // `http://localhost/?…` id) is public and must not send one. Derive this from
+            // the stored client_id, NOT by re-deriving route('oauth.bluesky.metadata')
+            // here: refreshOAuth runs in queue workers, where route() takes its scheme/
+            // host from APP_URL and drifts from the web-request context that connected the
+            // account (e.g. behind a reverse proxy). A mismatch dropped the assertion, so
+            // the auth server rejected the refresh with invalid_client and the account was
+            // flipped to needs-attention.
+            $usesAssertion = ! str_starts_with($clientId, 'http://localhost');
             if ($usesAssertion) {
                 $body['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
                 $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
@@ -345,23 +442,45 @@ class TokenManager
             $body['client_secret'] = $clientSecret;
         }
 
-        $response = $request->post((string) $endpoint, $body);
+        try {
+            $response = $request->post((string) $endpoint, $body);
 
-        if ($response->failed() && $account->platform === Platform::Bluesky) {
-            $nonce = $response->header('DPoP-Nonce');
-            if ($nonce !== '') {
-                if ($usesAssertion) {
-                    $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
+            // Retry ONLY the DPoP nonce handshake: atproto answers the first token
+            // request with 400 use_dpop_nonce and a server nonce, and does NOT consume
+            // the refresh token on that response, so re-POSTing it is safe. Retrying on
+            // any other failure would risk re-submitting a single-use token the server
+            // may already have rotated, producing a "Refresh token replayed" error.
+            if ($response->failed() && $account->platform === Platform::Bluesky
+                && $response->json('error') === 'use_dpop_nonce') {
+                $nonce = $response->header('DPoP-Nonce');
+                if ($nonce !== '') {
+                    if ($usesAssertion) {
+                        $body['client_assertion'] = $this->dpop->clientAssertion($issuer, $this->dpop->signingKey(), $clientId);
+                    }
+                    $response = $this->http->asForm()->timeout(10)->connectTimeout(5)
+                        ->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $nonce))
+                        ->post((string) $endpoint, $body);
                 }
-                $response = $this->http->asForm()
-                    ->withHeader('DPoP', $this->dpop->proof('POST', $endpoint, $key, nonce: $nonce))
-                    ->post((string) $endpoint, $body);
             }
+        } catch (ConnectionException $exception) {
+            // A timeout/connection failure is a transient provider issue, not a bad
+            // token. Leave the account Active so the next sweep retries, and signal the
+            // caller to back off rather than flip it to needs-attention or report an
+            // error. (Uncaught, this would also abort the sweep's whole each() loop.)
+            throw new TransientTokenRefreshException("Token refresh failed for account {$account->id}.", previous: $exception);
         }
 
-        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
-
         if ($response->failed()) {
+            $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
+
+            if ($this->isTransientStatus($response->status())) {
+                // Provider hiccup (429/5xx). The stored token is still valid — the sweep
+                // refreshes up to 6h ahead of expiry — so keep the account Active and let
+                // the next attempt retry instead of flipping it to needs-attention and
+                // spamming Sentry for a failure that self-heals.
+                throw new TransientTokenRefreshException("Token refresh failed for account {$account->id}.");
+            }
+
             $account->forceFill([
                 'status' => ConnectedAccountStatus::NeedsAttention->value,
                 'refresh_failed_at' => Date::now(),
@@ -375,6 +494,11 @@ class TokenManager
         $refreshToken = $response->json('refresh_token') ?? $secret->refresh_token;
         $expiresIn = (int) ($response->json('expires_in') ?? 0);
 
+        // The auth server has now consumed and rotated the single-use refresh token.
+        // Persist the rotated token FIRST — before metering or the status update — so an
+        // interruption in this window (deploy/SIGTERM, OOM, worker timeout) cannot strand
+        // the new token and force the next refresh to POST the consumed one, which the
+        // server rejects with "Refresh token replayed".
         $secret->forceFill([
             'access_token' => $accessToken,
             'refresh_token' => $refreshToken,
@@ -390,6 +514,8 @@ class TokenManager
             'refresh_failed_at' => null,
             'refresh_failure_reason' => null,
         ])->save();
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response);
 
         return $account->platform === Platform::Bluesky
             ? $this->blueskyOAuthPayload($secret->refresh())
@@ -410,6 +536,17 @@ class TokenManager
                 'accessJwt' => $secret->access_token,
             ],
         ];
+    }
+
+    /**
+     * A refresh failure is transient — worth retrying without flipping the account —
+     * when the token endpoint rate-limits (429) or returns a server error (5xx).
+     * Auth failures (400 invalid_grant, 401 invalid_client, 403) are permanent and
+     * require the user to reconnect. Mirrors the connectors' MapsHttpErrors trait.
+     */
+    private function isTransientStatus(int $status): bool
+    {
+        return $status === 429 || $status >= 500;
     }
 
     private function refreshFailureReason(Response $response): string

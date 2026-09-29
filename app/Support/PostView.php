@@ -35,6 +35,7 @@ final class PostView
             'status' => $post->status->value,
             'scheduled_at' => $post->scheduled_at?->toIso8601String(),
             'auto_repost' => $post->auto_repost,
+            'skip_sync' => $post->skip_sync,
             'published_at' => $post->published_at?->toIso8601String(),
             'updated_at' => $post->updated_at->toIso8601String(),
             'destination' => self::destination($post),

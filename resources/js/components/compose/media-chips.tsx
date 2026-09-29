@@ -7,6 +7,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { isAttachOnlyImage } from '@/lib/compose/media-rules';
 import { cn } from '@/lib/utils';
 import type { MediaView, PendingUpload, PlatformName } from '@/types/compose';
 
@@ -168,12 +169,13 @@ export function MediaChips({
                 const excluded = isExcluded(m.id);
                 const isGif = m.mime === 'image/gif';
                 // Videos open the trim editor; static images open the beautifier.
-                // GIFs open neither — the beautifier would flatten them to a static
-                // PNG — so they're attach-only.
+                // Animated images (GIF, or a GIF-browser WebP) open neither — the
+                // beautifier would flatten them to a still frame — so they're
+                // attach-only.
                 const canEdit =
                     m.kind === 'video'
                         ? Boolean(onVideoClick)
-                        : Boolean(onImageClick) && !isGif;
+                        : Boolean(onImageClick) && !isAttachOnlyImage(m);
                 const blueskyGif = activePlatform === 'bluesky' && isGif;
 
                 return (

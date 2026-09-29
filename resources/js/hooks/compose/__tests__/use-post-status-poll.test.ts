@@ -61,7 +61,7 @@ function Harness({ value }: { value: PostView }) {
 }
 
 beforeEach(() => {
-    vi.mocked(usePoll).mockReturnValue({ start, stop });
+    vi.mocked(usePoll).mockReturnValue({ start, stop, polling: false });
     container = document.createElement('div');
     root = createRoot(container);
 });

@@ -6,7 +6,8 @@ import { PlatformGlyph } from '@/components/common/platform-glyph';
 import type { ChipTarget } from '@/components/compose/target-status-chips';
 import { Badge } from '@/components/ui/badge';
 import { Film, Image } from '@/components/ui/icons';
-import { dayjs } from '@/lib/datetime/dayjs';
+import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
+import { dayjs, toUserTz } from '@/lib/datetime/dayjs';
 import { postStatusMeta } from '@/lib/posts/status';
 import { cn } from '@/lib/utils';
 import type { PlatformName, PostStatus } from '@/types/compose';
@@ -18,6 +19,8 @@ export type { PostStatus } from '@/types/compose';
 export type PostRowData = {
     id: string;
     base_text: string;
+    origin?: 'composer' | 'sync' | 'external';
+    source_post_id?: string | null;
     status: PostStatus;
     status_label: string;
     author: string | null;
@@ -31,9 +34,12 @@ export type PostRowData = {
     media_preview: { kind: 'image' | 'video'; url: string | null } | null;
 };
 
-function formatWhen(dateStr: string): { when: string; time: string } {
-    const d = dayjs(dateStr);
-    const startOfToday = dayjs().startOf('day');
+function formatWhen(
+    dateStr: string,
+    tz: string,
+): { when: string; time: string } {
+    const d = toUserTz(dateStr, tz);
+    const startOfToday = dayjs().tz(tz).startOf('day');
     let when: string;
     if (d.isSame(startOfToday, 'day')) {
         when = 'Today';
@@ -123,7 +129,8 @@ function rowTimestamp(post: PostRowData): string {
 }
 
 export function PostRow({ post }: { post: PostRowData }) {
-    const { when, time } = formatWhen(rowTimestamp(post));
+    const tz = useSchedulingTimezone();
+    const { when, time } = formatWhen(rowTimestamp(post), tz);
     // Default the optional list fields: an older/partial Inertia payload (e.g. a
     // page loaded before the index exposed per-target data) must not crash the row.
     const platforms = post.platforms ?? [];
@@ -238,6 +245,12 @@ export function PostRow({ post }: { post: PostRowData }) {
 
                 {/* Right: badge + actions */}
                 <div className="flex items-center gap-1.5">
+                    {post.origin === 'sync' && (
+                        <Badge variant="secondary">Synced</Badge>
+                    )}
+                    {post.origin === 'external' && (
+                        <Badge variant="outline">External</Badge>
+                    )}
                     <StatusBadge status={post.status} />
                     <PostRowActions post={post} />
                 </div>
