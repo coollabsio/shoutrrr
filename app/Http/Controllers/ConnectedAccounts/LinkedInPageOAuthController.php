@@ -7,6 +7,7 @@ namespace App\Http\Controllers\ConnectedAccounts;
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\LinkedIn\LinkedInOrganizationDiscovery;
+use App\Services\ConnectedAccounts\LinkedIn\LinkedInOrganizationDiscoveryException;
 use App\Support\InstanceSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -108,7 +109,19 @@ class LinkedInPageOAuthController extends Controller
             return $this->failed("We couldn't connect your LinkedIn Page. Please try again.");
         }
 
-        $organizations = $this->organizations->administeredOrganizations($token['accessToken']);
+        try {
+            $organizations = $this->organizations->administeredOrganizations($token['accessToken']);
+        } catch (LinkedInOrganizationDiscoveryException $e) {
+            Log::warning('LinkedIn Pages discovery failed.', ['status' => $e->getCode(), 'error' => $e->getMessage()]);
+
+            return $this->failed(match (true) {
+                $e->isRateLimited() => "LinkedIn is rate-limiting this app, so we couldn't list your Pages. "
+                    .'Please try again later.',
+                $e->isForbidden() => 'LinkedIn denied access to your Pages. Ask your instance admin to check that the LinkedIn Pages app '
+                    .'has Community Management API access.',
+                default => "LinkedIn couldn't list your Pages right now. Please try again.",
+            });
+        }
 
         if ($organizations === []) {
             return $this->failed(

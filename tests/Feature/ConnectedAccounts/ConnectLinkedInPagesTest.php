@@ -80,9 +80,48 @@ test('pages callback redirects with an error when the member administers no page
 
     test()->get('/accounts/callback/linkedin-pages?code=abc')
         ->assertRedirect(route('accounts.index'))
-        ->assertSessionHas('error');
+        ->assertSessionHas('error', fn (string $error): bool => str_contains($error, "couldn't find any LinkedIn Pages you administer"));
 
     expect(ConnectedAccount::count())->toBe(0);
+});
+
+test('pages callback reports throttling instead of no pages when LinkedIn rate limits discovery', function () {
+    ownerActingIn();
+
+    Http::fake([
+        'https://www.linkedin.com/oauth/v2/accessToken' => Http::response([
+            'access_token' => 'org-tok',
+            'expires_in' => 5184000,
+            'scope' => 'r_organization_social',
+        ]),
+        'https://api.linkedin.com/rest/organizationAcls*' => Http::response(
+            ['message' => 'Resource level throttle APPLICATION DAY limit for calls to this resource is reached.', 'status' => 429],
+            429,
+        ),
+    ]);
+
+    test()->get('/accounts/callback/linkedin-pages?code=abc')
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('error', fn (string $error): bool => str_contains($error, 'rate-limiting')
+            && ! str_contains($error, 'administer'));
+});
+
+test('pages callback reports denied access instead of no pages when discovery is forbidden', function () {
+    ownerActingIn();
+
+    Http::fake([
+        'https://www.linkedin.com/oauth/v2/accessToken' => Http::response([
+            'access_token' => 'org-tok',
+            'expires_in' => 5184000,
+            'scope' => 'r_organization_social',
+        ]),
+        'https://api.linkedin.com/rest/organizationAcls*' => Http::response([], 403),
+    ]);
+
+    test()->get('/accounts/callback/linkedin-pages?code=abc')
+        ->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('error', fn (string $error): bool => str_contains($error, 'denied access')
+            && ! str_contains($error, 'administer'));
 });
 
 test('pages callback redirects with an error when the token exchange fails', function () {
