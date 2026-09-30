@@ -47,6 +47,13 @@ class LinkedInMetricsConnector implements MetricsConnector
             return PostMetricsResult::failed('Target has no remote id.');
         }
 
+        // Built as a raw URL: a query array would percent-encode the Rest.li
+        // `List(...)` syntax, which LinkedIn rejects. Only the URNs are encoded.
+        $url = self::SHARE_STATS_URL
+            .'?q=organizationalEntity'
+            .'&organizationalEntity='.rawurlencode($account->linkedInAuthorUrn())
+            .'&shares=List('.rawurlencode((string) $shareUrn).')';
+
         try {
             $response = $this->http
                 ->timeout(10)
@@ -54,11 +61,7 @@ class LinkedInMetricsConnector implements MetricsConnector
                 ->withToken((string) ($credentials['access_token'] ?? ''))
                 ->withHeaders($this->headers())
                 ->acceptJson()
-                ->get(self::SHARE_STATS_URL, [
-                    'q' => 'organizationalEntity',
-                    'organizationalEntity' => $account->linkedInAuthorUrn(),
-                    'shares' => 'List('.$shareUrn.')',
-                ]);
+                ->get($url);
         } catch (ConnectionException $e) {
             return PostMetricsResult::failed($e->getMessage());
         }
