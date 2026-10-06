@@ -195,3 +195,25 @@ test('disabled destination accounts are excluded', function () {
 
     expect(Post::where('source_post_id', $post->id)->count())->toBe(0);
 });
+
+test('fan-out copies source media into the synced post', function () {
+    Storage::fake('public');
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
+    $dest = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
+    [$post, $target] = publishedSourceWithPipeline($source, [$dest], $workspace->id);
+
+    Storage::disk('public')->put('media/source.jpg', 'jpeg-bytes');
+    PostMedia::factory()->create([
+        'workspace_id' => $workspace->id,
+        'post_id' => $post->id,
+        'disk' => 'public',
+        'path' => 'media/source.jpg',
+    ]);
+
+    app(SyncFanOutService::class)->fanOut($target);
+
+    $synced = Post::where('source_post_id', $post->id)->firstOrFail();
+    expect($synced->media)->toHaveCount(1)
+        ->and(Storage::disk('public')->exists($synced->media->first()->path))->toBeTrue();
+});

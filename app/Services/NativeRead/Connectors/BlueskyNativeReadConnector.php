@@ -75,8 +75,11 @@ class BlueskyNativeReadConnector implements NativeReadConnector
             return [];
         }
 
+        // A quote post (recordWithMedia) nests its own images/gallery under `media`.
+        $embed = is_array($embed['media'] ?? null) ? $embed['media'] : $embed;
+
         $out = [];
-        foreach (($embed['images'] ?? []) as $image) {
+        foreach (($embed['images'] ?? $embed['items'] ?? []) as $image) {
             $url = (string) ($image['fullsize'] ?? $image['thumb'] ?? '');
             if ($url !== '') {
                 $out[] = new NativeMedia($url, 'image');

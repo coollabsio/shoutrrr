@@ -25,7 +25,7 @@ class ThreadsNativeReadConnector implements NativeReadConnector
         try {
             $response = $this->http->timeout(10)->connectTimeout(5)->acceptJson()
                 ->get(self::BASE.'/me/threads', [
-                    'fields' => 'id,text,media_type,media_url,timestamp',
+                    'fields' => 'id,text,media_type,media_url,timestamp,children{media_type,media_url}',
                     'since' => $cursor->watermark->timestamp,
                     'limit' => 50,
                     'access_token' => (string) ($credentials['access_token'] ?? ''),
@@ -49,19 +49,32 @@ class ThreadsNativeReadConnector implements NativeReadConnector
                 continue;
             }
 
-            $media = [];
-            $type = (string) ($row['media_type'] ?? 'TEXT');
-            $url = (string) ($row['media_url'] ?? '');
-            if ($url !== '' && $type === 'IMAGE') {
-                $media[] = new NativeMedia($url, 'image');
-            } elseif ($url !== '' && $type === 'VIDEO') {
-                $media[] = new NativeMedia($url, 'video');
-            }
-
             $newest ??= $id;
-            $posts[] = new NativePost($id, (string) ($row['text'] ?? ''), $createdAt, $media, false, false);
+            $posts[] = new NativePost($id, (string) ($row['text'] ?? ''), $createdAt, $this->media($row), false, false);
         }
 
         return RecentPostsResult::ok($posts, $newest);
+    }
+
+    /**
+     * A carousel carries its items in `children`; single posts carry their own media_url.
+     *
+     * @param  array<string, mixed>  $row
+     * @return list<NativeMedia>
+     */
+    private function media(array $row): array
+    {
+        $items = ($row['media_type'] ?? null) === 'CAROUSEL_ALBUM' ? (array) ($row['children']['data'] ?? []) : [$row];
+
+        $media = [];
+        foreach ($items as $item) {
+            $url = (string) ($item['media_url'] ?? '');
+            $type = (string) ($item['media_type'] ?? '');
+            if ($url !== '' && in_array($type, ['IMAGE', 'VIDEO'], true)) {
+                $media[] = new NativeMedia($url, $type === 'VIDEO' ? 'video' : 'image');
+            }
+        }
+
+        return $media;
     }
 }

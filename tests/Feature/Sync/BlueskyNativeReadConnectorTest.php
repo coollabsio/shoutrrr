@@ -28,3 +28,18 @@ test('parses author feed, dropping replies and reposts', function () {
         ->and($result->posts[0]->remoteId)->toBe('at://did/app.bsky.feed.post/1')
         ->and($result->posts[0]->isReply)->toBeFalse();
 });
+
+test('reads images from image, gallery and quote-with-media embeds', function (array $embed) {
+    Http::fake(['public.api.bsky.app/*' => Http::response(['feed' => [
+        ['post' => ['uri' => 'at://did/app.bsky.feed.post/1', 'record' => ['text' => 'pics', 'createdAt' => '2026-09-02T10:00:00Z'], 'embed' => $embed]],
+    ]])]);
+
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Bluesky, 'remote_account_id' => 'did:plc:abc']);
+    $result = $this->connector->fetchRecent($account, new NativeReadCursor(Date::parse('2026-09-01')->toImmutable(), null), []);
+
+    expect(array_map(fn ($m) => $m->url, $result->posts[0]->media))->toBe(['https://cdn/1.jpg', 'https://cdn/2.jpg']);
+})->with([
+    'images' => [['$type' => 'app.bsky.embed.images#view', 'images' => [['fullsize' => 'https://cdn/1.jpg'], ['fullsize' => 'https://cdn/2.jpg']]]],
+    'gallery' => [['$type' => 'app.bsky.embed.gallery#view', 'items' => [['fullsize' => 'https://cdn/1.jpg'], ['fullsize' => 'https://cdn/2.jpg']]]],
+    'quote with media' => [['$type' => 'app.bsky.embed.recordWithMedia#view', 'record' => [], 'media' => ['images' => [['fullsize' => 'https://cdn/1.jpg'], ['fullsize' => 'https://cdn/2.jpg']]]]],
+]);

@@ -23,3 +23,17 @@ test('parses threads media list with an image', function () {
         ->and($result->posts)->toHaveCount(1)
         ->and($result->posts[0]->media[0]->kind)->toBe('image');
 });
+
+test('reads every carousel child', function () {
+    Http::fake(['graph.threads.net/*' => Http::response(['data' => [
+        ['id' => 't1', 'text' => 'album', 'media_type' => 'CAROUSEL_ALBUM', 'timestamp' => '2026-09-02T10:00:00+0000', 'children' => ['data' => [
+            ['id' => 'c1', 'media_type' => 'IMAGE', 'media_url' => 'https://cdn/1.jpg'],
+            ['id' => 'c2', 'media_type' => 'IMAGE', 'media_url' => 'https://cdn/2.jpg'],
+        ]]],
+    ]])]);
+
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Threads, 'remote_account_id' => '9']);
+    $result = $this->connector->fetchRecent($account, new NativeReadCursor(Date::parse('2026-09-01')->toImmutable(), null), ['access_token' => 't']);
+
+    expect(array_map(fn ($m) => $m->url, $result->posts[0]->media))->toBe(['https://cdn/1.jpg', 'https://cdn/2.jpg']);
+});

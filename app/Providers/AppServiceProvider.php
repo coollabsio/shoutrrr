@@ -3,11 +3,6 @@
 namespace App\Providers;
 
 use App\Enums\Platform;
-use App\Events\PostTargetPublished;
-use App\Listeners\BindWorkspaceToAccessToken;
-use App\Listeners\SetCurrentWorkspaceOnLogin;
-use App\Listeners\SetSentryUserContext;
-use App\Listeners\TriggerSyncPipelines;
 use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
@@ -15,15 +10,12 @@ use App\Services\Auth\Socialite\ThreadsProvider;
 use App\Services\Media\ImageCompressor;
 use App\Services\Media\ImageToJpegConverter;
 use Carbon\CarbonImmutable;
-use Illuminate\Auth\Events\Authenticated;
-use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Routing\Middleware\ValidateSignature;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -32,7 +24,6 @@ use Illuminate\Validation\Rules\Password;
 use Inertia\ExceptionResponse;
 use Inertia\Inertia;
 use Laravel\Cashier\Cashier;
-use Laravel\Passport\Events\AccessTokenCreated;
 use Laravel\Passport\Passport;
 use Laravel\Socialite\Facades\Socialite;
 use Override;
@@ -116,11 +107,6 @@ class AppServiceProvider extends ServiceProvider
 
             return $user->hasAllPermissions([$ability], Context::get('workspace_id'));
         });
-
-        Event::listen(Login::class, SetCurrentWorkspaceOnLogin::class);
-        Event::listen(AccessTokenCreated::class, BindWorkspaceToAccessToken::class);
-        Event::listen(Authenticated::class, SetSentryUserContext::class);
-        Event::listen(PostTargetPublished::class, TriggerSyncPipelines::class);
 
         Passport::authorizationView(
             /** @param array<string, mixed> $parameters */
