@@ -116,7 +116,7 @@ export default function SyncPipelines({
     return (
         <>
             <Head title="Sync" />
-            <div className="mx-auto grid w-full max-w-2xl gap-10 p-4 sm:p-6">
+            <div className="mx-auto grid w-full max-w-2xl gap-10 p-4 pb-20 sm:p-6">
                 <header className="grid gap-1.5">
                     <h1 className="text-xl font-semibold tracking-tight">
                         Sync
