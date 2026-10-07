@@ -35,7 +35,7 @@ class XNativeReadConnector implements NativeReadConnector
                     'exclude' => 'replies,retweets',
                     'max_results' => 100,
                     'start_time' => $cursor->watermark->toIso8601ZuluString(),
-                    'tweet.fields' => 'created_at,attachments,entities,note_tweet',
+                    'tweet.fields' => 'created_at,attachments,entities,note_tweet,referenced_tweets,in_reply_to_user_id',
                     'expansions' => 'attachments.media_keys',
                     'media.fields' => 'type,url',
                 ]);
@@ -76,6 +76,8 @@ class XNativeReadConnector implements NativeReadConnector
                 continue;
             }
             $newest ??= $id;
+            // Do not rely on `exclude` alone; ingest skips flagged replies/retweets.
+            $referenceTypes = array_column((array) ($tweet['referenced_tweets'] ?? []), 'type');
             $posts[] = new NativePost(
                 remoteId: $id,
                 text: $this->text($tweet),
@@ -84,8 +86,8 @@ class XNativeReadConnector implements NativeReadConnector
                     static fn (string $key): NativeMedia => new NativeMedia($photoUrls[$key], 'image'),
                     array_filter((array) ($tweet['attachments']['media_keys'] ?? []), static fn (string $key): bool => isset($photoUrls[$key])),
                 )),
-                isReply: false,
-                isRepost: false,
+                isReply: isset($tweet['in_reply_to_user_id']) || in_array('replied_to', $referenceTypes, true),
+                isRepost: in_array('retweeted', $referenceTypes, true),
             );
         }
 

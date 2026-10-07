@@ -50,7 +50,15 @@ class ThreadsNativeReadConnector implements NativeReadConnector
             }
 
             $newest ??= $id;
-            $posts[] = new NativePost($id, (string) ($row['text'] ?? ''), $createdAt, $this->media($row), false, false);
+            $posts[] = new NativePost(
+                $id,
+                (string) ($row['text'] ?? ''),
+                $createdAt,
+                $this->media($row),
+                // /me/threads never returns replies; those live under /me/replies.
+                isReply: false,
+                isRepost: ($row['media_type'] ?? null) === 'REPOST_FACADE',
+            );
         }
 
         return RecentPostsResult::ok($posts, $newest);

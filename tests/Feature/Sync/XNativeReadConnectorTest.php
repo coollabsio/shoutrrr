@@ -82,3 +82,18 @@ test('strips media t.co links, expands other links and decodes entities', functi
     expect($result->posts[0]->text)->toBe('Tips & tricks https://example.com/post')
         ->and($result->posts[1]->text)->toBe('The full long post https://example.com/full');
 });
+
+test('flags replies and retweets so they are not ingested', function () {
+    Http::fake(['api.twitter.com/2/users/*/tweets*' => Http::response(['data' => [
+        ['id' => '100', 'text' => 'post', 'created_at' => '2026-09-02T10:00:00.000Z'],
+        ['id' => '101', 'text' => 'my comment', 'created_at' => '2026-09-02T10:01:00.000Z', 'in_reply_to_user_id' => '42', 'referenced_tweets' => [['type' => 'replied_to', 'id' => '100']]],
+        ['id' => '102', 'text' => 'RT', 'created_at' => '2026-09-02T10:02:00.000Z', 'referenced_tweets' => [['type' => 'retweeted', 'id' => '9']]],
+        ['id' => '103', 'text' => 'quote', 'created_at' => '2026-09-02T10:03:00.000Z', 'referenced_tweets' => [['type' => 'quoted', 'id' => '9']]],
+    ]])]);
+
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::X, 'remote_account_id' => '42']);
+    $result = $this->connector->fetchRecent($account, new NativeReadCursor(Date::parse('2026-09-01')->toImmutable(), null), ['access_token' => 't']);
+
+    expect(array_map(fn ($p) => [$p->isReply, $p->isRepost], $result->posts))
+        ->toBe([[false, false], [true, false], [false, true], [false, false]]);
+});

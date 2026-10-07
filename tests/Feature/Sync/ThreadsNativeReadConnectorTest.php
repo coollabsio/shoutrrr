@@ -37,3 +37,16 @@ test('reads every carousel child', function () {
 
     expect(array_map(fn ($m) => $m->url, $result->posts[0]->media))->toBe(['https://cdn/1.jpg', 'https://cdn/2.jpg']);
 });
+
+test('flags reposts so they are not ingested', function () {
+    Http::fake(['graph.threads.net/*' => Http::response(['data' => [
+        ['id' => 't1', 'text' => 'post', 'media_type' => 'TEXT_POST', 'timestamp' => '2026-09-02T10:00:00+0000'],
+        ['id' => 't3', 'media_type' => 'REPOST_FACADE', 'timestamp' => '2026-09-02T10:02:00+0000'],
+    ]])]);
+
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::Threads, 'remote_account_id' => '9']);
+    $result = $this->connector->fetchRecent($account, new NativeReadCursor(Date::parse('2026-09-01')->toImmutable(), null), ['access_token' => 't']);
+
+    expect(array_map(fn ($p) => [$p->isReply, $p->isRepost], $result->posts))
+        ->toBe([[false, false], [false, true]]);
+});
