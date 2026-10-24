@@ -314,7 +314,9 @@ class MetaConnectionController extends Controller
 
         foreach ($stashedAssets as $key => $asset) {
             $projected[] = [
-                'key' => $key,
+                // PHP turns numeric page-id keys into ints; JSON-encoding those as
+                // numbers loses precision past 2^53 in the browser, so send a string.
+                'key' => (string) $key,
                 'pageId' => $asset['pageId'],
                 'pageName' => $asset['pageName'],
                 'igUserId' => $asset['igUserId'],

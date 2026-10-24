@@ -47,7 +47,7 @@ function fakeFacebookOAuthUser(string $token = 'short-token'): SocialiteUser
     return $user;
 }
 
-function fakeMetaGraphResponses(): void
+function fakeMetaGraphResponses(string $pageId = 'PAGE1'): void
 {
     config()->set('services.facebook.graph_version', 'v25.0');
 
@@ -57,7 +57,7 @@ function fakeMetaGraphResponses(): void
             'expires_in' => 5183944,
         ]),
         '*/me/accounts*' => Http::response(['data' => [[
-            'id' => 'PAGE1',
+            'id' => $pageId,
             'name' => 'My Page',
             'access_token' => 'PGT1',
             'instagram_business_account' => [
@@ -122,6 +122,31 @@ test('callback stashes assets server-side and renders a browser-safe projection'
 
     Http::assertSent(fn ($request): bool => str_contains($request->url(), '/oauth/access_token')
         && $request['fb_exchange_token'] === 'short-token');
+});
+
+test('callback projects numeric page ids as string keys so the browser keeps every digit', function () {
+    metaOwnerActingIn();
+    fakeFacebookOAuthUser();
+    // Larger than JavaScript's Number.MAX_SAFE_INTEGER (2^53 - 1): a JSON
+    // number this size is rounded by the browser, so the key must be a string.
+    fakeMetaGraphResponses('9007199254740993');
+
+    test()->get(route('accounts.meta.callback', ['code' => 'fb-auth-code']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('accounts/connect-meta', false)
+            ->has('assets', 1)
+            ->where('assets.0.key', '9007199254740993')
+            ->where('assets.0.pageId', '9007199254740993')
+        );
+
+    test()->post(route('accounts.meta.store'), [
+        'selected' => [
+            ['assetKey' => '9007199254740993', 'platform' => 'facebook'],
+        ],
+    ])->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('success', '1 account connected.');
+
+    expect(ConnectedAccount::withoutGlobalScopes()->sole()->remote_account_id)->toBe('9007199254740993');
 });
 
 test('callback surfaces a friendly message when facebook denies the connection', function () {
