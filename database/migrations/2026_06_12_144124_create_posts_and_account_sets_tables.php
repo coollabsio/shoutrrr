@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -32,7 +33,7 @@ return new class extends Migration
             $table->foreignUuid('workspace_id')->constrained('workspaces')->cascadeOnDelete();
             $table->foreignUuid('account_set_id')->nullable()->constrained('account_sets')->nullOnDelete();
             $table->foreignUuid('author_id')->constrained('users')->cascadeOnDelete();
-            $table->text('base_text')->default('');
+            $table->text('base_text')->default(new Expression("('')"));
             $table->string('status')->default('draft');
             $table->timestamp('scheduled_at')->nullable();
             $table->timestamp('published_at')->nullable();
@@ -47,7 +48,7 @@ return new class extends Migration
             $table->foreignUuid('post_id')->constrained('posts')->cascadeOnDelete();
             $table->foreignUuid('connected_account_id')->constrained('connected_accounts')->cascadeOnDelete();
             $table->string('platform');
-            $table->json('sections')->default('[]');
+            $table->json('sections')->default(new Expression("('[]')"));
             $table->json('content_override')->nullable();
             $table->boolean('auto_split')->default(true);
             $table->string('status')->default('pending');

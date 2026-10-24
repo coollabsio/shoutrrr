@@ -13,7 +13,7 @@ return new class extends Migration
         Schema::create('usage_events', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->foreignUuid('workspace_id')->nullable()->constrained('workspaces')->nullOnDelete();
-            $table->string('category');
+            $table->string('category', 64);
             $table->string('operation');
             $table->string('platform')->nullable();
             $table->unsignedInteger('quota_weight')->default(1);

@@ -25,7 +25,7 @@ return new class extends Migration
             $table->timestamp('last_refreshed_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['workspace_id', 'platform', 'remote_account_id']);
+            $table->unique(['workspace_id', 'platform', 'remote_account_id'],'connected_accounts_workspace_platform_remote_unique');
         });
 
         Schema::create('connected_account_secrets', function (Blueprint $table) {

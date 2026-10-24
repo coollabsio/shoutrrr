@@ -26,7 +26,7 @@ return new class extends Migration
             $table->unsignedInteger('position')->default(0);
             $table->timestamps();
 
-            $table->unique(['posting_schedule_id', 'weekday', 'hour', 'minute']);
+            $table->unique(['posting_schedule_id', 'weekday', 'hour', 'minute'], 'posting_slots_schedule_time_unique');
         });
     }
 
