@@ -16,10 +16,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
- * Persists the LinkedIn accounts (personal profile + administered Pages) the
- * user picked after OAuth. All selected accounts share the same member token —
- * LinkedIn mints no per-Page token; the member token acts on Pages it
- * administers.
+ * Persists the LinkedIn Pages (Organizations) the user picked after the
+ * Community Management OAuth flow (LinkedInPageOAuthController). LinkedIn mints
+ * no per-Page token; the member token from the dedicated Pages app acts on every
+ * Page the member administers. Personal profiles never come through here — they
+ * connect directly via the separate `linkedin-openid` app.
  */
 class LinkedInPageConnectionController extends Controller
 {
@@ -42,8 +43,8 @@ class LinkedInPageConnectionController extends Controller
 
         $validated = $request->validate([
             'selected' => ['required', 'array', 'min:1'],
-            'selected.*.type' => ['required', 'string', Rule::in(['person', 'organization'])],
-            'selected.*.id' => ['required_if:selected.*.type,organization', 'nullable', 'string', Rule::in(array_keys($organizations))],
+            'selected.*.type' => ['required', 'string', Rule::in(['organization'])],
+            'selected.*.id' => ['required', 'string', Rule::in(array_keys($organizations))],
         ]);
 
         $token = (string) ($stash['accessToken'] ?? '');
@@ -57,39 +58,23 @@ class LinkedInPageConnectionController extends Controller
 
         $user = $request->user();
 
-        // Persist every selected account in one transaction so a mid-loop failure
+        // Persist every selected Page in one transaction so a mid-loop failure
         // can't leave the workspace with a partial set of connected accounts.
-        DB::transaction(function () use ($validated, $organizations, $stash, $token, $refresh, $expiresAt, $granted, $user): void {
+        DB::transaction(function () use ($validated, $organizations, $token, $refresh, $expiresAt, $granted, $user): void {
             foreach ($validated['selected'] as $selection) {
-                if ($selection['type'] === 'person') {
-                    $person = $stash['person'];
-                    $data = new ConnectedAccountData(
-                        platform: Platform::LinkedIn,
-                        remoteAccountId: (string) $person['remoteAccountId'],
-                        handle: (string) $person['handle'],
-                        displayName: $person['displayName'] ?? null,
-                        avatarUrl: $person['avatarUrl'] ?? null,
-                        authMethod: 'oauth',
-                        accessToken: $token,
-                        refreshToken: $refresh,
-                        capabilities: ['linkedin_account_type' => 'person', 'linkedin_engagement' => in_array('r_member_social_feed', $granted, true)],
-                        tokenExpiresAt: $expiresAt,
-                    );
-                } else {
-                    $organization = $organizations[$selection['id']];
-                    $data = new ConnectedAccountData(
-                        platform: Platform::LinkedIn,
-                        remoteAccountId: (string) $organization['id'],
-                        handle: (string) $organization['vanityName'],
-                        displayName: (string) $organization['name'],
-                        avatarUrl: null,
-                        authMethod: 'oauth',
-                        accessToken: $token,
-                        refreshToken: $refresh,
-                        capabilities: ['linkedin_account_type' => 'organization', 'linkedin_engagement' => in_array('r_organization_social', $granted, true)],
-                        tokenExpiresAt: $expiresAt,
-                    );
-                }
+                $organization = $organizations[$selection['id']];
+                $data = new ConnectedAccountData(
+                    platform: Platform::LinkedIn,
+                    remoteAccountId: (string) $organization['id'],
+                    handle: (string) $organization['vanityName'],
+                    displayName: (string) $organization['name'],
+                    avatarUrl: null,
+                    authMethod: 'oauth',
+                    accessToken: $token,
+                    refreshToken: $refresh,
+                    capabilities: ['linkedin_account_type' => 'organization', 'linkedin_engagement' => in_array('r_organization_social', $granted, true)],
+                    tokenExpiresAt: $expiresAt,
+                );
 
                 $this->connections->store($data, $user);
             }

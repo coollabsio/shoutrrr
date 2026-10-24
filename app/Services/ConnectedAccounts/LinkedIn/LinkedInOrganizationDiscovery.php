@@ -12,9 +12,9 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 /**
  * Discovers the LinkedIn Organizations (Pages) a member administers, so the
  * connect flow can offer them as connectable accounts. Uses the Community
- * Management ACL finder + Organization batch lookup. Never throws — any
- * permission/network failure yields an empty list so the connect flow degrades
- * to personal-profile-only rather than erroring.
+ * Management ACL finder + Organization batch lookup. An empty list means the
+ * member truly administers no Pages; any API or network failure throws, so a
+ * throttle or permission error is never reported as "no Pages".
  */
 class LinkedInOrganizationDiscovery
 {
@@ -29,6 +29,8 @@ class LinkedInOrganizationDiscovery
 
     /**
      * @return list<LinkedInOrganization>
+     *
+     * @throws LinkedInOrganizationDiscoveryException
      */
     public function administeredOrganizations(string $accessToken): array
     {
@@ -65,12 +67,12 @@ class LinkedInOrganizationDiscovery
                         'count' => 20,
                         'start' => $start,
                     ]);
-            } catch (ConnectionException) {
-                return [];
+            } catch (ConnectionException $e) {
+                throw LinkedInOrganizationDiscoveryException::fromConnection($e);
             }
 
             if ($response->failed()) {
-                return $urns;
+                throw LinkedInOrganizationDiscoveryException::fromResponse($response);
             }
 
             $elements = (array) $response->json('elements', []);
@@ -103,6 +105,8 @@ class LinkedInOrganizationDiscovery
     {
         $ids = array_map(fn (string $urn): string => $this->urnId($urn), $urns);
 
+        // Built as a raw URL: a query array would percent-encode the Rest.li
+        // `List(...)` syntax, which LinkedIn rejects with HTTP 400.
         try {
             $response = $this->http
                 ->timeout(5)
@@ -110,13 +114,13 @@ class LinkedInOrganizationDiscovery
                 ->withToken($accessToken)
                 ->withHeaders($this->headers())
                 ->acceptJson()
-                ->get(self::ORGANIZATIONS_URL, ['ids' => 'List('.implode(',', $ids).')']);
-        } catch (ConnectionException) {
-            return [];
+                ->get(self::ORGANIZATIONS_URL.'?ids=List('.implode(',', $ids).')');
+        } catch (ConnectionException $e) {
+            throw LinkedInOrganizationDiscoveryException::fromConnection($e);
         }
 
         if ($response->failed()) {
-            return [];
+            throw LinkedInOrganizationDiscoveryException::fromResponse($response);
         }
 
         $results = (array) $response->json('results', []);
