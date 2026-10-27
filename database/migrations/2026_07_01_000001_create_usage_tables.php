@@ -13,7 +13,7 @@ return new class extends Migration
         Schema::create('usage_events', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->foreignUuid('workspace_id')->nullable()->constrained('workspaces')->nullOnDelete();
-            $table->string('category', 64);
+            $table->string('category');
             $table->string('operation');
             $table->string('platform')->nullable();
             $table->unsignedInteger('quota_weight')->default(1);
@@ -36,7 +36,8 @@ return new class extends Migration
             $table->foreignUuid('workspace_id')->constrained('workspaces')->cascadeOnDelete();
             $table->date('period_start');
             $table->date('period_end');
-            $table->string('category');
+            // 64 chars keeps the composite unique index under MySQL's 3072-byte key limit.
+            $table->string('category', 64);
             // NOT NULL: a UNIQUE index treats NULLs as distinct, which would let
             // platform-less ops create duplicate rows. Platform-less ops use 'none'.
             $table->string('platform');
