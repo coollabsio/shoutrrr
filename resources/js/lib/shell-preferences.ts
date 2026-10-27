@@ -30,66 +30,99 @@ export const customThemeKeys = [
     'background',
 ] as const;
 
-export const customThemePresets: {
+const preset = (
+    name: string,
+    theme: CustomThemeColors | null,
+    swatch?: CustomThemeColors,
+): {
     name: string;
     theme: CustomThemeColors | null;
     swatch: CustomThemeColors;
-}[] = [
-    {
-        name: 'Coolify',
-        theme: null,
-        swatch: {
+} => ({
+    name,
+    theme,
+    swatch: swatch ??
+        theme ?? {
             sidebar: '#1a0f2d',
             selected: '#1c1c1c',
             accent: '#6b16ed',
             background: '#0a0a0a',
         },
-    },
-    {
-        name: 'Midnight',
-        theme: {
-            sidebar: '#0f172a',
-            selected: '#2e4a7d',
-            accent: '#f2458f',
-            background: '#1a2338',
-        },
-        swatch: {
-            sidebar: '#0f172a',
-            selected: '#2e4a7d',
-            accent: '#f2458f',
-            background: '#1a2338',
-        },
-    },
-    {
-        name: 'Forest',
-        theme: {
-            sidebar: '#12342b',
-            selected: '#2c6e57',
-            accent: '#f4b860',
-            background: '#1b2a25',
-        },
-        swatch: {
-            sidebar: '#12342b',
-            selected: '#2c6e57',
-            accent: '#f4b860',
-            background: '#1b2a25',
-        },
-    },
-    {
-        name: 'Paper',
-        theme: {
-            sidebar: '#ebe6da',
-            selected: '#d9d1bf',
-            accent: '#c2410c',
-            background: '#f7f4ec',
-        },
-        swatch: {
-            sidebar: '#ebe6da',
-            selected: '#d9d1bf',
-            accent: '#c2410c',
-            background: '#f7f4ec',
-        },
-    },
+});
+
+export const customThemePresets = [
+    preset('Coolify', null, {
+        sidebar: '#1a0f2d',
+        selected: '#1c1c1c',
+        accent: '#6b16ed',
+        background: '#0a0a0a',
+    }),
+    preset('Midnight', {
+        sidebar: '#0f172a',
+        selected: '#2e4a7d',
+        accent: '#f2458f',
+        background: '#1a2338',
+    }),
+    preset('Forest', {
+        sidebar: '#12342b',
+        selected: '#2c6e57',
+        accent: '#f4b860',
+        background: '#1b2a25',
+    }),
+    preset('Ember', {
+        sidebar: '#3b1410',
+        selected: '#8f2d1f',
+        accent: '#ffb86b',
+        background: '#241816',
+    }),
+    preset('Slate', {
+        sidebar: '#2b3038',
+        selected: '#4a5361',
+        accent: '#6cc4f5',
+        background: '#353b45',
+    }),
+    preset('Nord', {
+        sidebar: '#2e3440',
+        selected: '#4c566a',
+        accent: '#88c0d0',
+        background: '#3b4252',
+    }),
+    preset('Dracula', {
+        sidebar: '#21222c',
+        selected: '#44475a',
+        accent: '#bd93f9',
+        background: '#282a36',
+    }),
+    preset('GitHub Dark', {
+        sidebar: '#010409',
+        selected: '#21262d',
+        accent: '#2f81f7',
+        background: '#0d1117',
+    }),
+    preset('Aubergine', {
+        sidebar: '#3f0e40',
+        selected: '#1164a3',
+        accent: '#1164a3',
+        background: '#ffffff',
+    }),
+    preset('GitHub Light', {
+        sidebar: '#f6f8fa',
+        selected: '#dde4ec',
+        accent: '#0969da',
+        background: '#ffffff',
+    }),
+    preset('Paper', {
+        sidebar: '#ebe6da',
+        selected: '#d9d1bf',
+        accent: '#c2410c',
+        background: '#f7f4ec',
+    }),
+    preset('Blossom', {
+        sidebar: '#fde8f1',
+        selected: '#f9c4dc',
+        accent: '#d61f69',
+        background: '#fff7fa',
+    }),
 ];
 
 const listeners = new Set<() => void>();
@@ -396,14 +429,6 @@ export function updateShellPreferences(
     },
 ): void {
     persist({ ...current, ...patch });
-}
-
-export function openCustomThemeDialog(): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
-
-    window.dispatchEvent(new CustomEvent('shoutrrr:custom-theme'));
 }
 
 export function useShellPreferences(): ShellPreferences & {

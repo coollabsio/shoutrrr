@@ -1,6 +1,5 @@
 import { usePage } from '@inertiajs/react';
 
-import { CustomThemeDialog } from '@/components/layout/appearance-menu';
 import { UserInfo } from '@/components/layout/user-info';
 import { UserMenuContent } from '@/components/layout/user-menu-content';
 import {
@@ -61,7 +60,6 @@ export function NavUser() {
                     </DropdownMenu>
                 </SidebarMenuItem>
             </SidebarMenu>
-            <CustomThemeDialog />
         </>
     );
 }

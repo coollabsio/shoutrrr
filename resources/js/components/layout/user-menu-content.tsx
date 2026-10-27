@@ -1,7 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { useState } from 'react';
 
-import { AppearancePanel } from '@/components/layout/appearance-menu';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -11,6 +9,7 @@ import {
 import { LogOut, Settings, Sun } from '@/components/ui/icons';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { logout } from '@/routes';
+import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import type { User } from '@/types';
 
@@ -20,11 +19,6 @@ type Props = {
 
 export function UserMenuContent({ user }: Props) {
     const cleanup = useMobileNavigation();
-    const [appearance, setAppearance] = useState(false);
-
-    if (appearance) {
-        return <AppearancePanel onBack={() => setAppearance(false)} />;
-    }
 
     return (
         <>
@@ -53,8 +47,13 @@ export function UserMenuContent({ user }: Props) {
                     Settings
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                    closeOnClick={false}
-                    onClick={() => setAppearance(true)}
+                    render={
+                        <Link
+                            className="block w-full cursor-pointer"
+                            href={editAppearance()}
+                            onClick={cleanup}
+                        />
+                    }
                 >
                     <Sun className="mr-2" />
                     Appearance
