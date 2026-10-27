@@ -23,7 +23,7 @@ test('logged in invitee accepts via link', function () {
         'user_id' => $user->id,
     ]);
 
-    $this->actingAs($user)->get(route('workspace.invitation', $plain))->assertRedirect(route('dashboard'));
+    $this->actingAs($user)->get(route('workspace.invitation', $plain))->assertRedirect(route('agentic.home'));
 
     $this->assertTrue($user->fresh()->isMemberOfWorkspace($workspace->id));
     $this->assertSame($workspace->id, $user->fresh()->current_workspace_id);

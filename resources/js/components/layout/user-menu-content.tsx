@@ -1,15 +1,15 @@
 import { Link } from '@inertiajs/react';
 
-import { UserInfo } from '@/components/layout/user-info';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { LogOut, Settings } from '@/components/ui/icons';
+import { LogOut, Settings, Sun } from '@/components/ui/icons';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { logout } from '@/routes';
+import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import type { User } from '@/types';
 
@@ -23,8 +23,13 @@ export function UserMenuContent({ user }: Props) {
     return (
         <>
             <DropdownMenuLabel className="p-0 font-normal">
-                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                    <UserInfo user={user} showEmail={true} />
+                <div className="min-w-0 px-2 py-1.5">
+                    <div className="truncate text-[13px] font-semibold">
+                        {user.name}
+                    </div>
+                    <div className="truncate text-[11px] text-muted-foreground">
+                        {user.email}
+                    </div>
                 </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -40,6 +45,18 @@ export function UserMenuContent({ user }: Props) {
                 >
                     <Settings className="mr-2" />
                     Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    render={
+                        <Link
+                            className="block w-full cursor-pointer"
+                            href={editAppearance()}
+                            onClick={cleanup}
+                        />
+                    }
+                >
+                    <Sun className="mr-2" />
+                    Appearance
                 </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

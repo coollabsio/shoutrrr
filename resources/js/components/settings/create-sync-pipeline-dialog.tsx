@@ -26,6 +26,7 @@ export type SyncAccount = {
     display_name: string | null;
     avatar_url: string | null;
     status: string;
+    enabled: boolean;
     supports_native: boolean;
 };
 

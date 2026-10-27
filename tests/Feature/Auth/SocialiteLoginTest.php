@@ -199,11 +199,11 @@ test('redirect endpoint sends the user to the provider', function () {
         ->assertRedirect('https://accounts.google.com/o/oauth2/auth');
 });
 
-test('callback logs in a new user and redirects to dashboard', function () {
+test('callback logs in a new user and redirects to the agentic home', function () {
     fakeSocialiteUser(['email' => 'fresh@example.com']);
 
     $this->get('/auth/google/callback')
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('agentic.home'));
 
     $this->assertAuthenticated();
     expect(User::where('email', 'fresh@example.com')->exists())->toBeTrue();
@@ -295,7 +295,7 @@ test('callback logs in a new X user via the x driver', function () {
     config()->set('kit.auth.socialite.providers', ['google', 'x', 'linkedin']);
     fakeSocialiteUser(['id' => 'x-9', 'email' => 'xnew@example.com', 'email_verified' => false], 'x');
 
-    $this->get('/auth/x/callback')->assertRedirect(route('dashboard'));
+    $this->get('/auth/x/callback')->assertRedirect(route('agentic.home'));
 
     $this->assertAuthenticated();
     expect(User::where('email', 'xnew@example.com')->exists())->toBeTrue();
@@ -305,7 +305,7 @@ test('callback logs in a new LinkedIn user via the linkedin-openid driver', func
     config()->set('kit.auth.socialite.providers', ['google', 'x', 'linkedin']);
     fakeSocialiteUser(['id' => 'li-9', 'email' => 'linew@example.com'], 'linkedin-openid');
 
-    $this->get('/auth/linkedin/callback')->assertRedirect(route('dashboard'));
+    $this->get('/auth/linkedin/callback')->assertRedirect(route('agentic.home'));
 
     $this->assertAuthenticated();
     expect(User::where('email', 'linew@example.com')

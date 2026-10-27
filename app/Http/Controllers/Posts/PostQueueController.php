@@ -10,7 +10,6 @@ use App\Models\Post;
 use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Posts\NextSlotResolver;
 use App\Support\PostView;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -35,11 +34,7 @@ class PostQueueController extends Controller
             'scheduled_at' => ['nullable', 'date', 'after:now'],
         ]);
 
-        $availableSlots = $this->resolver->availableSlots($workspace);
-        $slot = $this->resolveRequestedSlot(
-            $availableSlots,
-            $validated['scheduled_at'] ?? null,
-        );
+        $slot = $this->resolver->pick($workspace, $validated['scheduled_at'] ?? null);
 
         if ($slot === null) {
             return response()->json([
@@ -56,27 +51,5 @@ class PostQueueController extends Controller
         return response()->json([
             'post' => PostView::make($post->fresh(['targets.account', 'media'])),
         ]);
-    }
-
-    /**
-     * @param  list<CarbonImmutable>  $availableSlots
-     */
-    private function resolveRequestedSlot(array $availableSlots, ?string $requestedSlot): ?CarbonImmutable
-    {
-        if ($requestedSlot === null) {
-            return $availableSlots[0] ?? null;
-        }
-
-        $requested = CarbonImmutable::parse($requestedSlot)
-            ->setTimezone('UTC')
-            ->toIso8601String();
-
-        foreach ($availableSlots as $slot) {
-            if ($slot->setTimezone('UTC')->toIso8601String() === $requested) {
-                return $slot;
-            }
-        }
-
-        return null;
     }
 }

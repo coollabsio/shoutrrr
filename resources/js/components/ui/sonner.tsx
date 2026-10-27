@@ -4,13 +4,13 @@ import { CircleCheck, Info, Loader2, OctagonX, TriangleAlert } from '@/component
 import { Toaster as Sonner, type ToasterProps } from 'sonner';
 
 function Toaster({ ...props }: ToasterProps) {
-    const { appearance } = useAppearance();
+    const { resolvedAppearance } = useAppearance();
 
     useFlashToast();
 
     return (
         <Sonner
-            theme={appearance}
+            theme={resolvedAppearance}
             className="toaster group"
             position="bottom-right"
             icons={{

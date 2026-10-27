@@ -43,12 +43,18 @@ function AccountChip({ account }: { account: SyncAccount }) {
                     {account.handle}
                 </span>
             )}
+            {!account.enabled && (
+                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    Disabled
+                </span>
+            )}
         </span>
     );
 }
 
 type Props = {
     accounts: SyncAccount[];
+    selectableAccounts: SyncAccount[];
     pipelines: Pipeline[];
     maxPipelines: number;
     canCreate: boolean;
@@ -60,6 +66,7 @@ type Props = {
 
 export default function SyncPipelines({
     accounts,
+    selectableAccounts,
     pipelines,
     maxPipelines,
     canCreate,
@@ -143,7 +150,7 @@ export default function SyncPipelines({
                             </p>
                         </div>
                         <CreateSyncPipelineDialog
-                            accounts={accounts}
+                            accounts={selectableAccounts}
                             disabled={!canCreate}
                             trackedAccountIds={trackedAccountIds}
                             canTrack={canTrack}
@@ -170,6 +177,7 @@ export default function SyncPipelines({
                                 );
                                 const untrackedSource =
                                     source?.supports_native === true &&
+                                    source.enabled &&
                                     !trackedAccountIds.includes(source.id);
                                 return (
                                     <div

@@ -174,6 +174,26 @@ function bindConnector(PublishResult|callable $result): void
  * with 'oauth_access_token_id' set so AccessToken::__get('id') proxies to the
  * underlying Token id, which is what WorkspaceTool::workspaceId() reads.
  */
+/**
+ * Owner of a workspace with an MCP token. Write tools need owner permissions;
+ * bindTokenToWorkspace alone creates a member.
+ *
+ * @return array{0: User, 1: Workspace}
+ */
+function mcpOwner(): array
+{
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    bindTokenToWorkspace($user, $workspace);
+
+    return [$user, $workspace];
+}
+
 function bindTokenToWorkspace(User $user, Workspace $workspace): void
 {
     // A real MCP grant is only ever issued for a workspace the user belongs to

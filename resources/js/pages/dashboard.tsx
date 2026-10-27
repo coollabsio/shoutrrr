@@ -126,8 +126,11 @@ export default function Dashboard({ posts, onboarding, savedMentions }: Props) {
                         {firstName}
                     </span>
                 </h1>
-                <p className="mt-1.5 mb-7 text-[13.5px] tracking-tight text-muted-foreground">
-                    Write something new — it autosaves as you go.
+                <p className="mt-1.5 mb-7 max-w-2xl text-[13.5px] tracking-tight text-muted-foreground">
+                    Classic composer. Write something new — it autosaves as you
+                    go. Agentic is the default home for accounts, agents, and
+                    sync; choose either mode in the sidebar. Classic keeps the
+                    calendar, queue, and inbox.
                 </p>
 
                 {onboarding && <GettingStartedCard onboarding={onboarding} />}

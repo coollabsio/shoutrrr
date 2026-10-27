@@ -8,6 +8,7 @@ use App\Enums\NotificationType;
 use App\Models\User;
 use App\Models\WorkspaceInvitation;
 use App\Services\Workspace\WorkspaceInvitationService;
+use App\Support\ProductHome;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -25,7 +26,7 @@ class WorkspaceInvitationResponseController extends Controller
         if ($result->wasSuccessful()) {
             $this->deleteInvitationNotifications($user, $invitation);
 
-            return redirect()->route('dashboard')->with('success', $result->message);
+            return ProductHome::redirect($user)->with('success', $result->message);
         }
 
         return back()->with($result->type, $result->message);

@@ -9,6 +9,7 @@ use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\Post;
 use App\Services\Posts\DraftService;
 use App\Services\Posts\PostStaleWriteException;
+use App\Support\PostComposerInput;
 use App\Support\PostView;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
@@ -29,31 +30,16 @@ class UpdatePostTool extends WorkspaceTool
         $validated = $request->validate([
             'post_id' => ['required', 'string'],
             'base_text' => ['present', 'nullable', 'string'],
-            'segments' => ['array'],
-            'segments.*' => ['string'],
-            'mentions' => ['array'],
-            'mentions.*.id' => ['required', 'string'],
-            'mentions.*.label' => ['required', 'string'],
-            'mentions.*.handles' => ['array'],
-            'mentions.*.handles.x' => ['nullable', 'string'],
-            'mentions.*.handles.bluesky' => ['nullable', 'string'],
-            'mentions.*.handles.linkedin' => ['nullable', 'string'],
-            'mentions.*.handles.linkedin_urn' => ['nullable', 'string', 'max:255'],
+            ...PostComposerInput::contentRules(),
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
-            'targets' => ['array'],
-            'targets.*.connected_account_id' => ['required', 'string'],
-            'targets.*.auto_split' => ['boolean'],
-            'targets.*.content_override' => ['nullable', 'array'],
-            'targets.*.content_override.text' => ['nullable', 'string'],
-            'targets.*.content_override.media_ids' => ['array'],
-            'targets.*.content_override.media_ids.*' => ['string'],
-            'media_ids' => ['array'],
-            'media_ids.*' => ['string'],
+            ...PostComposerInput::targetRules(),
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
             'expected_updated_at' => ['nullable', 'string'],
         ]);
+
+        PostComposerInput::ensureFormatsSupported($validated['targets'] ?? []);
 
         $post = Post::query()->whereKey($validated['post_id'])->first();
         if ($post === null) {
@@ -76,13 +62,13 @@ class UpdatePostTool extends WorkspaceTool
     {
         return [
             'post_id' => $schema->string()->description('Id of the draft to update.')->required(),
-            'base_text' => $schema->string()->description('New post body text. Use {{mention:id}} tokens for platform-specific mentions.'),
-            'mentions' => $schema->array()->description('Mention placeholders with per-platform handles.'),
+            'base_text' => $schema->string()->description('New post body text (ignored when segments is non-empty). Use {{mention:id}} tokens for platform-specific mentions.'),
+            ...PostComposerInput::contentSchema($schema),
             'destination' => $schema->object([
                 'kind' => $schema->string()->enum(['all', 'set', 'account'])->required(),
-                'id' => $schema->string(),
+                'id' => $schema->string()->description('Account set id (kind=set) or connected account id (kind=account).'),
             ])->description('Where to post.')->required(),
-            'media_ids' => $schema->array()->description('Ordered media ids to attach (from add_post_media).'),
+            'targets' => PostComposerInput::targetsSchema($schema),
             'auto_repost' => $schema->boolean()->description('Per-post auto-boost override: true always reshares, false never does, omit to leave the current setting unchanged (null = each account\'s automatic performance gate).'),
             'expected_updated_at' => $schema->string()->description('The post updated_at you last saw, for conflict detection.'),
         ];

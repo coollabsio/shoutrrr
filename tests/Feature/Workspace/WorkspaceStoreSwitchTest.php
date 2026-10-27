@@ -10,7 +10,7 @@ test('user can create a workspace and becomes owner', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('workspaces.store'), ['name' => 'New Co'])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('agentic.home'));
 
     $workspace = Workspace::where('name', 'New Co')->firstOrFail();
     $this->assertSame(WorkspaceRole::Owner, $user->getMembershipForWorkspace($workspace->id)->role);
@@ -50,7 +50,7 @@ test('switching workspace redirects away from workspace-scoped detail pages', fu
     $this->actingAs($user)
         ->from(route('posts.show', $post))
         ->post(route('workspaces.switch'), ['workspace_id' => $next->id])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('agentic.home'));
 
     $this->assertSame($next->id, $user->fresh()->current_workspace_id);
 });

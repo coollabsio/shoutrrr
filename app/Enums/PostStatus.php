@@ -36,4 +36,13 @@ enum PostStatus: string
     {
         return $this === self::Draft || $this === self::Scheduled;
     }
+
+    /**
+     * Only finished posts can be copied into a new draft; a draft or scheduled
+     * post is still editable in place.
+     */
+    public function isDuplicable(): bool
+    {
+        return in_array($this, [self::Published, self::Partial, self::Failed, self::Missed], true);
+    }
 }

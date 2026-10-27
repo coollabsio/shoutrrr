@@ -7,7 +7,9 @@ namespace App\Http\Controllers\Auth;
 use App\Enums\SocialProvider;
 use App\Exceptions\SocialAuthException;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Services\Auth\SocialiteService;
+use App\Support\ProductHome;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Laravel\Socialite\Facades\Socialite;
@@ -64,7 +66,9 @@ class SocialiteController extends Controller
             return redirect()->route('login')->with('error', $e->getMessage());
         }
 
-        return redirect()->intended(route('dashboard'));
+        $user = auth()->user();
+
+        return redirect()->intended(ProductHome::url($user instanceof User ? $user : null));
     }
 
     private function resolveProvider(string $provider): SocialProvider
