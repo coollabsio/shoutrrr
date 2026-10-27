@@ -62,7 +62,7 @@ test('pages callback renders the org picker after the CM token exchange', functi
             ->has('organizations', 1)
             ->where('organizations.0.name', 'Acme Inc'));
 
-    expect(ConnectedAccount::count())->toBe(0)          // nothing persisted until the user picks
+    expect(ConnectedAccount::count())->toBe(0)
         ->and(session('accounts.linkedin.connect.accessToken'))->toBe('org-tok');
 });
 

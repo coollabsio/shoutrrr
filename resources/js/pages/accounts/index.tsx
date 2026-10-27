@@ -1,5 +1,6 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
 import ConnectedAccountController from '@/actions/App/Http/Controllers/ConnectedAccounts/ConnectedAccountController';
@@ -83,6 +84,16 @@ export default function ConnectedAccounts({
     };
 
     const reconnectOAuth = (account: Account) => {
+        // The Pages redirect route 404s unless the toggle is on and the
+        // dedicated app is configured, so explain why instead of navigating.
+        if (
+            account.is_linkedin_page &&
+            !(linkedinPagesEnabled && linkedinPagesConfigured)
+        ) {
+            toast.error('LinkedIn Pages is not configured for reconnection.');
+            return;
+        }
+
         window.location.href = reconnectOAuthUrl(account);
     };
 
