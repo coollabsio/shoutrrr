@@ -138,6 +138,8 @@ describe('product mode switch', () => {
 
         expect(source).toContain('<ModeSwitch />');
         expect(source).toContain('agenticHome');
+        expect(source).toContain('classicMode &&');
+        expect(source).toContain('Connect accounts');
     });
 });
 

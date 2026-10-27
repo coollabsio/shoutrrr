@@ -138,10 +138,8 @@ export function AppSidebar() {
         [setOpenMobile],
     );
 
-    const productHome =
-        resolveUiMode(auth.user?.ui_mode) === 'classic'
-            ? dashboard()
-            : agenticHome();
+    const classicMode = resolveUiMode(auth.user?.ui_mode) === 'classic';
+    const productHome = classicMode ? dashboard() : agenticHome();
     const composeHref = dashboard();
     const showWorkspaceSettings = workspaces.enabled && workspaces.current;
     const canManageWorkspace = (workspaces.current?.permissions ?? []).includes(
@@ -223,116 +221,149 @@ export function AppSidebar() {
 
             <SidebarContent className="gap-0">
                 <ModeSwitch />
-                <SidebarGroup className="border-b border-sidebar-border">
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton
-                                    tooltip="Compose new post"
-                                    isActive={isCurrentUrl(composeHref)}
-                                    className={composeButtonClassName(
-                                        collapsed,
-                                    )}
-                                    render={<Link href={composeHref} />}
-                                >
-                                    <span className="pointer-events-none flex items-center gap-2">
-                                        <span
-                                            className={composeIconClassName()}
-                                        >
-                                            <Pencil aria-hidden="true" />
-                                        </span>
-                                        {!collapsed && (
-                                            <span>Compose post</span>
-                                        )}
-                                    </span>
-                                    {!collapsed && (
-                                        <Kbd className="bg-primary-foreground/15 text-primary-foreground">
-                                            ⌘.
-                                        </Kbd>
-                                    )}
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                    <SidebarGroupLabel>Posts</SidebarGroupLabel>
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            {postsNavItems
-                                .filter(
-                                    (item) =>
-                                        (item.title !== 'Engagement' ||
-                                            features?.engagement) &&
-                                        (item.title !== 'Messages' ||
-                                            features?.messages),
-                                )
-                                .map((item) => (
-                                    <SidebarMenuItem key={item.title}>
+                {!classicMode && (
+                    <SidebarGroup>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton
+                                        tooltip="Connect accounts"
+                                        isActive={isCurrentUrl(accountsRoute())}
+                                        render={<Link href={accountsRoute()} />}
+                                    >
+                                        <Share2 aria-hidden="true" />
+                                        <span>Connect accounts</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                )}
+                {classicMode && (
+                    <>
+                        <SidebarGroup className="border-b border-sidebar-border">
+                            <SidebarGroupContent>
+                                <SidebarMenu>
+                                    <SidebarMenuItem>
                                         <SidebarMenuButton
-                                            tooltip={item.title}
-                                            isActive={isCurrentUrl(item.href)}
-                                            render={<Link href={item.href} />}
+                                            tooltip="Compose new post"
+                                            isActive={isCurrentUrl(composeHref)}
+                                            className={composeButtonClassName(
+                                                collapsed,
+                                            )}
+                                            render={<Link href={composeHref} />}
                                         >
-                                            <item.icon aria-hidden="true" />
-                                            <span>{item.title}</span>
-                                            {item.title === 'Engagement' &&
-                                            unreadReplies > 0 ? (
-                                                <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
-                                                    {unreadReplies > 99
-                                                        ? '99+'
-                                                        : unreadReplies}
+                                            <span className="pointer-events-none flex items-center gap-2">
+                                                <span
+                                                    className={composeIconClassName()}
+                                                >
+                                                    <Pencil aria-hidden="true" />
                                                 </span>
-                                            ) : null}
-                                            {item.title === 'Messages' &&
-                                            unreadMessages > 0 ? (
-                                                <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
-                                                    {unreadMessages > 99
-                                                        ? '99+'
-                                                        : unreadMessages}
-                                                </span>
-                                            ) : null}
+                                                {!collapsed && (
+                                                    <span>Compose post</span>
+                                                )}
+                                            </span>
+                                            {!collapsed && (
+                                                <Kbd className="bg-primary-foreground/15 text-primary-foreground">
+                                                    ⌘.
+                                                </Kbd>
+                                            )}
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
-                                ))}
-                            {features?.analytics && (
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton
-                                        tooltip="Analytics"
-                                        isActive={isCurrentUrl(
-                                            analyticsRoute(),
-                                        )}
-                                        render={
-                                            <Link href={analyticsRoute()} />
-                                        }
-                                    >
-                                        <ChartColumn aria-hidden="true" />
-                                        <span>Analytics</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            )}
-                            {showSyncPipelines && (
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton
-                                        tooltip="Sync pipelines"
-                                        isActive={isCurrentOrParentUrl(
-                                            SyncPipelinesController.index().url,
-                                        )}
-                                        render={
-                                            <Link
-                                                href={SyncPipelinesController.index()}
-                                            />
-                                        }
-                                    >
-                                        <RefreshCw aria-hidden="true" />
-                                        <span>Sync pipelines</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            )}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
+                                </SidebarMenu>
+                            </SidebarGroupContent>
+                        </SidebarGroup>
+
+                        <SidebarGroup>
+                            <SidebarGroupLabel>Posts</SidebarGroupLabel>
+                            <SidebarGroupContent>
+                                <SidebarMenu>
+                                    {postsNavItems
+                                        .filter(
+                                            (item) =>
+                                                (item.title !== 'Engagement' ||
+                                                    features?.engagement) &&
+                                                (item.title !== 'Messages' ||
+                                                    features?.messages),
+                                        )
+                                        .map((item) => (
+                                            <SidebarMenuItem key={item.title}>
+                                                <SidebarMenuButton
+                                                    tooltip={item.title}
+                                                    isActive={isCurrentUrl(
+                                                        item.href,
+                                                    )}
+                                                    render={
+                                                        <Link
+                                                            href={item.href}
+                                                        />
+                                                    }
+                                                >
+                                                    <item.icon aria-hidden="true" />
+                                                    <span>{item.title}</span>
+                                                    {item.title ===
+                                                        'Engagement' &&
+                                                    unreadReplies > 0 ? (
+                                                        <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                            {unreadReplies > 99
+                                                                ? '99+'
+                                                                : unreadReplies}
+                                                        </span>
+                                                    ) : null}
+                                                    {item.title ===
+                                                        'Messages' &&
+                                                    unreadMessages > 0 ? (
+                                                        <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                            {unreadMessages > 99
+                                                                ? '99+'
+                                                                : unreadMessages}
+                                                        </span>
+                                                    ) : null}
+                                                </SidebarMenuButton>
+                                            </SidebarMenuItem>
+                                        ))}
+                                    {features?.analytics && (
+                                        <SidebarMenuItem>
+                                            <SidebarMenuButton
+                                                tooltip="Analytics"
+                                                isActive={isCurrentUrl(
+                                                    analyticsRoute(),
+                                                )}
+                                                render={
+                                                    <Link
+                                                        href={analyticsRoute()}
+                                                    />
+                                                }
+                                            >
+                                                <ChartColumn aria-hidden="true" />
+                                                <span>Analytics</span>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    )}
+                                    {showSyncPipelines && (
+                                        <SidebarMenuItem>
+                                            <SidebarMenuButton
+                                                tooltip="Sync pipelines"
+                                                isActive={isCurrentOrParentUrl(
+                                                    SyncPipelinesController.index()
+                                                        .url,
+                                                )}
+                                                render={
+                                                    <Link
+                                                        href={SyncPipelinesController.index()}
+                                                    />
+                                                }
+                                            >
+                                                <RefreshCw aria-hidden="true" />
+                                                <span>Sync pipelines</span>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    )}
+                                </SidebarMenu>
+                            </SidebarGroupContent>
+                        </SidebarGroup>
+                    </>
+                )}
 
                 {showWorkspaceSettings && (
                     <SidebarGroup>

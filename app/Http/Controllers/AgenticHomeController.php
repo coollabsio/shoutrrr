@@ -10,7 +10,6 @@ use App\Models\SyncPipeline;
 use App\Models\UsageEvent;
 use App\Models\User;
 use App\Models\Workspace;
-use App\Support\Onboarding\OnboardingPresenter;
 use App\Support\UsageOperation;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -19,19 +18,17 @@ use Inertia\Response;
 class AgenticHomeController extends Controller
 {
     /**
-     * Agentic home: accounts, MCP and API setup, recent agent activity, and sync.
+     * Agentic home: connect an agent over MCP OAuth. The agent does the rest.
      */
     public function index(Request $request): Response
     {
         /** @var User $user */
         $user = $request->user();
-        $workspace = $user->currentWorkspace;
-        $workspaceId = $workspace instanceof Workspace ? $workspace->id : null;
+        $workspaceId = $user->currentWorkspace instanceof Workspace
+            ? $user->currentWorkspace->id
+            : null;
 
         return Inertia::render('agentic/home', [
-            'onboarding' => $workspace instanceof Workspace
-                ? OnboardingPresenter::make($workspace, $user)
-                : null,
             'mcp' => [
                 'endpoint' => url('/mcp'),
                 'docs_url' => 'https://shoutrrr.com/docs/mcp',

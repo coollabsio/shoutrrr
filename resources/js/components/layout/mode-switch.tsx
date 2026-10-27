@@ -21,13 +21,13 @@ const modes: {
     {
         value: 'agentic',
         title: 'Agentic',
-        hint: 'Agentic home — accounts, agents, and sync. This is the default.',
+        hint: 'Agentic',
         icon: Bot,
     },
     {
         value: 'classic',
         title: 'Classic',
-        hint: 'Classic home — composer, calendar, queue, and inbox.',
+        hint: 'Classic',
         icon: PenLine,
     },
 ];
