@@ -460,6 +460,62 @@
     }
 }
 
+/* Coolify-aligned shell. Flat rows are the default; 3D tiles and a custom
+   theme opt in through data attributes set from the Appearance menu. */
+html[data-page-width='centered'] [data-slot='sidebar-inset'] {
+    width: 100%;
+    max-width: 80rem;
+    margin-inline: auto;
+}
+
+html[data-nav-style='floating'] [data-slot='sidebar-container'] {
+    padding: 0.5rem;
+}
+
+html[data-nav-style='floating'] [data-slot='sidebar-inner'] {
+    overflow: hidden;
+    border-radius: 0.75rem;
+    border: 1px solid var(--sidebar-border);
+}
+
+html[data-nav-items='3d'] [data-sidebar='menu-button'] {
+    height: 36px;
+    background: transparent;
+}
+
+html[data-nav-items='3d'] [data-sidebar='menu-button'] > svg {
+    box-sizing: content-box;
+    width: 16px;
+    height: 16px;
+    padding: 6px;
+    border: 1px solid rgb(0 0 0 / 9%);
+    border-radius: 8px;
+    background: #fafafa;
+    box-shadow: 0 2px 0 rgb(0 0 0 / 0.22);
+}
+
+html.dark[data-nav-items='3d'] [data-sidebar='menu-button'] > svg {
+    border-color: rgb(255 255 255 / 0.07);
+    background: rgb(255 255 255 / 0.03);
+    box-shadow: 0 2px 0 rgb(255 255 255 / 0.08);
+}
+
+html[data-theme='custom'] {
+    --background: var(--theme-bg);
+    --foreground: var(--theme-text);
+    --sidebar: var(--theme-sidebar);
+    --sidebar-foreground: var(--theme-sidebar-text);
+    --sidebar-accent: var(--theme-selected);
+    --sidebar-accent-foreground: var(--theme-selected-text);
+    --primary: var(--theme-accent);
+    --primary-foreground: var(--theme-accent-foreground);
+}
+
+html[data-theme='custom'] [data-sidebar='menu-button'][data-active='true'] {
+    background: var(--theme-selected);
+    color: var(--theme-selected-text);
+}
+
 /* Kept-warm popovers (the emoji picker, marked `data-keep-warm`) stay mounted
    via Portal `keepMounted` while closed to avoid a heavy remount on reopen. The
    Base UI Positioner that wraps them is made click-through while closed inline
