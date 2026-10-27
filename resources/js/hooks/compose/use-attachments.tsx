@@ -160,6 +160,7 @@ export function useAttachments({
         // upload judges the mixing rule against the surface's whole media list.
         mediaForSegment: () => media,
         videoLimits,
+        maxImagePixels: shell.maxImagePixels,
         onEnsurePost: async () => ownerId,
         onAddMedia: (m) => onChange([...media, m]),
         // This surface (reply box / DM composer) has no thread segments.

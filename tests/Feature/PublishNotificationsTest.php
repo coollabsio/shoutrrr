@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\ErrorKind;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
 use App\Jobs\PublishPostTarget;
@@ -31,7 +30,7 @@ test('terminal non-auth failure notifies the author of publish failure', functio
     $post = Post::factory()->for($user, 'author')->create();
     $target = PostTarget::factory()->for($post)->create();
 
-    (new PublishPostTarget($target))->notifyFailed($target, ErrorKind::Unknown);
+    (new PublishPostTarget($target))->notifyFailed($target);
 
     Notification::assertSentTo($user, PublishFailedNotification::class);
     Notification::assertNotSentTo($user, AccountNeedsAttentionNotification::class);
@@ -48,16 +47,16 @@ test('uncaught publish job failure notifies the author of publish failure', func
     Notification::assertSentTo($user, PublishFailedNotification::class);
 });
 
-test('terminal auth-expired failure notifies account-needs-attention instead', function () {
+test('terminal auth-expired failure tells the author the post failed', function () {
     Notification::fake();
     $user = User::factory()->create();
     $post = Post::factory()->for($user, 'author')->create();
     $target = PostTarget::factory()->for($post)->create();
 
-    (new PublishPostTarget($target))->notifyFailed($target, ErrorKind::AuthExpired);
+    (new PublishPostTarget($target))->notifyFailed($target);
 
-    Notification::assertSentTo($user, AccountNeedsAttentionNotification::class);
-    Notification::assertNotSentTo($user, PublishFailedNotification::class);
+    Notification::assertSentTo($user, PublishFailedNotification::class);
+    Notification::assertNotSentTo($user, AccountNeedsAttentionNotification::class);
 });
 
 test('published notification payload identifies the post, platform and account', function () {
@@ -95,7 +94,7 @@ test('account needs attention notification links to accounts page', function () 
     $payload = (new AccountNeedsAttentionNotification($account, 'ws-123'))->toArray($user);
 
     expect($payload['title'])->toBe('X account needs attention')
-        ->and($payload['body'])->toBe('@acme needs to be reconnected.')
+        ->and($payload['body'])->toBe('@acme needs to be reconnected. Publishing and sync pipelines using this account are paused.')
         ->and($payload['href'])->toBe(route('accounts.index'));
 });
 

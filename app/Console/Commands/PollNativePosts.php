@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Enums\ConnectedAccountStatus;
-use App\Enums\Platform;
 use App\Jobs\IngestNativePosts;
 use App\Models\ConnectedAccountNativeWatch;
 use App\Services\Billing\WorkspaceSubscriptionGate;
@@ -36,10 +35,9 @@ class PollNativePosts extends Command
                     || ! $account->platform->supportsNativeRead()) {
                     return;
                 }
-                // Skip X polling when the workspace has exhausted its X API budget.
-                if ($account->platform === Platform::X
-                    && $watch->workspace !== null
-                    && ! $gate->canPublishX($watch->workspace)) {
+                // Skip free workspaces, and X once the workspace's X budget is spent.
+                if ($watch->workspace !== null
+                    && ! $gate->canCallPlatformApi($watch->workspace, $account->platform)) {
                     return;
                 }
 

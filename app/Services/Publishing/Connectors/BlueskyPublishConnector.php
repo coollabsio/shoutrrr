@@ -152,7 +152,7 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
                     $record['embed'] = $embed;
                 }
 
-                if ($rootUri !== null && $rootCid !== null && $parentUri !== null && $parentCid !== null) {
+                if ($rootUri !== null) {
                     $record['reply'] = [
                         'root' => ['uri' => $rootUri, 'cid' => $rootCid],
                         'parent' => ['uri' => $parentUri, 'cid' => $parentCid],

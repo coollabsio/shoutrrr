@@ -9,6 +9,7 @@ use App\Enums\Platform;
 use App\Exceptions\TokenRefreshException;
 use App\Models\PostTarget;
 use App\Models\PostTargetMetric;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Metrics\MetricsConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
@@ -64,7 +65,7 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
         return [10, 30, 60];
     }
 
-    public function handle(MetricsConnectorRegistry $registry, TokenManager $tokens, InstanceSettings $settings): void
+    public function handle(MetricsConnectorRegistry $registry, TokenManager $tokens, InstanceSettings $settings, WorkspaceSubscriptionGate $gate): void
     {
         if (! $settings->metricsEnabled()) {
             return;
@@ -79,6 +80,10 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
         $account = $target->account()->withoutGlobalScopes()->first();
 
         if ($account === null || $account->isDisabled()) {
+            return;
+        }
+
+        if (! $gate->canCallPlatformApi($account->workspace, $account->platform)) {
             return;
         }
 

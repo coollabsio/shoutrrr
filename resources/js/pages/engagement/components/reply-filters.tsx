@@ -12,7 +12,13 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { Check, ChevronDown, FileText, X } from '@/components/ui/icons';
+import {
+    Check,
+    CheckCheck,
+    ChevronDown,
+    FileText,
+    X,
+} from '@/components/ui/icons';
 import {
     Popover,
     PopoverContent,
@@ -36,6 +42,8 @@ type Props = {
     filters: EngagementFilters;
     accounts: AccountFacet[];
     posts: PostFacet[];
+    onMarkAllRead: () => void;
+    markingAllRead: boolean;
 };
 
 const PLATFORMS: { value: PlatformName; label: string }[] = [
@@ -44,7 +52,13 @@ const PLATFORMS: { value: PlatformName; label: string }[] = [
     { value: 'linkedin', label: 'LinkedIn' },
 ];
 
-export function ReplyFilters({ filters, accounts, posts }: Props) {
+export function ReplyFilters({
+    filters,
+    accounts,
+    posts,
+    onMarkAllRead,
+    markingAllRead,
+}: Props) {
     const [postPickerOpen, setPostPickerOpen] = useState(false);
     const activePost = posts.find((p) => p.id === filters.post);
 
@@ -229,6 +243,19 @@ export function ReplyFilters({ filters, accounts, posts }: Props) {
                     </PopoverContent>
                 </Popover>
             ) : null}
+
+            {filters.archived ? null : (
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto h-8 gap-1.5 text-xs text-muted-foreground"
+                    disabled={markingAllRead}
+                    onClick={onMarkAllRead}
+                >
+                    <CheckCheck className="size-3.5" />
+                    Mark all read
+                </Button>
+            )}
         </div>
     );
 }

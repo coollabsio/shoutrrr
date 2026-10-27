@@ -14,5 +14,5 @@ test('is unique per account so a slow poll cannot overlap the next tick and doub
 
     expect($job)->toBeInstanceOf(ShouldBeUnique::class)
         ->and($job->uniqueId())->toBe($account->id)
-        ->and($job->uniqueFor)->toBe(900);
+        ->and($job->uniqueFor)->toBeGreaterThan($job->timeout);
 });

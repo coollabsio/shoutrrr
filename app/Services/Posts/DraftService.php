@@ -57,7 +57,13 @@ class DraftService
             // Pass the DraftData so the created targets carry the thread's
             // segment_breaks from the first save (placements settle on the next
             // PUT once their media is attached).
-            $this->syncTargets($post, $accountIds, $segments, [], [], $post->mentions ?? [], [], $data);
+            $formatByAccount = [];
+            foreach ($accountIds as $accountId) {
+                if ($data instanceof DraftData && $data->hasFormatFor($accountId)) {
+                    $formatByAccount[$accountId] = $data->formatFor($accountId);
+                }
+            }
+            $this->syncTargets($post, $accountIds, $segments, [], [], $post->mentions ?? [], $formatByAccount, $data);
 
             return $post->load('targets');
         });

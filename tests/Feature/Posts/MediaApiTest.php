@@ -110,3 +110,11 @@ test('it rejects an alt-text update on a post that is no longer editable', funct
     test()->patchJson("/posts/{$post['id']}/media/{$media['id']}/alt", ['alt_text' => 'too late'])
         ->assertStatus(422);
 });
+
+test('it shares the image pixel ceiling so the composer can downscale before upload', function () {
+    config(['media.max_image_pixels' => 12_000_000]);
+
+    $this->actingAs(User::factory()->withWorkspace()->create())
+        ->get('/dashboard')
+        ->assertInertia(fn ($page) => $page->where('shell.maxImagePixels', 12_000_000));
+});

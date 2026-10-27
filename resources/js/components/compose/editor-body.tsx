@@ -358,8 +358,10 @@ function EditorBodyInner(
     }, [editor, autoFocus, editable]);
 
     // Reflect editability changes (tiptap caches it from the initial options).
+    // No update emit: it would echo the stale doc through onChange and undo a
+    // same-render external reset (e.g. clearing the quick reply after send).
     useEffect(() => {
-        editor?.setEditable(editable);
+        editor?.setEditable(editable, false);
     }, [editor, editable]);
 
     // Read the per-segment media anchors straight off the rendered DOM after

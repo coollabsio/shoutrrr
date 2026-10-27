@@ -86,6 +86,18 @@ class WorkspaceSubscriptionGate
     }
 
     /**
+     * Whether background work (metrics, replies, DMs, native reads) may call a
+     * platform API for this workspace. Free workspaces get no calls at all, and
+     * X calls also stop once the workspace's X budget is spent.
+     */
+    public function canCallPlatformApi(Workspace $workspace, Platform $platform): bool
+    {
+        return $platform === Platform::X
+            ? $this->canPublishX($workspace)
+            : $this->canUseWorkspace($workspace);
+    }
+
+    /**
      * Monthly X publish quota for a workspace, or null when unlimited (unlimited
      * override / initial workspace, or a non-positive per-post cost).
      */

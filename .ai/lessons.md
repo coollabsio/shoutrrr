@@ -62,3 +62,9 @@ namespace/API fixes are fine). Linter-tooling that only reddens the gate on pre-
 code and needs risky refactors (set-state-in-effect) → pin it back, report the findings
 as a follow-up; don't bulk-refactor prod effects right before a release. Fix findings
 that are clean and safe (dead-code removal, honest PHPDoc widening, test isolation).
+
+## Test fakes landmines
+- `Process::run([...])` array commands are shell-quoted (`'ffprobe' '-v' ...`), so `Process::fake(['ffprobe *' => ...])` never matches; use `'*ffprobe*'`.
+- A shared `Http::response(...)` in `Http::fake` is one PSR stream: the 2nd request (esp. with `sink`) reads it empty. Wrap it: `fn () => Http::response(...)`.
+- Use `now()` (not `time()`) for clocks in app code; `travelTo()` cannot move `time()`.
+- SafeImageFetcher/SafeVideoFetcher do REAL DNS for the SSRF guard; fake URLs must use a resolvable host (`example.com`), not `pds.example.com`.

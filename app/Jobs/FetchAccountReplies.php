@@ -14,6 +14,7 @@ use App\Jobs\Middleware\ThrottlesEngagementFetch;
 use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Engagement\Contracts\BatchEngagementConnector;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Engagement\ReplyFetchCadence;
@@ -71,6 +72,7 @@ class FetchAccountReplies implements ReleasableJob, ShouldBeUnique, ShouldQueue
         ReplyPersister $persister,
         ReplyFetchCadence $cadence,
         InstanceSettings $settings,
+        WorkspaceSubscriptionGate $gate,
     ): void {
         if (! $settings->engagementEnabled()) {
             return;
@@ -81,6 +83,10 @@ class FetchAccountReplies implements ReleasableJob, ShouldBeUnique, ShouldQueue
         $account = ConnectedAccount::withoutGlobalScopes()->whereKey($this->account->getKey())->first();
 
         if ($account === null || $account->isDisabled()) {
+            return;
+        }
+
+        if (! $gate->canCallPlatformApi($account->workspace, $account->platform)) {
             return;
         }
 

@@ -11,6 +11,7 @@ use App\Jobs\Contracts\ReleasableJob;
 use App\Jobs\Middleware\ThrottlesMessageFetch;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Messaging\MessageConnectorRegistry;
 use App\Services\Messaging\MessagePersister;
 use App\Services\Publishing\TokenManager;
@@ -64,6 +65,7 @@ class FetchAccountMessages implements ReleasableJob, ShouldBeUnique, ShouldQueue
         TokenManager $tokens,
         MessagePersister $persister,
         InstanceSettings $settings,
+        WorkspaceSubscriptionGate $gate,
     ): void {
         if (! $settings->messagesEnabled()) {
             return;
@@ -74,6 +76,10 @@ class FetchAccountMessages implements ReleasableJob, ShouldBeUnique, ShouldQueue
         $account = ConnectedAccount::withoutGlobalScopes()->whereKey($this->account->getKey())->first();
 
         if ($account === null || $account->isDisabled() || ! $account->canReceiveDirectMessages()) {
+            return;
+        }
+
+        if (! $gate->canCallPlatformApi($account->workspace, $account->platform)) {
             return;
         }
 

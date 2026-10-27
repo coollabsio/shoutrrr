@@ -25,7 +25,14 @@ class LinkedInOrgLookup extends Command
             return self::FAILURE;
         }
 
-        $reference = (string) $this->argument('reference');
+        $reference = $this->argument('reference');
+
+        if (! is_string($reference)) {
+            $this->error('Pass a single organization reference.');
+
+            return self::FAILURE;
+        }
+
         $result = $resolver->resolve($account, $reference);
 
         if ($result->error !== null) {

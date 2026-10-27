@@ -39,6 +39,8 @@ Route::middleware(['auth:api', ResolveApiWorkspace::class, 'throttle:api', Recor
             Route::delete('posts/{id}/shares/{shareId}', [SharesController::class, 'destroy']);
 
             Route::post('media', [MediaController::class, 'store']);
+            Route::post('media/video/upload-url', [MediaController::class, 'videoUploadUrl']);
+            Route::post('media/video', [MediaController::class, 'storeVideo']);
             Route::delete('media/{mediaId}', [MediaController::class, 'destroy']);
 
             Route::post('account-sets', [AccountSetsController::class, 'store']);

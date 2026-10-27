@@ -30,6 +30,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->name('engagement.index');
     Route::get('engagement/{reply}/thread', [EngagementController::class, 'thread'])
         ->middleware('engagement.enabled')->name('engagement.thread');
+    Route::post('engagement/read-all', [EngagementController::class, 'markAllRead'])
+        ->middleware('engagement.enabled')->name('engagement.read-all');
     Route::post('engagement/{reply}/read', [EngagementController::class, 'markRead'])
         ->middleware('engagement.enabled')->name('engagement.read');
     Route::post('engagement/{reply}/archive', [EngagementController::class, 'archive'])

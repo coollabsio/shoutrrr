@@ -1,7 +1,10 @@
 <?php
 
+use App\Enums\Platform;
+use App\Enums\PostFormat;
 use App\Enums\PostStatus;
 use App\Jobs\DeletePostTarget;
+use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostTarget;
 use Illuminate\Support\Facades\Queue;
@@ -79,4 +82,94 @@ test('deleting a published post dispatches remote deletion for targets with a re
     $post->refresh();
     expect(Post::whereKey($post->id)->exists())->toBeTrue()
         ->and($post->status)->toBe(PostStatus::Deleted);
+});
+
+test('creates a draft with a per-target format', function () {
+    [, $workspace, $token] = issuedKey();
+    $instagram = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Instagram->value]);
+
+    $response = $this->withToken($token)->postJson('/api/v1/posts', [
+        'base_text' => 'A reel',
+        'destination' => ['kind' => 'account', 'id' => $instagram->id],
+        'targets' => [['connected_account_id' => $instagram->id, 'format' => 'reels']],
+    ]);
+
+    $response->assertCreated()->assertJsonPath('post.targets.0.format', 'reels');
+
+    expect(PostTarget::where('connected_account_id', $instagram->id)->sole()->format)->toBe(PostFormat::Reels);
+});
+
+test('updates a target format and keeps it on a later update that omits it', function () {
+    [$user, $workspace, $token] = issuedKey();
+    $facebook = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Facebook->value]);
+    $post = Post::factory()->for($workspace)->create(['author_id' => $user->id]);
+
+    $this->withToken($token)->patchJson("/api/v1/posts/{$post->id}", [
+        'base_text' => 'Story time',
+        'destination' => ['kind' => 'account', 'id' => $facebook->id],
+        'targets' => [['connected_account_id' => $facebook->id, 'format' => 'story']],
+    ])->assertOk()->assertJsonPath('post.targets.0.format', 'story');
+
+    $this->withToken($token)->patchJson("/api/v1/posts/{$post->id}", [
+        'base_text' => 'Still a story',
+        'destination' => ['kind' => 'account', 'id' => $facebook->id],
+    ])->assertOk()->assertJsonPath('post.targets.0.format', 'story');
+});
+
+test('rejects an unknown format', function () {
+    [, $workspace, $token] = issuedKey();
+    $instagram = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Instagram->value]);
+
+    $this->withToken($token)->postJson('/api/v1/posts', [
+        'base_text' => 'x',
+        'destination' => ['kind' => 'account', 'id' => $instagram->id],
+        'targets' => [['connected_account_id' => $instagram->id, 'format' => 'carousel']],
+    ])->assertStatus(422)->assertJsonValidationErrors(['targets.0.format']);
+});
+
+test('rejects a format the target platform does not offer', function () {
+    [$user, $workspace, $token] = issuedKey();
+    $x = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
+    $post = Post::factory()->for($workspace)->create(['author_id' => $user->id]);
+
+    $this->withToken($token)->postJson('/api/v1/posts', [
+        'base_text' => 'x',
+        'destination' => ['kind' => 'account', 'id' => $x->id],
+        'targets' => [['connected_account_id' => $x->id, 'format' => 'reels']],
+    ])->assertStatus(422)->assertJsonValidationErrors(['targets.0.format']);
+
+    $this->withToken($token)->patchJson("/api/v1/posts/{$post->id}", [
+        'base_text' => 'x',
+        'destination' => ['kind' => 'account', 'id' => $x->id],
+        'targets' => [['connected_account_id' => $x->id, 'format' => 'story']],
+    ])->assertStatus(422)->assertJsonValidationErrors(['targets.0.format']);
+});
+
+test('rejects a format for an account outside the api key workspace', function () {
+    [, , $token] = issuedKey();
+    $foreign = ConnectedAccount::factory()->create(['platform' => Platform::Instagram->value]);
+
+    $this->withToken($token)->postJson('/api/v1/posts', [
+        'base_text' => 'x',
+        'destination' => ['kind' => 'all'],
+        'targets' => [['connected_account_id' => $foreign->id, 'format' => 'reels']],
+    ])->assertStatus(422)->assertJsonValidationErrors(['targets.0.connected_account_id']);
+});
+
+test('reports an unsupported format on the right target when several are sent', function () {
+    [, $workspace, $token] = issuedKey();
+    $instagram = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Instagram->value]);
+    $x = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
+
+    $response = $this->withToken($token)->postJson('/api/v1/posts', [
+        'base_text' => 'x',
+        'destination' => ['kind' => 'all'],
+        'targets' => [
+            ['connected_account_id' => $instagram->id, 'format' => 'reels'],
+            ['connected_account_id' => $x->id, 'format' => 'reels'],
+        ],
+    ]);
+
+    $response->assertStatus(422)->assertJsonValidationErrors(['targets.1.format']);
+    expect($response->json('errors'))->not->toHaveKey('targets.0.format');
 });

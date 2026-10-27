@@ -21,6 +21,7 @@ use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
 use App\Support\ReplyListItem;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
@@ -44,22 +45,7 @@ class EngagementController extends Controller
         $post = $request->string('post')->toString();
         $unread = $request->boolean('unread');
         $archived = $request->boolean('archived');
-
-        $apply = fn ($query) => $query
-            ->where('is_ours', false)
-            ->when(
-                $archived,
-                fn ($q) => $q->where('status', ReplyStatus::Archived->value),
-                fn ($q) => $q->where('status', '!=', ReplyStatus::Archived->value),
-            )
-            ->when($unread && ! $archived, fn ($q) => $q->whereNull('read_at'))
-            ->when($platform !== '', fn ($q) => $q->whereHas('target',
-                fn ($t) => $t->where('platform', $platform)))
-            ->when($target !== '', fn ($q) => $q->where('post_target_id', $target))
-            ->when($post !== '', fn ($q) => $q->whereHas('target',
-                fn ($t) => $t->where('post_id', $post)))
-            ->when($account !== '', fn ($q) => $q->whereHas('target',
-                fn ($t) => $t->where('connected_account_id', $account)));
+        $apply = $this->inboxFilter($request);
 
         $accounts = ConnectedAccount::query()->get(['id', 'handle', 'platform'])
             ->map(fn (ConnectedAccount $a): array => [
@@ -160,6 +146,15 @@ class EngagementController extends Controller
         return response()->noContent();
     }
 
+    public function markAllRead(Request $request): Response
+    {
+        $this->inboxFilter($request)(PostTargetReply::query())
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->noContent();
+    }
+
     public function archive(PostTargetReply $reply): Response
     {
         PostTargetReply::query()
@@ -167,6 +162,37 @@ class EngagementController extends Controller
             ->update(['status' => ReplyStatus::Archived->value]);
 
         return response()->noContent();
+    }
+
+    /**
+     * Scopes a reply query to the inbox view the request's filters describe.
+     *
+     * @return Closure(Builder<PostTargetReply>): Builder<PostTargetReply>
+     */
+    private function inboxFilter(Request $request): Closure
+    {
+        $account = $request->string('account')->toString();
+        $platform = $request->string('platform')->toString();
+        $target = $request->string('target')->toString();
+        $post = $request->string('post')->toString();
+        $unread = $request->boolean('unread');
+        $archived = $request->boolean('archived');
+
+        return fn (Builder $query): Builder => $query
+            ->where('is_ours', false)
+            ->when(
+                $archived,
+                fn ($q) => $q->where('status', ReplyStatus::Archived->value),
+                fn ($q) => $q->where('status', '!=', ReplyStatus::Archived->value),
+            )
+            ->when($unread && ! $archived, fn ($q) => $q->whereNull('read_at'))
+            ->when($platform !== '', fn ($q) => $q->whereHas('target',
+                fn ($t) => $t->where('platform', $platform)))
+            ->when($target !== '', fn ($q) => $q->where('post_target_id', $target))
+            ->when($post !== '', fn ($q) => $q->whereHas('target',
+                fn ($t) => $t->where('post_id', $post)))
+            ->when($account !== '', fn ($q) => $q->whereHas('target',
+                fn ($t) => $t->where('connected_account_id', $account)));
     }
 
     /**

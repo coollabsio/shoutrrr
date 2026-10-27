@@ -195,3 +195,52 @@ test('disabled destination accounts are excluded', function () {
 
     expect(Post::where('source_post_id', $post->id)->count())->toBe(0);
 });
+
+test('fan-out copies source media into the synced post', function () {
+    Storage::fake('public');
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
+    $dest = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
+    [$post, $target] = publishedSourceWithPipeline($source, [$dest], $workspace->id);
+
+    Storage::disk('public')->put('media/source.jpg', 'jpeg-bytes');
+    PostMedia::factory()->create([
+        'workspace_id' => $workspace->id,
+        'post_id' => $post->id,
+        'disk' => 'public',
+        'path' => 'media/source.jpg',
+    ]);
+
+    app(SyncFanOutService::class)->fanOut($target);
+
+    $synced = Post::where('source_post_id', $post->id)->firstOrFail();
+    expect($synced->media)->toHaveCount(1)
+        ->and(Storage::disk('public')->exists($synced->media->first()->path))->toBeTrue();
+});
+
+test('fan-out fits mixed or oversized media to what every destination accepts', function (array $destinationPlatforms, array $expectedPaths) {
+    Storage::fake('public');
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Instagram->value]);
+    $destinations = array_map(fn (Platform $p) => ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => $p->value]), $destinationPlatforms);
+    [$post, $target] = publishedSourceWithPipeline($source, $destinations, $workspace->id);
+
+    // A native carousel: one video between five images.
+    foreach (['i0', 'v', 'i1', 'i2', 'i3', 'i4'] as $position => $name) {
+        Storage::disk('public')->put("media/{$name}", 'bytes');
+        PostMedia::factory()->create([
+            'workspace_id' => $workspace->id, 'post_id' => $post->id, 'disk' => 'public', 'path' => "media/{$name}",
+            'position' => $position, 'kind' => $name === 'v' ? 'video' : 'image', 'mime' => $name === 'v' ? 'video/mp4' : 'image/jpeg',
+        ]);
+    }
+
+    app(SyncFanOutService::class)->fanOut($target);
+
+    $synced = Post::where('source_post_id', $post->id)->firstOrFail();
+    expect($synced->media->map(fn (PostMedia $m) => Storage::disk('public')->get($m->path) === 'bytes' ? $m->kind : null)->all())
+        ->toBe($expectedPaths);
+})->with([
+    'threads keeps the mixed carousel' => [[Platform::Threads], ['image', 'video', 'image', 'image', 'image', 'image']],
+    'bluesky drops the video and caps at 4' => [[Platform::Bluesky], ['image', 'image', 'image', 'image']],
+    'smallest limit across destinations wins' => [[Platform::Threads, Platform::X], ['image', 'image', 'image', 'image']],
+]);

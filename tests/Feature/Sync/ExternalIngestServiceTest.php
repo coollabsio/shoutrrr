@@ -12,9 +12,12 @@ use App\Models\Post;
 use App\Models\PostTarget;
 use App\Models\SyncPipeline;
 use App\Services\NativeRead\ExternalIngestService;
+use App\Support\FileStorage;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     Queue::fake();
@@ -97,6 +100,58 @@ test('a failed image download does not wedge the account (post still created, cu
         ->and($post->media)->toHaveCount(0)
         ->and($post->external_media[0]['url'])->toBe('https://example.com/broken.jpg');
     expect($account->nativeWatch->fresh()->last_seen_remote_id)->toBe('at://did/1');
+});
+
+test('a pipeline source downloads its video as a probed video media row', function () {
+    [, $workspace] = ownerActingIn();
+    Storage::fake(FileStorage::diskName());
+    $account = watchBluesky($workspace->id);
+    $account->secret->forceFill(['session' => ['pds' => 'https://example.com']])->save();
+    SyncPipeline::factory()->create(['workspace_id' => $workspace->id, 'source_connected_account_id' => $account->id, 'enabled' => true]);
+    $video = "\x00\x00\x00\x20".'ftypisom'.str_repeat("\x00", 64);
+    Http::fake([
+        'public.api.bsky.app/*' => Http::response(['feed' => [
+            ['post' => ['uri' => 'at://did/2', 'record' => ['text' => 'unprobeable', 'createdAt' => '2026-09-02T11:00:00Z'], 'embed' => ['cid' => 'bafkbad', 'playlist' => 'https://video.bsky.app/p.m3u8']]],
+            ['post' => ['uri' => 'at://did/1', 'record' => ['text' => 'clip', 'createdAt' => '2026-09-02T10:00:00Z'], 'embed' => ['cid' => 'bafkvid', 'playlist' => 'https://video.bsky.app/p.m3u8']]],
+        ]]),
+        'https://example.com/*' => fn () => Http::response($video),
+    ]);
+    // Oldest-first ingest: the clip is probed first, then the unprobeable one.
+    Process::fake(['*ffprobe*' => Process::sequence()
+        ->push(Process::result(json_encode(['streams' => [['width' => 1280, 'height' => 720]], 'format' => ['duration' => '12.4']])))
+        ->push(Process::result('', 'Invalid data', 1))]);
+
+    app(ExternalIngestService::class)->ingest($account);
+
+    $clip = Post::where('base_text', 'clip')->first();
+    expect($clip->media)->toHaveCount(1)
+        ->and($clip->media->first()->only(['kind', 'mime', 'width', 'height', 'duration_seconds', 'size_bytes']))
+        ->toBe(['kind' => 'video', 'mime' => 'video/mp4', 'width' => 1280, 'height' => 720, 'duration_seconds' => 13, 'size_bytes' => strlen($video)]);
+    Storage::disk(FileStorage::diskName())->assertExists($clip->media->first()->path);
+    // No readable duration: skipped, but the post itself is still ingested.
+    expect(Post::where('base_text', 'unprobeable')->first()->media)->toHaveCount(0);
+    Http::assertSent(fn ($request) => $request->url() === 'https://example.com/xrpc/com.atproto.sync.getBlob?did=did%3Aplc%3Ame&cid=bafkvid');
+});
+
+test('skips media downloads once the run budget is spent but still ingests the post', function () {
+    [, $workspace] = ownerActingIn();
+    $account = watchBluesky($workspace->id);
+    SyncPipeline::factory()->create(['workspace_id' => $workspace->id, 'source_connected_account_id' => $account->id, 'enabled' => true]);
+    Http::fake(['public.api.bsky.app/*' => Http::response(['feed' => [
+        ['post' => ['uri' => 'at://did/1', 'record' => ['text' => 'late', 'createdAt' => '2026-09-02T10:00:00Z'], 'embed' => ['images' => [['fullsize' => 'https://example.com/a.jpg']]]]],
+    ]])]);
+    // The poll itself is instant; the clock then jumps past the budget before downloads.
+    $this->travelTo(now());
+    Http::globalRequestMiddleware(function ($request) {
+        $this->travel(10)->minutes();
+
+        return $request;
+    });
+
+    app(ExternalIngestService::class)->ingest($account);
+
+    expect(Post::where('base_text', 'late')->first()->media)->toHaveCount(0);
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'example.com'));
 });
 
 test('is inert when sync.enabled is false', function () {

@@ -8,6 +8,7 @@ import { useConfirm } from '@/components/common/confirm-dialog';
 import CreateSyncPipelineDialog, {
     type SyncAccount,
 } from '@/components/settings/create-sync-pipeline-dialog';
+import { PipelineConnectionWarning } from '@/components/settings/pipeline-connection-warning';
 import { Button } from '@/components/ui/button';
 import {
     Empty,
@@ -116,7 +117,7 @@ export default function SyncPipelines({
     return (
         <>
             <Head title="Sync" />
-            <div className="mx-auto grid w-full max-w-2xl gap-10 p-4 sm:p-6">
+            <div className="mx-auto grid w-full max-w-2xl gap-10 p-4 pb-20 sm:p-6">
                 <header className="grid gap-1.5">
                     <h1 className="text-xl font-semibold tracking-tight">
                         Sync
@@ -234,6 +235,16 @@ export default function SyncPipelines({
                                                 </div>
                                             </div>
                                         </div>
+
+                                        <PipelineConnectionWarning
+                                            enabled={pipeline.enabled}
+                                            accounts={[
+                                                source,
+                                                ...pipeline.destination_connected_account_ids.map(
+                                                    accountById,
+                                                ),
+                                            ]}
+                                        />
 
                                         {untrackedSource && (
                                             <p className="border-t pt-2.5 text-xs text-muted-foreground">

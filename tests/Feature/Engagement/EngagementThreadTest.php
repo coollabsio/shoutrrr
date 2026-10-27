@@ -125,6 +125,53 @@ test('mark read sets read_at', function (): void {
     expect($reply->fresh()->read_at)->not->toBeNull();
 });
 
+test('mark all read marks every unread inbound reply in the workspace', function (): void {
+    $replies = PostTargetReply::factory()->for($this->target, 'target')->count(3)->create([
+        'workspace_id' => $this->workspace->id,
+    ]);
+    $archived = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'status' => ReplyStatus::Archived,
+    ]);
+    $otherWorkspace = Workspace::factory()->create();
+    $foreign = PostTargetReply::factory()
+        ->for(PostTarget::factory()->for(Post::factory()->create(['workspace_id' => $otherWorkspace->id])), 'target')
+        ->create(['workspace_id' => $otherWorkspace->id]);
+
+    $this->postJson(route('engagement.read-all'))->assertNoContent();
+
+    expect($replies->every(fn (PostTargetReply $reply): bool => $reply->fresh()->read_at !== null))->toBeTrue()
+        ->and($archived->fresh()->read_at)->toBeNull()
+        ->and(PostTargetReply::withoutGlobalScopes()->find($foreign->id)->read_at)->toBeNull();
+});
+
+test('mark all read covers replies beyond the first inbox page', function (): void {
+    PostTargetReply::factory()->for($this->target, 'target')->count(30)->create([
+        'workspace_id' => $this->workspace->id,
+    ]);
+
+    $this->postJson(route('engagement.read-all'))->assertNoContent();
+
+    expect(PostTargetReply::query()->whereNull('read_at')->count())->toBe(0);
+});
+
+test('mark all read only touches replies matching the active filters', function (): void {
+    $xReply = PostTargetReply::factory()->for($this->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+    ]);
+    $blueskyTarget = PostTarget::factory()
+        ->for(Post::factory()->create(['workspace_id' => $this->workspace->id]))
+        ->create(['platform' => Platform::Bluesky->value]);
+    $blueskyReply = PostTargetReply::factory()->for($blueskyTarget, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+    ]);
+
+    $this->postJson(route('engagement.read-all', ['platform' => 'bluesky']))->assertNoContent();
+
+    expect($blueskyReply->fresh()->read_at)->not->toBeNull()
+        ->and($xReply->fresh()->read_at)->toBeNull();
+});
+
 test('opening a conversation returns only replies in the selected base reply thread', function (): void {
     $this->target->forceFill(['remote_id' => 'at://root-post'])->save();
 

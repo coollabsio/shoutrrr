@@ -12,6 +12,7 @@ use App\Jobs\Contracts\ReleasableJob;
 use App\Jobs\Middleware\ThrottlesEngagementFetch;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Engagement\ReplyPersister;
 use App\Services\Publishing\TokenManager;
@@ -67,7 +68,7 @@ class FetchPostTargetReplies implements ReleasableJob, ShouldBeUnique, ShouldQue
         return [10, 30, 60];
     }
 
-    public function handle(EngagementConnectorRegistry $registry, TokenManager $tokens, ReplyPersister $persister, InstanceSettings $settings): void
+    public function handle(EngagementConnectorRegistry $registry, TokenManager $tokens, ReplyPersister $persister, InstanceSettings $settings, WorkspaceSubscriptionGate $gate): void
     {
         if (! $settings->engagementEnabled()) {
             return;
@@ -83,6 +84,10 @@ class FetchPostTargetReplies implements ReleasableJob, ShouldBeUnique, ShouldQue
         $post = $target->post()->withoutGlobalScopes()->first();
 
         if ($account === null || $account->isDisabled() || $post === null) {
+            return;
+        }
+
+        if (! $gate->canCallPlatformApi($account->workspace, $account->platform)) {
             return;
         }
 

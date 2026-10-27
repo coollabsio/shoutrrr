@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import PostMediaController from '@/actions/App/Http/Controllers/Posts/PostMediaController';
 import PostVideoUploadController from '@/actions/App/Http/Controllers/Posts/PostVideoUploadController';
+import { fitImageForUpload } from '@/lib/compose/fit-image';
 import {
     minVideoBytes,
     putWithProgress,
@@ -26,6 +27,8 @@ type Options = {
     mediaForSegment: (segmentRef: string) => MediaView[];
     /** Limits for the selected platforms, used to validate a video before upload. */
     videoLimits: PlatformLimits[];
+    /** Server pixel ceiling for images; larger images are downscaled before upload. */
+    maxImagePixels: number;
     /** Guarantee a persisted post id before uploading; returns the post id. */
     onEnsurePost: () => Promise<string>;
     /** Append a finished upload to the composer's media, tagged with the segment it belongs to. */
@@ -75,6 +78,7 @@ type MediaUploads = {
 export function useMediaUploads({
     mediaForSegment,
     videoLimits,
+    maxImagePixels,
     onEnsurePost,
     onAddMedia,
     activeSegmentRef,
@@ -271,8 +275,9 @@ export function useMediaUploads({
             return failUpload(tempId);
         }
 
+        const upload = await fitImageForUpload(file, maxImagePixels);
         // transform injects the file at submit time (multipart upload).
-        imageHttp.transform(() => ({ file }));
+        imageHttp.transform(() => ({ file: upload }));
         let validationMessage: string | undefined;
         try {
             const { media: result } = await imageHttp.post(ep.imageStore(id), {
@@ -286,6 +291,10 @@ export function useMediaUploads({
             });
             finishUpload(tempId, result, segmentRef, previewUrl);
         } catch {
+            // The chip alone hides the reason behind a hover tooltip (#189).
+            toast.error(
+                validationMessage ?? 'The image could not be uploaded.',
+            );
             failUpload(tempId, validationMessage);
         }
     }

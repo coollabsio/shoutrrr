@@ -312,9 +312,11 @@ class MetaConnectionController extends Controller
     {
         $projected = [];
 
-        foreach ($stashedAssets as $key => $asset) {
+        foreach ($stashedAssets as $asset) {
             $projected[] = [
-                'key' => $key,
+                // Not the array key: PHP casts numeric-string keys to int, and a
+                // Page ID above 2^53 then loses precision in the browser.
+                'key' => $asset['pageId'],
                 'pageId' => $asset['pageId'],
                 'pageName' => $asset['pageName'],
                 'igUserId' => $asset['igUserId'],

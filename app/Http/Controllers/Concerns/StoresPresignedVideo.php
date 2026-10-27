@@ -29,6 +29,17 @@ trait StoresPresignedVideo
      */
     private function signVideoUpload(string $workspaceId): JsonResponse
     {
+        return response()->json($this->videoUploadTarget($workspaceId));
+    }
+
+    /**
+     * The sign step without the response shape, so each surface (the web
+     * composer, the public API) can render the upload target its own way.
+     *
+     * @return array{key: string, url: string, headers: array<string, string>}
+     */
+    private function videoUploadTarget(string $workspaceId): array
+    {
         $key = 'tmp/media/'.$workspaceId.'/'.Str::uuid().'.mp4';
 
         ['url' => $uploadUrl, 'headers' => $headers] = FileStorage::temporaryVideoUploadUrl(
@@ -36,11 +47,11 @@ trait StoresPresignedVideo
             now()->addMinutes(15),
         );
 
-        return response()->json([
+        return [
             'key' => $key,
             'url' => $uploadUrl,
             'headers' => $headers,
-        ]);
+        ];
     }
 
     /**
@@ -51,6 +62,20 @@ trait StoresPresignedVideo
      * @param  array<string, mixed>  $logContext  Identifies the owner in rejection logs.
      */
     private function storeUploadedVideo(array $validated, string $workspaceId, array $logContext = []): JsonResponse
+    {
+        $media = $this->persistUploadedVideo($validated, $workspaceId, $logContext);
+
+        return response()->json(['media' => $media->toView()], 201);
+    }
+
+    /**
+     * The confirm step without the response shape, so each surface (the web
+     * composer, the public API) can render the stored media its own way.
+     *
+     * @param  array<string, mixed>  $validated
+     * @param  array<string, mixed>  $logContext  Identifies the owner in rejection logs.
+     */
+    private function persistUploadedVideo(array $validated, string $workspaceId, array $logContext = []): PostMedia
     {
         $key = (string) $validated['key'];
         $disk = FileStorage::diskName();
@@ -82,7 +107,7 @@ trait StoresPresignedVideo
         $final = 'media/'.$workspaceId.'/'.Str::uuid().'.mp4';
         Storage::disk($disk)->move($key, $final);
 
-        $media = PostMedia::create([
+        return PostMedia::create([
             'workspace_id' => $workspaceId,
             'post_id' => null,
             'disk' => $disk,
@@ -96,8 +121,6 @@ trait StoresPresignedVideo
             'alt_text' => $validated['alt_text'] ?? null,
             'position' => 0,
         ]);
-
-        return response()->json(['media' => $media->toView()], 201);
     }
 
     /**

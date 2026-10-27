@@ -7,13 +7,20 @@ namespace App\Services\Posts;
 use App\Models\PostMedia;
 use App\Support\FileStorage;
 use App\Support\SafeImageFetcher;
+use App\Support\SafeVideoFetcher;
+use App\Support\VideoProbe;
+use Illuminate\Http\File;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use RuntimeException;
 
 class MediaStorageService
 {
-    public function __construct(private readonly SafeImageFetcher $fetcher) {}
+    public function __construct(
+        private readonly SafeImageFetcher $fetcher,
+        private readonly SafeVideoFetcher $videoFetcher,
+        private readonly VideoProbe $probe,
+    ) {}
 
     /**
      * Store an uploaded image on the configured disk and create an orphan PostMedia row.
@@ -77,6 +84,52 @@ class MediaStorageService
             'alt_text' => $altText,
             'position' => 0,
         ]);
+    }
+
+    /**
+     * Download an MP4 from a public URL (SSRF-guarded, streamed to a temp file)
+     * and store it as an orphan video PostMedia row. A video without a readable
+     * duration is rejected: it would bypass every platform's duration check.
+     *
+     * @throws RuntimeException if the download fails or the file is not a probeable MP4.
+     */
+    public function storeVideoFromUrl(string $workspaceId, string $url): PostMedia
+    {
+        $temp = tempnam(sys_get_temp_dir(), 'video');
+        if ($temp === false) {
+            throw new RuntimeException('Could not create a temp file for the video.');
+        }
+
+        try {
+            $this->videoFetcher->fetchToFile($url, $temp);
+
+            $meta = $this->probe->probe($temp);
+            if ($meta === null) {
+                throw new RuntimeException('The video has no readable duration.');
+            }
+
+            $disk = FileStorage::diskName();
+            $path = FileStorage::disk($disk)->putFileAs('media/'.$workspaceId, new File($temp), Str::uuid()->toString().'.mp4');
+            if ($path === false) {
+                throw new RuntimeException('Could not store the video.');
+            }
+
+            return PostMedia::create([
+                'workspace_id' => $workspaceId,
+                'post_id' => null,
+                'disk' => $disk,
+                'path' => $path,
+                'kind' => 'video',
+                'mime' => 'video/mp4',
+                'size_bytes' => (int) filesize($temp),
+                'width' => $meta['width'],
+                'height' => $meta['height'],
+                'duration_seconds' => $meta['duration_seconds'],
+                'position' => 0,
+            ]);
+        } finally {
+            @unlink($temp);
+        }
     }
 
     /**

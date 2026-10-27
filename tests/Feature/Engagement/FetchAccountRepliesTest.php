@@ -9,6 +9,7 @@ use App\Models\ConnectedAccountSecret;
 use App\Models\Post;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
+use App\Services\Billing\WorkspaceSubscriptionGate;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Engagement\ReplyFetchCadence;
 use App\Services\Engagement\ReplyPersister;
@@ -23,6 +24,7 @@ function runAccountFetch(ConnectedAccount $account): void
         app(ReplyPersister::class),
         app(ReplyFetchCadence::class),
         app(InstanceSettings::class),
+        app(WorkspaceSubscriptionGate::class),
     );
 }
 

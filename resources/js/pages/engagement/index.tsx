@@ -51,6 +51,7 @@ import {
     destroy as destroyRoute,
     index as engagementRoute,
     like as likeRoute,
+    readAll as readAllRoute,
     respond as respondRoute,
     thread as threadRoute,
     unlike as unlikeRoute,
@@ -631,6 +632,7 @@ export default function EngagementIndex({
     // The keyboard `A` shortcut archives without an Inertia visit, mirroring the
     // conversation pane's plain-JSON action so the deferred list never blanks.
     const archiveHttp = useHttp<Record<string, never>, null>({});
+    const readAllHttp = useHttp<Record<string, never>, null>({});
 
     const {
         account: filterAccount,
@@ -834,6 +836,36 @@ export default function EngagementIndex({
         router.reload({ only: ['shell.unreadReplies'] });
     }
 
+    function markAllRead() {
+        void readAllHttp
+            .post(readAllRoute({ query: filters }).url, {
+                onSuccess: () => {
+                    // Adopt the refetched list outright: the unread view should
+                    // empty and the rest lose their unread markers.
+                    router.reload({
+                        only: ['replies', 'shell.unreadReplies'],
+                        reset: ['replies'],
+                        onSuccess: (page) => {
+                            setOnScreen(
+                                (page.props as Partial<PageProps>).replies
+                                    ?.data ?? [],
+                            );
+                            setRevealedIds([]);
+                        },
+                    });
+                },
+                onHttpException: (r) => {
+                    toast.error(
+                        actionErrorMessage(r, 'Could not mark replies read.'),
+                    );
+                },
+                onNetworkError: () => {
+                    toast.error('Could not reach the server.');
+                },
+            })
+            .catch(() => {});
+    }
+
     function handleResponded(id: string) {
         setOverrides((prev) => ({ ...prev, [id]: 'responded' }));
     }
@@ -861,6 +893,8 @@ export default function EngagementIndex({
                             filters={filters}
                             accounts={facets.accounts}
                             posts={facets.posts}
+                            onMarkAllRead={markAllRead}
+                            markingAllRead={readAllHttp.processing}
                         />
                     </div>
                     <div className="relative min-h-0 flex-1">

@@ -35,3 +35,9 @@ test('openapi spec declares a bearer security scheme', function (): void {
 
     expect($hasBearerScheme)->toBeTrue();
 });
+
+test('openapi spec documents the video upload endpoints', function (): void {
+    $paths = $this->getJson('/api/v1/openapi.json')->json('paths');
+
+    expect($paths)->toHaveKeys(['/media/video/upload-url', '/media/video']);
+});

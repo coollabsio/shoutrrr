@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\NativeRead\Connectors;
 
+use App\Dto\NativeRead\NativeMedia;
 use App\Dto\NativeRead\NativePost;
 use App\Dto\NativeRead\NativeReadCursor;
 use App\Dto\NativeRead\RecentPostsResult;
@@ -34,7 +35,9 @@ class XNativeReadConnector implements NativeReadConnector
                     'exclude' => 'replies,retweets',
                     'max_results' => 100,
                     'start_time' => $cursor->watermark->toIso8601ZuluString(),
-                    'tweet.fields' => 'created_at',
+                    'tweet.fields' => 'created_at,attachments,entities,note_tweet,referenced_tweets,in_reply_to_user_id',
+                    'expansions' => 'attachments.media_keys',
+                    'media.fields' => 'type,url,variants',
                 ]);
         } catch (ConnectionException $e) {
             return RecentPostsResult::failed($e->getMessage());
@@ -57,6 +60,25 @@ class XNativeReadConnector implements NativeReadConnector
                 : RecentPostsResult::failed($response->body());
         }
 
+        // Photos: the bare `url` serves a 1200px "medium" copy, so request the original.
+        // Video/GIF: no `url`; take the highest-bitrate MP4 variant (HLS has no bit_rate).
+        $mediaByKey = [];
+        foreach ((array) $response->json('includes.media', []) as $media) {
+            $key = (string) ($media['media_key'] ?? '');
+            $type = $media['type'] ?? null;
+            if ($type === 'photo' && isset($media['url'])) {
+                $mediaByKey[$key] = new NativeMedia($media['url'].'?name=orig', 'image');
+            } elseif (in_array($type, ['video', 'animated_gif'], true)) {
+                $mp4 = collect((array) ($media['variants'] ?? []))
+                    ->where('content_type', 'video/mp4')
+                    ->sortByDesc('bit_rate')
+                    ->first();
+                if (isset($mp4['url'])) {
+                    $mediaByKey[$key] = new NativeMedia((string) $mp4['url'], 'video', 'video/mp4');
+                }
+            }
+        }
+
         $posts = [];
         $newest = null;
         foreach ($tweets as $tweet) {
@@ -65,16 +87,44 @@ class XNativeReadConnector implements NativeReadConnector
                 continue;
             }
             $newest ??= $id;
+            // Do not rely on `exclude` alone; ingest skips flagged replies/retweets.
+            $referenceTypes = array_column((array) ($tweet['referenced_tweets'] ?? []), 'type');
             $posts[] = new NativePost(
                 remoteId: $id,
-                text: (string) ($tweet['text'] ?? ''),
+                text: $this->text($tweet),
                 createdAt: Carbon::parse((string) ($tweet['created_at'] ?? 'now'))->toImmutable(),
-                media: [], // X media requires expansions; v1 mirrors text (media is reference-less)
-                isReply: false,
-                isRepost: false,
+                media: array_values(array_filter(array_map(
+                    static fn (string $key): ?NativeMedia => $mediaByKey[$key] ?? null,
+                    (array) ($tweet['attachments']['media_keys'] ?? []),
+                ))),
+                isReply: isset($tweet['in_reply_to_user_id']) || in_array('replied_to', $referenceTypes, true),
+                isRepost: in_array('retweeted', $referenceTypes, true),
             );
         }
 
         return RecentPostsResult::ok($posts, $newest);
+    }
+
+    /**
+     * X appends a t.co link per attachment and shortens every link; drop the media
+     * links, expand the rest and decode the HTML-escaped text.
+     *
+     * @param  array<string, mixed>  $tweet
+     */
+    private function text(array $tweet): string
+    {
+        // Long posts (>280 chars) carry the full text + entities in note_tweet.
+        $source = isset($tweet['note_tweet']['text']) ? $tweet['note_tweet'] : $tweet;
+        $text = (string) ($source['text'] ?? '');
+
+        foreach ((array) ($source['entities']['urls'] ?? []) as $url) {
+            if (! isset($url['url'])) {
+                continue;
+            }
+            $isMedia = isset($url['media_key']) || preg_match('#/status/\d+/(photo|video)/\d+$#', (string) ($url['expanded_url'] ?? '')) === 1;
+            $text = str_replace((string) $url['url'], $isMedia ? '' : (string) ($url['expanded_url'] ?? $url['url']), $text);
+        }
+
+        return trim(html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
     }
 }

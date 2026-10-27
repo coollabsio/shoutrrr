@@ -275,6 +275,65 @@ test('x surfaces the real reason when video processing fails', function () {
         ->and($result->errorMessage)->toContain('aspect ratio of the video');
 });
 
+test('x surfaces the error detail when the post request is rejected with Invalid Request', function () {
+    Http::fake([
+        'https://api.twitter.com/2/tweets' => Http::response([
+            'title' => 'Invalid Request',
+            'detail' => 'One or more parameters to your request was invalid.',
+            'type' => 'https://api.twitter.com/2/problems/invalid-request',
+            'errors' => [['parameters' => ['media.media_ids' => ['123']], 'message' => 'Your media IDs are invalid.']],
+        ], 400),
+    ]);
+
+    $result = app(XConnector::class)->publish(xContext(['hi']));
+
+    expect($result->errorKind)->toBe(ErrorKind::Validation)
+        ->and($result->errorMessage)->toBe('Invalid Request: Your media IDs are invalid.');
+});
+
+test('x falls back to detail and title when the error body has no errors list', function () {
+    Http::fake([
+        'https://api.twitter.com/2/tweets' => Http::sequence()
+            ->push(['title' => 'Forbidden', 'detail' => 'Your account is not permitted to perform this action.'], 403)
+            ->push(['title' => 'Invalid Request'], 400)
+            ->push('', 400),
+    ]);
+
+    $connector = app(XConnector::class);
+
+    expect($connector->publish(xContext(['hi']))->errorMessage)
+        ->toBe('Forbidden: Your account is not permitted to perform this action.')
+        ->and($connector->publish(xContext(['hi']))->errorMessage)->toBe('Invalid Request')
+        ->and($connector->publish(xContext(['hi']))->errorMessage)->toBe('X request failed');
+});
+
+test('x names the video upload step and the real reason when upload is rejected', function () {
+    Storage::fake('public');
+    Storage::disk('public')->put('media/result.mp4', 'video-bytes');
+
+    $media = PostMedia::factory()->video()->create([
+        'disk' => 'public',
+        'path' => 'media/result.mp4',
+        'mime' => 'video/mp4',
+        'size_bytes' => strlen('video-bytes'),
+    ]);
+
+    Http::fake([
+        'https://api.x.com/2/media/upload/initialize' => Http::response([
+            'title' => 'Invalid Request',
+            'detail' => 'One or more parameters to your request was invalid.',
+            'errors' => [['message' => 'total_bytes is too large.']],
+        ], 400),
+    ]);
+
+    $result = app(XConnector::class)->publish(xContext(['watch this'], [$media]));
+
+    expect($result->errorKind)->toBe(ErrorKind::Validation)
+        ->and($result->errorMessage)->toBe('X video upload failed: Invalid Request: total_bytes is too large.');
+
+    Http::assertNotSent(fn ($request) => $request->url() === 'https://api.twitter.com/2/tweets');
+});
+
 test('x rejects mixing a gif with other media before calling the api', function () {
     Storage::fake('public');
     Storage::disk('public')->put('media/animation.gif', 'gif-bytes');

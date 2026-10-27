@@ -17,7 +17,6 @@ use App\Exceptions\TransientTokenRefreshException;
 use App\Models\PostMediaPlacement;
 use App\Models\PostTarget;
 use App\Models\PostTargetAttempt;
-use App\Notifications\AccountNeedsAttentionNotification;
 use App\Notifications\PostPublishedNotification;
 use App\Notifications\PublishFailedNotification;
 use App\Services\Billing\WorkspaceSubscriptionGate;
@@ -166,7 +165,7 @@ class PublishPostTarget implements ShouldQueue
                 // did upload resumes from stored state) before declaring the
                 // account needs attention.
                 if ($result->errorKind === ErrorKind::AuthExpired) {
-                    $credentials = $tokens->fresh($account, force: true);
+                    $credentials = $tokens->fresh($account, force: true, rejectedAccessToken: $credentials['access_token'] ?? null);
                     $result = $connector->publish($this->context($target, $credentials));
                 }
             } catch (TransientTokenRefreshException $e) {
@@ -303,7 +302,7 @@ class PublishPostTarget implements ShouldQueue
 
         app(PostStatusRollup::class)->recompute($target->post()->firstOrFail());
 
-        $this->notifyFailed($target, ErrorKind::Unknown);
+        $this->notifyFailed($target);
     }
 
     /**
@@ -370,24 +369,16 @@ class PublishPostTarget implements ShouldQueue
     }
 
     /**
-     * Notify the post author about a terminal failure. Auth-expiry routes to the
-     * reconnect notification; everything else to the publish-failed notification.
+     * Notify the post author about a terminal failure. Reconnect notices are sent
+     * separately to the workspace owner and connecting user when the account status
+     * changes, so the author still learns about the failed post.
      */
-    public function notifyFailed(PostTarget $target, ErrorKind $kind): void
+    public function notifyFailed(PostTarget $target): void
     {
         $post = $target->post()->firstOrFail();
         $author = $post->author()->first();
 
         if ($author === null) {
-            return;
-        }
-
-        if ($kind === ErrorKind::AuthExpired) {
-            $author->notify(new AccountNeedsAttentionNotification(
-                $target->account()->firstOrFail(),
-                $post->workspace_id,
-            ));
-
             return;
         }
 
@@ -464,7 +455,7 @@ class PublishPostTarget implements ShouldQueue
             ])->save();
         }
 
-        $this->notifyFailed($target, $kind);
+        $this->notifyFailed($target);
     }
 
     private function onMediaProcessing(PostTarget $target, PostTargetAttempt $attempt, PublishResult $result): void
@@ -494,7 +485,7 @@ class PublishPostTarget implements ShouldQueue
                 'next_attempt_at' => null,
             ])->save();
 
-            $this->notifyFailed($target, ErrorKind::ServerError);
+            $this->notifyFailed($target);
 
             return;
         }

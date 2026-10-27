@@ -111,3 +111,26 @@ test('brackets IPv6 addresses in the curl resolution pin', function (): void {
     expect($fetcher->exposePin('cdn.example.com', 'https', 'https://cdn.example.com/clip.mp4', ['1.2.3.4']))
         ->toBe([CURLOPT_RESOLVE => ['cdn.example.com:443:1.2.3.4']]);
 });
+
+test('fetchToFile streams a valid mp4 to the given path', function () {
+    Http::fake(['https://example.com/*' => Http::response(fakeMp4Bytes())]);
+    $path = tempnam(sys_get_temp_dir(), 'test');
+
+    app(SafeVideoFetcher::class)->fetchToFile('https://example.com/video.mp4', $path);
+
+    expect(file_get_contents($path))->toBe(fakeMp4Bytes());
+    @unlink($path);
+});
+
+test('fetchToFile rejects an oversize or non-mp4 download', function (string $body) {
+    config()->set('media.max_video_bytes', 2048);
+    Http::fake(['https://example.com/*' => Http::response($body)]);
+    $path = tempnam(sys_get_temp_dir(), 'test');
+
+    expect(fn () => app(SafeVideoFetcher::class)->fetchToFile('https://example.com/video.mp4', $path))
+        ->toThrow(RuntimeException::class);
+    @unlink($path);
+})->with([
+    'oversize' => [fakeMp4Bytes(4096)],
+    'not an mp4' => [str_repeat('A', 1024)],
+]);

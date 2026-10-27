@@ -17,8 +17,15 @@ class IngestNativePosts implements ShouldBeUnique, ShouldQueue
     /**
      * Keep a second job for the same account from overlapping a still-running
      * poll (slow job + next schedule tick), which would otherwise double-post.
+     * Outlives $timeout so the lock never expires under a still-running job.
      */
-    public int $uniqueFor = 900;
+    public int $uniqueFor = 1200;
+
+    /**
+     * Pipeline sources download their videos inside this run. MUST stay below the
+     * queue connection's `retry_after` (default 1200), as PublishPostTarget does.
+     */
+    public int $timeout = 900;
 
     public function __construct(public ConnectedAccount $account) {}
 

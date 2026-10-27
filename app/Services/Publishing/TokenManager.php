@@ -58,7 +58,7 @@ class TokenManager
      *
      * @return array<string, mixed>
      */
-    public function fresh(ConnectedAccount $account, bool $force = false): array
+    public function fresh(ConnectedAccount $account, bool $force = false, ?string $rejectedAccessToken = null): array
     {
         $secret = $account->secret()->firstOrFail();
 
@@ -67,7 +67,7 @@ class TokenManager
         }
 
         if ($account->platform === Platform::Bluesky && $account->auth_method === 'oauth') {
-            return $this->blueskyOAuthCredentials($account, $secret, $force);
+            return $this->blueskyOAuthCredentials($account, $secret, $force, $rejectedAccessToken);
         }
 
         if ($account->platform === Platform::Threads) {
@@ -127,30 +127,32 @@ class TokenManager
     /**
      * @return array<string, mixed>
      */
-    private function blueskyOAuthCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret, bool $force): array
+    private function blueskyOAuthCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret, bool $force, ?string $rejectedAccessToken): array
     {
         if (! $force && ! $this->needsRefresh($account)) {
             return $this->blueskyOAuthPayload($secret);
         }
 
-        // Bluesky (ATProto) OAuth refresh tokens are single-use and rotate on every
-        // refresh. Concurrent refreshers — the hourly force-sweep plus the publish,
-        // reply-fetch, and engagement jobs that all call fresh() — would otherwise
-        // race: the winner rotates the token, the loser POSTs the already-consumed
-        // one and 400s with invalid_grant, flipping the account to needs-attention.
-        // Serialize per account and re-read the rotated state under the lock, exactly
-        // as the generic OAuth path below does.
-        return Cache::lock("connected-account-token-refresh:{$account->id}", self::REFRESH_LOCK_SECONDS)
-            ->block(10, function () use ($account, $force): array {
-                $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
-                $freshSecret = $freshAccount->secret()->firstOrFail();
+        $originalAccessToken = $rejectedAccessToken ?? $secret->access_token;
 
-                if (! $force && ! $this->needsRefresh($freshAccount)) {
-                    return $this->blueskyOAuthPayload($freshSecret);
-                }
+        try {
+            return Cache::lock("connected-account-token-refresh:{$account->id}", self::REFRESH_LOCK_SECONDS)
+                ->block(10, function () use ($account, $force, $originalAccessToken): array {
+                    $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
+                    $freshSecret = $freshAccount->secret()->firstOrFail();
 
-                return $this->refreshOAuth($freshAccount, $freshSecret);
-            });
+                    // A forced retry only rejects the token used by the failed request.
+                    // Reuse a replacement obtained by another worker while we waited.
+                    if (! $this->needsRefresh($freshAccount)
+                        && (! $force || $freshSecret->access_token !== $originalAccessToken)) {
+                        return $this->blueskyOAuthPayload($freshSecret);
+                    }
+
+                    return $this->refreshOAuth($freshAccount, $freshSecret);
+                });
+        } catch (LockTimeoutException $exception) {
+            throw new TransientTokenRefreshException("Token refresh is busy for account {$account->id}.", previous: $exception);
+        }
     }
 
     /**

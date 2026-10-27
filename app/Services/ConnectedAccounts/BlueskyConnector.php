@@ -194,7 +194,7 @@ class BlueskyConnector
         return ltrim(trim($identifier), '@');
     }
 
-    private function resolveDidToPds(string $did): ?string
+    public function resolveDidToPds(string $did): ?string
     {
         $response = $this->http
             ->timeout(10)

@@ -26,6 +26,7 @@ declare module '@inertiajs/core' {
                 unreadReplies: number;
                 unreadMessages: number;
                 gifs_enabled: boolean;
+                maxImagePixels: number;
             };
             notifications: NotificationsData;
             features?: {
