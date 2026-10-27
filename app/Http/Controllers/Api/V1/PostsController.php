@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Dto\Post\DraftData;
+use App\Enums\PostFormat;
 use App\Enums\PostStatus;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesWorkspacePost;
 use App\Http\Controllers\Controller;
 use App\Jobs\DeletePostTarget;
+use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostTarget;
 use App\Models\User;
@@ -21,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PostsController extends Controller
 {
@@ -71,8 +74,13 @@ class PostsController extends Controller
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
+            'targets' => ['array'],
+            'targets.*.connected_account_id' => ['required', 'string'],
+            'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
         ]);
+
+        $this->ensureFormatsSupported($validated['targets'] ?? []);
 
         /** @var User $user */
         $user = $request->user();
@@ -88,6 +96,7 @@ class PostsController extends Controller
             $segments,
             $validated['mentions'] ?? [],
             $validated['auto_repost'] ?? null,
+            DraftData::fromArray($validated),
         );
 
         return response()->json(['post' => PostView::make($post->fresh(['targets.account', 'media']))], 201);
@@ -116,6 +125,7 @@ class PostsController extends Controller
             'targets' => ['array'],
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
+            'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.media_ids' => ['array'],
@@ -125,6 +135,8 @@ class PostsController extends Controller
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
             'expected_updated_at' => ['nullable', 'string'],
         ]);
+
+        $this->ensureFormatsSupported($validated['targets'] ?? []);
 
         try {
             $updated = $drafts->updateDraft($model, DraftData::fromArray($validated));
@@ -157,5 +169,46 @@ class PostsController extends Controller
         $model->forceFill(['status' => PostStatus::Deleted->value, 'deleted_at' => now()])->save();
 
         return response()->json(['deleted' => true, 'remote' => true, 'message' => 'Remote deletion queued for published targets.']);
+    }
+
+    /**
+     * Reject a per-target `format` the target's platform does not offer (e.g.
+     * Reels on X) — the same set the web composer exposes via PostFormat::forPlatform.
+     *
+     * @param  array<int, array{connected_account_id: string, format?: string|null}>  $targets
+     *
+     * @throws ValidationException
+     */
+    private function ensureFormatsSupported(array $targets): void
+    {
+        $accounts = ConnectedAccount::query()
+            ->whereKey(array_column($targets, 'connected_account_id'))
+            ->get()
+            ->keyBy('id');
+        $errors = [];
+
+        foreach ($targets as $index => $target) {
+            $format = PostFormat::tryFrom((string) ($target['format'] ?? ''));
+
+            if (! $format instanceof PostFormat) {
+                continue;
+            }
+
+            $account = $accounts->get($target['connected_account_id']);
+
+            if (! $account instanceof ConnectedAccount) {
+                $errors["targets.{$index}.connected_account_id"] = 'No connected account with that id exists in this workspace.';
+
+                continue;
+            }
+
+            if (! in_array($format, PostFormat::forPlatform($account->platform), true)) {
+                $errors["targets.{$index}.format"] = "The {$format->value} format is not available on {$account->platform->value}.";
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 }
