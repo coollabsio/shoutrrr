@@ -1,17 +1,21 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
+import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import SyncPipelinesController from '@/actions/App/Http/Controllers/Settings/SyncPipelinesController';
 import AppLogo from '@/components/layout/app-logo';
 import { ModeSwitch } from '@/components/layout/mode-switch';
 import { NavUser } from '@/components/layout/nav-user';
+import { SidebarContextMenu } from '@/components/layout/sidebar-context-menu';
 import { SidebarFooterCard } from '@/components/layout/sidebar-footer-card';
 import type { IconComponent } from '@/components/ui/icons';
 import {
+    Bell,
     Blocks,
     CalendarDays,
     ChartColumn,
+    ChevronRight,
     CreditCard,
     Inbox,
     KeyRound,
@@ -19,10 +23,13 @@ import {
     MessageCircle,
     MessageSquare,
     Pencil,
+    Plug,
     RefreshCw,
     Settings,
     Share2,
     Shield,
+    Sun,
+    User,
     Users,
     Wrench,
 } from '@/components/ui/icons';
@@ -48,6 +55,10 @@ import {
 import { WorkspaceSelector } from '@/components/workspace/workspace-selector';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import {
+    accountSettingsNavItems,
+    type AccountSettingsNavKey,
+} from '@/lib/navigation/account-settings-nav';
+import {
     composeButtonClassName,
     composeIconClassName,
 } from '@/lib/navigation/compose-nav';
@@ -55,6 +66,11 @@ import {
     instanceSettingsNavItems,
     type InstanceSettingsNavKey,
 } from '@/lib/navigation/instance-settings-nav';
+import {
+    sidebarContextFor,
+    sidebarContextLabel,
+    type SidebarContextId,
+} from '@/lib/navigation/sidebar-context';
 import {
     workspaceSettingsNavItems,
     type WorkspaceSettingsNavKey,
@@ -94,6 +110,14 @@ const instanceSettingsIcons: Record<InstanceSettingsNavKey, IconComponent> = {
     admins: Shield,
 };
 
+const accountSettingsIcons: Record<AccountSettingsNavKey, IconComponent> = {
+    profile: User,
+    security: Shield,
+    connections: Plug,
+    appearance: Sun,
+    notifications: Bell,
+};
+
 const versionBadgeClassName =
     'rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none font-medium text-sidebar-foreground/60 transition-colors hover:border-sidebar-accent-foreground/30 hover:text-sidebar-foreground';
 
@@ -111,16 +135,19 @@ const postsNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
+    const page = usePage();
     const {
         auth,
         workspaces,
         features,
         instance,
         shell,
+        socialite,
         updateAvailable,
         latestVersion,
         latestReleaseUrl,
-    } = usePage().props;
+    } = page.props;
+    const pathname = page.url.split('?')[0];
     const unreadReplies = shell?.unreadReplies ?? 0;
     const unreadMessages = shell?.unreadMessages ?? 0;
     const { isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
@@ -139,6 +166,14 @@ export function AppSidebar() {
     );
 
     const classicMode = resolveUiMode(auth.user?.ui_mode) === 'classic';
+    const routeContext = sidebarContextFor(pathname, { classicMode });
+    const [menuOverride, setMenuOverride] = useState<
+        'main' | SidebarContextId | null
+    >(null);
+
+    useEffect(() => {
+        setMenuOverride(null);
+    }, [pathname]);
     const productHome = classicMode ? dashboard() : agenticHome();
     const composeHref = dashboard();
     const showWorkspaceSettings = workspaces.enabled && workspaces.current;
@@ -156,12 +191,94 @@ export function AppSidebar() {
     const instanceItems = showInstanceSettings
         ? instanceSettingsNavItems()
         : [];
+    const accountItems = accountSettingsNavItems({
+        hasSocialProviders: socialite.providers.length > 0,
+    });
+    const shownContextId: SidebarContextId | null =
+        menuOverride === 'main'
+            ? null
+            : (menuOverride ?? routeContext?.id ?? null);
+    const shownContext =
+        shownContextId === null
+            ? null
+            : {
+                  id: shownContextId,
+                  label: sidebarContextLabel(shownContextId),
+                  backTitle: 'Back to the main menu',
+                  postId:
+                      shownContextId === 'post'
+                          ? (routeContext?.postId ?? null)
+                          : null,
+              };
     const isItemActive = (
         item: (typeof settingsItems)[number] | (typeof instanceItems)[number],
     ) =>
         item.key === 'overview' || item.key === 'general'
             ? isCurrentUrl(item.href)
             : isCurrentOrParentUrl(item.href);
+    const contextItems: Array<NavItem & { key: string; active: boolean }> =
+        shownContext?.id === 'workspace'
+            ? settingsItems.map((item) => ({
+                  key: item.key,
+                  title: item.title,
+                  href: item.href,
+                  icon: workspaceSettingsIcons[item.key],
+                  active: isItemActive(item),
+              }))
+            : shownContext?.id === 'instance'
+              ? instanceItems.map((item) => ({
+                    key: item.key,
+                    title: item.title,
+                    href: item.href,
+                    icon: instanceSettingsIcons[item.key],
+                    active: isItemActive(item),
+                }))
+              : shownContext?.id === 'account'
+                ? accountItems.map((item) => ({
+                      key: item.key,
+                      title: item.title,
+                      href: item.href,
+                      icon: accountSettingsIcons[item.key],
+                      active: isCurrentOrParentUrl(item.href),
+                  }))
+                : shownContext?.id === 'post' && shownContext.postId
+                  ? [
+                        {
+                            key: 'edit',
+                            title: 'Edit',
+                            href: ComposerController.show(shownContext.postId),
+                            icon: Pencil,
+                            active: isCurrentUrl(
+                                ComposerController.show(shownContext.postId),
+                            ),
+                        },
+                        ...(features?.engagement
+                            ? [
+                                  {
+                                      key: 'replies',
+                                      title: 'Replies',
+                                      href: engagementRoute({
+                                          query: {
+                                              post: shownContext.postId,
+                                          },
+                                      }),
+                                      icon: MessageCircle,
+                                      active: false,
+                                  },
+                              ]
+                            : []),
+                    ]
+                  : shownContext?.id === 'accounts'
+                    ? [
+                          {
+                              key: 'accounts',
+                              title: 'Accounts',
+                              href: accountsRoute(),
+                              icon: Share2,
+                              active: isCurrentUrl(accountsRoute()),
+                          },
+                      ]
+                    : [];
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -219,212 +336,269 @@ export function AppSidebar() {
                 <WorkspaceSelector />
             </SidebarHeader>
 
-            <SidebarContent className="gap-0">
+            <SidebarContent
+                className="gap-0"
+                data-sidebar-context={shownContext?.id ?? 'main'}
+            >
                 <ModeSwitch />
-                {!classicMode && (
-                    <SidebarGroup>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton
-                                        tooltip="Connect accounts"
-                                        isActive={isCurrentUrl(accountsRoute())}
-                                        render={<Link href={accountsRoute()} />}
-                                    >
-                                        <Share2 aria-hidden="true" />
-                                        <span>Connect accounts</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-                )}
-                {classicMode && (
+                {shownContext ? (
+                    <SidebarContextMenu
+                        label={shownContext.label}
+                        backTitle={shownContext.backTitle}
+                        items={contextItems}
+                        onBack={() => setMenuOverride('main')}
+                    />
+                ) : (
                     <>
-                        <SidebarGroup className="border-b border-sidebar-border">
+                        {!classicMode && (
+                            <SidebarGroup>
+                                <SidebarGroupContent>
+                                    <SidebarMenu>
+                                        <SidebarMenuItem>
+                                            <SidebarMenuButton
+                                                tooltip="Connect accounts"
+                                                isActive={isCurrentUrl(
+                                                    accountsRoute(),
+                                                )}
+                                                render={
+                                                    <Link
+                                                        href={accountsRoute()}
+                                                    />
+                                                }
+                                            >
+                                                <Share2 aria-hidden="true" />
+                                                <span>Connect accounts</span>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    </SidebarMenu>
+                                </SidebarGroupContent>
+                            </SidebarGroup>
+                        )}
+                        {classicMode && (
+                            <>
+                                <SidebarGroup className="border-b border-sidebar-border">
+                                    <SidebarGroupContent>
+                                        <SidebarMenu>
+                                            <SidebarMenuItem>
+                                                <SidebarMenuButton
+                                                    tooltip="Compose new post"
+                                                    isActive={isCurrentUrl(
+                                                        composeHref,
+                                                    )}
+                                                    className={composeButtonClassName(
+                                                        collapsed,
+                                                    )}
+                                                    render={
+                                                        <Link
+                                                            href={composeHref}
+                                                        />
+                                                    }
+                                                >
+                                                    <span className="pointer-events-none flex items-center gap-2">
+                                                        <span
+                                                            className={composeIconClassName()}
+                                                        >
+                                                            <Pencil aria-hidden="true" />
+                                                        </span>
+                                                        {!collapsed && (
+                                                            <span>
+                                                                Compose post
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    {!collapsed && (
+                                                        <Kbd className="bg-primary-foreground/15 text-primary-foreground">
+                                                            ⌘.
+                                                        </Kbd>
+                                                    )}
+                                                </SidebarMenuButton>
+                                            </SidebarMenuItem>
+                                        </SidebarMenu>
+                                    </SidebarGroupContent>
+                                </SidebarGroup>
+
+                                <SidebarGroup>
+                                    <SidebarGroupLabel>Posts</SidebarGroupLabel>
+                                    <SidebarGroupContent>
+                                        <SidebarMenu>
+                                            {postsNavItems
+                                                .filter(
+                                                    (item) =>
+                                                        (item.title !==
+                                                            'Engagement' ||
+                                                            features?.engagement) &&
+                                                        (item.title !==
+                                                            'Messages' ||
+                                                            features?.messages),
+                                                )
+                                                .map((item) => (
+                                                    <SidebarMenuItem
+                                                        key={item.title}
+                                                    >
+                                                        <SidebarMenuButton
+                                                            tooltip={item.title}
+                                                            isActive={isCurrentUrl(
+                                                                item.href,
+                                                            )}
+                                                            render={
+                                                                <Link
+                                                                    href={
+                                                                        item.href
+                                                                    }
+                                                                />
+                                                            }
+                                                        >
+                                                            <item.icon aria-hidden="true" />
+                                                            <span>
+                                                                {item.title}
+                                                            </span>
+                                                            {item.title ===
+                                                                'Engagement' &&
+                                                            unreadReplies >
+                                                                0 ? (
+                                                                <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                                    {unreadReplies >
+                                                                    99
+                                                                        ? '99+'
+                                                                        : unreadReplies}
+                                                                </span>
+                                                            ) : null}
+                                                            {item.title ===
+                                                                'Messages' &&
+                                                            unreadMessages >
+                                                                0 ? (
+                                                                <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                                                                    {unreadMessages >
+                                                                    99
+                                                                        ? '99+'
+                                                                        : unreadMessages}
+                                                                </span>
+                                                            ) : null}
+                                                        </SidebarMenuButton>
+                                                    </SidebarMenuItem>
+                                                ))}
+                                            {features?.analytics && (
+                                                <SidebarMenuItem>
+                                                    <SidebarMenuButton
+                                                        tooltip="Analytics"
+                                                        isActive={isCurrentUrl(
+                                                            analyticsRoute(),
+                                                        )}
+                                                        render={
+                                                            <Link
+                                                                href={analyticsRoute()}
+                                                            />
+                                                        }
+                                                    >
+                                                        <ChartColumn aria-hidden="true" />
+                                                        <span>Analytics</span>
+                                                    </SidebarMenuButton>
+                                                </SidebarMenuItem>
+                                            )}
+                                            {showSyncPipelines && (
+                                                <SidebarMenuItem>
+                                                    <SidebarMenuButton
+                                                        tooltip="Sync pipelines"
+                                                        isActive={isCurrentOrParentUrl(
+                                                            SyncPipelinesController.index()
+                                                                .url,
+                                                        )}
+                                                        render={
+                                                            <Link
+                                                                href={SyncPipelinesController.index()}
+                                                            />
+                                                        }
+                                                    >
+                                                        <RefreshCw aria-hidden="true" />
+                                                        <span>
+                                                            Sync pipelines
+                                                        </span>
+                                                    </SidebarMenuButton>
+                                                </SidebarMenuItem>
+                                            )}
+                                        </SidebarMenu>
+                                    </SidebarGroupContent>
+                                </SidebarGroup>
+                            </>
+                        )}
+
+                        <SidebarGroup>
                             <SidebarGroupContent>
                                 <SidebarMenu>
+                                    {showWorkspaceSettings && (
+                                        <SidebarMenuItem>
+                                            <SidebarMenuButton
+                                                tooltip={workspaceSettingsLabel}
+                                                isActive={
+                                                    routeContext?.id ===
+                                                    'workspace'
+                                                }
+                                                onClick={() =>
+                                                    setMenuOverride('workspace')
+                                                }
+                                            >
+                                                <Settings aria-hidden="true" />
+                                                <span>
+                                                    {workspaceSettingsLabel}
+                                                </span>
+                                                <span className="ml-auto group-data-[collapsible=icon]:hidden">
+                                                    <ChevronRight
+                                                        className="size-3 opacity-60"
+                                                        aria-hidden="true"
+                                                    />
+                                                </span>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    )}
+                                    {showInstanceSettings && (
+                                        <SidebarMenuItem>
+                                            <SidebarMenuButton
+                                                tooltip={instanceSettingsLabel}
+                                                isActive={
+                                                    routeContext?.id ===
+                                                    'instance'
+                                                }
+                                                onClick={() =>
+                                                    setMenuOverride('instance')
+                                                }
+                                            >
+                                                <Wrench aria-hidden="true" />
+                                                <span>
+                                                    {instanceSettingsLabel}
+                                                </span>
+                                                <span className="ml-auto group-data-[collapsible=icon]:hidden">
+                                                    <ChevronRight
+                                                        className="size-3 opacity-60"
+                                                        aria-hidden="true"
+                                                    />
+                                                </span>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    )}
                                     <SidebarMenuItem>
                                         <SidebarMenuButton
-                                            tooltip="Compose new post"
-                                            isActive={isCurrentUrl(composeHref)}
-                                            className={composeButtonClassName(
-                                                collapsed,
-                                            )}
-                                            render={<Link href={composeHref} />}
+                                            tooltip="Settings"
+                                            isActive={
+                                                routeContext?.id === 'account'
+                                            }
+                                            onClick={() =>
+                                                setMenuOverride('account')
+                                            }
                                         >
-                                            <span className="pointer-events-none flex items-center gap-2">
-                                                <span
-                                                    className={composeIconClassName()}
-                                                >
-                                                    <Pencil aria-hidden="true" />
-                                                </span>
-                                                {!collapsed && (
-                                                    <span>Compose post</span>
-                                                )}
+                                            <User aria-hidden="true" />
+                                            <span>Settings</span>
+                                            <span className="ml-auto group-data-[collapsible=icon]:hidden">
+                                                <ChevronRight
+                                                    className="size-3 opacity-60"
+                                                    aria-hidden="true"
+                                                />
                                             </span>
-                                            {!collapsed && (
-                                                <Kbd className="bg-primary-foreground/15 text-primary-foreground">
-                                                    ⌘.
-                                                </Kbd>
-                                            )}
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
                                 </SidebarMenu>
                             </SidebarGroupContent>
                         </SidebarGroup>
-
-                        <SidebarGroup>
-                            <SidebarGroupLabel>Posts</SidebarGroupLabel>
-                            <SidebarGroupContent>
-                                <SidebarMenu>
-                                    {postsNavItems
-                                        .filter(
-                                            (item) =>
-                                                (item.title !== 'Engagement' ||
-                                                    features?.engagement) &&
-                                                (item.title !== 'Messages' ||
-                                                    features?.messages),
-                                        )
-                                        .map((item) => (
-                                            <SidebarMenuItem key={item.title}>
-                                                <SidebarMenuButton
-                                                    tooltip={item.title}
-                                                    isActive={isCurrentUrl(
-                                                        item.href,
-                                                    )}
-                                                    render={
-                                                        <Link
-                                                            href={item.href}
-                                                        />
-                                                    }
-                                                >
-                                                    <item.icon aria-hidden="true" />
-                                                    <span>{item.title}</span>
-                                                    {item.title ===
-                                                        'Engagement' &&
-                                                    unreadReplies > 0 ? (
-                                                        <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
-                                                            {unreadReplies > 99
-                                                                ? '99+'
-                                                                : unreadReplies}
-                                                        </span>
-                                                    ) : null}
-                                                    {item.title ===
-                                                        'Messages' &&
-                                                    unreadMessages > 0 ? (
-                                                        <span className="ml-auto rounded-full bg-primary-gradient px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
-                                                            {unreadMessages > 99
-                                                                ? '99+'
-                                                                : unreadMessages}
-                                                        </span>
-                                                    ) : null}
-                                                </SidebarMenuButton>
-                                            </SidebarMenuItem>
-                                        ))}
-                                    {features?.analytics && (
-                                        <SidebarMenuItem>
-                                            <SidebarMenuButton
-                                                tooltip="Analytics"
-                                                isActive={isCurrentUrl(
-                                                    analyticsRoute(),
-                                                )}
-                                                render={
-                                                    <Link
-                                                        href={analyticsRoute()}
-                                                    />
-                                                }
-                                            >
-                                                <ChartColumn aria-hidden="true" />
-                                                <span>Analytics</span>
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    )}
-                                    {showSyncPipelines && (
-                                        <SidebarMenuItem>
-                                            <SidebarMenuButton
-                                                tooltip="Sync pipelines"
-                                                isActive={isCurrentOrParentUrl(
-                                                    SyncPipelinesController.index()
-                                                        .url,
-                                                )}
-                                                render={
-                                                    <Link
-                                                        href={SyncPipelinesController.index()}
-                                                    />
-                                                }
-                                            >
-                                                <RefreshCw aria-hidden="true" />
-                                                <span>Sync pipelines</span>
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    )}
-                                </SidebarMenu>
-                            </SidebarGroupContent>
-                        </SidebarGroup>
                     </>
-                )}
-
-                {showWorkspaceSettings && (
-                    <SidebarGroup>
-                        <SidebarGroupLabel>
-                            {workspaceSettingsLabel}
-                        </SidebarGroupLabel>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                {settingsItems.map((item) => {
-                                    const Icon =
-                                        workspaceSettingsIcons[item.key];
-
-                                    return (
-                                        <SidebarMenuItem key={item.key}>
-                                            <SidebarMenuButton
-                                                tooltip={item.title}
-                                                isActive={isItemActive(item)}
-                                                render={
-                                                    <Link href={item.href} />
-                                                }
-                                            >
-                                                <Icon aria-hidden="true" />
-                                                <span>{item.title}</span>
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    );
-                                })}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-                )}
-
-                {showInstanceSettings && (
-                    <SidebarGroup>
-                        <SidebarGroupLabel>
-                            {instanceSettingsLabel}
-                        </SidebarGroupLabel>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                {instanceItems.map((item) => {
-                                    const Icon =
-                                        instanceSettingsIcons[item.key];
-
-                                    return (
-                                        <SidebarMenuItem key={item.key}>
-                                            <SidebarMenuButton
-                                                tooltip={item.title}
-                                                isActive={isItemActive(item)}
-                                                render={
-                                                    <Link href={item.href} />
-                                                }
-                                            >
-                                                <Icon aria-hidden="true" />
-                                                <span>{item.title}</span>
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    );
-                                })}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
                 )}
             </SidebarContent>
 

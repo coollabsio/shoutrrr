@@ -140,7 +140,7 @@ let current: ShellPreferences = {
     theme: 'system',
     pageWidth: 'full',
     navStyle: 'default',
-    navItems: 'flat',
+    navItems: '3d',
     chartTimes: 'local',
     customTheme: customThemePresets[0].swatch,
 };
@@ -297,7 +297,7 @@ export function readShellPreferences(): ShellPreferences {
                 ? pageWidth
                 : 'full',
         navStyle: navStyle === 'floating' ? 'floating' : 'default',
-        navItems: navItems === '3d' ? '3d' : 'flat',
+        navItems: navItems === 'flat' ? 'flat' : '3d',
         chartTimes: chartTimes === 'utc' ? 'utc' : 'local',
         customTheme: readCustomTheme(),
     };

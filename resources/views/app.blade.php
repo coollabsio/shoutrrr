@@ -28,7 +28,7 @@
                     }
                     root.dataset.pageWidth = localStorage.getItem('pageWidth') === 'centered' ? 'centered' : 'full';
                     root.dataset.navStyle = localStorage.getItem('navStyle') === 'floating' ? 'floating' : 'default';
-                    root.dataset.navItems = localStorage.getItem('navItems') === '3d' ? '3d' : 'flat';
+                    root.dataset.navItems = localStorage.getItem('navItems') === 'flat' ? 'flat' : '3d';
                 } catch (e) {}
 
                 const hex = (value) => {

@@ -29,7 +29,7 @@ describe('shell preferences', () => {
 
         expect(readShellPreferences().theme).toBe('dark');
         expect(readShellPreferences().pageWidth).toBe('full');
-        expect(readShellPreferences().navItems).toBe('flat');
+        expect(readShellPreferences().navItems).toBe('3d');
     });
 
     it('lets Coolify theme win and treats the old purple value as custom', () => {
@@ -47,6 +47,12 @@ describe('shell preferences', () => {
             background: '#444444',
         });
         expect(parseCustomTheme('nope')).toBeNull();
+    });
+
+    it('keeps a saved flat navigation style', () => {
+        localStorage.setItem('navItems', 'flat');
+
+        expect(readShellPreferences().navItems).toBe('flat');
     });
 
     it('writes theme and the legacy appearance key together', () => {

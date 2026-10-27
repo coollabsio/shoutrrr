@@ -26,7 +26,7 @@ describe('settings sidebar active states', () => {
         );
 
         expect(source).toContain('instanceSettingsNavItems(');
-        expect(source).toContain('isActive={isItemActive(item)}');
+        expect(source).toContain('active: isItemActive(item)');
         expect(source).toContain("item.key === 'general'");
         expect(source).not.toContain('settingsActive');
         expect(source).not.toContain('instanceActive');
@@ -152,14 +152,14 @@ describe('settings navbar items', () => {
         'utf8',
     );
 
-    it('renders every workspace settings item directly in the navbar', () => {
+    it('renders workspace settings in the swapped sidebar context', () => {
         expect(source).toContain('workspaceSettingsNavItems(');
         expect(source).toContain('workspaceSettingsIcons');
         expect(source).toContain('workspaceSettingsLabel');
         expect(source).toContain('settingsItems.map((item)');
     });
 
-    it('renders every instance settings item directly in the navbar', () => {
+    it('renders instance settings in the swapped sidebar context', () => {
         expect(source).toContain('instanceSettingsNavItems(');
         expect(source).toContain('instanceSettingsIcons');
         expect(source).toContain('instanceSettingsLabel');
@@ -170,5 +170,7 @@ describe('settings navbar items', () => {
         expect(source).not.toContain('NestedSidebarNav');
         expect(source).not.toContain('<Collapsible');
         expect(source).not.toContain('<DropdownMenu>');
+        expect(source).toContain('<SidebarContextMenu');
+        expect(source).toContain("setMenuOverride('main')");
     });
 });
