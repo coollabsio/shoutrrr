@@ -145,7 +145,7 @@ class XConnector implements PublishConnector, RepostConnector
                 ])->save();
             }
         } catch (XRequestFailed $e) {
-            return $this->mapFailure($e->response);
+            return $this->mapFailure($e->response, 'X image upload');
         } catch (ConnectionException $e) {
             return PublishResult::failure(ErrorKind::Network, $e->getMessage());
         }
@@ -321,7 +321,7 @@ class XConnector implements PublishConnector, RepostConnector
                 }
 
                 // Non-transient (auth/validation/etc.) — surface as a real failure.
-                return $this->mapFailure($status);
+                return $this->mapFailure($status, "X {$label} status check");
             }
 
             $info = (array) $status->json('data.processing_info', []);
@@ -351,7 +351,7 @@ class XConnector implements PublishConnector, RepostConnector
 
             return PublishResult::success([(string) $mediaId]);
         } catch (XRequestFailed $e) {
-            return $this->mapFailure($e->response);
+            return $this->mapFailure($e->response, "X {$label} upload");
         }
     }
 
@@ -434,15 +434,49 @@ class XConnector implements PublishConnector, RepostConnector
         return $ids;
     }
 
-    private function mapFailure(Response $response): PublishResult
+    /**
+     * @param  string|null  $step  names the failed media step, so a media rejection is not mistaken for a post rejection
+     */
+    private function mapFailure(Response $response, ?string $step = null): PublishResult
     {
         $kind = $this->isDuplicateContent($response)
             ? ErrorKind::DuplicateContent
             : $this->classifyStatus($response->status());
 
-        $message = (string) ($response->json('title') ?? $response->json('detail') ?? 'X request failed');
+        $message = $this->errorMessage($response);
+
+        if ($step !== null) {
+            $message = "{$step} failed: {$message}";
+        }
 
         return PublishResult::failure($kind, $message, $response->status(), $this->excerpt($response), $this->retryAfter($response));
+    }
+
+    /**
+     * X's `title` is generic ("Invalid Request"); the actual cause is in `errors[].message` or `detail`.
+     */
+    private function errorMessage(Response $response): string
+    {
+        $title = trim((string) $response->json('title'));
+
+        $reasons = [];
+        foreach ((array) ($response->json('errors') ?? []) as $error) {
+            $reason = is_array($error) ? trim((string) ($error['message'] ?? $error['detail'] ?? '')) : '';
+            if ($reason !== '') {
+                $reasons[] = $reason;
+            }
+        }
+
+        $reason = $reasons !== []
+            ? implode(' ', array_unique($reasons))
+            : trim((string) $response->json('detail'));
+
+        return match (true) {
+            $title !== '' && $reason !== '' => "{$title}: {$reason}",
+            $reason !== '' => $reason,
+            $title !== '' => $title,
+            default => 'X request failed',
+        };
     }
 
     /**

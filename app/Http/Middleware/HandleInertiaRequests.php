@@ -12,6 +12,7 @@ use App\Models\PostTargetReply;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
 use App\Services\Gifs\KlipyClient;
+use App\Services\Media\ImageCompressor;
 use App\Support\CommunityStats;
 use App\Support\FeedbackConfig;
 use App\Support\InstanceSettings;
@@ -115,6 +116,7 @@ class HandleInertiaRequests extends Middleware
      *     unreadReplies: \Closure(): int,
      *     unreadMessages: \Closure(): int,
      *     gifs_enabled: \Closure(): bool,
+     *     maxImagePixels: \Closure(): int,
      * }
      */
     private function shellData(?User $user): array
@@ -151,6 +153,7 @@ class HandleInertiaRequests extends Middleware
                     ->sum('unread_count')
                 : 0,
             'gifs_enabled' => fn (): bool => app(KlipyClient::class)->configured(),
+            'maxImagePixels' => fn (): int => (int) config('media.max_image_pixels', ImageCompressor::DEFAULT_MAX_PIXELS),
         ];
     }
 

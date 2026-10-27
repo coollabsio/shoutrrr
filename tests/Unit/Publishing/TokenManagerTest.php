@@ -3,6 +3,7 @@
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Exceptions\TokenRefreshException;
+use App\Exceptions\TransientTokenRefreshException;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
@@ -13,7 +14,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
-it('refreshes bluesky oauth tokens with dpop and returns a bluesky session payload', function () {
+it('refreshes bluesky oauth tokens with dpop and returns a bluesky session payload', function (bool $force) {
     $key = app(DPoP::class)->generateKey();
     $account = ConnectedAccount::factory()->create([
         'platform' => Platform::Bluesky->value,
@@ -42,7 +43,7 @@ it('refreshes bluesky oauth tokens with dpop and returns a bluesky session paylo
         ], 200, ['DPoP-Nonce' => 'new-nonce']),
     ]);
 
-    $credentials = app(TokenManager::class)->fresh($account);
+    $credentials = app(TokenManager::class)->fresh($account, force: $force, rejectedAccessToken: 'old-access');
 
     expect($credentials['session']['accessJwt'])->toBe('new-access')
         ->and($credentials['session']['dpop_nonce'])->toBe('new-nonce')
@@ -52,7 +53,7 @@ it('refreshes bluesky oauth tokens with dpop and returns a bluesky session paylo
     Http::assertSent(fn (Request $request): bool => $request->hasHeader('DPoP')
         && $request['grant_type'] === 'refresh_token'
         && $request['client_id'] === 'https://app.example/oauth/bluesky/client-metadata.json');
-});
+})->with([false, true]);
 
 it('sends the private_key_jwt assertion on refresh even when route() drifts from the stored client_id', function () {
     // Regression: refreshOAuth runs in queue workers, where route('oauth.bluesky.metadata')
@@ -292,5 +293,71 @@ it('falls back to the persisted bluesky session when the refresh lock times out'
         ->and($credentials['session']['refreshJwt'])->toBe('persisted-refresh')
         ->and($credentials['app_password'])->toBe('app-pass');
 
+    Http::assertNothingSent();
+});
+
+it('reuses a newer bluesky token when a publish retries with rejected credentials', function () {
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Bluesky,
+        'auth_method' => 'oauth',
+        'token_expires_at' => now()->addHour(),
+    ]);
+    ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'replacement-access',
+        'refresh_token' => 'replacement-refresh',
+    ]);
+    Http::fake();
+
+    $credentials = app(TokenManager::class)->fresh($account, force: true, rejectedAccessToken: 'rejected-access');
+
+    expect($credentials['access_token'])->toBe('replacement-access')
+        ->and($account->secret->refresh_token)->toBe('replacement-refresh');
+    Http::assertNothingSent();
+});
+
+it('coalesces forced bluesky refreshes waiting on another worker', function () {
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Bluesky,
+        'auth_method' => 'oauth',
+        'token_expires_at' => now()->subMinute(),
+    ]);
+    $secret = ConnectedAccountSecret::factory()->create([
+        'connected_account_id' => $account->id,
+        'access_token' => 'old-access',
+        'refresh_token' => 'old-refresh',
+    ]);
+    $lock = Mockery::mock(Lock::class);
+    $lock->shouldReceive('block')->once()->with(10, Mockery::type('Closure'))
+        ->andReturnUsing(function (int $seconds, Closure $callback) use ($account, $secret): array {
+            $secret->update(['access_token' => 'worker-access', 'refresh_token' => 'worker-refresh']);
+            $account->update(['token_expires_at' => now()->addHour()]);
+
+            return $callback();
+        });
+    Cache::partialMock()->shouldReceive('lock')->once()->andReturn($lock);
+    Http::fake();
+
+    $credentials = app(TokenManager::class)->fresh($account, force: true);
+
+    expect($credentials['access_token'])->toBe('worker-access');
+    Http::assertNothingSent();
+});
+
+it('treats bluesky oauth refresh lock contention as retryable', function () {
+    $account = ConnectedAccount::factory()->create([
+        'platform' => Platform::Bluesky,
+        'auth_method' => 'oauth',
+        'token_expires_at' => now()->subMinute(),
+    ]);
+    ConnectedAccountSecret::factory()->create(['connected_account_id' => $account->id]);
+    $lock = Mockery::mock(Lock::class);
+    $lock->shouldReceive('block')->once()->andThrow(new LockTimeoutException);
+    Cache::partialMock()->shouldReceive('lock')->once()->andReturn($lock);
+    Http::fake();
+
+    expect(fn () => app(TokenManager::class)->fresh($account))
+        ->toThrow(TransientTokenRefreshException::class);
+    expect($account->fresh()->status)->toBe(ConnectedAccountStatus::Active);
     Http::assertNothingSent();
 });

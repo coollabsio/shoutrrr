@@ -8,6 +8,7 @@ use App\Concerns\HasWorkspaceScope;
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\MetricsStatus;
 use App\Enums\Platform;
+use App\Notifications\AccountNeedsAttentionNotification;
 use Carbon\CarbonImmutable;
 use Database\Factories\ConnectedAccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Notification;
 use Override;
 
 /**
@@ -67,6 +69,26 @@ class ConnectedAccount extends Model
 {
     /** @use HasFactory<ConnectedAccountFactory> */
     use HasFactory, HasUuids, HasWorkspaceScope;
+
+    protected static function booted(): void
+    {
+        static::updated(function (ConnectedAccount $account): void {
+            if (! $account->wasChanged('status') || $account->status !== ConnectedAccountStatus::NeedsAttention) {
+                return;
+            }
+
+            $workspace = Workspace::query()->find($account->workspace_id);
+            $recipientIds = array_unique(array_filter([
+                $workspace?->owner_id,
+                $account->connected_by_user_id,
+            ]));
+
+            Notification::send(
+                User::query()->whereKey($recipientIds)->get(),
+                new AccountNeedsAttentionNotification($account, $account->workspace_id),
+            );
+        });
+    }
 
     /**
      * X subscription tiers that unlock Premium limits (longer posts and video).

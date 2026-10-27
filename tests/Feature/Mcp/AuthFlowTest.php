@@ -109,3 +109,49 @@ test('the approve route carries the capture middleware via the web group', funct
     $webGroup = app(Kernel::class)->getMiddlewareGroups()['web'] ?? [];
     expect($webGroup)->toContain(CaptureMcpWorkspaceSelection::class);
 });
+
+test('the workspace binding follows the access token through a refresh', function (): void {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create();
+    WorkspaceMembership::factory()->owner()->create([
+        'user_id' => $user->id,
+        'workspace_id' => $workspace->id,
+    ]);
+    $client = app(ClientRepository::class)->createAuthorizationCodeGrantClient(
+        'Test MCP Client',
+        ['http://localhost/callback'],
+        confidential: true,
+        user: $user,
+    );
+
+    $this->actingAs($user)->get('/oauth/authorize?'.http_build_query([
+        'client_id' => $client->getKey(),
+        'redirect_uri' => 'http://localhost/callback',
+        'response_type' => 'code',
+        'scope' => 'mcp:use',
+        'state' => 'xyz',
+    ]))->assertOk();
+
+    $redirect = $this->post('/oauth/authorize', [
+        'client_id' => $client->getKey(),
+        'workspace_id' => $workspace->id,
+        'auth_token' => session('authToken'),
+    ])->assertRedirect()->headers->get('Location');
+    parse_str((string) parse_url((string) $redirect, PHP_URL_QUERY), $callback);
+
+    $credentials = [
+        'client_id' => $client->getKey(),
+        'client_secret' => $client->plainSecret,
+        'redirect_uri' => 'http://localhost/callback',
+    ];
+    $first = $this->post('/oauth/token', [...$credentials, 'grant_type' => 'authorization_code', 'code' => $callback['code']])
+        ->assertOk()->json();
+    $refreshed = $this->post('/oauth/token', [...$credentials, 'grant_type' => 'refresh_token', 'refresh_token' => $first['refresh_token']])
+        ->assertOk()->json();
+
+    $tokenId = fn (array $response): string => json_decode(base64_decode(strtr(explode('.', $response['access_token'])[1], '-_', '+/')), true)['jti'];
+
+    expect($tokenId($refreshed))->not->toBe($tokenId($first))
+        ->and(McpGrantWorkspace::where('access_token_id', $tokenId($refreshed))->value('workspace_id'))->toBe($workspace->id)
+        ->and(McpGrantWorkspace::count())->toBe(1);
+});

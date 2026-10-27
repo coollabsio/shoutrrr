@@ -7,6 +7,8 @@
 ARG SERVERSIDEUP_PHP_VERSION=8.5-frankenphp-trixie
 # https://www.postgresql.org/support/versioning/
 ARG POSTGRES_VERSION=17
+# https://github.com/oven-sh/bun/releases
+ARG BUN_VERSION=1.4.4
 ARG USER_ID=9999
 ARG GROUP_ID=9999
 # The running app version, set by the release pipeline from the published git
@@ -75,7 +77,7 @@ USER www-data
 # SSR bundle are arch-independent, and this avoids running Bun/Vite under QEMU
 # emulation. node_modules native deps here (oxide/lightningcss/rolldown) are
 # build-time only; the SSR runtime bundle loads pure-JS deps.
-FROM --platform=$BUILDPLATFORM oven/bun:latest AS assets
+FROM --platform=$BUILDPLATFORM oven/bun:${BUN_VERSION} AS assets
 
 WORKDIR /app
 COPY package.json bun.lock vite.config.ts ./
@@ -140,13 +142,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install the Bun binary for the target architecture (amd64 -> x64, arm64 -> aarch64).
 # TARGETARCH is provided automatically by buildx.
 ARG TARGETARCH
+ARG BUN_VERSION
 RUN set -eux; \
     case "${TARGETARCH}" in \
         amd64) bun_arch=x64 ;; \
         arm64) bun_arch=aarch64 ;; \
         *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-${bun_arch}.zip" -o /tmp/bun.zip; \
+    curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${bun_arch}.zip" -o /tmp/bun.zip; \
     unzip /tmp/bun.zip -d /tmp; \
     mv "/tmp/bun-linux-${bun_arch}/bun" /usr/local/bin/bun; \
     chmod 755 /usr/local/bin/bun; \

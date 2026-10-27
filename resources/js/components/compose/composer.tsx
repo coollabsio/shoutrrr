@@ -273,6 +273,7 @@ export default function Composer({
     const mediaUploads = useMediaUploads({
         mediaForSegment,
         videoLimits: selectedVideoLimits,
+        maxImagePixels: shell.maxImagePixels,
         onEnsurePost: ensurePost,
         onAddMedia: (m, segmentRef) =>
             dispatch({ type: 'addMedia', media: m, segmentRef }),

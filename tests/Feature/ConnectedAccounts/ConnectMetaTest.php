@@ -124,6 +124,42 @@ test('callback stashes assets server-side and renders a browser-safe projection'
         && $request['fb_exchange_token'] === 'short-token');
 });
 
+test('a numeric page id beyond the javascript safe integer range round-trips as a string', function () {
+    metaOwnerActingIn();
+    fakeFacebookOAuthUser();
+    config()->set('services.facebook.graph_version', 'v25.0');
+
+    // Above Number.MAX_SAFE_INTEGER (2^53 - 1): as a JSON number the browser
+    // would round it and submit an assetKey that no longer matches the stash.
+    $pageId = '1234567890123456789';
+
+    Http::fake([
+        '*/oauth/access_token*' => Http::response(['access_token' => 'LONG_USER_TOKEN', 'expires_in' => 5183944]),
+        '*/me/accounts*' => Http::response(['data' => [[
+            'id' => $pageId,
+            'name' => 'Big Page',
+            'access_token' => 'PGT1',
+        ]]]),
+    ]);
+
+    $response = test()->get(route('accounts.meta.callback', ['code' => 'fb-auth-code']));
+
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('accounts/connect-meta', false)
+        ->where('assets.0.key', $pageId)
+    );
+    expect($response->getContent())->toContain('"key":"'.$pageId.'"');
+
+    test()->post(route('accounts.meta.store'), [
+        'selected' => [
+            ['assetKey' => $pageId, 'platform' => 'facebook'],
+        ],
+    ])->assertRedirect(route('accounts.index'))
+        ->assertSessionHas('success', '1 account connected.');
+
+    expect(ConnectedAccount::withoutGlobalScopes()->sole()->remote_account_id)->toBe($pageId);
+});
+
 test('callback surfaces a friendly message when facebook denies the connection', function () {
     metaOwnerActingIn();
 

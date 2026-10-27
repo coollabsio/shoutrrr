@@ -3,14 +3,24 @@
 import { useHttp } from '@inertiajs/react';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { fitImageForUpload } from '@/lib/compose/fit-image';
 import type { MediaView, PendingUpload } from '@/types/compose';
 
 import { useMediaUploads } from '../use-media-uploads';
 
 vi.mock('@inertiajs/react', () => ({
     useHttp: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({
+    toast: { error: vi.fn() },
+}));
+
+vi.mock('@/lib/compose/fit-image', () => ({
+    fitImageForUpload: vi.fn(async (file: File) => file),
 }));
 
 vi.mock('@/actions/App/Http/Controllers/Posts/PostMediaController', () => ({
@@ -73,6 +83,7 @@ function Harness({
     const uploads = useMediaUploads({
         mediaForSegment,
         videoLimits: [],
+        maxImagePixels: 16_000_000,
         onEnsurePost: async () => 'post-1',
         onAddMedia,
         activeSegmentRef,
@@ -205,6 +216,48 @@ describe('useMediaUploads image upload failure', () => {
         expect(pendingRef[0].errorMessage).toBe(
             'The image resolution is too large.',
         );
+    });
+
+    it('shows the server validation message as a toast so the failure is not hidden behind a tooltip', async () => {
+        render();
+        post.mockImplementation(
+            (
+                _url: string,
+                opts: { onError?: (errors: Record<string, string>) => void },
+            ) => {
+                opts.onError?.({ file: 'The image resolution is too large.' });
+
+                return Promise.reject(new Error('422'));
+            },
+        );
+
+        await act(async () => {
+            await handleFilesRef?.([imageFile()]);
+        });
+
+        expect(toast.error).toHaveBeenCalledWith(
+            'The image resolution is too large.',
+        );
+    });
+});
+
+describe('useMediaUploads image downscale', () => {
+    it('uploads the downscaled file instead of the original', async () => {
+        const original = imageFile();
+        const fitted = new File(['small'], 'photo.webp', {
+            type: 'image/webp',
+        });
+        vi.mocked(fitImageForUpload).mockResolvedValueOnce(fitted);
+        render();
+        post.mockResolvedValue({ media: mediaView() });
+
+        await act(async () => {
+            await handleFilesRef?.([original]);
+        });
+
+        expect(fitImageForUpload).toHaveBeenCalledWith(original, 16_000_000);
+        const payload = transform.mock.calls[0][0]();
+        expect(payload.file).toBe(fitted);
     });
 });
 

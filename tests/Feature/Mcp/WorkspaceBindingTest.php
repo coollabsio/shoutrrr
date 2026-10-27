@@ -8,6 +8,7 @@ use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use Illuminate\Http\Request;
 use Laravel\Passport\Events\AccessTokenCreated;
+use Laravel\Passport\Events\AccessTokenRevoked;
 
 test('a grant binding can be created and resolved by token id', function (): void {
     $user = User::factory()->create();
@@ -80,4 +81,22 @@ test('issuing a token stamps the pending binding with the token id', function ()
 
     expect(McpGrantWorkspace::where('access_token_id', 'token-final')->value('workspace_id'))
         ->toBe($workspace->id);
+});
+
+test('a refresh does not claim a pending binding from a newer consent', function (): void {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create();
+    McpGrantWorkspace::create([
+        'user_id' => $user->id,
+        'client_id' => 'client-xyz',
+        'workspace_id' => $workspace->id,
+        'access_token_id' => null,
+    ]);
+
+    $listener = new BindWorkspaceToAccessToken;
+    $listener->handleRevoked(new AccessTokenRevoked('token-old'));
+    $listener->handle(new AccessTokenCreated('token-refreshed', $user->id, 'client-xyz'));
+
+    expect(McpGrantWorkspace::whereNull('access_token_id')->count())->toBe(1)
+        ->and(McpGrantWorkspace::where('access_token_id', 'token-refreshed')->exists())->toBeFalse();
 });

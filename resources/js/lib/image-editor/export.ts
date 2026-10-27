@@ -8,7 +8,7 @@ import type { EditSettings } from './settings';
  * so the composed upload was silently rejected with a 422 and the media never
  * attached (#126). Encode to a compressed format sized to fit instead.
  */
-const MAX_COMPOSED_BYTES = Math.floor(7.5 * 1024 * 1024); // headroom under the 8 MiB (max:8192) server cap
+export const MAX_COMPOSED_BYTES = Math.floor(7.5 * 1024 * 1024); // headroom under the 8 MiB (max:8192) server cap
 const QUALITY_STEPS = [0.92, 0.82, 0.72, 0.6] as const;
 /** Downscale factors tried in order, ending at the smallest we'll ship. */
 const SCALE_STEPS = [1, 0.8, 0.6, 0.5] as const;
