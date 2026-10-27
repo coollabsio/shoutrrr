@@ -516,6 +516,84 @@ html[data-theme='custom'] [data-sidebar='menu-button'][data-active='true'] {
     color: var(--theme-selected-text);
 }
 
+/* Default-dark sidebar chrome, following Coolify's shell rules with Shoutrrr's
+   green instead of Coolify purple. Light mode keeps the neutral canvas and a
+   faint chrome edge. A custom theme keeps its own sidebar color and does not
+   get the brand wash. The page canvas and cards stay on --background / --card. */
+html.dark:not([data-theme='custom']) {
+    /* Green-black equivalent of Coolify #120e1a. Same oklch lightness (0.175)
+       and chroma (0.025); hue 130.85 is Shoutrrr's dark --primary, not
+       Coolify's purple 299. Locked in sRGB because oklch compresses near black. */
+    --sidebar: #0d1307;
+    /* Green analog of Coolify brand-light #a391ff (oklch 0.719 0.157, hue 130.85). */
+    --sidebar-brand-light: #81b744;
+    /* 9% of the live brand token, so the wash tracks --primary. */
+    --sidebar-brand-wash: color-mix(in srgb, var(--primary) 9%, transparent);
+    /* Faint brand edge, the 10% green stand-in for rgb(163 145 255 / 0.10). */
+    --sidebar-brand-edge: color-mix(
+        in srgb,
+        var(--sidebar-brand-light) 10%,
+        transparent
+    );
+}
+
+/* Inset layout paints the sidebar color behind the whole page. Keep that
+   frame on the neutral canvas; only the sidebar column is green-black. */
+html.dark:not([data-theme='custom']) [data-slot='sidebar-wrapper'] {
+    background-color: var(--background);
+}
+
+html:not(.dark) [data-slot='sidebar-inner'] {
+    box-shadow: inset -1px 0 0 rgb(0 0 0 / 6%);
+}
+
+html.dark[data-theme='custom'] [data-slot='sidebar-inner'] {
+    box-shadow: inset -1px 0 0 rgb(255 255 255 / 4%);
+}
+
+html.dark:not([data-theme='custom']) [data-slot='sidebar-inner'] {
+    position: relative;
+    background-color: var(--sidebar);
+    box-shadow: inset -1px 0 0 var(--sidebar-brand-edge);
+}
+
+html.dark:not([data-theme='custom'])[data-nav-style='floating']
+    [data-slot='sidebar-inner'] {
+    border-color: var(--sidebar-brand-edge);
+}
+
+/* Logo cell: a flat 9% brand wash over the green-black, matching the top of
+   the nav fade so the brand block and the sidebar read as one surface. */
+html.dark:not([data-theme='custom']) [data-slot='sidebar-header'] {
+    anchor-name: --sidebar-logo-cell;
+    position: relative;
+    z-index: 1;
+    background-color: color-mix(in srgb, var(--primary) 9%, var(--sidebar));
+}
+
+html.dark:not([data-theme='custom'])
+    :is([data-slot='sidebar-content'], [data-slot='sidebar-footer']) {
+    position: relative;
+    z-index: 1;
+}
+
+html.dark:not([data-theme='custom']) [data-slot='sidebar-inner']::before {
+    content: '';
+    position: absolute;
+    z-index: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    top: anchor(bottom);
+    position-anchor: --sidebar-logo-cell;
+    background-image: linear-gradient(
+        180deg,
+        var(--sidebar-brand-wash),
+        transparent 520px
+    );
+    pointer-events: none;
+}
+
 /* Kept-warm popovers (the emoji picker, marked `data-keep-warm`) stay mounted
    via Portal `keepMounted` while closed to avoid a heavy remount on reopen. The
    Base UI Positioner that wraps them is made click-through while closed inline
