@@ -39,7 +39,7 @@ test('new users can register', function () {
     ]);
 
     $this->assertAuthenticated();
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect(route('agentic.home', absolute: false));
 });
 
 test('first registered user becomes the instance owner', function () {

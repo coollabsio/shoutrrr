@@ -76,7 +76,7 @@ test('invitee can accept a workspace invitation from a notification action', fun
 
     $this->actingAs($invitee)
         ->post(route('workspace.invitations.accept', $invitation))
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('agentic.home'));
 
     expect($invitee->fresh()->isMemberOfWorkspace($workspace->id))->toBeTrue()
         ->and($invitee->fresh()->current_workspace_id)->toBe($workspace->id)

@@ -11,6 +11,7 @@ use App\Http\Middleware\EnsureMetricsEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\SetFortifyHome;
 use App\Http\Middleware\WorkspaceMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -54,6 +55,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // the security headers onto the final response.
             SecurityHeaders::class,
             HandleAppearance::class,
+            SetFortifyHome::class,
             // WorkspaceMiddleware must run BEFORE HandleInertiaRequests: Inertia
             // resolves share() (which reads workspace-scoped shell data) inside
             // its own handle() before calling $next, so the workspace_id context

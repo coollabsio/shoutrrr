@@ -19,10 +19,12 @@ use App\Mcp\Tools\ListConnectedAccountsTool;
 use App\Mcp\Tools\ListPostsTool;
 use App\Mcp\Tools\ListSharesTool;
 use App\Mcp\Tools\ListWorkspacesTool;
+use App\Mcp\Tools\PublishNowTool;
 use App\Mcp\Tools\PublishPostTool;
 use App\Mcp\Tools\QueuePostTool;
 use App\Mcp\Tools\RemovePostMediaTool;
 use App\Mcp\Tools\RetryPostTargetTool;
+use App\Mcp\Tools\ScheduleAtTool;
 use App\Mcp\Tools\SchedulePostTool;
 use App\Mcp\Tools\UpdateAccountSetTool;
 use App\Mcp\Tools\UpdatePostTool;
@@ -34,7 +36,7 @@ use Laravel\Mcp\Server\Tool;
 
 #[Name('Shoutrrr')]
 #[Version('1.0.0')]
-#[Instructions('Read and manage social posts, schedules, and connected accounts for one workspace. The workspace is fixed at connection time. Use list_workspaces to see which workspace this connection operates on; reconnect to switch. Write tools let you create and edit drafts, schedule, manage media and account sets, and share links. Irreversible outward-facing actions (publish_post_now, retry_post_target, delete_post) require explicit human confirmation — call them with confirm=true only after the human approves.')]
+#[Instructions('Read and manage social posts, schedules, and connected accounts for one workspace. The workspace is fixed at connection time. Use list_workspaces to see which workspace this connection operates on; reconnect to switch. Prefer publish_now and schedule_at to create and publish or schedule in one idempotent step (pass a stable idempotency_key). Write tools also let you create and edit drafts, schedule an existing post, manage media and account sets, and share links. Irreversible outward-facing actions (publish_now, publish_post_now, retry_post_target, delete_post) require explicit human confirmation — call them with confirm=true only after the human approves.')]
 class ShoutrrrServer extends Server
 {
     /**
@@ -49,6 +51,8 @@ class ShoutrrrServer extends Server
         ListAccountSetsTool::class,
         GetPostingScheduleTool::class,
         CreatePostTool::class,
+        PublishNowTool::class,
+        ScheduleAtTool::class,
         UpdatePostTool::class,
         SchedulePostTool::class,
         QueuePostTool::class,

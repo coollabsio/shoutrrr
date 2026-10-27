@@ -115,8 +115,10 @@ export function WelcomeModal({ welcomed }: { welcomed: boolean }) {
                         </span>
                     </DialogTitle>
                     <DialogDescription>
-                        Write once, send everywhere. Connect a destination and
-                        your posts go out to every account at once.
+                        Write once, send everywhere. Agentic is the default home
+                        for accounts, agents, and sync. Classic — the composer,
+                        calendar, queue, and inbox — stays one sidebar switch
+                        away.
                     </DialogDescription>
                 </DialogHeader>
 

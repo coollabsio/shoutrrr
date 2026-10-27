@@ -36,7 +36,7 @@ test('email can be verified', function () {
     Event::assertDispatched(Verified::class);
 
     $this->assertTrue($user->fresh()->hasVerifiedEmail());
-    $response->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+    $response->assertRedirect(route('agentic.home', absolute: false).'?verified=1');
 });
 
 test('email can be verified when the ESP appends tracking parameters to the link', function () {
@@ -58,7 +58,7 @@ test('email can be verified when the ESP appends tracking parameters to the link
 
     Event::assertDispatched(Verified::class);
     $this->assertTrue($user->fresh()->hasVerifiedEmail());
-    $response->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+    $response->assertRedirect(route('agentic.home', absolute: false).'?verified=1');
 });
 
 test('email is not verified when an unrecognized query parameter is appended', function () {
@@ -122,7 +122,7 @@ test('verified user is redirected to dashboard from verification prompt', functi
     $response = $this->actingAs($user)->get(route('verification.notice'));
 
     Event::assertNotDispatched(Verified::class);
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect(route('agentic.home', absolute: false));
 });
 
 test('already verified user visiting verification link is redirected without firing event again', function () {
@@ -137,7 +137,7 @@ test('already verified user visiting verification link is redirected without fir
     );
 
     $this->actingAs($user)->get($verificationUrl)
-        ->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+        ->assertRedirect(route('agentic.home', absolute: false).'?verified=1');
 
     Event::assertNotDispatched(Verified::class);
     $this->assertTrue($user->fresh()->hasVerifiedEmail());

@@ -126,6 +126,21 @@ describe('version badge update tooltip', () => {
     });
 });
 
+describe('product mode switch', () => {
+    it('keeps a persistent Agentic and Classic switch in the sidebar', () => {
+        const source = readFileSync(
+            resolve(
+                process.cwd(),
+                'resources/js/components/layout/app-sidebar.tsx',
+            ),
+            'utf8',
+        );
+
+        expect(source).toContain('<ModeSwitch />');
+        expect(source).toContain('agenticHome');
+    });
+});
+
 describe('settings navbar items', () => {
     const source = readFileSync(
         resolve(

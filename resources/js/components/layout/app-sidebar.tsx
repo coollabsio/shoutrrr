@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import SyncPipelinesController from '@/actions/App/Http/Controllers/Settings/SyncPipelinesController';
 import AppLogo from '@/components/layout/app-logo';
+import { ModeSwitch } from '@/components/layout/mode-switch';
 import { NavUser } from '@/components/layout/nav-user';
 import { SidebarFooterCard } from '@/components/layout/sidebar-footer-card';
 import type { IconComponent } from '@/components/ui/icons';
@@ -58,9 +59,11 @@ import {
     workspaceSettingsNavItems,
     type WorkspaceSettingsNavKey,
 } from '@/lib/navigation/workspace-settings-nav';
+import { resolveUiMode } from '@/lib/ui-mode';
 import { appVersion, githubReleaseUrl } from '@/lib/version';
 import { dashboard } from '@/routes';
 import { index as accountsRoute } from '@/routes/accounts';
+import { home as agenticHome } from '@/routes/agentic';
 import { index as analyticsRoute } from '@/routes/analytics';
 import { index as calendarRoute } from '@/routes/calendar';
 import { index as engagementRoute } from '@/routes/engagement';
@@ -109,6 +112,7 @@ const postsNavItems: NavItem[] = [
 
 export function AppSidebar() {
     const {
+        auth,
         workspaces,
         features,
         instance,
@@ -134,6 +138,10 @@ export function AppSidebar() {
         [setOpenMobile],
     );
 
+    const productHome =
+        resolveUiMode(auth.user?.ui_mode) === 'classic'
+            ? dashboard()
+            : agenticHome();
     const composeHref = dashboard();
     const showWorkspaceSettings = workspaces.enabled && workspaces.current;
     const canManageWorkspace = (workspaces.current?.permissions ?? []).includes(
@@ -164,7 +172,7 @@ export function AppSidebar() {
                     <SidebarMenuItem className="flex items-center gap-1">
                         <SidebarMenuButton
                             className="h-8 min-w-0 flex-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
-                            render={<Link href={composeHref} />}
+                            render={<Link href={productHome} />}
                         >
                             <AppLogo />
                         </SidebarMenuButton>
@@ -214,6 +222,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent className="gap-0">
+                <ModeSwitch />
                 <SidebarGroup className="border-b border-sidebar-border">
                     <SidebarGroupContent>
                         <SidebarMenu>

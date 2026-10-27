@@ -1,17 +1,26 @@
 <?php
 
+use App\Http\Controllers\AgenticHomeController;
 use App\Http\Controllers\CommandSearchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Gifs\GifBrowserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PublicShareController;
+use App\Http\Controllers\UiModeController;
 use App\Http\Controllers\WorkspaceMentionController;
 use App\Http\Middleware\NoIndex;
+use App\Models\User;
 use App\Services\Gifs\KlipyClient;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return redirect()->route(auth()->check() ? 'dashboard' : 'login');
+    $user = auth()->user();
+
+    if (! $user instanceof User) {
+        return redirect()->route('login');
+    }
+
+    return redirect()->route($user->uiMode()->homeRoute());
 })->name('home');
 
 Route::get('/share/{token}', [PublicShareController::class, 'show'])
@@ -21,6 +30,8 @@ Route::get('/share/{token}', [PublicShareController::class, 'show'])
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('agent', [AgenticHomeController::class, 'index'])->name('agentic.home');
+    Route::put('ui-mode', [UiModeController::class, 'update'])->name('ui-mode.update');
     Route::post('workspace-mentions', [WorkspaceMentionController::class, 'store'])->name('workspace-mentions.store');
     Route::delete('workspace-mentions/{workspaceMention}', [WorkspaceMentionController::class, 'destroy'])->name('workspace-mentions.destroy');
 
