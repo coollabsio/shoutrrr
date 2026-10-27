@@ -483,7 +483,11 @@ html[data-nav-items='3d'] [data-sidebar='menu-button'] {
     background: transparent;
 }
 
-html[data-nav-items='3d'] [data-sidebar='menu-button'] > svg {
+/* Raised tiles are nav icons only. Search and other chrome inputs stay flat:
+   no depth shadow and no raised edge, including the icon inside the field. */
+html[data-nav-items='3d']
+    [data-sidebar='menu-button']:not([data-chrome-search]):not(:has(input))
+    > svg {
     box-sizing: content-box;
     width: 16px;
     height: 16px;
@@ -494,10 +498,27 @@ html[data-nav-items='3d'] [data-sidebar='menu-button'] > svg {
     box-shadow: 0 2px 0 rgb(0 0 0 / 0.22);
 }
 
-html.dark[data-nav-items='3d'] [data-sidebar='menu-button'] > svg {
+html.dark[data-nav-items='3d']
+    [data-sidebar='menu-button']:not([data-chrome-search]):not(:has(input))
+    > svg {
     border-color: rgb(255 255 255 / 0.07);
     background: rgb(255 255 255 / 0.03);
     box-shadow: 0 2px 0 rgb(255 255 255 / 0.08);
+}
+
+html[data-nav-items='3d'] :is([data-chrome-search], [data-slot='sidebar-input']) {
+    border-style: solid;
+    box-shadow: none;
+}
+
+html[data-nav-items='3d']
+    :is([data-chrome-search], [data-slot='sidebar-input'])
+    svg {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 html[data-theme='custom'] {

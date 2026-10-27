@@ -27,6 +27,16 @@ describe('default dark sidebar chrome', () => {
         expect(chrome).not.toContain('163 145 255');
     });
 
+    it('keeps chrome inputs flat when nav tiles are 3D', () => {
+        const tiles = css.replace(/\/\*[\s\S]*?\*\//g, '');
+
+        expect(tiles).toContain(':not([data-chrome-search]):not(:has(input))');
+        expect(tiles).toContain("[data-slot='sidebar-input']");
+        expect(tiles).toMatch(
+            /\[data-chrome-search\][\s\S]*box-shadow:\s*none/,
+        );
+    });
+
     it('keeps light mode on a neutral chrome edge', () => {
         expect(chrome).toContain("html:not(.dark) [data-slot='sidebar-inner']");
         expect(chrome).toContain('rgb(0 0 0 / 6%)');

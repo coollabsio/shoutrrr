@@ -325,6 +325,7 @@ function SidebarInput({
     <Input
       data-slot="sidebar-input"
       data-sidebar="input"
+      data-chrome-search=""
       className={cn("h-8 w-full bg-input/50 shadow-none", className)}
       {...props}
     />

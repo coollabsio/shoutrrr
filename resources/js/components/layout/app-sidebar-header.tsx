@@ -41,8 +41,9 @@ export function AppSidebarHeader({
             <div className="ml-auto flex items-center gap-1.5">
                 <button
                     type="button"
+                    data-chrome-search
                     onClick={openCommandPalette}
-                    className="hidden h-8 items-center gap-2 rounded-lg border border-input bg-input/40 pr-1.5 pl-2.5 text-sm text-muted-foreground transition-colors hover:bg-input/70 sm:flex"
+                    className="hidden h-8 items-center gap-2 rounded-lg border border-input bg-input/40 pr-1.5 pl-2.5 text-sm text-muted-foreground shadow-none transition-colors hover:bg-input/70 sm:flex"
                 >
                     <Search className="size-3.5" />
                     <span className="pr-6">Search…</span>
