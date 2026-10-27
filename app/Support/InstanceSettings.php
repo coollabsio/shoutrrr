@@ -66,11 +66,10 @@ class InstanceSettings
     }
 
     /**
-     * Whether the operator has declared this instance's LinkedIn app is approved
-     * for the Community Management API. Gates requesting the restricted
-     * `r_member_social_feed`/`w_member_social_feed` scopes at connect and polling
-     * LinkedIn for replies. Off by default — the scopes are a closed LinkedIn
-     * product, so requesting them on an unapproved app breaks the connect flow.
+     * Whether the operator has declared a LinkedIn app approved for the Community
+     * Management API (`services.linkedin-pages`). Gates the LinkedIn Pages connect
+     * flow and polling LinkedIn for replies. Off by default — it is a closed
+     * LinkedIn product, so requesting its scopes on an unapproved app breaks authorize.
      */
     public function linkedinCommunityManagementEnabled(): bool
     {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
+import LinkedInPageOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/LinkedInPageOAuthController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import type { Account } from '@/components/accounts/types';
 import { reconnectOAuthUrl } from '@/pages/accounts/index';
@@ -62,6 +63,24 @@ describe('reconnectOAuthUrl', () => {
                     pds_url: 'https://pds.example',
                 },
             }),
+        );
+    });
+
+    it('uses the dedicated LinkedIn Pages route for LinkedIn Page accounts', () => {
+        expect(
+            reconnectOAuthUrl(
+                account({ platform: 'linkedin', is_linkedin_page: true }),
+            ),
+        ).toBe(LinkedInPageOAuthController.redirect.url());
+    });
+
+    it('uses the generic OAuth route for personal LinkedIn accounts', () => {
+        expect(
+            reconnectOAuthUrl(
+                account({ platform: 'linkedin', is_linkedin_page: false }),
+            ),
+        ).toBe(
+            OAuthConnectionController.redirect.url({ platform: 'linkedin' }),
         );
     });
 

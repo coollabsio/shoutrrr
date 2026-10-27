@@ -45,8 +45,10 @@ test('fetchPost returns share statistics for a page account', function () {
         ->and($result->reposts)->toBe(5)
         ->and($result->impressions)->toBe(5287);
 
-    Http::assertSent(fn ($req) => str_contains($req->url(), 'organizationalEntity=urn%3Ali%3Aorganization%3A2414183')
-        && str_contains($req->url(), 'shares=List'));
+    // Rest.li 2.0: `List(...)` stays literal, only the URN inside is encoded.
+    Http::assertSent(fn ($req) => str_contains($req->url(), 'q=organizationalEntity')
+        && str_contains($req->url(), 'organizationalEntity=urn%3Ali%3Aorganization%3A2414183')
+        && str_contains($req->url(), 'shares=List(urn%3Ali%3Ashare%3A1000000)'));
 });
 
 test('fetchAccount returns follower count for a page account', function () {
