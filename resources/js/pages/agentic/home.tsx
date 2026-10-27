@@ -71,7 +71,9 @@ export default function AgenticHome({ mcp, api, activity }: Props) {
                         Connect with MCP
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        OAuth. Paste this URL in your agent.
+                        OAuth. Paste this URL in your agent. It can hand you
+                        connect links; you still approve each network in the
+                        browser.
                     </p>
                     <div className="flex gap-2">
                         <Input
