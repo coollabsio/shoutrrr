@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
+use App\Dto\Post\IntentContent;
 use App\Exceptions\AgentIntentRejectedException;
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\Post;
 use App\Models\User;
 use App\Services\Posts\AgentIntentService;
+use App\Support\PostComposerInput;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Validation\Rule;
@@ -18,7 +20,7 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
 #[Name('publish_now')]
-#[Description('Create a post and publish it immediately. Idempotent on idempotency_key: the same key and payload returns the original post and does not publish again. Irreversible and outward-facing. Requires confirm=true.')]
+#[Description('Create a post and publish it immediately. Supports threads (segments), media_ids, and mentions. Idempotent on idempotency_key: the same key and payload returns the original post and does not publish again. Irreversible and outward-facing. Requires confirm=true.')]
 class PublishNowTool extends WorkspaceTool
 {
     public function handle(Request $request, AgentIntentService $intents): Response
@@ -37,7 +39,8 @@ class PublishNowTool extends WorkspaceTool
         }
 
         $validated = $request->validate([
-            'text' => ['required', 'string'],
+            'text' => ['required_without:segments', 'nullable', 'string'],
+            ...PostComposerInput::contentRules(),
             'idempotency_key' => ['required', 'string', 'max:255'],
             'confirm' => ['boolean'],
             'destination' => ['required', 'array'],
@@ -53,7 +56,7 @@ class PublishNowTool extends WorkspaceTool
                 $user,
                 $workspaceId,
                 $validated['idempotency_key'],
-                $validated['text'],
+                IntentContent::fromValidated($validated),
                 $validated['destination'],
             );
         } catch (AgentIntentRejectedException $exception) {
@@ -76,7 +79,8 @@ class PublishNowTool extends WorkspaceTool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'text' => $schema->string()->description('The post body.')->required(),
+            'text' => $schema->string()->description('The post body. Required unless segments is given; ignored when segments is non-empty.'),
+            ...PostComposerInput::contentSchema($schema),
             'idempotency_key' => $schema->string()->description('Stable key for this request. Replays return the original post.')->required(),
             'confirm' => $schema->boolean()->description('Must be true to actually publish.'),
             'destination' => $schema->object([

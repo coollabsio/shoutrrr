@@ -6,6 +6,7 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\PostingSchedule;
+use App\Services\Posts\PostingScheduleService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
@@ -15,7 +16,7 @@ use Laravel\Mcp\Server\Attributes\Description;
 #[Description('Get the bound workspace posting schedule: timezone and the recurring weekly time slots used when queueing posts.')]
 class GetPostingScheduleTool extends WorkspaceTool
 {
-    public function handle(Request $request): Response
+    public function handle(Request $request, PostingScheduleService $schedules): Response
     {
         $workspaceId = $this->bindWorkspace($request);
 
@@ -28,18 +29,7 @@ class GetPostingScheduleTool extends WorkspaceTool
             ->with('slots')
             ->first();
 
-        if ($schedule === null) {
-            return Response::text(json_encode(['schedule' => null, 'slots' => []], JSON_THROW_ON_ERROR));
-        }
-
-        return Response::text(json_encode([
-            'timezone' => $schedule->timezone,
-            'slots' => $schedule->slots->map(fn ($slot): array => [
-                'weekday' => $slot->weekday,
-                'hour' => $slot->hour,
-                'minute' => $slot->minute,
-            ]),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+        return Response::text(json_encode($schedules->payload($schedule), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
     /**

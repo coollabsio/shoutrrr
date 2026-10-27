@@ -6,10 +6,9 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\ConnectedAccount;
-use App\Models\ConnectedAccountNativeWatch;
 use App\Models\User;
 use App\Models\Workspace;
-use App\Services\Billing\WorkspaceSubscriptionGate;
+use App\Services\Sync\NativeTracking;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
@@ -21,7 +20,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description('Enable or disable native tracking for a connected account, so posts made outside Shoutrrr can sync. The platform must support native reads, and enabling one counts against the plan limit.')]
 class SetNativeTrackingTool extends WorkspaceTool
 {
-    public function handle(Request $request, WorkspaceSubscriptionGate $gate): Response
+    public function handle(Request $request, NativeTracking $tracking): Response
     {
         if ($this->bindWorkspace($request) === null) {
             return Response::error('This connection is not bound to a workspace. Reconnect and select a workspace.');
@@ -50,30 +49,14 @@ class SetNativeTrackingTool extends WorkspaceTool
         }
 
         if ($validated['enabled']) {
-            if (! $account->platform->supportsNativeRead()) {
-                return Response::error(ucfirst($account->platform->value).' does not support native tracking, so its posts can only sync when published through Shoutrrr.');
-            }
-
-            if (! $account->nativeWatch()->exists() && ! $gate->canTrackNativeAccount($workspace)) {
-                $max = (int) config('subscriptions.max_native_tracked');
-
-                return Response::error("You've reached your plan's limit of {$max} tracked accounts. Untrack one to track another.");
-            }
-
-            ConnectedAccountNativeWatch::query()->firstOrCreate(
-                ['connected_account_id' => $account->id],
-                ['workspace_id' => $workspace->id, 'enabled_at' => now(), 'enabled_by' => $user->id],
-            );
+            $tracking->track($workspace, $user, $account);
         } else {
-            ConnectedAccountNativeWatch::query()
-                ->where('workspace_id', $workspace->id)
-                ->where('connected_account_id', $account->id)
-                ->delete();
+            $tracking->untrack($account);
         }
 
         return Response::text(json_encode([
             'account_id' => $account->id,
-            'native_tracking' => $validated['enabled'] && $account->nativeWatch()->exists(),
+            'native_tracking' => (bool) $validated['enabled'],
         ], JSON_THROW_ON_ERROR));
     }
 

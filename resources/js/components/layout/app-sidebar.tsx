@@ -5,6 +5,7 @@ import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerCon
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
 import SyncPipelinesController from '@/actions/App/Http/Controllers/Settings/SyncPipelinesController';
 import AppLogo from '@/components/layout/app-logo';
+import { openCommandPalette } from '@/components/layout/command-palette';
 import { ModeSwitch } from '@/components/layout/mode-switch';
 import { NavUser } from '@/components/layout/nav-user';
 import { SidebarContextMenu } from '@/components/layout/sidebar-context-menu';
@@ -25,6 +26,7 @@ import {
     Pencil,
     Plug,
     RefreshCw,
+    Search,
     Settings,
     Share2,
     Shield,
@@ -45,6 +47,7 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    SidebarTrigger,
     useSidebar,
 } from '@/components/ui/sidebar';
 import {
@@ -119,7 +122,7 @@ const accountSettingsIcons: Record<AccountSettingsNavKey, IconComponent> = {
 };
 
 const versionBadgeClassName =
-    'rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none font-medium text-sidebar-foreground/60 transition-colors hover:border-sidebar-accent-foreground/30 hover:text-sidebar-foreground';
+    'truncate text-[11px] leading-none font-medium text-sidebar-foreground/50 transition-colors hover:text-sidebar-foreground';
 
 const postsNavItems: NavItem[] = [
     { title: 'Posts', href: postsRoute(), icon: Inbox },
@@ -281,17 +284,17 @@ export function AppSidebar() {
                     : [];
 
     return (
-        <Sidebar collapsible="icon" variant="inset">
+        <Sidebar collapsible="icon">
             <SidebarHeader className="gap-1.5">
                 <SidebarMenu>
                     <SidebarMenuItem className="flex items-center gap-1">
                         <SidebarMenuButton
-                            className="h-8 min-w-0 flex-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
+                            className="h-8 w-auto flex-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
                             render={<Link href={productHome} />}
                         >
                             <AppLogo />
                         </SidebarMenuButton>
-                        <span className="relative flex group-data-[collapsible=icon]:hidden">
+                        <span className="relative flex min-w-0 group-data-[collapsible=icon]:hidden">
                             {(() => {
                                 const badge = (
                                     <a
@@ -334,10 +337,37 @@ export function AppSidebar() {
                     </SidebarMenuItem>
                 </SidebarMenu>
                 <WorkspaceSelector />
+                <button
+                    type="button"
+                    data-chrome-search
+                    onClick={openCommandPalette}
+                    aria-label="Search"
+                    className="flex h-8 w-full items-center justify-between gap-2 rounded-lg bg-black/4 px-2.5 text-[13px] font-medium text-sidebar-foreground/60 transition-colors group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0 hover:bg-black/7 hover:text-sidebar-foreground dark:bg-white/4 dark:hover:bg-white/7"
+                >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                        <Search
+                            className="size-4 shrink-0"
+                            aria-hidden="true"
+                        />
+                        <span className="truncate group-data-[collapsible=icon]:hidden">
+                            Search
+                        </span>
+                    </span>
+                    <Kbd className="group-data-[collapsible=icon]:hidden">
+                        ⌘K
+                    </Kbd>
+                </button>
             </SidebarHeader>
 
             <SidebarContent
-                className="gap-0"
+                className={
+                    menuOverride === null
+                        ? 'gap-0'
+                        : menuOverride === 'main'
+                          ? 'nav-swap-back gap-0'
+                          : 'nav-swap-forward gap-0'
+                }
+                key={shownContext?.id ?? 'main'}
                 data-sidebar-context={shownContext?.id ?? 'main'}
             >
                 <ModeSwitch />
@@ -370,18 +400,38 @@ export function AppSidebar() {
                                                 <span>Connect accounts</span>
                                             </SidebarMenuButton>
                                         </SidebarMenuItem>
+                                        {showSyncPipelines && (
+                                            <SidebarMenuItem>
+                                                <SidebarMenuButton
+                                                    tooltip="Sync pipelines"
+                                                    isActive={isCurrentOrParentUrl(
+                                                        SyncPipelinesController.index()
+                                                            .url,
+                                                    )}
+                                                    render={
+                                                        <Link
+                                                            href={SyncPipelinesController.index()}
+                                                        />
+                                                    }
+                                                >
+                                                    <RefreshCw aria-hidden="true" />
+                                                    <span>Sync pipelines</span>
+                                                </SidebarMenuButton>
+                                            </SidebarMenuItem>
+                                        )}
                                     </SidebarMenu>
                                 </SidebarGroupContent>
                             </SidebarGroup>
                         )}
                         {classicMode && (
                             <>
-                                <SidebarGroup className="border-b border-sidebar-border">
+                                <SidebarGroup>
                                     <SidebarGroupContent>
                                         <SidebarMenu>
                                             <SidebarMenuItem>
                                                 <SidebarMenuButton
                                                     tooltip="Compose new post"
+                                                    data-compose=""
                                                     isActive={isCurrentUrl(
                                                         composeHref,
                                                     )}
@@ -413,6 +463,27 @@ export function AppSidebar() {
                                                     )}
                                                 </SidebarMenuButton>
                                             </SidebarMenuItem>
+                                            {showSyncPipelines && (
+                                                <SidebarMenuItem>
+                                                    <SidebarMenuButton
+                                                        tooltip="Sync pipelines"
+                                                        isActive={isCurrentOrParentUrl(
+                                                            SyncPipelinesController.index()
+                                                                .url,
+                                                        )}
+                                                        render={
+                                                            <Link
+                                                                href={SyncPipelinesController.index()}
+                                                            />
+                                                        }
+                                                    >
+                                                        <RefreshCw aria-hidden="true" />
+                                                        <span>
+                                                            Sync pipelines
+                                                        </span>
+                                                    </SidebarMenuButton>
+                                                </SidebarMenuItem>
+                                            )}
                                         </SidebarMenu>
                                     </SidebarGroupContent>
                                 </SidebarGroup>
@@ -495,27 +566,6 @@ export function AppSidebar() {
                                                     </SidebarMenuButton>
                                                 </SidebarMenuItem>
                                             )}
-                                            {showSyncPipelines && (
-                                                <SidebarMenuItem>
-                                                    <SidebarMenuButton
-                                                        tooltip="Sync pipelines"
-                                                        isActive={isCurrentOrParentUrl(
-                                                            SyncPipelinesController.index()
-                                                                .url,
-                                                        )}
-                                                        render={
-                                                            <Link
-                                                                href={SyncPipelinesController.index()}
-                                                            />
-                                                        }
-                                                    >
-                                                        <RefreshCw aria-hidden="true" />
-                                                        <span>
-                                                            Sync pipelines
-                                                        </span>
-                                                    </SidebarMenuButton>
-                                                </SidebarMenuItem>
-                                            )}
                                         </SidebarMenu>
                                     </SidebarGroupContent>
                                 </SidebarGroup>
@@ -523,6 +573,7 @@ export function AppSidebar() {
                         )}
 
                         <SidebarGroup>
+                            <SidebarGroupLabel>Manage</SidebarGroupLabel>
                             <SidebarGroupContent>
                                 <SidebarMenu>
                                     {showWorkspaceSettings && (
@@ -541,7 +592,7 @@ export function AppSidebar() {
                                                 <span>
                                                     {workspaceSettingsLabel}
                                                 </span>
-                                                <span className="ml-auto group-data-[collapsible=icon]:hidden">
+                                                <span className="nav-chevron ml-auto group-data-[collapsible=icon]:hidden">
                                                     <ChevronRight
                                                         className="size-3 opacity-60"
                                                         aria-hidden="true"
@@ -566,7 +617,7 @@ export function AppSidebar() {
                                                 <span>
                                                     {instanceSettingsLabel}
                                                 </span>
-                                                <span className="ml-auto group-data-[collapsible=icon]:hidden">
+                                                <span className="nav-chevron ml-auto group-data-[collapsible=icon]:hidden">
                                                     <ChevronRight
                                                         className="size-3 opacity-60"
                                                         aria-hidden="true"
@@ -587,7 +638,7 @@ export function AppSidebar() {
                                         >
                                             <User aria-hidden="true" />
                                             <span>Settings</span>
-                                            <span className="ml-auto group-data-[collapsible=icon]:hidden">
+                                            <span className="nav-chevron ml-auto group-data-[collapsible=icon]:hidden">
                                                 <ChevronRight
                                                     className="size-3 opacity-60"
                                                     aria-hidden="true"
@@ -604,7 +655,12 @@ export function AppSidebar() {
 
             <SidebarFooter>
                 <SidebarFooterCard />
-                <NavUser />
+                <div className="flex items-center gap-1 group-data-[collapsible=icon]:flex-col">
+                    <div className="min-w-0 flex-1 group-data-[collapsible=icon]:flex-none">
+                        <NavUser />
+                    </div>
+                    <SidebarTrigger className="size-8 shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground" />
+                </div>
             </SidebarFooter>
         </Sidebar>
     );

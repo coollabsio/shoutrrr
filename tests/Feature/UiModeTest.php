@@ -36,6 +36,17 @@ test('classic users still sign in to the composer', function () {
     ])->assertRedirect(route('dashboard', absolute: false));
 });
 
+test('signed-in users who open a guest page land on their mode home', function (UiMode $mode, string $home) {
+    $user = User::factory()->create(['ui_mode' => $mode]);
+
+    $this->actingAs($user)
+        ->get(route('login'))
+        ->assertRedirect(route($home));
+})->with([
+    'agentic' => [UiMode::Agentic, 'agentic.home'],
+    'classic' => [UiMode::Classic, 'dashboard'],
+]);
+
 test('the mode switch persists and redirects to that home', function () {
     $user = User::factory()->create();
 
@@ -97,6 +108,8 @@ test('agentic home shows setup, sync, and recent activity', function () {
             ->where('auth.user.ui_mode', 'agentic')
             ->where('mcp.endpoint', url('/mcp'))
             ->where('sync.total', 0)
+            ->where('setup.accounts', 0)
+            ->where('setup.agent_connected', false)
             ->has('activity', 2)
             ->has('api.publish_example')
             ->has('api.schedule_example')

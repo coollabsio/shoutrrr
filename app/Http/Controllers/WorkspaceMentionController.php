@@ -4,54 +4,21 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Enums\Platform;
 use App\Models\WorkspaceMention;
-use App\Support\LinkedInOrg;
+use App\Services\Workspace\WorkspaceMentionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class WorkspaceMentionController extends Controller
 {
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, WorkspaceMentionService $mentions): JsonResponse
     {
-        $allowedPlatforms = array_map(
-            static fn (Platform $platform): string => $platform->value,
-            Platform::cases(),
-        );
+        $validated = $request->validate(WorkspaceMentionService::rules());
 
-        // Nested rules must cover every platform key: `validated()` strips any
-        // `handles.*` key without an explicit rule (excludeUnvalidatedArrayKeys),
-        // which silently dropped Meta handles before these rules were derived
-        // from the enum (issue #123).
-        $handleRules = [];
-        foreach ([...$allowedPlatforms, 'linkedin_urn'] as $handleKey) {
-            $handleRules['handles.'.$handleKey] = ['nullable', 'string', 'max:255'];
-        }
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80', 'regex:/^@[A-Za-z0-9_.-]+$/'],
-            'handles' => ['required', 'array'],
-            ...$handleRules,
-        ]);
-        $handles = [];
-        foreach ($allowedPlatforms as $platform) {
-            $handle = trim((string) ($validated['handles'][$platform] ?? ''));
-            if ($handle !== '') {
-                $handles[$platform] = $handle;
-            }
-        }
-
-        $linkedinUrn = LinkedInOrg::normalizeUrn($validated['handles']['linkedin_urn'] ?? null);
-        if ($linkedinUrn !== null) {
-            $handles['linkedin_urn'] = $linkedinUrn;
-        }
-
-        $mention = WorkspaceMention::withoutGlobalScopes()->updateOrCreate(
-            [
-                'workspace_id' => $request->user()->current_workspace_id,
-                'name' => $validated['name'],
-            ],
-            ['handles' => $handles],
+        $mention = $mentions->save(
+            $request->user()->current_workspace_id,
+            $validated['name'],
+            $validated['handles'],
         );
 
         return response()->json(['mention' => self::view($mention)]);

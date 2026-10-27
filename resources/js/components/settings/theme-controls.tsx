@@ -245,7 +245,7 @@ function CustomThemeDialog({
                                         color: readableTextOn(colors.selected),
                                     }}
                                 >
-                                    Projects
+                                    Posts
                                 </div>
                             </div>
                             <div
@@ -257,7 +257,7 @@ function CustomThemeDialog({
                             >
                                 <div className="flex items-center justify-between gap-2">
                                     <span className="text-sm font-semibold">
-                                        Projects
+                                        Posts
                                     </span>
                                     <span
                                         className="rounded-md px-2 py-1 text-[11px] font-medium"
@@ -268,11 +268,11 @@ function CustomThemeDialog({
                                             ),
                                         }}
                                     >
-                                        + New
+                                        + New post
                                     </span>
                                 </div>
                                 <div className="rounded-md border p-2.5 opacity-90">
-                                    My first project
+                                    My first post
                                 </div>
                             </div>
                         </div>
@@ -468,66 +468,6 @@ export function ThemeControls() {
                     selected={preferences.theme === 'custom'}
                     onClick={() => setDialogOpen(true)}
                     preview={<Swatch colors={preferences.customTheme} />}
-                />
-            </Section>
-
-            <Section
-                title="Page width"
-                description="Choose how content uses the available browser width."
-            >
-                <ChoiceCard
-                    label="Full width"
-                    description="Use all available space for page content."
-                    selected={preferences.pageWidth === 'full'}
-                    onClick={() =>
-                        updateShellPreferences({ pageWidth: 'full' })
-                    }
-                    preview={
-                        <span className="h-8 w-28 rounded-md border bg-background" />
-                    }
-                />
-                <ChoiceCard
-                    label="Centered"
-                    description="Keep content centered at a comfortable maximum width."
-                    selected={preferences.pageWidth === 'centered'}
-                    onClick={() =>
-                        updateShellPreferences({ pageWidth: 'centered' })
-                    }
-                    preview={
-                        <span className="mx-auto h-8 w-16 rounded-md border bg-background" />
-                    }
-                />
-            </Section>
-
-            <Section
-                title="Navigation style"
-                description="Choose how the top bar and sidebars sit on the page."
-            >
-                <ChoiceCard
-                    label="Default"
-                    description="Top bar and sidebars run edge to edge."
-                    selected={preferences.navStyle === 'default'}
-                    onClick={() =>
-                        updateShellPreferences({ navStyle: 'default' })
-                    }
-                    preview={
-                        <span className="text-xs text-muted-foreground">
-                            Edge to edge
-                        </span>
-                    }
-                />
-                <ChoiceCard
-                    label="Floating"
-                    description="Framed panels float on the page."
-                    selected={preferences.navStyle === 'floating'}
-                    onClick={() =>
-                        updateShellPreferences({ navStyle: 'floating' })
-                    }
-                    preview={
-                        <span className="text-xs text-muted-foreground">
-                            Inset frame
-                        </span>
-                    }
                 />
             </Section>
 

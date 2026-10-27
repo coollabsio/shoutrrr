@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\Tools\Concerns\PresentsSyncPipeline;
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\SyncPipeline;
+use App\Services\Sync\SyncPipelineService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
@@ -18,9 +18,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description('List sync pipelines in the bound workspace: name, enabled flag, source account, and destination accounts.')]
 class ListSyncPipelinesTool extends WorkspaceTool
 {
-    use PresentsSyncPipeline;
-
-    public function handle(Request $request): Response
+    public function handle(Request $request, SyncPipelineService $pipelines): Response
     {
         if ($this->bindWorkspace($request) === null) {
             return Response::error('This connection is not bound to a workspace. Reconnect and select a workspace.');
@@ -34,7 +32,7 @@ class ListSyncPipelinesTool extends WorkspaceTool
             ->with('destinations:id')
             ->latest()
             ->get()
-            ->map(fn (SyncPipeline $pipeline): array => $this->pipelinePayload($pipeline))
+            ->map(fn (SyncPipeline $pipeline): array => $pipelines->payload($pipeline))
             ->values();
 
         return Response::text(json_encode(['pipelines' => $pipelines], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));

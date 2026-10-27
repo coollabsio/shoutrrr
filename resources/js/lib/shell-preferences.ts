@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react';
 
 /**
- * Browser shell preferences shared with Coolify: `theme`, `pageWidth`,
- * `navStyle`, `navItems`, `chartTimes`, and `customTheme`.
+ * Browser shell preferences shared with Coolify: `theme`, `navItems`,
+ * `chartTimes`, and `customTheme`.
  *
  * Shoutrrr already stored light/dark/system as `appearance`. When `theme` is
  * missing, that value is the theme. Writing a theme also updates `appearance`
@@ -11,8 +11,6 @@ import { useSyncExternalStore } from 'react';
  */
 
 export type ThemeChoice = 'light' | 'dark' | 'system' | 'custom';
-export type PageWidth = 'full' | 'centered';
-export type NavStyle = 'default' | 'floating';
 export type NavItems = 'flat' | '3d';
 export type ChartTimes = 'local' | 'utc';
 
@@ -30,10 +28,17 @@ export const customThemeKeys = [
     'background',
 ] as const;
 
+/** Shoutrrr's default dark chrome: green-black sidebar and lime accent. */
+const shoutrrrSwatch: CustomThemeColors = {
+    sidebar: '#0d1307',
+    selected: '#1c2414',
+    accent: '#7ccf00',
+    background: '#0a0a0a',
+};
+
 const preset = (
     name: string,
     theme: CustomThemeColors | null,
-    swatch?: CustomThemeColors,
 ): {
     name: string;
     theme: CustomThemeColors | null;
@@ -41,22 +46,11 @@ const preset = (
 } => ({
     name,
     theme,
-    swatch: swatch ??
-        theme ?? {
-            sidebar: '#1a0f2d',
-            selected: '#1c1c1c',
-            accent: '#6b16ed',
-            background: '#0a0a0a',
-        },
+    swatch: theme ?? shoutrrrSwatch,
 });
 
 export const customThemePresets = [
-    preset('Coolify', null, {
-        sidebar: '#1a0f2d',
-        selected: '#1c1c1c',
-        accent: '#6b16ed',
-        background: '#0a0a0a',
-    }),
+    preset('Shoutrrr', null),
     preset('Midnight', {
         sidebar: '#0f172a',
         selected: '#2e4a7d',
@@ -129,8 +123,6 @@ const listeners = new Set<() => void>();
 
 export type ShellPreferences = {
     theme: ThemeChoice;
-    pageWidth: PageWidth;
-    navStyle: NavStyle;
     navItems: NavItems;
     chartTimes: ChartTimes;
     customTheme: CustomThemeColors;
@@ -138,8 +130,6 @@ export type ShellPreferences = {
 
 let current: ShellPreferences = {
     theme: 'system',
-    pageWidth: 'full',
-    navStyle: 'default',
     navItems: '3d',
     chartTimes: 'local',
     customTheme: customThemePresets[0].swatch,
@@ -285,18 +275,11 @@ export function readShellPreferences(): ShellPreferences {
     }
 
     const store = storage();
-    const pageWidth = store?.getItem('pageWidth');
-    const navStyle = store?.getItem('navStyle');
     const navItems = store?.getItem('navItems');
     const chartTimes = store?.getItem('chartTimes');
 
     return {
         theme: readTheme(),
-        pageWidth:
-            pageWidth === 'centered' || pageWidth === 'full'
-                ? pageWidth
-                : 'full',
-        navStyle: navStyle === 'floating' ? 'floating' : 'default',
         navItems: navItems === 'flat' ? 'flat' : '3d',
         chartTimes: chartTimes === 'utc' ? 'utc' : 'local',
         customTheme: readCustomTheme(),
@@ -332,8 +315,6 @@ export function applyShellPreferences(preferences: ShellPreferences): void {
     root.style.colorScheme = dark ? 'dark' : 'light';
     root.dataset.theme =
         preferences.theme === 'custom' ? 'custom' : dark ? 'dark' : 'light';
-    root.dataset.pageWidth = preferences.pageWidth;
-    root.dataset.navStyle = preferences.navStyle;
     root.dataset.navItems = preferences.navItems;
 
     if (preferences.theme === 'custom') {
@@ -385,8 +366,6 @@ function persist(next: ShellPreferences): void {
         const store = storage();
         store?.setItem('theme', next.theme);
         store?.setItem('appearance', appearance);
-        store?.setItem('pageWidth', next.pageWidth);
-        store?.setItem('navStyle', next.navStyle);
         store?.setItem('navItems', next.navItems);
         store?.setItem('chartTimes', next.chartTimes);
         store?.setItem('customTheme', serializeCustomTheme(next.customTheme));

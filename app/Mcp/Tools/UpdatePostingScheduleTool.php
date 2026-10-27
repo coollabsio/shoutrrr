@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\WorkspaceTool;
-use App\Models\PostingSchedule;
+use App\Services\Posts\PostingScheduleService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
-use Illuminate\Support\Facades\DB;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -18,7 +17,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description('Replace the workspace posting schedule timezone and weekly queue slots. Omit slots to leave them unchanged. Pass an empty slots list to clear them. Weekday is 0 (Sunday) through 6.')]
 class UpdatePostingScheduleTool extends WorkspaceTool
 {
-    public function handle(Request $request): Response
+    public function handle(Request $request, PostingScheduleService $schedules): Response
     {
         $workspaceId = $this->bindWorkspace($request);
 
@@ -30,6 +29,7 @@ class UpdatePostingScheduleTool extends WorkspaceTool
             return $denied;
         }
 
+        /** @var array{timezone?: string, slots?: list<array{weekday: int, hour: int, minute?: int|null}>} $validated */
         $validated = $request->validate([
             'timezone' => ['sometimes', 'string', 'timezone'],
             'slots' => ['sometimes', 'array'],
@@ -42,58 +42,9 @@ class UpdatePostingScheduleTool extends WorkspaceTool
             return Response::error('Provide a timezone, slots, or both.');
         }
 
-        $schedule = DB::transaction(function () use ($workspaceId, $validated): PostingSchedule {
-            $schedule = PostingSchedule::query()->firstOrCreate(
-                ['workspace_id' => $workspaceId],
-                ['timezone' => $validated['timezone'] ?? 'UTC'],
-            );
+        $schedule = $schedules->update($workspaceId, $validated['timezone'] ?? null, $validated['slots'] ?? null);
 
-            if (array_key_exists('timezone', $validated)) {
-                $schedule->forceFill(['timezone' => $validated['timezone']])->save();
-            }
-
-            if (! array_key_exists('slots', $validated)) {
-                return $schedule->load('slots');
-            }
-
-            $schedule->slots()->delete();
-
-            $seen = [];
-            $position = 0;
-            $rows = [];
-
-            foreach ($validated['slots'] as $slot) {
-                $minute = $slot['minute'] ?? 0;
-                $key = $slot['weekday'].':'.$slot['hour'].':'.$minute;
-
-                if (isset($seen[$key])) {
-                    continue;
-                }
-
-                $seen[$key] = true;
-                $rows[] = [
-                    'weekday' => $slot['weekday'],
-                    'hour' => $slot['hour'],
-                    'minute' => $minute,
-                    'position' => $position++,
-                ];
-            }
-
-            if ($rows !== []) {
-                $schedule->slots()->createMany($rows);
-            }
-
-            return $schedule->load('slots');
-        });
-
-        return Response::text(json_encode([
-            'timezone' => $schedule->timezone,
-            'slots' => $schedule->slots->map(fn ($slot): array => [
-                'weekday' => $slot->weekday,
-                'hour' => $slot->hour,
-                'minute' => $slot->minute,
-            ])->values(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+        return Response::text(json_encode($schedules->payload($schedule), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
     /**

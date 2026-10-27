@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Dto\Post\IntentContent;
 use App\Exceptions\AgentIntentRejectedException;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Posts\AgentIntentService;
+use App\Support\PostComposerInput;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Context;
@@ -28,7 +30,7 @@ class IntentsController extends Controller
                 $user,
                 $workspaceId,
                 $key,
-                $validated['text'],
+                IntentContent::fromValidated($validated),
                 $validated['destination'],
             );
         }, queued: true);
@@ -53,7 +55,7 @@ class IntentsController extends Controller
                 $user,
                 $workspaceId,
                 $key,
-                $validated['text'],
+                IntentContent::fromValidated($validated),
                 $validated['destination'],
                 $scheduledAt,
             );
@@ -66,7 +68,8 @@ class IntentsController extends Controller
     private function draftRules(): array
     {
         return [
-            'text' => ['required', 'string'],
+            'text' => ['required_without:segments', 'nullable', 'string'],
+            ...PostComposerInput::contentRules(),
             'destination' => ['required', 'array'],
             'destination.kind' => ['required', Rule::in(['all', 'set', 'account'])],
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],

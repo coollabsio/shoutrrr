@@ -35,7 +35,7 @@ export function SidebarContextMenu({
 }) {
     return (
         <>
-            <SidebarGroup className="border-b border-sidebar-border">
+            <SidebarGroup className="pb-0">
                 <SidebarGroupContent>
                     <SidebarMenu>
                         <SidebarMenuItem>
@@ -43,10 +43,17 @@ export function SidebarContextMenu({
                                 tooltip={backTitle}
                                 aria-label={backTitle}
                                 data-test="sidebar-context-back"
+                                data-nav-back=""
+                                className="group-data-[collapsible=icon]:justify-center"
                                 onClick={onBack}
                             >
-                                <ChevronLeft aria-hidden="true" />
-                                <span>{label}</span>
+                                <ChevronLeft
+                                    className="size-3! opacity-70"
+                                    aria-hidden="true"
+                                />
+                                <span className="flex-1 pr-5 text-center group-data-[collapsible=icon]:hidden">
+                                    {label}
+                                </span>
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     </SidebarMenu>

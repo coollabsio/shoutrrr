@@ -6,6 +6,8 @@ namespace App\Http\Controllers;
 
 use App\Enums\AgentIntentAction;
 use App\Models\AgentIntent;
+use App\Models\ConnectedAccount;
+use App\Models\McpGrantWorkspace;
 use App\Models\SyncPipeline;
 use App\Models\UsageEvent;
 use App\Models\User;
@@ -32,22 +34,31 @@ class AgenticHomeController extends Controller
             'mcp' => [
                 'endpoint' => url('/mcp'),
                 'docs_url' => 'https://shoutrrr.com/docs/mcp',
-                'snippet' => json_encode([
-                    'mcpServers' => [
-                        'shoutrrr' => [
-                            'url' => url('/mcp'),
-                        ],
-                    ],
-                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             ],
             'api' => [
                 'base_url' => url('/api/v1'),
                 'publish_example' => $this->publishExample(),
                 'schedule_example' => $this->scheduleExample(),
             ],
+            'setup' => $this->setupProgress($workspaceId),
             'sync' => $this->syncSummary($workspaceId),
             'activity' => $workspaceId === null ? [] : $this->activity($workspaceId),
         ]);
+    }
+
+    /**
+     * @return array{accounts: int, agent_connected: bool}
+     */
+    private function setupProgress(?string $workspaceId): array
+    {
+        if ($workspaceId === null) {
+            return ['accounts' => 0, 'agent_connected' => false];
+        }
+
+        return [
+            'accounts' => ConnectedAccount::query()->where('workspace_id', $workspaceId)->enabled()->count(),
+            'agent_connected' => McpGrantWorkspace::query()->where('workspace_id', $workspaceId)->exists(),
+        ];
     }
 
     /**
@@ -80,7 +91,7 @@ class AgenticHomeController extends Controller
             $items[] = [
                 'id' => 'intent-'.$intent->id,
                 'kind' => 'intent',
-                'label' => $intent->action === AgentIntentAction::ScheduleAt ? 'Scheduled a post' : 'Publish now',
+                'label' => $intent->action === AgentIntentAction::ScheduleAt ? 'Scheduled a post' : 'Published a post',
                 'detail' => null,
                 'succeeded' => null,
                 'occurred_at' => $occurredAt,
@@ -101,7 +112,7 @@ class AgenticHomeController extends Controller
             $items[] = [
                 'id' => 'mcp-'.$event->id,
                 'kind' => 'mcp',
-                'label' => 'MCP request',
+                'label' => 'Assistant request',
                 'detail' => is_int($status) || is_string($status) ? 'HTTP '.$status : null,
                 'succeeded' => $event->succeeded,
                 'occurred_at' => $occurredAt,

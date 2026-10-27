@@ -6,6 +6,7 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\ConnectedAccount;
+use App\Services\ConnectedAccounts\ConnectedAccountSettings;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
@@ -17,7 +18,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description('Make a connected account the workspace default.')]
 class MakeDefaultAccountTool extends WorkspaceTool
 {
-    public function handle(Request $request): Response
+    public function handle(Request $request, ConnectedAccountSettings $settings): Response
     {
         if ($this->bindWorkspace($request) === null) {
             return Response::error('This connection is not bound to a workspace. Reconnect and select a workspace.');
@@ -37,15 +38,7 @@ class MakeDefaultAccountTool extends WorkspaceTool
             return $denied;
         }
 
-        $workspace = $request->user()?->currentWorkspace()->first();
-
-        if ($workspace === null) {
-            return Response::error('This connection is not bound to a workspace. Reconnect and select a workspace.');
-        }
-
-        $workspace->forceFill([
-            'default_connected_account_id' => $account->id,
-        ])->save();
+        $settings->makeDefault($account);
 
         return Response::text(json_encode([
             'account_id' => $account->id,

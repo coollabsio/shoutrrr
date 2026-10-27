@@ -3,8 +3,10 @@
 use App\Enums\PostOrigin;
 use App\Enums\PostStatus;
 use App\Jobs\PublishPostTarget;
+use App\Models\AgentIntent;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
+use App\Models\PostMedia;
 use Illuminate\Support\Facades\Queue;
 
 test('publish now creates an agent post and is idempotent', function () {
@@ -136,6 +138,63 @@ test('schedule at rejects a time in the past', function () {
         ->assertStatus(422);
 
     expect(Post::query()->count())->toBe(0);
+});
+
+test('publish now accepts a thread with media and rejects the same key with different segments', function () {
+    Queue::fake();
+    [, $workspace, $token] = issuedKey();
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $media = PostMedia::factory()->for($workspace)->create(['post_id' => null]);
+
+    $payload = [
+        'segments' => ['one', 'two'],
+        'media_ids' => [$media->id],
+        'destination' => ['kind' => 'all'],
+    ];
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-thread')
+        ->postJson('/api/v1/intents/publish-now', $payload)
+        ->assertStatus(202)
+        ->assertJsonPath('post.segments', ['one', 'two'])
+        ->assertJsonPath('post.media.0.id', $media->id);
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-thread')
+        ->postJson('/api/v1/intents/publish-now', [...$payload, 'segments' => ['one', 'changed']])
+        ->assertStatus(409);
+
+    expect(Post::query()->where('workspace_id', $workspace->id)->count())->toBe(1);
+});
+
+test('a text-only intent keeps the fingerprint it had before media and threads existed', function () {
+    Queue::fake();
+    [, $workspace, $token] = issuedKey();
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-legacy')
+        ->postJson('/api/v1/intents/publish-now', ['text' => 'Plain', 'destination' => ['kind' => 'all']])
+        ->assertStatus(202);
+
+    $legacyHash = hash('sha256', json_encode([
+        'action' => 'publish_now',
+        'destination' => ['id' => null, 'kind' => 'all'],
+        'scheduled_at' => null,
+        'text' => 'Plain',
+    ], JSON_THROW_ON_ERROR));
+
+    expect(AgentIntent::query()->where('idempotency_key', 'intent-legacy')->sole()->request_hash)->toBe($legacyHash);
+});
+
+test('publish now requires text or segments', function () {
+    [, , $token] = issuedKey();
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-empty')
+        ->postJson('/api/v1/intents/publish-now', ['destination' => ['kind' => 'all']])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('text');
 });
 
 test('openapi spec documents the intent endpoints', function () {

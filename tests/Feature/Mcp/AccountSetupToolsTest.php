@@ -49,6 +49,7 @@ test('get_account_connect_url returns the classic oauth start url', function ():
 });
 
 test('get_account_connect_url refuses an unknown or unconfigured platform', function (): void {
+    config(['services.x.client_id' => null, 'services.x.client_secret' => null]);
     [$user] = mcpOwner();
 
     ShoutrrrServer::actingAs($user)->tool(GetAccountConnectUrlTool::class, ['platform' => 'nope'])
@@ -150,4 +151,23 @@ test('make_default_account and set_auto_repost update the account', function ():
         'enabled' => true,
     ])->assertOk();
     expect($discord->fresh()->autoRepostEnabled())->toBeFalse();
+});
+
+test('set_auto_repost takes min_percentile as a fraction between 0 and 1', function (): void {
+    [$user, $workspace] = mcpOwner();
+    $account = ConnectedAccount::factory()->for($workspace)->create(['platform' => Platform::X]);
+
+    ShoutrrrServer::actingAs($user)->tool(SetAutoRepostTool::class, [
+        'account_id' => $account->id,
+        'enabled' => true,
+        'min_percentile' => 0.75,
+    ])->assertOk();
+    expect($account->fresh()->autoRepostConfig()['min_percentile'])->toBe(0.75);
+
+    ShoutrrrServer::actingAs($user)->tool(SetAutoRepostTool::class, [
+        'account_id' => $account->id,
+        'enabled' => true,
+        'min_percentile' => 75,
+    ])->assertHasErrors();
+    expect($account->fresh()->autoRepostConfig()['min_percentile'])->toBe(0.75);
 });

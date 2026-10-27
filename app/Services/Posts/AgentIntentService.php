@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Services\Posts;
 
+use App\Dto\Post\DraftData;
+use App\Dto\Post\IntentContent;
 use App\Enums\AgentIntentAction;
 use App\Enums\PostOrigin;
 use App\Enums\PostStatus;
 use App\Exceptions\AgentIntentRejectedException;
 use App\Models\AgentIntent;
 use App\Models\Post;
+use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Billing\WorkspaceSubscriptionGate;
@@ -39,17 +42,18 @@ class AgentIntentService
      * @param  array{kind: string, id?: string|null}  $destination
      * @return array{post: array<string, mixed>, idempotent_replay: bool}
      */
-    public function publishNow(User $user, string $workspaceId, string $idempotencyKey, string $text, array $destination): array
+    public function publishNow(User $user, string $workspaceId, string $idempotencyKey, IntentContent $content, array $destination): array
     {
         $this->assertMemberCanCreate($user);
         $this->assertCanPublish($workspaceId);
+        $this->assertMediaInWorkspace($workspaceId, $content->mediaIds);
 
         $resolved = $this->claim(
             $user,
             $workspaceId,
             $idempotencyKey,
             AgentIntentAction::PublishNow,
-            $text,
+            $content,
             $destination,
             null,
             function (Post $post): void {
@@ -84,17 +88,18 @@ class AgentIntentService
      * @param  array{kind: string, id?: string|null}  $destination
      * @return array{post: array<string, mixed>, idempotent_replay: bool}
      */
-    public function scheduleAt(User $user, string $workspaceId, string $idempotencyKey, string $text, array $destination, string $scheduledAt): array
+    public function scheduleAt(User $user, string $workspaceId, string $idempotencyKey, IntentContent $content, array $destination, string $scheduledAt): array
     {
         $this->assertMemberCanCreate($user);
         $this->assertCanPublish($workspaceId);
+        $this->assertMediaInWorkspace($workspaceId, $content->mediaIds);
 
         $resolved = $this->claim(
             $user,
             $workspaceId,
             $idempotencyKey,
             AgentIntentAction::ScheduleAt,
-            $text,
+            $content,
             $destination,
             $scheduledAt,
             function (Post $post) use ($scheduledAt): void {
@@ -122,15 +127,15 @@ class AgentIntentService
         string $workspaceId,
         string $idempotencyKey,
         AgentIntentAction $action,
-        string $text,
+        IntentContent $content,
         array $destination,
         ?string $scheduledAt,
         Closure $apply,
     ): array {
-        $fingerprint = $this->fingerprint($action, $text, $destination, $scheduledAt);
+        $fingerprint = $this->fingerprint($action, $content, $destination, $scheduledAt);
 
         try {
-            return DB::transaction(function () use ($user, $workspaceId, $idempotencyKey, $action, $text, $destination, $fingerprint, $apply): array {
+            return DB::transaction(function () use ($user, $workspaceId, $idempotencyKey, $action, $content, $destination, $fingerprint, $apply): array {
                 $existing = AgentIntent::query()
                     ->where('workspace_id', $workspaceId)
                     ->where('idempotency_key', $idempotencyKey)
@@ -141,7 +146,19 @@ class AgentIntentService
                     return $this->replay($existing, $fingerprint);
                 }
 
-                $post = $this->drafts->createDraft($workspaceId, $user, $destination, [$text]);
+                $segments = $content->effectiveSegments();
+                $post = $this->drafts->createDraft(
+                    $workspaceId,
+                    $user,
+                    $destination,
+                    $segments,
+                    $content->mentions,
+                    data: DraftData::fromArray([
+                        'segments' => $segments,
+                        'destination' => $destination,
+                        'media_ids' => $content->mediaIds,
+                    ]),
+                );
                 $post->origin = PostOrigin::Agent;
                 $post->save();
 
@@ -209,6 +226,30 @@ class AgentIntentService
         }
     }
 
+    /**
+     * DraftService attaches only media it finds in the workspace and skips the
+     * rest, which would publish a post silently missing an image. Reject instead.
+     *
+     * @param  list<string>  $mediaIds
+     */
+    private function assertMediaInWorkspace(string $workspaceId, array $mediaIds): void
+    {
+        if ($mediaIds === []) {
+            return;
+        }
+
+        $found = PostMedia::withoutGlobalScopes()
+            ->where('workspace_id', $workspaceId)
+            ->whereIn('id', $mediaIds)
+            ->pluck('id')
+            ->all();
+        $missing = array_values(array_diff($mediaIds, $found));
+
+        if ($missing !== []) {
+            throw new AgentIntentRejectedException('No media with these ids exists in this workspace.', 422, ['missing_media_ids' => $missing]);
+        }
+    }
+
     private function assertCanPublish(string $workspaceId): void
     {
         $workspace = Workspace::query()->whereKey($workspaceId)->first();
@@ -221,7 +262,7 @@ class AgentIntentService
     /**
      * @param  array{kind: string, id?: string|null}  $destination
      */
-    private function fingerprint(AgentIntentAction $action, string $text, array $destination, ?string $scheduledAt): string
+    private function fingerprint(AgentIntentAction $action, IntentContent $content, array $destination, ?string $scheduledAt): string
     {
         $canonical = [
             'action' => $action->value,
@@ -232,7 +273,8 @@ class AgentIntentService
             'scheduled_at' => $scheduledAt === null
                 ? null
                 : Date::parse($scheduledAt)->utc()->toIso8601String(),
-            'text' => $text,
+            'text' => $content->text,
+            ...$content->fingerprintFields(),
         ];
 
         return hash('sha256', json_encode($canonical, JSON_THROW_ON_ERROR));

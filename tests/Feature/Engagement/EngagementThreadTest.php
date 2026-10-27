@@ -3,7 +3,6 @@
 use App\Enums\Platform;
 use App\Enums\ReplyStatus;
 use App\Enums\WorkspaceRole;
-use App\Http\Controllers\Engagement\EngagementController;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostTarget;
@@ -11,6 +10,7 @@ use App\Models\PostTargetReply;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Services\Engagement\ReplyInbox;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\DB;
@@ -408,13 +408,13 @@ test('base reply lookup reuses the remote reply index for one collection', funct
         }
     };
 
-    $method = new ReflectionMethod(EngagementController::class, 'baseReplyFor');
+    $method = new ReflectionMethod(ReplyInbox::class, 'baseReplyFor');
     $method->setAccessible(true);
 
-    $controller = app(EngagementController::class);
+    $inbox = app(ReplyInbox::class);
 
-    expect($method->invoke($controller, $child, $targetReplies)->is($base))->toBeTrue();
-    expect($method->invoke($controller, $base, $targetReplies)->is($base))->toBeTrue();
-    expect($method->invoke($controller, $child, $targetReplies)->is($base))->toBeTrue();
+    expect($method->invoke($inbox, $child, $targetReplies)->is($base))->toBeTrue();
+    expect($method->invoke($inbox, $base, $targetReplies)->is($base))->toBeTrue();
+    expect($method->invoke($inbox, $child, $targetReplies)->is($base))->toBeTrue();
     expect($targetReplies->keyByCalls)->toBe(1);
 });

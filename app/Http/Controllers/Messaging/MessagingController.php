@@ -5,23 +5,16 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Messaging;
 
 use App\Dto\Messaging\MessageSendResult;
-use App\Enums\EngagementStatus;
-use App\Enums\MessageDirection;
-use App\Enums\SendStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Messaging\RespondToMessageRequest;
-use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\DirectMessage;
-use App\Models\PostMedia;
-use App\Services\Messaging\MessageConnectorRegistry;
-use App\Services\Publishing\TokenManager;
+use App\Services\Messaging\ConversationReplier;
 use App\Support\ConversationListItem;
 use App\Support\MessageListItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -69,126 +62,16 @@ class MessagingController extends Controller
         return response()->noContent();
     }
 
-    public function respond(RespondToMessageRequest $request, Conversation $conversation, MessageConnectorRegistry $registry, TokenManager $tokens): JsonResponse
+    public function respond(RespondToMessageRequest $request, Conversation $conversation, ConversationReplier $replier): JsonResponse
     {
-        if (! $conversation->canReplyNow()) {
-            return response()->json(['status' => EngagementStatus::Unsupported->value, 'message' => 'The 24-hour reply window has closed.'], EngagementStatus::Unsupported->httpStatus());
+        /** @var list<string> $mediaIds */
+        $mediaIds = $request->validated('media', []);
+        $outcome = $replier->reply($conversation, $request->string('text')->toString(), $mediaIds);
+
+        if ($outcome instanceof MessageSendResult) {
+            return response()->json(['status' => $outcome->status->value, 'message' => $outcome->excerpt], $outcome->status->httpStatus());
         }
 
-        $text = $request->string('text')->toString();
-        $media = $this->orderedMedia($request, $conversation);
-
-        $account = $conversation->account;
-        $credentials = $tokens->fresh($account);
-        $result = $registry->for($conversation->platform)->sendMessage($account, $conversation, $text, $credentials, $media);
-
-        if (! $result->isOk()) {
-            if ($result->remoteMessageId !== null) {
-                $this->persistPartialSend($conversation, $account, $media, $result);
-            }
-
-            return response()->json(['status' => $result->status->value, 'message' => $result->excerpt], $result->status->httpStatus());
-        }
-
-        $row = DirectMessage::create([
-            'workspace_id' => $conversation->workspace_id,
-            'conversation_id' => $conversation->id,
-            'remote_message_id' => $result->remoteMessageId ?? 'pending:'.Str::uuid(),
-            'direction' => MessageDirection::Outbound,
-            'author_remote_id' => $account->remote_account_id,
-            'text' => $text,
-            'attachments' => [],
-            'remote_created_at' => now(),
-            'is_ours' => true,
-            'send_status' => SendStatus::Sent,
-            'our_remote_id' => $result->remoteMessageId,
-        ]);
-
-        $this->claimMedia($row, $media);
-
-        return response()->json(['message' => MessageListItem::make($row)], 201);
-    }
-
-    /**
-     * A Meta send can deliver the attachment and then fail on the text — the
-     * remote thread already carries it, so this row (media claimed, text
-     * empty since it never landed) keeps the local view honest and stops
-     * `media:prune-uploads` from deleting an attachment the recipient can
-     * already see, or the user from re-sending it as a duplicate.
-     *
-     * @param  list<PostMedia>  $media
-     */
-    private function persistPartialSend(Conversation $conversation, ConnectedAccount $account, array $media, MessageSendResult $result): void
-    {
-        $row = DirectMessage::create([
-            'workspace_id' => $conversation->workspace_id,
-            'conversation_id' => $conversation->id,
-            'remote_message_id' => $result->remoteMessageId,
-            'direction' => MessageDirection::Outbound,
-            'author_remote_id' => $account->remote_account_id,
-            'text' => '',
-            'attachments' => [],
-            'remote_created_at' => now(),
-            'is_ours' => true,
-            'send_status' => SendStatus::Sent,
-            'our_remote_id' => $result->remoteMessageId,
-        ]);
-
-        $this->claimMedia($row, $media);
-    }
-
-    /**
-     * Hand the delivered attachments to the message that carried them.
-     *
-     * Until now they were orphaned uploads, which `media:prune-uploads` deletes
-     * after six hours — and the bubble renders them for as long as the thread
-     * exists. Claiming them also fixes their order for `DirectMessage::media()`.
-     *
-     * @param  list<PostMedia>  $media
-     */
-    private function claimMedia(DirectMessage $message, array $media): void
-    {
-        foreach ($media as $position => $item) {
-            $item->forceFill([
-                'direct_message_id' => $message->id,
-                'position' => $position,
-            ])->save();
-        }
-
-        $message->setRelation('media', collect($media));
-    }
-
-    /**
-     * The picked attachments, resorted into the order the client listed them —
-     * `whereIn` returns database order.
-     *
-     * Only unclaimed orphan rows (no `post_id`, no `direct_message_id`) are
-     * eligible: the client sends ids of freshly uploaded DM attachments, so a
-     * claim must never reach into media already owned by a post or another sent
-     * DM and steal or reorder it.
-     *
-     * @return list<PostMedia>
-     */
-    private function orderedMedia(RespondToMessageRequest $request, Conversation $conversation): array
-    {
-        /** @var list<string> $ids */
-        $ids = $request->validated('media', []);
-
-        if ($ids === []) {
-            return [];
-        }
-
-        $rows = PostMedia::query()
-            ->where('workspace_id', $conversation->workspace_id)
-            ->whereNull('post_id')
-            ->whereNull('direct_message_id')
-            ->whereIn('id', $ids)
-            ->get()
-            ->keyBy('id');
-
-        return array_values(array_filter(array_map(
-            fn (string $id): ?PostMedia => $rows->get($id),
-            $ids,
-        )));
+        return response()->json(['message' => MessageListItem::make($outcome)], 201);
     }
 }

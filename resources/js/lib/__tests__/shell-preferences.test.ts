@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+    customThemePresets,
     parseCustomTheme,
     readShellPreferences,
     updateShellPreferences,
@@ -28,7 +29,6 @@ describe('shell preferences', () => {
         localStorage.setItem('appearance', 'dark');
 
         expect(readShellPreferences().theme).toBe('dark');
-        expect(readShellPreferences().pageWidth).toBe('full');
         expect(readShellPreferences().navItems).toBe('3d');
     });
 
@@ -56,11 +56,25 @@ describe('shell preferences', () => {
     });
 
     it('writes theme and the legacy appearance key together', () => {
-        updateShellPreferences({ theme: 'dark', pageWidth: 'centered' });
+        updateShellPreferences({ theme: 'dark' });
 
         expect(localStorage.getItem('theme')).toBe('dark');
         expect(localStorage.getItem('appearance')).toBe('dark');
-        expect(localStorage.getItem('pageWidth')).toBe('centered');
-        expect(document.documentElement.dataset.pageWidth).toBe('centered');
+    });
+
+    it('starts custom themes from the Shoutrrr green default', () => {
+        expect(customThemePresets[0]).toEqual({
+            name: 'Shoutrrr',
+            theme: null,
+            swatch: {
+                sidebar: '#0d1307',
+                selected: '#1c2414',
+                accent: '#7ccf00',
+                background: '#0a0a0a',
+            },
+        });
+        expect(customThemePresets.map((preset) => preset.name)).not.toContain(
+            'Coolify',
+        );
     });
 });

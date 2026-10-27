@@ -6,10 +6,9 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\ConnectedAccount;
+use App\Services\ConnectedAccounts\ConnectedAccountSettings;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
-use Illuminate\Support\Facades\Date;
-use Illuminate\Support\Facades\DB;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -19,7 +18,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description('Enable or disable a connected account. Disabling it also clears it as the workspace default. The account stays connected.')]
 class ToggleAccountTool extends WorkspaceTool
 {
-    public function handle(Request $request): Response
+    public function handle(Request $request, ConnectedAccountSettings $settings): Response
     {
         if ($this->bindWorkspace($request) === null) {
             return Response::error('This connection is not bound to a workspace. Reconnect and select a workspace.');
@@ -40,21 +39,7 @@ class ToggleAccountTool extends WorkspaceTool
             return $denied;
         }
 
-        DB::transaction(function () use ($request, $account, $validated): void {
-            $account->forceFill([
-                'disabled_at' => $validated['enabled'] ? null : Date::now(),
-            ])->save();
-
-            if (! $validated['enabled']) {
-                $workspace = $request->user()?->currentWorkspace()->first();
-
-                if ($workspace?->default_connected_account_id === $account->id) {
-                    $workspace->forceFill(['default_connected_account_id' => null])->save();
-                }
-            }
-        });
-
-        $account->refresh();
+        $settings->setEnabled($account, (bool) $validated['enabled']);
 
         return Response::text(json_encode([
             'account_id' => $account->id,

@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
-use App\Mcp\Tools\Concerns\PresentsSyncPipeline;
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\SyncPipeline;
+use App\Services\Sync\SyncPipelineService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Exists;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -20,9 +18,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description('Update a sync pipeline name, enabled flag, source account, or destination accounts. The source cannot also be a destination.')]
 class UpdateSyncPipelineTool extends WorkspaceTool
 {
-    use PresentsSyncPipeline;
-
-    public function handle(Request $request): Response
+    public function handle(Request $request, SyncPipelineService $pipelines): Response
     {
         $workspaceId = $this->bindWorkspace($request);
 
@@ -34,13 +30,10 @@ class UpdateSyncPipelineTool extends WorkspaceTool
             return $denied;
         }
 
+        /** @var array{pipeline_id: string, name?: string, enabled?: bool, source_connected_account_id?: string, destination_connected_account_ids?: list<string>} $validated */
         $validated = $request->validate([
             'pipeline_id' => ['required', 'string'],
-            'name' => ['sometimes', 'string', 'max:255'],
-            'enabled' => ['sometimes', 'boolean'],
-            'source_connected_account_id' => ['sometimes', 'string', $this->accountRule($workspaceId)],
-            'destination_connected_account_ids' => ['sometimes', 'array', 'min:1', 'max:3'],
-            'destination_connected_account_ids.*' => [$this->accountRule($workspaceId)],
+            ...$pipelines->updateRules($workspaceId),
         ]);
 
         $pipeline = SyncPipeline::query()->whereKey($validated['pipeline_id'])->first();
@@ -49,29 +42,11 @@ class UpdateSyncPipelineTool extends WorkspaceTool
             return Response::error('No sync pipeline with that id exists in this workspace.');
         }
 
-        $finalSource = $validated['source_connected_account_id'] ?? $pipeline->source_connected_account_id;
-        $finalDestinations = array_key_exists('destination_connected_account_ids', $validated)
-            ? $validated['destination_connected_account_ids']
-            : $pipeline->destinations()->pluck('connected_accounts.id')->all();
-
-        if (in_array((string) $finalSource, array_map(static fn (mixed $id): string => (string) $id, $finalDestinations), true)) {
-            return Response::error('The source account cannot also be a destination.');
-        }
-
-        $pipeline->update(array_intersect_key($validated, array_flip(['name', 'enabled', 'source_connected_account_id'])));
-
-        if (array_key_exists('destination_connected_account_ids', $validated)) {
-            $pipeline->destinations()->sync($validated['destination_connected_account_ids']);
-        }
+        unset($validated['pipeline_id']);
 
         return Response::text(json_encode([
-            'pipeline' => $this->pipelinePayload($pipeline->refresh()),
+            'pipeline' => $pipelines->payload($pipelines->update($pipeline, $validated)),
         ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
-    }
-
-    private function accountRule(string $workspaceId): Exists
-    {
-        return Rule::exists('connected_accounts', 'id')->where('workspace_id', $workspaceId);
     }
 
     /**

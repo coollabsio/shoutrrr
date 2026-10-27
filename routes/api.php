@@ -7,10 +7,13 @@ use App\Http\Controllers\Api\V1\CalendarController;
 use App\Http\Controllers\Api\V1\ConnectedAccountsController;
 use App\Http\Controllers\Api\V1\IntentsController;
 use App\Http\Controllers\Api\V1\MediaController;
+use App\Http\Controllers\Api\V1\NativeTrackingController;
+use App\Http\Controllers\Api\V1\PlatformsController;
 use App\Http\Controllers\Api\V1\PostActionsController;
 use App\Http\Controllers\Api\V1\PostingScheduleController;
 use App\Http\Controllers\Api\V1\PostsController;
 use App\Http\Controllers\Api\V1\SharesController;
+use App\Http\Controllers\Api\V1\SyncPipelinesController;
 use App\Http\Middleware\RecordApiUsage;
 use App\Http\Middleware\RequireWriteScope;
 use App\Http\Middleware\ResolveApiWorkspace;
@@ -18,7 +21,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:api', ResolveApiWorkspace::class, 'throttle:api', RecordApiUsage::class])
     ->group(function (): void {
+        Route::get('platforms', [PlatformsController::class, 'index']);
+        Route::get('platforms/{platform}/connect-url', [PlatformsController::class, 'connectUrl']);
         Route::get('connected-accounts', [ConnectedAccountsController::class, 'index']);
+        Route::get('connected-accounts/{id}/reconnect-url', [ConnectedAccountsController::class, 'reconnectUrl']);
+        Route::get('sync-pipelines', [SyncPipelinesController::class, 'index']);
         Route::get('posts', [PostsController::class, 'index']);
         Route::get('posts/{id}', [PostsController::class, 'show']);
         Route::get('account-sets', [AccountSetsController::class, 'index']);
@@ -50,5 +57,18 @@ Route::middleware(['auth:api', ResolveApiWorkspace::class, 'throttle:api', Recor
             Route::post('account-sets', [AccountSetsController::class, 'store']);
             Route::patch('account-sets/{set}', [AccountSetsController::class, 'update']);
             Route::delete('account-sets/{set}', [AccountSetsController::class, 'destroy']);
+
+            Route::patch('connected-accounts/{id}', [ConnectedAccountsController::class, 'update']);
+            Route::delete('connected-accounts/{id}', [ConnectedAccountsController::class, 'destroy']);
+            Route::post('connected-accounts/{id}/default', [ConnectedAccountsController::class, 'makeDefault']);
+            Route::patch('connected-accounts/{id}/auto-repost', [ConnectedAccountsController::class, 'autoRepost']);
+            Route::post('connected-accounts/{id}/native-tracking', [NativeTrackingController::class, 'store']);
+            Route::delete('connected-accounts/{id}/native-tracking', [NativeTrackingController::class, 'destroy']);
+
+            Route::post('sync-pipelines', [SyncPipelinesController::class, 'store']);
+            Route::patch('sync-pipelines/{id}', [SyncPipelinesController::class, 'update']);
+            Route::delete('sync-pipelines/{id}', [SyncPipelinesController::class, 'destroy']);
+
+            Route::put('posting-schedule', [PostingScheduleController::class, 'update']);
         });
     });

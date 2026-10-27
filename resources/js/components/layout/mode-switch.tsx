@@ -49,7 +49,7 @@ export function ModeSwitch() {
     }
 
     return (
-        <SidebarGroup className="border-b border-sidebar-border">
+        <SidebarGroup>
             <SidebarGroupLabel>Mode</SidebarGroupLabel>
             <SidebarGroupContent>
                 <SidebarMenu role="radiogroup" aria-label="Product mode">

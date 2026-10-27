@@ -43,7 +43,7 @@ test('sync pipeline tools create, update, and delete within plan rules', functio
         'name' => 'Loop',
         'source_connected_account_id' => $source->id,
         'destination_connected_account_ids' => [$source->id],
-    ])->assertHasErrors();
+    ])->assertHasErrors(['The source account cannot also be a destination.']);
 
     ShoutrrrServer::actingAs($user)->tool(UpdateSyncPipelineTool::class, [
         'pipeline_id' => $pipeline->id,
@@ -104,7 +104,7 @@ test('set_native_tracking follows platform support', function (): void {
     ShoutrrrServer::actingAs($user)->tool(SetNativeTrackingTool::class, [
         'account_id' => $discord->id,
         'enabled' => true,
-    ])->assertHasErrors();
+    ])->assertHasErrors(['Discord does not support native tracking']);
 
     ShoutrrrServer::actingAs($user)->tool(SetNativeTrackingTool::class, [
         'account_id' => $account->id,
@@ -117,4 +117,26 @@ test('set_native_tracking follows platform support', function (): void {
         'enabled' => false,
     ])->assertOk();
     expect(ConnectedAccountNativeWatch::query()->where('connected_account_id', $account->id)->exists())->toBeFalse();
+});
+
+test('set_native_tracking reports the plan cap as a tool error', function (): void {
+    config(['subscriptions.enabled' => true, 'subscriptions.max_native_tracked' => 1]);
+    [$user, $workspace] = mcpOwner();
+    $workspace->forceFill(['is_initial' => false])->save();
+    $workspace->subscriptions()->create(['type' => 'default', 'stripe_id' => 'sub_'.fake()->uuid(), 'stripe_status' => 'active', 'stripe_price' => 'price_test', 'quantity' => 1]);
+    $tracked = ConnectedAccount::factory()->for($workspace)->create(['platform' => Platform::Bluesky]);
+    $next = ConnectedAccount::factory()->for($workspace)->create(['platform' => Platform::Bluesky]);
+    ConnectedAccountNativeWatch::query()->create([
+        'workspace_id' => $workspace->id,
+        'connected_account_id' => $tracked->id,
+        'enabled_at' => now(),
+        'enabled_by' => $user->id,
+    ]);
+
+    ShoutrrrServer::actingAs($user)->tool(SetNativeTrackingTool::class, [
+        'account_id' => $next->id,
+        'enabled' => true,
+    ])->assertHasErrors(["You've reached your plan's limit of 1 tracked accounts."]);
+
+    expect(ConnectedAccountNativeWatch::query()->where('connected_account_id', $next->id)->exists())->toBeFalse();
 });

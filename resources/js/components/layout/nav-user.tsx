@@ -34,7 +34,7 @@ export function NavUser() {
                             render={
                                 <SidebarMenuButton
                                     size="sm"
-                                    className="h-8 rounded-lg px-2 text-xs font-medium data-[popup-open]:bg-black/5 dark:data-[popup-open]:bg-white/6"
+                                    className="h-8 rounded-lg border border-sidebar-border px-2 text-xs font-medium data-[popup-open]:bg-black/5 dark:data-[popup-open]:bg-white/6"
                                     data-test="sidebar-menu-button"
                                     aria-label={`Account menu for ${auth.user.name}`}
                                 />

@@ -6,9 +6,9 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\ConnectedAccount;
+use App\Services\ConnectedAccounts\ConnectedAccountSettings;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
-use Inertia\Inertia;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -18,7 +18,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description('Disconnect a connected account and delete its stored credentials. Irreversible. Requires confirm=true.')]
 class DisconnectAccountTool extends WorkspaceTool
 {
-    public function handle(Request $request): Response
+    public function handle(Request $request, ConnectedAccountSettings $settings): Response
     {
         if ($this->bindWorkspace($request) === null) {
             return Response::error('This connection is not bound to a workspace. Reconnect and select a workspace.');
@@ -43,15 +43,7 @@ class DisconnectAccountTool extends WorkspaceTool
             return $unconfirmed;
         }
 
-        $workspace = $request->user()?->currentWorkspace()->first();
-
-        if ($workspace?->default_connected_account_id === $account->id) {
-            $workspace->forceFill(['default_connected_account_id' => null])->save();
-        }
-
-        $account->secret()->delete();
-        $account->delete();
-        Inertia::clearHistory();
+        $settings->disconnect($account);
 
         return Response::text(json_encode(['disconnected' => true, 'account_id' => $validated['account_id']], JSON_THROW_ON_ERROR));
     }

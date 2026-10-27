@@ -10,7 +10,7 @@ use App\Models\ConnectedAccount;
 use App\Support\InstanceSettings;
 
 /**
- * Browser URLs that start Classic's connect and reconnect flows. MCP never
+ * Browser URLs that start Classic's connect and reconnect flows. Neither MCP nor the REST API ever
  * completes provider OAuth or stores a webhook or app password.
  */
 class AccountConnectLinks
@@ -48,7 +48,7 @@ class AccountConnectLinks
         $resolved = Platform::tryFrom($key);
 
         if ($resolved === null) {
-            return $this->unavailable($key, $key, 'unknown', 'Unknown platform. Use list_platforms for the supported values.');
+            return $this->unavailable($key, $key, 'unknown', 'Unknown platform. List the platforms to see the supported values.');
         }
 
         if (! $resolved->isLaunched() || ! $this->settings->platformAvailable($resolved)) {
@@ -61,7 +61,7 @@ class AccountConnectLinks
                 $resolved->label(),
                 'webhook',
                 route('accounts.index'),
-                'Discord connects with a webhook, not OAuth. Open this page and paste the webhook there. Do not send the webhook URL to MCP.',
+                'Discord connects with a webhook, not OAuth. Open this page and paste the webhook there. Do not send the webhook URL to the agent.',
             );
         }
 
@@ -79,7 +79,7 @@ class AccountConnectLinks
                 $resolved->label(),
                 'oauth',
                 route('accounts.meta.redirect'),
-                'Open this URL and finish Facebook Login in the browser. Pick the Facebook Page or Instagram account there. MCP does not complete OAuth.',
+                'Open this URL and finish Facebook Login in the browser. Pick the Facebook Page or Instagram account there. The agent cannot complete OAuth.',
             );
         }
 
@@ -88,7 +88,7 @@ class AccountConnectLinks
             $resolved->label(),
             'oauth',
             route('accounts.connect', ['platform' => $resolved->value]),
-            'Open this URL and finish '.$resolved->label().' authorization in the browser. MCP does not complete OAuth.',
+            'Open this URL and finish '.$resolved->label().' authorization in the browser. The agent cannot complete OAuth.',
         );
     }
 
@@ -116,7 +116,7 @@ class AccountConnectLinks
                 $account->platform->label(),
                 'webhook',
                 route('accounts.index'),
-                'Open Accounts and paste a new Discord webhook for '.$account->handle.'. Do not send the webhook URL to MCP.',
+                'Open Accounts and paste a new Discord webhook for '.$account->handle.'. Do not send the webhook URL to the agent.',
             );
         }
 
@@ -130,7 +130,7 @@ class AccountConnectLinks
                 $account->platform->label(),
                 'app_password',
                 route('accounts.index'),
-                'Open Accounts and resubmit the Bluesky app password for '.$account->handle.'. Do not send the password to MCP.',
+                'Open Accounts and resubmit the Bluesky app password for '.$account->handle.'. Do not send the password to the agent.',
             );
         }
 
@@ -153,7 +153,7 @@ class AccountConnectLinks
             $platform->label(),
             'oauth',
             route('accounts.bluesky.oauth', $parameters),
-            'Open this URL to start Bluesky OAuth in the browser. An app password, if you use one instead, is entered on the Accounts page — do not send it to MCP.',
+            'Open this URL to start Bluesky OAuth in the browser. An app password, if you use one instead, is entered on the Accounts page — do not send it to the agent.',
         );
     }
 
@@ -176,7 +176,7 @@ class AccountConnectLinks
             'LinkedIn Pages',
             'oauth',
             route('accounts.linkedin-pages.redirect'),
-            'Open this URL and finish LinkedIn Pages authorization in the browser. MCP does not complete OAuth.',
+            'Open this URL and finish LinkedIn Pages authorization in the browser. The agent cannot complete OAuth.',
         );
     }
 

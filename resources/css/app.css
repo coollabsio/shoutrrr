@@ -460,33 +460,89 @@
     }
 }
 
-/* Coolify-aligned shell. Flat rows are the default; 3D tiles and a custom
-   theme opt in through data attributes set from the Appearance menu. */
-html[data-page-width='centered'] [data-slot='sidebar-inset'] {
-    width: 100%;
-    max-width: 80rem;
-    margin-inline: auto;
+/* The sidebar sits flush against the page, like Coolify's default nav. The
+   inner panel draws its own edge (see the chrome rules below). */
+[data-slot='sidebar-container'] {
+    border-right-width: 0;
 }
 
-html[data-nav-style='floating'] [data-slot='sidebar-container'] {
-    padding: 0.5rem;
+/* Section titles: small mono caps, as in Coolify's main nav. */
+[data-slot='sidebar-content'] [data-sidebar='group-label'] {
+    height: 1.75rem;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--sidebar-foreground) 50%, transparent);
 }
 
-html[data-nav-style='floating'] [data-slot='sidebar-inner'] {
-    overflow: hidden;
-    border-radius: 0.75rem;
-    border: 1px solid var(--sidebar-border);
+/* Submenu chevrons show only on hover, focus, or the current family. */
+[data-sidebar='menu-button'] > .nav-chevron {
+    transition: opacity 120ms ease;
 }
 
-html[data-nav-items='3d'] [data-sidebar='menu-button'] {
+[data-sidebar='menu-button']:not(:hover):not(:focus-visible):not([data-active])
+    > .nav-chevron {
+    opacity: 0;
+}
+
+/* The Back row of a context menu keeps a filled hover in both styles. */
+[data-sidebar='menu-button'][data-nav-back]:hover {
+    background-color: rgb(0 0 0 / 5%);
+}
+
+html.dark [data-sidebar='menu-button'][data-nav-back]:hover {
+    background-color: rgb(255 255 255 / 6%);
+}
+
+/* A deeper menu enters from the right, the main menu from the left. */
+@keyframes nav-swap-forward {
+    from {
+        opacity: 0;
+        transform: translateX(0.5rem);
+    }
+}
+
+@keyframes nav-swap-back {
+    from {
+        opacity: 0;
+        transform: translateX(-0.5rem);
+    }
+}
+
+.nav-swap-forward {
+    animation: nav-swap-forward 150ms ease-out;
+}
+
+.nav-swap-back {
+    animation: nav-swap-back 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-swap-forward,
+    .nav-swap-back {
+        animation: none;
+    }
+}
+
+/* 3D: each nav icon sits in a framed tile with a 2px ledge, like Coolify.
+   Only the tile reacts; the row has no fill. The Compose button keeps its
+   primary gradient fill. */
+html[data-nav-items='3d']
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button']:not([data-compose]):not([data-nav-back]) {
     height: 36px;
+    padding-left: 0.25rem;
     background: transparent;
 }
 
 /* Raised tiles are nav icons only. Search and other chrome inputs stay flat:
    no depth shadow and no raised edge, including the icon inside the field. */
 html[data-nav-items='3d']
-    [data-sidebar='menu-button']:not([data-chrome-search]):not(:has(input))
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button']:not([data-chrome-search]):not(:has(input)):not(
+        [data-nav-back]
+    )
     > svg {
     box-sizing: content-box;
     width: 16px;
@@ -495,18 +551,135 @@ html[data-nav-items='3d']
     border: 1px solid rgb(0 0 0 / 9%);
     border-radius: 8px;
     background: #fafafa;
-    box-shadow: 0 2px 0 rgb(0 0 0 / 0.22);
+    --nav-tile-depth: rgb(0 0 0 / 0.22);
+    box-shadow: 0 2px 0 var(--nav-tile-depth);
+    transition:
+        border-color 120ms,
+        background-color 120ms,
+        box-shadow 80ms,
+        transform 80ms;
 }
 
 html.dark[data-nav-items='3d']
-    [data-sidebar='menu-button']:not([data-chrome-search]):not(:has(input))
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button']:not([data-chrome-search]):not(:has(input)):not(
+        [data-nav-back]
+    )
     > svg {
     border-color: rgb(255 255 255 / 0.07);
     background: rgb(255 255 255 / 0.03);
-    box-shadow: 0 2px 0 rgb(255 255 255 / 0.08);
+    color: oklch(72% 0 0);
+    --nav-tile-depth: rgb(255 255 255 / 0.08);
 }
 
-html[data-nav-items='3d'] :is([data-chrome-search], [data-slot='sidebar-input']) {
+/* Hover lifts the tile, a press sinks it onto the ledge. */
+html[data-nav-items='3d']
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button']:not([data-nav-back]):hover
+    > svg {
+    transform: translateY(-1px);
+    border-color: rgb(0 0 0 / 18%);
+    background: #fff;
+    box-shadow: 0 3px 0 var(--nav-tile-depth);
+}
+
+html.dark[data-nav-items='3d']
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button']:not([data-nav-back]):not([data-active]):hover
+    > svg {
+    border-color: rgb(255 255 255 / 0.14);
+    background: rgb(255 255 255 / 0.06);
+    color: #fff;
+}
+
+html[data-nav-items='3d']
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button']:not([data-nav-back]):active
+    > svg {
+    transform: translateY(2px);
+    box-shadow: none;
+}
+
+/* The current item's tile is filled with the brand green in both modes, like
+   the primary buttons. A lime outline alone is too faint on a light sidebar. */
+html[data-nav-items='3d']
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button'][data-active]:not([data-compose]):not(
+        [data-chrome-search]
+    ):not(:has(input)):not([data-nav-back])
+    > svg {
+    color: var(--primary-foreground);
+    border-color: var(--primary-gradient-edge);
+    background: linear-gradient(
+        180deg,
+        var(--primary-gradient-from) 0%,
+        var(--primary-gradient-to) 100%
+    );
+    --nav-tile-depth: var(--primary-gradient-edge);
+}
+
+/* The collapsed rail shows the tile alone. The sidebar sizes collapsed rows
+   with layered !important utilities, so this override lives in that layer. */
+@layer utilities {
+    html[data-nav-items='3d']
+        [data-collapsible='icon']
+        [data-slot='sidebar-content']
+        [data-sidebar='menu-button']:not([data-compose]) {
+        justify-content: center;
+        overflow: visible;
+        padding: 0 !important;
+    }
+}
+
+/* The footer account pill is a 3D button too:
+   framed, on a 2px ledge, lifting on hover and pressing on click. */
+html[data-nav-items='3d']
+    [data-slot='sidebar-footer']
+    [data-test='sidebar-menu-button'] {
+    border: 1px solid rgb(0 0 0 / 9%);
+    background: #fafafa;
+    --nav-tile-depth: rgb(0 0 0 / 0.22);
+    box-shadow: 0 2px 0 var(--nav-tile-depth);
+    transition:
+        border-color 120ms,
+        background-color 120ms,
+        box-shadow 80ms,
+        transform 80ms;
+}
+
+html.dark[data-nav-items='3d']
+    [data-slot='sidebar-footer']
+    [data-test='sidebar-menu-button'] {
+    border-color: rgb(255 255 255 / 0.07);
+    background: rgb(255 255 255 / 0.03);
+    --nav-tile-depth: rgb(255 255 255 / 0.08);
+}
+
+html[data-nav-items='3d']
+    [data-slot='sidebar-footer']
+    [data-test='sidebar-menu-button']:hover {
+    transform: translateY(-1px);
+    border-color: rgb(0 0 0 / 18%);
+    background: #fff;
+    box-shadow: 0 3px 0 var(--nav-tile-depth);
+}
+
+html.dark[data-nav-items='3d']
+    [data-slot='sidebar-footer']
+    [data-test='sidebar-menu-button']:hover {
+    border-color: rgb(255 255 255 / 0.14);
+    background: rgb(255 255 255 / 0.06);
+}
+
+html[data-nav-items='3d']
+    [data-slot='sidebar-footer']
+    [data-test='sidebar-menu-button']:active {
+    transform: translateY(2px);
+    box-shadow: none;
+}
+
+html[data-nav-items='3d']
+    :is([data-chrome-search], [data-slot='sidebar-input']) {
     border-style: solid;
     box-shadow: none;
 }
@@ -573,46 +746,85 @@ html.dark[data-theme='custom'] [data-slot='sidebar-inner'] {
 }
 
 html.dark:not([data-theme='custom']) [data-slot='sidebar-inner'] {
-    position: relative;
     background-color: var(--sidebar);
     box-shadow: inset -1px 0 0 var(--sidebar-brand-edge);
 }
 
-html.dark:not([data-theme='custom'])[data-nav-style='floating']
-    [data-slot='sidebar-inner'] {
-    border-color: var(--sidebar-brand-edge);
-}
-
-/* Logo cell: a flat 9% brand wash over the green-black, matching the top of
-   the nav fade so the brand block and the sidebar read as one surface. */
-html.dark:not([data-theme='custom']) [data-slot='sidebar-header'] {
-    anchor-name: --sidebar-logo-cell;
-    position: relative;
-    z-index: 1;
-    background-color: color-mix(in srgb, var(--primary) 9%, var(--sidebar));
-}
-
-html.dark:not([data-theme='custom'])
-    :is([data-slot='sidebar-content'], [data-slot='sidebar-footer']) {
-    position: relative;
-    z-index: 1;
-}
-
-html.dark:not([data-theme='custom']) [data-slot='sidebar-inner']::before {
-    content: '';
-    position: absolute;
-    z-index: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    top: anchor(bottom);
-    position-anchor: --sidebar-logo-cell;
+/* One brand wash from the top of the sidebar, logo cell included, fading
+   over 520px. The header has no fill of its own, so no seam shows. */
+html.dark:not([data-theme='custom']) [data-slot='sidebar-inner'] {
     background-image: linear-gradient(
         180deg,
         var(--sidebar-brand-wash),
         transparent 520px
     );
-    pointer-events: none;
+}
+
+/* Default dark nav: green-tinted labels, idle tiles, section titles, and
+   search field, the green stand-in for Coolify's lavender. */
+html.dark:not([data-theme='custom'])
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button']:not([data-compose]) {
+    color: oklch(80% 0.02 130.85);
+}
+
+html.dark:not([data-theme='custom'])
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button']:not([data-compose]):is(:hover, [data-active]) {
+    color: var(--sidebar-foreground);
+}
+
+html.dark:not([data-theme='custom'])[data-nav-items='3d']
+    [data-slot='sidebar-content']
+    [data-sidebar='menu-button']:not([data-chrome-search]):not(:has(input)):not(
+        [data-nav-back]
+    ):not([data-active]):not(:hover)
+    > svg {
+    border-color: color-mix(
+        in srgb,
+        var(--sidebar-brand-light) 13%,
+        transparent
+    );
+    background: color-mix(in srgb, var(--primary) 7%, transparent);
+    color: color-mix(in srgb, var(--sidebar-brand-light) 75%, white);
+}
+
+html.dark:not([data-theme='custom'])
+    [data-slot='sidebar-content']
+    [data-sidebar='group-label'] {
+    color: color-mix(in srgb, var(--sidebar-brand-light) 55%, transparent);
+}
+
+html.dark:not([data-theme='custom'])
+    [data-slot='sidebar-header']
+    [data-chrome-search] {
+    background-color: color-mix(
+        in srgb,
+        var(--sidebar-brand-light) 6%,
+        transparent
+    );
+    box-shadow: inset 0 0 0 1px var(--sidebar-brand-edge);
+}
+
+html.dark:not([data-theme='custom'])[data-nav-items='3d']
+    [data-slot='sidebar-footer']
+    [data-test='sidebar-menu-button']:not(:hover) {
+    border-color: color-mix(
+        in srgb,
+        var(--sidebar-brand-light) 13%,
+        transparent
+    );
+    background: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+
+html.dark:not([data-theme='custom'])
+    [data-slot='sidebar-header']
+    [data-chrome-search]:hover {
+    background-color: color-mix(
+        in srgb,
+        var(--sidebar-brand-light) 10%,
+        transparent
+    );
 }
 
 /* Kept-warm popovers (the emoji picker, marked `data-keep-warm`) stay mounted
