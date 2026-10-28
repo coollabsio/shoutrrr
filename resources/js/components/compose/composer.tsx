@@ -1371,6 +1371,21 @@ export default function Composer({
                                       })
                                 : undefined
                         }
+                        taggedHandles={
+                            activeAccount
+                                ? state.taggedByAccount[activeAccount.id]
+                                : undefined
+                        }
+                        onTaggedHandlesChange={
+                            activeAccount
+                                ? (handles) =>
+                                      dispatch({
+                                          type: 'setTaggedHandles',
+                                          accountId: activeAccount.id,
+                                          handles,
+                                      })
+                                : undefined
+                        }
                         overrideActive={overrideActive}
                         showSplitControls={activeAccount !== null}
                         boost={

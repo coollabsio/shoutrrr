@@ -10,6 +10,7 @@ use App\Models\Post;
 use App\Services\Posts\DraftService;
 use App\Services\Posts\PostStaleWriteException;
 use App\Support\PostView;
+use App\Support\XTaggedUsers;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Validation\Rule;
@@ -45,6 +46,7 @@ class UpdatePostTool extends WorkspaceTool
             'targets' => ['array'],
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
+            ...XTaggedUsers::rules(),
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.media_ids' => ['array'],

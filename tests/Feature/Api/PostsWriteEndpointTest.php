@@ -173,3 +173,48 @@ test('reports an unsupported format on the right target when several are sent', 
     $response->assertStatus(422)->assertJsonValidationErrors(['targets.1.format']);
     expect($response->json('errors'))->not->toHaveKey('targets.0.format');
 });
+
+test('stores tagged handles on an X target and keeps already resolved ids for unchanged handles', function () {
+    [$user, $workspace, $token] = issuedKey();
+    $x = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
+    $post = Post::factory()->for($workspace)->create(['author_id' => $user->id]);
+    PostTarget::factory()->for($post)->create([
+        'connected_account_id' => $x->id,
+        'platform' => Platform::X->value,
+        'tagged_users' => [['handle' => 'Ada', 'id' => '11']],
+    ]);
+
+    $this->withToken($token)->patchJson("/api/v1/posts/{$post->id}", [
+        'base_text' => 'Photos',
+        'destination' => ['kind' => 'account', 'id' => $x->id],
+        'targets' => [['connected_account_id' => $x->id, 'tagged_handles' => ['@ada', 'grace', 'GRACE']]],
+    ])->assertOk()->assertJsonPath('post.targets.0.tagged_handles', ['ada', 'grace']);
+
+    expect(PostTarget::where('connected_account_id', $x->id)->sole()->tagged_users)->toBe([
+        ['handle' => 'ada', 'id' => '11'],
+        ['handle' => 'grace', 'id' => null],
+    ]);
+
+    $this->withToken($token)->patchJson("/api/v1/posts/{$post->id}", [
+        'base_text' => 'Edited',
+        'destination' => ['kind' => 'account', 'id' => $x->id],
+    ])->assertOk()->assertJsonPath('post.targets.0.tagged_handles', ['ada', 'grace']);
+});
+
+test('rejects more than ten tagged handles or tags on a platform other than X', function () {
+    [, $workspace, $token] = issuedKey();
+    $x = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
+    $bluesky = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky->value]);
+
+    $this->withToken($token)->postJson('/api/v1/posts', [
+        'base_text' => 'x',
+        'destination' => ['kind' => 'account', 'id' => $x->id],
+        'targets' => [['connected_account_id' => $x->id, 'tagged_handles' => array_map(fn (int $n): string => "user{$n}", range(1, 11))]],
+    ])->assertStatus(422)->assertJsonValidationErrors(['targets.0.tagged_handles']);
+
+    $this->withToken($token)->postJson('/api/v1/posts', [
+        'base_text' => 'x',
+        'destination' => ['kind' => 'account', 'id' => $bluesky->id],
+        'targets' => [['connected_account_id' => $bluesky->id, 'tagged_handles' => ['ada']]],
+    ])->assertStatus(422)->assertJsonValidationErrors(['targets.0.tagged_handles']);
+});

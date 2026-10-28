@@ -21,6 +21,7 @@ use App\Services\Repost\Contracts\RepostConnector;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
+use App\Support\XTaggedUsers;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
@@ -35,6 +36,8 @@ class XConnector implements PublishConnector, RepostConnector
     // v2 media upload (the v1.1 upload.twitter.com endpoint was deprecated 2025-03-31).
     // Simple single-request upload is sufficient for images; chunking is only required
     // for video/large media. Requires the OAuth2 `media.write` scope (see Platform::X).
+    private const string USERS_BY_URL = 'https://api.x.com/2/users/by';
+
     private const string MEDIA_URL = 'https://api.x.com/2/media/upload';
 
     private const string MEDIA_BASE = 'https://api.x.com/2/media/upload';
@@ -55,6 +58,18 @@ class XConnector implements PublishConnector, RepostConnector
         $remoteIds = $context->target->remote_ids ?? [];
 
         try {
+            // Tags ride on one tweet only: the first segment carrying photos.
+            $tagSegment = $this->firstPhotoSegment($context);
+            $taggedUserIds = [];
+
+            if ($tagSegment !== null && ! isset($remoteIds[$tagSegment]) && ($context->target->tagged_users ?? []) !== []) {
+                $resolved = $this->resolveTaggedUserIds($context, $token);
+                if ($resolved instanceof PublishResult) {
+                    return $resolved;
+                }
+                $taggedUserIds = $resolved;
+            }
+
             foreach ($context->segments as $index => $text) {
                 // Resume: skip segments already posted on a prior attempt.
                 if (isset($remoteIds[$index])) {
@@ -107,6 +122,10 @@ class XConnector implements PublishConnector, RepostConnector
 
                 if ($hasMedia) {
                     $body['media'] = ['media_ids' => $mediaIds];
+
+                    if ($index === $tagSegment && $taggedUserIds !== []) {
+                        $body['media']['tagged_user_ids'] = $taggedUserIds;
+                    }
                 }
 
                 if ($quoteTweetId !== null) {
@@ -182,6 +201,68 @@ class XConnector implements PublishConnector, RepostConnector
         // The retweets endpoint returns {data:{retweeted:true}} with no new id; the
         // source tweet id is what a future un-retweet (DELETE .../retweets/:id) needs.
         return PublishResult::success([$tweetId]);
+    }
+
+    /**
+     * Index of the first segment whose media is photos (not video or a GIF), the
+     * only kind X lets people be tagged in.
+     */
+    private function firstPhotoSegment(PublishContext $context): ?int
+    {
+        foreach (array_keys($context->segments) as $index) {
+            $sectionMedia = array_slice($context->mediaForSection($index), 0, Platform::X->maxMedia());
+
+            if ($sectionMedia !== [] && ! array_filter($sectionMedia, fn (PostMedia $m): bool => $m->isVideo() || $m->mime === 'image/gif')) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Ids for the target's tagged handles. Only handles without a stored id are
+     * looked up (one batched call, billed per user), and the result is saved on the
+     * target so retries and republishes never pay for the same lookup twice.
+     *
+     * @return list<string>|PublishResult
+     */
+    private function resolveTaggedUserIds(PublishContext $context, string $token): array|PublishResult
+    {
+        $users = array_slice($context->target->tagged_users ?? [], 0, XTaggedUsers::MAX);
+        $unresolved = array_column(array_filter($users, fn (array $user): bool => $user['id'] === null), 'handle');
+
+        if ($unresolved !== []) {
+            $response = $this->http->withToken($token)->acceptJson()
+                ->get(self::USERS_BY_URL, ['usernames' => implode(',', $unresolved)]);
+
+            /** @var list<array{id: string, username: string}> $found */
+            $found = $response->successful() ? (array) $response->json('data', []) : [];
+            $this->meterRead(UsageCategory::Publish, UsageOperation::USER_LOOKUP, $context->account, $response, array_column($found, 'id'));
+
+            if ($response->failed()) {
+                return $this->mapFailure($response, 'X tag lookup');
+            }
+
+            $idByHandle = [];
+            foreach ($found as $user) {
+                $idByHandle[strtolower($user['username'])] = (string) $user['id'];
+            }
+
+            $users = array_map(fn (array $user): array => [
+                'handle' => $user['handle'],
+                'id' => $user['id'] ?? $idByHandle[strtolower($user['handle'])] ?? null,
+            ], $users);
+
+            $missing = array_column(array_filter($users, fn (array $user): bool => $user['id'] === null), 'handle');
+            if ($missing !== []) {
+                return PublishResult::failure(ErrorKind::Validation, 'X could not find: @'.implode(', @', $missing).'. Fix the tagged handles and retry.');
+            }
+
+            $context->target->forceFill(['tagged_users' => $users])->save();
+        }
+
+        return array_column($users, 'id');
     }
 
     /**

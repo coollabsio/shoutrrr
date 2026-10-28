@@ -188,6 +188,7 @@ class PostDuplicator
                 'content_override' => $this->remapOverride($target->content_override, $mediaIdMap),
                 'auto_split' => $target->auto_split,
                 'format' => $target->format->value,
+                'tagged_users' => $target->tagged_users,
             ]);
         }
     }
