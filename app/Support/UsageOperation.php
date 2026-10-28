@@ -45,4 +45,6 @@ final class UsageOperation
     public const string DM_SEND = 'dm_send';
 
     public const string X_READ = 'x_read';
+
+    public const string USER_LOOKUP = 'user_lookup';
 }
