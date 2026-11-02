@@ -13,6 +13,7 @@ final readonly class ReplyPostResult
         public ?string $remoteReplyId = null,
         public ?string $remoteCid = null,
         public ?string $message = null,
+        public ?string $processingContainerId = null,
     ) {}
 
     public static function ok(string $remoteReplyId, ?string $remoteCid = null): self
@@ -38,6 +39,19 @@ final readonly class ReplyPostResult
     public static function failed(?string $message = null): self
     {
         return new self(EngagementStatus::Failed, message: $message);
+    }
+
+    /**
+     * The platform has not finished the reply. Anything that cannot wait for it
+     * sees an ordinary failure.
+     */
+    public static function processing(string $containerId): self
+    {
+        return new self(
+            EngagementStatus::Failed,
+            message: 'The platform is still processing the reply. Try again in a moment.',
+            processingContainerId: $containerId,
+        );
     }
 
     public function isOk(): bool

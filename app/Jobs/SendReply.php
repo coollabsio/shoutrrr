@@ -11,6 +11,7 @@ use App\Exceptions\TokenRefreshException;
 use App\Models\PostMedia;
 use App\Models\PostTargetReply;
 use App\Notifications\ReplyFailedNotification;
+use App\Services\Engagement\Contracts\PublishesReplyContainers;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Publishing\TokenManager;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,11 +23,18 @@ class SendReply implements ShouldQueue
 {
     use Queueable;
 
+    public const int CONTAINER_CHECK_DELAY_SECONDS = 3;
+
+    public const int MAX_CONTAINER_CHECKS = 20;
+
     public int $tries = 3;
 
     public int $timeout = 300;
 
     /**
+     * A processing container comes back as a follow-up job, so the wait never
+     * holds a queue worker. `$containerId` keeps it from creating a second one.
+     *
      * @param  list<string>  $mediaIds
      */
     public function __construct(
@@ -35,17 +43,20 @@ class SendReply implements ShouldQueue
         public array $mediaIds,
         public string $text,
         public Platform $platform,
+        public ?string $containerId = null,
+        public int $containerChecks = 0,
     ) {}
 
     /**
      * Throttle outbound replies on the same per-platform limiter as the fetch job,
-     * so a burst of replies can't trip the platform's own rate limits.
+     * so a burst of replies can't trip the platform's own rate limits. A follow-up
+     * check is not a new send, and would otherwise spend the limit on status reads.
      *
      * @return array<int, object>
      */
     public function middleware(): array
     {
-        return [new RateLimited("engagement-{$this->platform->value}")];
+        return $this->containerId === null ? [new RateLimited("engagement-{$this->platform->value}")] : [];
     }
 
     /**
@@ -79,7 +90,7 @@ class SendReply implements ShouldQueue
         }
 
         try {
-            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn], true)
+            $credentials = in_array($account->platform, [Platform::X, Platform::Bluesky, Platform::LinkedIn, Platform::Threads], true)
                 ? $tokens->fresh($account)
                 : [];
         } catch (TokenRefreshException) {
@@ -90,7 +101,24 @@ class SendReply implements ShouldQueue
 
         $media = array_values(PostMedia::withoutGlobalScopes()->whereIn('id', $this->mediaIds)->get()->all());
 
-        $result = $registry->for($parent->platform)->postReply($account, $parent, $this->text, $credentials, $media);
+        $connector = $registry->for($parent->platform);
+        $result = $this->containerId !== null && $connector instanceof PublishesReplyContainers
+            ? $connector->publishContainer($account, $this->containerId, $credentials)
+            : $connector->postReply($account, $parent, $this->text, $credentials, $media);
+
+        if ($result->processingContainerId !== null && $this->containerChecks < self::MAX_CONTAINER_CHECKS) {
+            self::dispatch(
+                $this->ourRowId,
+                $this->parentReplyId,
+                $this->mediaIds,
+                $this->text,
+                $this->platform,
+                $result->processingContainerId,
+                $this->containerChecks + 1,
+            )->delay(self::CONTAINER_CHECK_DELAY_SECONDS);
+
+            return;
+        }
 
         if (! $result->isOk()) {
             // The connector's own words — e.g. "LinkedIn comments cannot include
@@ -131,7 +159,7 @@ class SendReply implements ShouldQueue
 
     private function failRow(PostTargetReply $ourRow, ?string $reason = null): void
     {
-        $ourRow->forceFill(['send_status' => SendStatus::Failed->value])->save();
+        $ourRow->forceFill(['send_status' => SendStatus::Failed->value, 'send_error' => $reason])->save();
 
         $author = $ourRow->target?->post()->withoutGlobalScopes()->first()?->author()->first();
         $parent = PostTargetReply::withoutGlobalScopes()->find($this->parentReplyId);

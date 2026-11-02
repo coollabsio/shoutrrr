@@ -357,7 +357,7 @@ class EngagementController extends Controller
 
         $mediaIds = array_values($request->validated('media', []));
 
-        if ($mediaIds === []) {
+        if ($mediaIds === [] && ! $reply->platform->sendsRepliesInBackground()) {
             $result = $registry->for($reply->platform)->postReply($account, $reply, (string) $request->validated('text'), $credentials);
 
             if (! $result->isOk()) {
@@ -393,7 +393,7 @@ class EngagementController extends Controller
             return $this->respondedRow($ourRow);
         }
 
-        // Media path: create the outgoing row in a sending state, then dispatch.
+        // Background path: create the outgoing row in a sending state, then dispatch.
         $ourRow = PostTargetReply::withoutGlobalScopes()->create([
             'workspace_id' => $reply->workspace_id,
             'post_target_id' => $reply->post_target_id,

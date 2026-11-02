@@ -129,6 +129,8 @@ type EditorBodyProps = {
 export type EditorBodyHandle = {
     /** Insert text (e.g. an emoji) at the current selection and refocus. */
     insertText: (text: string) => void;
+    /** Whether the editor holds no text. */
+    isEmpty: () => boolean;
     /** Move focus into the editor with the caret at the end. */
     focus: () => void;
     /** Release focus from the editor. */
@@ -322,6 +324,7 @@ function EditorBodyInner(
             insertText: (text: string) => {
                 editor?.chain().focus().insertContent(text).run();
             },
+            isEmpty: () => editor?.isEmpty ?? true,
             focus: () => {
                 editor?.commands.focus('end');
             },

@@ -32,6 +32,7 @@ final class ReplyListItem
             'can_like' => ($target->platform ?? $reply->platform)->supportsReplyLikes(),
             'is_ours' => $reply->is_ours,
             'send_status' => $reply->send_status?->value,
+            'send_error' => $reply->send_error,
             'status' => $reply->status->value,
             'post_target_id' => $reply->post_target_id,
             'post_id' => $target?->post_id,

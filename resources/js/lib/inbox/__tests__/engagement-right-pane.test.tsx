@@ -1,13 +1,13 @@
 import type * as InertiaReact from '@inertiajs/react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EditorBodyHandle } from '@/components/compose/editor-body';
-import { RightPane } from '@/pages/engagement/index';
+import { REPLY_POLL_MS, RightPane } from '@/pages/engagement/index';
 import type { ReplyItem } from '@/pages/engagement/types';
 
-const post = vi.hoisted(() => {
+const { post, toastError } = vi.hoisted(() => {
     // jsdom has no matchMedia, and a page import reads it on load.
     window.matchMedia = () =>
         ({
@@ -16,8 +16,10 @@ const post = vi.hoisted(() => {
             removeEventListener: () => {},
         }) as unknown as MediaQueryList;
 
-    return vi.fn();
+    return { post: vi.fn(), toastError: vi.fn() };
 });
+
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
 
 vi.mock('@/hooks/compose/use-attachments', () => ({
     useAttachments: () => ({
@@ -60,6 +62,7 @@ const selected: ReplyItem = {
     can_like: false,
     is_ours: false,
     send_status: null,
+    send_error: null,
     status: 'pending',
     post_target_id: 'target-1',
     post_id: 'post-1',
@@ -70,13 +73,15 @@ const selected: ReplyItem = {
     account_disabled: false,
 };
 
+const onResponded = vi.fn();
+
 async function sendDraft(): Promise<HTMLElement> {
     const editorRef = createRef<EditorBodyHandle>();
     const { container } = render(
         <RightPane
             selected={selected}
             onArchived={vi.fn()}
-            onResponded={vi.fn()}
+            onResponded={onResponded}
             replyEditorRef={editorRef}
             savedMentions={[]}
         />,
@@ -98,6 +103,8 @@ async function sendDraft(): Promise<HTMLElement> {
 describe('RightPane send', () => {
     beforeEach(() => {
         post.mockReset();
+        toastError.mockReset();
+        onResponded.mockReset();
         vi.stubGlobal(
             'fetch',
             vi.fn(async () => ({
@@ -116,6 +123,161 @@ describe('RightPane send', () => {
 
         await act(async () => {});
         expect(editor.textContent).toBe('Thanks for the feedback!');
+    });
+
+    describe('a reply sent in the background', () => {
+        const queued: ReplyItem = {
+            ...selected,
+            id: 'reply-2',
+            is_ours: true,
+            send_status: 'sending',
+        };
+
+        function respondWithThread(reply: Partial<ReplyItem>): void {
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(async () => ({
+                    json: async () => ({
+                        post_excerpt: null,
+                        thread: [{ ...queued, ...reply }],
+                    }),
+                })),
+            );
+        }
+
+        async function sendAndPoll(): Promise<HTMLElement> {
+            post.mockImplementation(async (_url, options) => {
+                options.onSuccess({ reply: queued });
+
+                return { reply: queued };
+            });
+            vi.useFakeTimers({
+                toFake: ['setInterval', 'clearInterval'],
+            });
+
+            const editor = await sendDraft();
+
+            await act(async () => {});
+            expect(editor.textContent).toBe('');
+
+            await act(async () => {
+                vi.advanceTimersByTime(REPLY_POLL_MS);
+            });
+            await act(async () => {});
+
+            return editor;
+        }
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('shows the reason and restores the draft when the job fails', async () => {
+            const editor = await sendAndPoll().then(async (field) => {
+                respondWithThread({
+                    send_status: 'failed',
+                    send_error: 'Reply not allowed',
+                });
+                await act(async () => {
+                    vi.advanceTimersByTime(REPLY_POLL_MS);
+                });
+                await act(async () => {});
+
+                return field;
+            });
+
+            expect(toastError).toHaveBeenCalledExactlyOnceWith(
+                'Reply not allowed',
+            );
+            expect(editor.textContent).toBe('Thanks for the feedback!');
+        });
+
+        it('marks the conversation replied only after the job sends', async () => {
+            await sendAndPoll();
+            expect(onResponded).not.toHaveBeenCalled();
+
+            respondWithThread({ send_status: 'sent' });
+            await act(async () => {
+                vi.advanceTimersByTime(REPLY_POLL_MS);
+            });
+            await act(async () => {});
+
+            expect(onResponded).toHaveBeenCalledExactlyOnceWith(selected.id);
+        });
+
+        it('does not mark the conversation replied when the job fails', async () => {
+            await sendAndPoll();
+
+            respondWithThread({ send_status: 'failed' });
+            await act(async () => {
+                vi.advanceTimersByTime(REPLY_POLL_MS);
+            });
+            await act(async () => {});
+
+            expect(onResponded).not.toHaveBeenCalled();
+        });
+
+        it('stops polling once the job has sent the reply', async () => {
+            await sendAndPoll();
+            respondWithThread({ send_status: 'sent' });
+            await act(async () => {
+                vi.advanceTimersByTime(REPLY_POLL_MS);
+            });
+            await act(async () => {});
+            const polls = vi.mocked(fetch).mock.calls.length;
+
+            await act(async () => {
+                vi.advanceTimersByTime(REPLY_POLL_MS * 3);
+            });
+
+            expect(vi.mocked(fetch).mock.calls.length).toBe(polls);
+            expect(toastError).not.toHaveBeenCalled();
+        });
+
+        it('leaves a new draft alone when the job fails', async () => {
+            const editorRef = createRef<EditorBodyHandle>();
+            post.mockImplementation(async (_url, options) => {
+                options.onSuccess({ reply: queued });
+
+                return { reply: queued };
+            });
+            vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+            const { container } = render(
+                <RightPane
+                    selected={selected}
+                    onArchived={vi.fn()}
+                    onResponded={vi.fn()}
+                    replyEditorRef={editorRef}
+                    savedMentions={[]}
+                />,
+            );
+            const editor = () =>
+                container.querySelector('.ProseMirror') as HTMLElement;
+
+            await vi.waitFor(() => expect(editor()).not.toBeNull());
+            await act(async () => {
+                editorRef.current?.insertText('First reply');
+            });
+            await act(async () => {
+                fireEvent.click(
+                    screen.getByRole('button', { name: /^reply/i }),
+                );
+            });
+            await act(async () => {});
+            await act(async () => {
+                editorRef.current?.insertText('A newer draft');
+            });
+            respondWithThread({ send_status: 'failed' });
+            await act(async () => {
+                vi.advanceTimersByTime(REPLY_POLL_MS);
+            });
+            await act(async () => {});
+
+            expect(editor().textContent).toBe('A newer draft');
+            expect(toastError).toHaveBeenCalledWith(
+                'Could not send the reply.',
+            );
+        });
     });
 
     it('clears the draft when the reply is accepted', async () => {

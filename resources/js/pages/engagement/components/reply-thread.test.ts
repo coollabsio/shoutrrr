@@ -23,6 +23,7 @@ function reply(overrides: Partial<ReplyItem> = {}): ReplyItem {
         can_like: true,
         is_ours: false,
         send_status: null,
+        send_error: null,
         status: 'pending',
         post_target_id: 'pt-1',
         post_id: 'p-1',

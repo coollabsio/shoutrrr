@@ -157,6 +157,15 @@ enum Platform: string
     }
 
     /**
+     * Threads builds a reply in a container that takes time to finish, so its
+     * replies always go through SendReply and never wait in a web request.
+     */
+    public function sendsRepliesInBackground(): bool
+    {
+        return $this === self::Threads;
+    }
+
+    /**
      * Whether this platform's metrics connector returns real post-level metrics.
      * Every launched platform, including LinkedIn (Page/Organization accounts
      * via the Community Management API), returns real post metrics; personal

@@ -7,13 +7,10 @@ use App\Models\PostMedia;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Connectors\ThreadsEngagementConnector;
-use App\Support\ConnectionFailure;
 use Carbon\CarbonImmutable;
-use Carbon\CarbonInterval;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Sleep;
 
 function threadsEngagementConnector(): ThreadsEngagementConnector
 {
@@ -124,38 +121,7 @@ test('postReply declines media (Threads replies cannot carry attachments in this
     expect($result->status)->toBe(EngagementStatus::Unsupported);
 });
 
-test('postReply keeps polling until the container finishes, then publishes', function () {
-    Sleep::fake();
-
-    Http::fake([
-        'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
-        'graph.threads.net/v1.0/CONTAINER1*' => Http::sequence()
-            ->push(['status' => 'IN_PROGRESS'])
-            ->push(['status' => 'IN_PROGRESS'])
-            ->push(['status' => 'FINISHED']),
-        'graph.threads.net/v1.0/THREADSUSER1/threads_publish' => Http::response(['id' => 'R2']),
-    ]);
-
-    $parent = PostTargetReply::factory()->create([
-        'platform' => Platform::Threads,
-        'remote_reply_id' => 'R1',
-        'parent_remote_id' => 'MEDIA1',
-    ]);
-
-    $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
-
-    expect($result->isOk())->toBeTrue();
-    expect($result->remoteReplyId)->toBe('R2');
-
-    Sleep::assertSleptTimes(2);
-    Http::assertSent(fn ($req) => str_contains($req->url(), '/THREADSUSER1/threads_publish')
-        && $req['creation_id'] === 'CONTAINER1');
-});
-
-test('postReply returns failed when the container never finishes processing', function () {
-    $this->freezeTime();
-    Sleep::fake(syncWithCarbon: true);
-
+test('postReply hands back the container while it is processing', function () {
     Http::fake([
         'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
         'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'IN_PROGRESS']),
@@ -169,24 +135,16 @@ test('postReply returns failed when the container never finishes processing', fu
 
     $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
 
-    expect($result->status)->toBe(EngagementStatus::Failed);
-
-    Sleep::assertSlept(fn (CarbonInterval $duration): bool => $duration->totalSeconds === 2.0, times: 6);
+    expect($result->isOk())->toBeFalse();
+    expect($result->processingContainerId)->toBe('CONTAINER1');
 
     Http::assertNotSent(fn ($req) => str_contains($req->url(), 'threads_publish'));
 });
 
-test('postReply stops waiting at the deadline when status checks are slow', function () {
-    $this->freezeTime();
-    Sleep::fake(syncWithCarbon: true);
-
+test('postReply treats a status check that cannot connect as still processing', function () {
     Http::fake([
         'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
-        'graph.threads.net/v1.0/CONTAINER1*' => function () {
-            $this->travel(3)->seconds();
-
-            return Http::response(['status' => 'IN_PROGRESS']);
-        },
+        'graph.threads.net/v1.0/CONTAINER1*' => fn () => throw new ConnectionException('cURL error 28: Operation timed out'),
     ]);
 
     $parent = PostTargetReply::factory()->create([
@@ -197,92 +155,20 @@ test('postReply stops waiting at the deadline when status checks are slow', func
 
     $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
 
-    expect($result->status)->toBe(EngagementStatus::Failed);
-
-    Sleep::assertSleptTimes(2);
-    Http::assertNotSent(fn ($req) => str_contains($req->url(), 'threads_publish'));
+    expect($result->processingContainerId)->toBe('CONTAINER1');
 });
 
-test('postReply bounds each request so the worst case fits the Octane limit', function () {
-    Sleep::fake();
-
-    $timeouts = [];
-
-    Http::fake(function ($request, array $options) use (&$timeouts) {
-        $step = match (true) {
-            str_contains($request->url(), 'threads_publish') => 'publish',
-            str_contains($request->url(), 'CONTAINER1') => 'status',
-            default => 'create',
-        };
-        $timeouts[$step] = $options['timeout'];
-
-        expect($options['connect_timeout'])->toBe(2);
-
-        return Http::response(['id' => 'CONTAINER1', 'status' => 'FINISHED']);
-    });
-
-    $parent = PostTargetReply::factory()->create([
-        'platform' => Platform::Threads,
-        'remote_reply_id' => 'R1',
-        'parent_remote_id' => 'MEDIA1',
-    ]);
-
-    threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
-
-    expect($timeouts)->toBe(['create' => 4, 'status' => 4, 'publish' => 8]);
-
-    // A status check may start just before the 12s wait ends.
-    expect($timeouts['create'] + 12 + $timeouts['status'] + $timeouts['publish'])
-        ->toBeLessThan(config('octane.max_execution_time'));
-});
-
-test('postReply keeps waiting after a status check cannot connect', function () {
-    Sleep::fake();
-
-    $checks = 0;
-
+test('publishContainer publishes a finished container without creating another', function () {
     Http::fake([
-        'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
-        'graph.threads.net/v1.0/CONTAINER1*' => function () use (&$checks) {
-            if (++$checks === 1) {
-                throw new ConnectionException('cURL error 28: Operation timed out');
-            }
-
-            return Http::response(['status' => 'FINISHED']);
-        },
+        'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'FINISHED']),
         'graph.threads.net/v1.0/THREADSUSER1/threads_publish' => Http::response(['id' => 'R2']),
     ]);
 
-    $parent = PostTargetReply::factory()->create([
-        'platform' => Platform::Threads,
-        'remote_reply_id' => 'R1',
-        'parent_remote_id' => 'MEDIA1',
-    ]);
+    $result = threadsEngagementConnector()->publishContainer(threadsEngagementAccount(), 'CONTAINER1', ['access_token' => 't']);
 
-    $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
+    expect($result->remoteReplyId)->toBe('R2');
 
-    expect($result->isOk())->toBeTrue();
-});
-
-test('postReply reports a connection failure when every status check fails', function () {
-    $this->freezeTime();
-    Sleep::fake(syncWithCarbon: true);
-
-    Http::fake([
-        'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
-        'graph.threads.net/v1.0/CONTAINER1*' => fn () => throw new ConnectionException('cURL error 7'),
-    ]);
-
-    $parent = PostTargetReply::factory()->create([
-        'platform' => Platform::Threads,
-        'remote_reply_id' => 'R1',
-        'parent_remote_id' => 'MEDIA1',
-    ]);
-
-    $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
-
-    expect($result->message)->toBe(ConnectionFailure::MESSAGE);
-    Http::assertNotSent(fn ($req) => str_contains($req->url(), 'threads_publish'));
+    Http::assertNotSent(fn ($req) => str_ends_with($req->url(), '/THREADSUSER1/threads'));
 });
 
 test('postReply does not invite a retry when the publish outcome is unknown', function () {
@@ -305,8 +191,6 @@ test('postReply does not invite a retry when the publish outcome is unknown', fu
 });
 
 test('postReply falls back when Threads gives a blank reason', function () {
-    Sleep::fake();
-
     Http::fake([
         'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
         'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'ERROR', 'error_message' => '']),
@@ -324,8 +208,6 @@ test('postReply falls back when Threads gives a blank reason', function () {
 });
 
 test('postReply stops polling and reports why when Threads rejects the container', function () {
-    Sleep::fake();
-
     Http::fake([
         'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
         'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'ERROR', 'error_message' => 'THREADS_API__REPLY_FAILED']),
@@ -342,7 +224,6 @@ test('postReply stops polling and reports why when Threads rejects the container
     expect($result->status)->toBe(EngagementStatus::Failed);
     expect($result->message)->toBe('THREADS_API__REPLY_FAILED');
 
-    Sleep::assertNeverSlept();
     Http::assertNotSent(fn ($req) => str_contains($req->url(), 'threads_publish'));
 });
 

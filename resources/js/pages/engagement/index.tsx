@@ -251,6 +251,12 @@ function EngagementDisabledBanner({
     );
 }
 
+/** How often the pane re-reads a thread while a reply sends in the background. */
+export const REPLY_POLL_MS = 2000;
+
+/** Five minutes: the queue worker may not be running, so do not poll forever. */
+const REPLY_POLL_LIMIT = 150;
+
 type RightPaneProps = {
     selected: ReplyItem;
     onArchived: (id: string) => void;
@@ -327,6 +333,62 @@ export function RightPane({
             .finally(() => setLoading(false));
     }, [selectedId]);
 
+    // Rows a queue worker is still sending; temp rows are in the request itself.
+    const hasQueuedReply = thread.some(
+        (r) => r.send_status === 'sending' && !r.id.startsWith('temp-'),
+    );
+    // Replies sent from here: the draft to restore if the job fails, and the
+    // conversation to mark replied once it sends.
+    const queuedReplies = useRef(
+        new Map<string, { draft: string; parentId: string }>(),
+    );
+
+    useEffect(() => {
+        if (!hasQueuedReply) {
+            return;
+        }
+
+        let polls = 0;
+        const timer = setInterval(() => {
+            polls += 1;
+            if (polls > REPLY_POLL_LIMIT) {
+                clearInterval(timer);
+
+                return;
+            }
+            fetch(threadRoute(selectedId).url, {
+                headers: { Accept: 'application/json' },
+            })
+                .then((r) => r.json())
+                .then((data: { thread: ReplyItem[] }) => {
+                    const latest = new Map(data.thread.map((r) => [r.id, r]));
+                    setThread((prev) => prev.map((r) => latest.get(r.id) ?? r));
+                })
+                // The next poll tries again.
+                .catch(() => {});
+        }, REPLY_POLL_MS);
+
+        return () => clearInterval(timer);
+    }, [hasQueuedReply, selectedId]);
+
+    useEffect(() => {
+        for (const reply of thread) {
+            const queued = queuedReplies.current.get(reply.id);
+            if (queued === undefined || reply.send_status === 'sending') {
+                continue;
+            }
+            queuedReplies.current.delete(reply.id);
+            if (reply.send_status === 'sent') {
+                onResponded(queued.parentId);
+            } else {
+                toast.error(reply.send_error ?? 'Could not send the reply.');
+                if (replyEditorRef?.current?.isEmpty()) {
+                    replyEditorRef.current.insertText(queued.draft);
+                }
+            }
+        }
+    }, [thread, replyEditorRef, onResponded]);
+
     function setSendStatus(id: string, status: ReplyItem['send_status']) {
         setThread((prev) =>
             prev.map((r) => (r.id === id ? { ...r, send_status: status } : r)),
@@ -353,12 +415,19 @@ export function RightPane({
         // Failures rethrow so QuickReplyBox's `await onSend(...)` still sees them.
         const response = await respondHttp.post(respondRoute(selected.id).url, {
             onSuccess: ({ reply }) => {
-                // The server row carries the real id and send_status (media
-                // replies hand off to a job and stay "sending").
+                // The server row carries the real id and send_status (a reply
+                // handed off to a job stays "sending").
+                if (reply.send_status === 'sending') {
+                    queuedReplies.current.set(reply.id, {
+                        draft: text,
+                        parentId: selected.id,
+                    });
+                } else {
+                    onResponded(selected.id);
+                }
                 setThread((prev) =>
                     prev.map((r) => (r.id === tempId ? reply : r)),
                 );
-                onResponded(selected.id);
             },
             onError: (errors) => {
                 setSendStatus(tempId, 'failed');

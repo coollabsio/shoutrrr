@@ -13,6 +13,7 @@ use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Engagement\Contracts\PublishesReplyContainers;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\ConnectionFailure;
 use App\Support\RetryAfter;
@@ -20,9 +21,7 @@ use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
-use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
-use Illuminate\Support\Sleep;
 
 /**
  * Reads and writes replies on a Threads post via the Threads Graph API, using
@@ -31,32 +30,17 @@ use Illuminate\Support\Sleep;
  * `Unsupported` so the inbox degrades cleanly rather than erroring.
  *
  * Threads has no dedicated reply endpoint: a reply is a normal two-step
- * container publish (create → poll → publish) with `reply_to_id` set on the
+ * container publish (create → check → publish) with `reply_to_id` set on the
  * container-creation call, mirroring `ThreadsConnector::publish()`. Media on
  * replies is declined in this first cut. Threads has no documented
  * reply-like API, so like/unlike always return `Unsupported` without making
  * a request.
  */
-class ThreadsEngagementConnector implements EngagementConnector
+class ThreadsEngagementConnector implements EngagementConnector, PublishesReplyContainers
 {
     use TracksUsage;
 
     private const string BASE_URL = 'https://graph.threads.net/v1.0';
-
-    /**
-     * postReply runs in the web request. Its own worst case is 4 + 12 + 4 + 8 = 28s,
-     * under Octane's 30s. A token refresh before it is not counted.
-     */
-    private const int CONNECT_TIMEOUT_SECONDS = 2;
-
-    private const int REQUEST_TIMEOUT_SECONDS = 4;
-
-    /** Longer: a timed-out publish may still go live, and a retry would then post twice. */
-    private const int PUBLISH_TIMEOUT_SECONDS = 8;
-
-    private const int CONTAINER_WAIT_SECONDS = 12;
-
-    private const int CONTAINER_POLL_INTERVAL_SECONDS = 2;
 
     public function __construct(private readonly HttpFactory $http) {}
 
@@ -125,7 +109,7 @@ class ThreadsEngagementConnector implements EngagementConnector
         $threadsUserId = (string) $account->remote_account_id;
 
         try {
-            $container = $this->request()->asForm()->post(self::BASE_URL.'/'.$threadsUserId.'/threads', [
+            $container = $this->http->asForm()->post(self::BASE_URL.'/'.$threadsUserId.'/threads', [
                 'media_type' => 'TEXT',
                 'text' => $text,
                 'reply_to_id' => $parent->remote_reply_id,
@@ -147,14 +131,48 @@ class ThreadsEngagementConnector implements EngagementConnector
             return ReplyPostResult::failed('Threads did not return a container id');
         }
 
-        $notReady = $this->awaitContainer($account, $containerId, $token);
+        return $this->publishContainer($account, $containerId, $credentials);
+    }
 
-        if ($notReady !== null) {
-            return $notReady;
+    /**
+     * Publish the container if it is ready. This makes one check and never waits:
+     * Meta can take about 30 seconds, and SendReply comes back for a processing one.
+     */
+    public function publishContainer(ConnectedAccount $account, string $containerId, array $credentials): ReplyPostResult
+    {
+        $token = (string) ($credentials['access_token'] ?? '');
+        $threadsUserId = (string) $account->remote_account_id;
+
+        try {
+            $response = $this->http->get(self::BASE_URL.'/'.$containerId, [
+                'fields' => 'status,error_message',
+                'access_token' => $token,
+            ]);
+        } catch (ConnectionException $e) {
+            // Nothing is published yet, so a failed check is safe to repeat.
+            ConnectionFailure::report($e);
+
+            return ReplyPostResult::processing($containerId);
+        }
+
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $response);
+
+        if ($response->failed()) {
+            return $this->mapPostFailure($response);
+        }
+
+        $status = (string) $response->json('status');
+
+        if ($status === 'IN_PROGRESS') {
+            return ReplyPostResult::processing($containerId);
+        }
+
+        if ($status !== 'FINISHED') {
+            return ReplyPostResult::failed((string) ($response->json('error_message') ?: "Threads could not process the reply ({$status})."));
         }
 
         try {
-            $publish = $this->request(self::PUBLISH_TIMEOUT_SECONDS)->asForm()->post(self::BASE_URL.'/'.$threadsUserId.'/threads_publish', [
+            $publish = $this->http->asForm()->post(self::BASE_URL.'/'.$threadsUserId.'/threads_publish', [
                 'creation_id' => $containerId,
                 'access_token' => $token,
             ]);
@@ -196,56 +214,6 @@ class ThreadsEngagementConnector implements EngagementConnector
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_DELETE, $account, $response);
 
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
-    }
-
-    private function request(int $timeoutSeconds = self::REQUEST_TIMEOUT_SECONDS): PendingRequest
-    {
-        return $this->http->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)->timeout($timeoutSeconds);
-    }
-
-    /**
-     * Poll until the container is publishable. Returns null when ready, or the
-     * failure otherwise. A new container is not ready at once.
-     */
-    private function awaitContainer(ConnectedAccount $account, string $containerId, string $token): ?ReplyPostResult
-    {
-        $deadline = now()->addSeconds(self::CONTAINER_WAIT_SECONDS);
-
-        while (true) {
-            $waitFailure = 'Threads is still processing the reply. Try again in a moment.';
-
-            try {
-                $response = $this->request()->get(self::BASE_URL.'/'.$containerId, [
-                    'fields' => 'status,error_message',
-                    'access_token' => $token,
-                ]);
-
-                $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $response);
-
-                if ($response->failed()) {
-                    return $this->mapPostFailure($response);
-                }
-
-                $status = (string) $response->json('status');
-
-                if ($status === 'FINISHED') {
-                    return null;
-                }
-
-                if ($status !== 'IN_PROGRESS') {
-                    return ReplyPostResult::failed((string) ($response->json('error_message') ?: "Threads could not process the reply ({$status})."));
-                }
-            } catch (ConnectionException $e) {
-                // Nothing is published yet, so a failed check is safe to repeat.
-                $waitFailure = ConnectionFailure::report($e);
-            }
-
-            if (now()->addSeconds(self::CONTAINER_POLL_INTERVAL_SECONDS)->greaterThan($deadline)) {
-                return ReplyPostResult::failed($waitFailure);
-            }
-
-            Sleep::for(self::CONTAINER_POLL_INTERVAL_SECONDS)->seconds();
-        }
     }
 
     private function mapPostFailure(Response $response): ReplyPostResult
