@@ -15,6 +15,7 @@ use App\Models\Conversation;
 use App\Models\PostMedia;
 use App\Services\Messaging\Contracts\DirectMessageConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
@@ -238,7 +239,7 @@ class XDirectMessageConnector implements DirectMessageConnector
                 ? MessageSendResult::unsupported($this->excerpt($e->response))
                 : MessageSendResult::failed($this->excerpt($e->response));
         } catch (ConnectionException $e) {
-            return MessageSendResult::failed($e->getMessage());
+            return MessageSendResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::DM_SEND, $account, $response);

@@ -117,6 +117,8 @@ export function QuickMessageBox({
             await onSend(text, media);
             setText('');
             setMedia([]);
+        } catch {
+            // onSend reports the failure; keep the draft for a retry.
         } finally {
             setSending(false);
         }

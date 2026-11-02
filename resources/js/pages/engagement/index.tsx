@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useLiveProps } from '@/hooks/use-live-props';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { requireResponse } from '@/lib/http/errors';
 import {
     disabledPlatformLabels,
     platformKeys,
@@ -64,6 +65,8 @@ import { ReplyStream } from './components/reply-stream';
 import { ReplyThread } from './components/reply-thread';
 import {
     actionErrorMessage,
+    firstValidationError,
+    withoutFailedAttempts,
     adjacentIndex,
     atHandle,
     engagementShortcut,
@@ -263,7 +266,7 @@ type RightPaneProps = {
  * response into a fresh `GET /engagement`, which drops the deferred `replies`
  * scroll prop and blanks the left list to a skeleton.
  */
-function RightPane({
+export function RightPane({
     selected,
     onArchived,
     onResponded,
@@ -333,7 +336,7 @@ function RightPane({
     async function send(text: string, mediaIds: string[]) {
         const tempId = `temp-${Date.now()}`;
         setThread((prev) => [
-            ...prev,
+            ...withoutFailedAttempts(prev),
             {
                 ...selected,
                 id: tempId,
@@ -348,7 +351,7 @@ function RightPane({
         // stays a JSON request — no `forceFormData`.
         respondHttp.transform(() => ({ text, media: mediaIds }));
         // Failures rethrow so QuickReplyBox's `await onSend(...)` still sees them.
-        await respondHttp.post(respondRoute(selected.id).url, {
+        const response = await respondHttp.post(respondRoute(selected.id).url, {
             onSuccess: ({ reply }) => {
                 // The server row carries the real id and send_status (media
                 // replies hand off to a job and stay "sending").
@@ -357,7 +360,12 @@ function RightPane({
                 );
                 onResponded(selected.id);
             },
-            onError: () => setSendStatus(tempId, 'failed'),
+            onError: (errors) => {
+                setSendStatus(tempId, 'failed');
+                toast.error(
+                    firstValidationError(errors, 'Could not send the reply.'),
+                );
+            },
             onHttpException: (r) => {
                 setSendStatus(tempId, 'failed');
                 toast.error(actionErrorMessage(r, 'Could not send the reply.'));
@@ -367,6 +375,9 @@ function RightPane({
                 toast.error('Could not reach the server.');
             },
         });
+
+        // Reject on a 422 too, so QuickReplyBox keeps the draft.
+        requireResponse(response);
     }
 
     function toggleLike(reply: ReplyItem) {

@@ -1,5 +1,7 @@
 import { dayjs } from '@/lib/datetime/dayjs';
 
+export { actionErrorMessage, firstValidationError } from '@/lib/http/errors';
+
 /**
  * Helpers shared by the triage inboxes (`pages/engagement`, `pages/messages`).
  * Both pages present the same two-pane list/desk with keyboard triage, so the
@@ -56,29 +58,14 @@ export function initialsFrom(
     return letters.toUpperCase();
 }
 
-/**
- * Message for a failed inbox action, read from `useHttp`'s `onHttpException`
- * response. That response carries the **raw body string**, and a non-2xx can
- * come from anywhere in the stack — a proxy's HTML 502 page must not throw
- * inside an error handler, so parsing is guarded and falls back.
- */
-export function actionErrorMessage(
-    response: { data: string },
-    fallback: string,
-): string {
-    try {
-        const parsed: unknown = JSON.parse(response.data);
-        if (parsed !== null && typeof parsed === 'object') {
-            const { message } = parsed as { message?: unknown };
-            if (typeof message === 'string' && message.trim() !== '') {
-                return message;
-            }
-        }
-    } catch {
-        // Not JSON (e.g. a gateway HTML error page) — use the fallback.
-    }
-
-    return fallback;
+/** Drop unsent bubbles from earlier attempts: the draft is being sent again. */
+export function withoutFailedAttempts<
+    T extends { id: string; send_status: string | null },
+>(items: T[]): T[] {
+    return items.filter(
+        (item) =>
+            !(item.id.startsWith('temp-') && item.send_status === 'failed'),
+    );
 }
 
 /** Display handle with a leading @ when it isn't already a URL-style handle. */

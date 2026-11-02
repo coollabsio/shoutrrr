@@ -10,8 +10,10 @@ export {
     actionErrorMessage,
     adjacentIndex,
     atHandle,
+    firstValidationError,
     nextAfterArchive,
     relativeTime,
+    withoutFailedAttempts,
 } from '@/lib/inbox/helpers';
 
 /** Up to two uppercase initials from a display name or handle. */

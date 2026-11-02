@@ -12,7 +12,7 @@ function Toaster({ ...props }: ToasterProps) {
         <Sonner
             theme={appearance}
             className="toaster group"
-            position="bottom-right"
+            position="top-center"
             icons={{
                 success: <CircleCheck className="size-4" />,
                 info: <Info className="size-4" />,

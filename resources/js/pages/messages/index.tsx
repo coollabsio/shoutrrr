@@ -17,6 +17,7 @@ import { Kbd } from '@/components/ui/kbd';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { requireResponse } from '@/lib/http/errors';
 import { platformLabel } from '@/lib/platforms';
 import { cn } from '@/lib/utils';
 import {
@@ -34,6 +35,8 @@ import { MessageThread } from './components/message-thread';
 import { QuickMessageBox } from './components/quick-message-box';
 import {
     actionErrorMessage,
+    firstValidationError,
+    withoutFailedAttempts,
     adjacentIndex,
     atHandle,
     initials,
@@ -145,7 +148,7 @@ type RightPaneProps = {
  * response into a fresh `GET /messages`, which drops the deferred
  * `conversations` scroll prop and blanks the left list to a skeleton.
  */
-function RightPane({
+export function RightPane({
     selected,
     onArchived,
     onResponded,
@@ -188,7 +191,7 @@ function RightPane({
         const tempId = `temp-${Date.now()}`;
         const now = new Date().toISOString();
         setThread((prev) => [
-            ...prev,
+            ...withoutFailedAttempts(prev),
             {
                 id: tempId,
                 remote_message_id: tempId,
@@ -213,7 +216,7 @@ function RightPane({
         }));
         // Failures rethrow so QuickMessageBox's `await onSend(...)` still sees
         // them, but the box already reflects the sending/failed state above.
-        await respondHttp.post(respondRoute(selected.id).url, {
+        const response = await respondHttp.post(respondRoute(selected.id).url, {
             onSuccess: ({ message }) => {
                 setThread((prev) =>
                     prev.map((m) => (m.id === tempId ? message : m)),
@@ -229,7 +232,12 @@ function RightPane({
                     now,
                 );
             },
-            onError: () => setSendStatus(tempId, 'failed'),
+            onError: (errors) => {
+                setSendStatus(tempId, 'failed');
+                toast.error(
+                    firstValidationError(errors, 'Could not send the message.'),
+                );
+            },
             onHttpException: (r) => {
                 setSendStatus(tempId, 'failed');
                 toast.error(
@@ -241,6 +249,9 @@ function RightPane({
                 toast.error('Could not reach the server.');
             },
         });
+
+        // Reject on a 422 too, so QuickMessageBox keeps the draft.
+        requireResponse(response);
     }
 
     function archive() {

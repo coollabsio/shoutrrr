@@ -196,7 +196,12 @@ export default function MentionPicker({
             return;
         }
 
-        await onSaveMention(mention);
+        try {
+            await onSaveMention(mention);
+        } catch {
+            // The save already told the user; keep the picker open.
+            return;
+        }
         onMentionComplete?.(mention);
     }
 

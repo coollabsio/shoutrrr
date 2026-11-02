@@ -8,6 +8,7 @@ use App\Enums\PostTargetStatus;
 use App\Models\PostTarget;
 use App\Services\Publishing\PublishConnectorRegistry;
 use App\Services\Publishing\TokenManager;
+use App\Support\ConnectionFailure;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
@@ -54,7 +55,7 @@ class DeletePostTarget implements ShouldQueue
 
         $target->forceFill([
             'status' => PostTargetStatus::Failed->value,
-            'error_message' => Str::limit($e->getMessage(), 1000),
+            'error_message' => Str::limit(ConnectionFailure::safeMessage($e), 1000),
             'next_attempt_at' => null,
         ])->save();
     }

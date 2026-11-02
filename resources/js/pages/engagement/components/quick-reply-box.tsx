@@ -1,11 +1,10 @@
-import { useHttp, usePage } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import ReplyImageEditController from '@/actions/App/Http/Controllers/Engagement/ReplyImageEditController';
 import ReplyMediaController from '@/actions/App/Http/Controllers/Engagement/ReplyMediaController';
 import ReplyVideoUploadController from '@/actions/App/Http/Controllers/Engagement/ReplyVideoUploadController';
 import ReplyGifController from '@/actions/App/Http/Controllers/Gifs/ReplyGifController';
-import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import EditorBody, {
     type EditorBodyHandle,
 } from '@/components/compose/editor-body';
@@ -21,6 +20,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useAttachments } from '@/hooks/compose/use-attachments';
 import { useEmojiPreferences } from '@/hooks/compose/use-emoji-preferences';
+import { useSaveMention } from '@/hooks/compose/use-save-mention';
 import {
     replaceMentionLabel,
     replaceMentionTokens,
@@ -79,10 +79,8 @@ export function QuickReplyBox({
     useEffect(() => {
         setSavedMentions(initialSavedMentions);
     }, [initialSavedMentions]);
-    const saveMentionHttp = useHttp<
-        Record<string, never>,
-        { mention: WorkspaceMention }
-    >({});
+    const { saveMention, processing: saveMentionProcessing } =
+        useSaveMention(setSavedMentions);
 
     // Paste and drag/drop are unwired too, not just the buttons.
     const canAttachMedia = REPLY_MEDIA_PLATFORMS.includes(platform);
@@ -145,27 +143,6 @@ export function QuickReplyBox({
         );
     }
 
-    async function saveMention(mention: MentionPlaceholder): Promise<void> {
-        saveMentionHttp.transform(() => ({
-            name: mention.label,
-            handles: mention.handles,
-        }));
-        const response = await saveMentionHttp.post(
-            WorkspaceMentionController.store().url,
-        );
-        setSavedMentions((current) => {
-            const others = current.filter(
-                (item) =>
-                    item.id !== response.mention.id &&
-                    item.name !== response.mention.name,
-            );
-
-            return [...others, response.mention].sort((left, right) =>
-                left.name.localeCompare(right.name),
-            );
-        });
-    }
-
     // What actually gets sent: mention labels resolved to this platform's handle.
     // Char counting also uses the resolved text so the count matches the payload.
     const outgoing = replaceMentionTokens(text, mentions, platform);
@@ -188,6 +165,8 @@ export function QuickReplyBox({
             setText('');
             setMedia([]);
             setMentions([]);
+        } catch {
+            // onSend reports the failure; keep the draft for a retry.
         } finally {
             setSending(false);
         }
@@ -242,7 +221,7 @@ export function QuickReplyBox({
                         renameMention(mention, savedMentionToPlaceholder(saved))
                     }
                     onSaveMention={saveMention}
-                    saveMentionProcessing={saveMentionHttp.processing}
+                    saveMentionProcessing={saveMentionProcessing}
                     placeholder={
                         replyingTo
                             ? `Reply to ${replyingTo}…`

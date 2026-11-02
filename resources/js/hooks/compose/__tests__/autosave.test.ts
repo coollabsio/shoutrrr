@@ -45,7 +45,7 @@ const httpPut = vi.fn();
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
-let flushRef: (() => Promise<void>) | null = null;
+let flushRef: (() => Promise<boolean>) | null = null;
 
 function draftState(overrides: Partial<ComposerState> = {}): ComposerState {
     return {
@@ -146,6 +146,65 @@ describe('useAutosave onSaved', () => {
 
         expect(httpPut).toHaveBeenCalledOnce();
         expect(onSaved).toHaveBeenCalledOnce();
+    });
+});
+
+describe('useAutosave flush result', () => {
+    const editedPost = {
+        state: draftState({
+            postId: 'post-1',
+            baselineUpdatedAt: post.updated_at,
+        }),
+        onSaved: vi.fn(),
+    };
+
+    async function flushEditedPost(): Promise<boolean | undefined> {
+        act(() => {
+            root?.render(createElement(Harness, editedPost));
+        });
+
+        let saved: boolean | undefined;
+        await act(async () => {
+            saved = await flushRef?.();
+        });
+
+        return saved;
+    }
+
+    it('reports a save that worked', async () => {
+        expect(await flushEditedPost()).toBe(true);
+    });
+
+    it('reports a save that failed', async () => {
+        httpPut.mockReset().mockRejectedValue(new Error('Request failed'));
+
+        expect(await flushEditedPost()).toBe(false);
+    });
+
+    it('reports a save rejected with a 422', async () => {
+        // useHttp resolves with nothing and skips onSuccess on a 422.
+        httpPut.mockReset().mockResolvedValue(undefined);
+
+        expect(await flushEditedPost()).toBe(false);
+    });
+
+    it('reports nothing to save as a success', async () => {
+        act(() => {
+            root?.render(
+                createElement(Harness, {
+                    ...editedPost,
+                    state: { ...editedPost.state, saveState: 'saved' },
+                }),
+            );
+        });
+
+        let saved: boolean | undefined;
+        await act(async () => {
+            saved = await flushRef?.();
+        });
+
+        expect(saved).toBe(true);
+        expect(httpPut).not.toHaveBeenCalled();
     });
 });
 

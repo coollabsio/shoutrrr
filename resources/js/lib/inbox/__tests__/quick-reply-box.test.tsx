@@ -4,8 +4,7 @@ import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { EditorBodyHandle } from '@/components/compose/editor-body';
-
-import { QuickReplyBox } from './quick-reply-box';
+import { QuickReplyBox } from '@/pages/engagement/components/quick-reply-box';
 
 vi.mock('@/hooks/compose/use-attachments', () => ({
     useAttachments: () => ({
@@ -28,6 +27,10 @@ vi.mock('@inertiajs/react', async (importOriginal) => {
         usePage: () => ({ props: { shell: { gifs_enabled: false } } }),
     };
 });
+
+// jsdom has no Range layout; ProseMirror reads it when scrolling to the cursor.
+Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect = () => ({}) as DOMRect;
 
 describe('QuickReplyBox send', () => {
     it('clears the editor after a reply is sent', async () => {
@@ -56,5 +59,41 @@ describe('QuickReplyBox send', () => {
 
         expect(onSend).toHaveBeenCalledWith('Thanks for the feedback!', []);
         expect(editor().textContent).toBe('');
+    });
+
+    it('keeps the draft and handles the rejection when a send fails', async () => {
+        const unhandledRejection = vi.fn();
+        process.on('unhandledRejection', unhandledRejection);
+
+        const onSend = vi.fn(async () => {
+            throw new Error('Threads is still processing the reply.');
+        });
+        const editorRef = createRef<EditorBodyHandle>();
+        const { container } = render(
+            <QuickReplyBox
+                replyId="reply-1"
+                platform="threads"
+                editorRef={editorRef}
+                onSend={onSend}
+            />,
+        );
+        const editor = () =>
+            container.querySelector('.ProseMirror') as HTMLElement;
+
+        await vi.waitFor(() => expect(editor()).not.toBeNull());
+        await act(async () => {
+            editorRef.current?.insertText('Thanks for the feedback!');
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /reply/i }));
+        });
+        // Node reports unhandled rejections after the microtask queue drains.
+        await new Promise((resolve) => setTimeout(resolve));
+        process.off('unhandledRejection', unhandledRejection);
+
+        expect(unhandledRejection).not.toHaveBeenCalled();
+        expect(editor().textContent).toBe('Thanks for the feedback!');
+        expect(screen.getByRole('button', { name: /reply/i })).toBeEnabled();
     });
 });

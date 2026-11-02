@@ -14,6 +14,7 @@ use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
@@ -120,7 +121,7 @@ class InstagramEngagementConnector implements EngagementConnector
                     'access_token' => (string) ($credentials['access_token'] ?? ''),
                 ]);
         } catch (ConnectionException $e) {
-            return ReplyPostResult::failed($e->getMessage());
+            return ReplyPostResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $response);
@@ -147,7 +148,7 @@ class InstagramEngagementConnector implements EngagementConnector
                     'access_token' => (string) ($credentials['access_token'] ?? ''),
                 ]);
         } catch (ConnectionException $e) {
-            return ReplyActionResult::failed($e->getMessage());
+            return ReplyActionResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_LIKE, $account, $response);
@@ -163,7 +164,7 @@ class InstagramEngagementConnector implements EngagementConnector
                 'access_token' => (string) ($credentials['access_token'] ?? ''),
             ]);
         } catch (ConnectionException $e) {
-            return ReplyActionResult::failed($e->getMessage());
+            return ReplyActionResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_UNLIKE, $account, $response);
@@ -178,7 +179,7 @@ class InstagramEngagementConnector implements EngagementConnector
                 'access_token' => (string) ($credentials['access_token'] ?? ''),
             ]);
         } catch (ConnectionException $e) {
-            return ReplyActionResult::failed($e->getMessage());
+            return ReplyActionResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_DELETE, $account, $response);

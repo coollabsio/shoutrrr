@@ -65,7 +65,7 @@ test('queueing schedules a draft into the next open slot', function () {
     expect($post->scheduled_at->toIso8601String())->toBe('2026-05-18T09:00:00+00:00');
 });
 
-test('queueing returns 422 when no open slot is available', function () {
+test('queueing returns 409 when no open slot is available', function () {
     [$user, $workspace] = queueMember();
     // No posting schedule at all → resolver returns null.
 
@@ -75,7 +75,7 @@ test('queueing returns 422 when no open slot is available', function () {
     ]);
 
     test()->postJson("/posts/{$post->id}/queue")
-        ->assertStatus(422)
+        ->assertStatus(409)
         ->assertJsonPath('message', 'No open posting slot available. Add posting-schedule slots in settings.');
 
     expect($post->refresh()->status)->toBe(PostStatus::Draft);
@@ -147,7 +147,7 @@ test('queueing rejects a selected slot that is already occupied', function () {
     test()->postJson("/posts/{$post->id}/queue", [
         'scheduled_at' => '2026-05-18T09:00:00+00:00',
     ])
-        ->assertStatus(422)
+        ->assertStatus(409)
         ->assertJsonPath('message', 'Choose an open slot from your posting queue.');
 
     expect($post->refresh()->status)->toBe(PostStatus::Draft);

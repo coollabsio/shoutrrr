@@ -17,6 +17,7 @@ use App\Services\Media\ImageCompressor;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\UsageOperation;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
@@ -109,7 +110,7 @@ class FacebookConnector implements PublishConnector
         } catch (FacebookRequestFailed $e) {
             return $this->mapFailure($e->response);
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         if ($id === '') {
@@ -288,7 +289,7 @@ class FacebookConnector implements PublishConnector
         } catch (FacebookRequestFailed $e) {
             return $this->mapFailure($e->response);
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         return PublishResult::success([$videoId]);
@@ -373,7 +374,7 @@ class FacebookConnector implements PublishConnector
         } catch (FacebookRequestFailed $e) {
             return $this->mapFailure($e->response);
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         return PublishResult::success([$videoId]);
@@ -426,7 +427,7 @@ class FacebookConnector implements PublishConnector
         } catch (FacebookRequestFailed $e) {
             return $this->mapFailure($e->response);
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         if ($id === '') {
@@ -511,7 +512,7 @@ class FacebookConnector implements PublishConnector
         } catch (FacebookRequestFailed $e) {
             return $this->mapFailure($e->response);
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         return PublishResult::success([$videoId]);

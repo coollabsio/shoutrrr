@@ -14,12 +14,15 @@ use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Sleep;
 
 /**
  * Reads and writes replies on a Threads post via the Threads Graph API, using
@@ -39,6 +42,21 @@ class ThreadsEngagementConnector implements EngagementConnector
     use TracksUsage;
 
     private const string BASE_URL = 'https://graph.threads.net/v1.0';
+
+    /**
+     * postReply runs in the web request. Its own worst case is 4 + 12 + 4 + 8 = 28s,
+     * under Octane's 30s. A token refresh before it is not counted.
+     */
+    private const int CONNECT_TIMEOUT_SECONDS = 2;
+
+    private const int REQUEST_TIMEOUT_SECONDS = 4;
+
+    /** Longer: a timed-out publish may still go live, and a retry would then post twice. */
+    private const int PUBLISH_TIMEOUT_SECONDS = 8;
+
+    private const int CONTAINER_WAIT_SECONDS = 12;
+
+    private const int CONTAINER_POLL_INTERVAL_SECONDS = 2;
 
     public function __construct(private readonly HttpFactory $http) {}
 
@@ -107,14 +125,14 @@ class ThreadsEngagementConnector implements EngagementConnector
         $threadsUserId = (string) $account->remote_account_id;
 
         try {
-            $container = $this->http->asForm()->post(self::BASE_URL.'/'.$threadsUserId.'/threads', [
+            $container = $this->request()->asForm()->post(self::BASE_URL.'/'.$threadsUserId.'/threads', [
                 'media_type' => 'TEXT',
                 'text' => $text,
                 'reply_to_id' => $parent->remote_reply_id,
                 'access_token' => $token,
             ]);
         } catch (ConnectionException $e) {
-            return ReplyPostResult::failed($e->getMessage());
+            return ReplyPostResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $container);
@@ -129,32 +147,21 @@ class ThreadsEngagementConnector implements EngagementConnector
             return ReplyPostResult::failed('Threads did not return a container id');
         }
 
-        try {
-            $status = $this->http->get(self::BASE_URL.'/'.$containerId, [
-                'fields' => 'status',
-                'access_token' => $token,
-            ]);
-        } catch (ConnectionException $e) {
-            return ReplyPostResult::failed($e->getMessage());
-        }
+        $notReady = $this->awaitContainer($account, $containerId, $token);
 
-        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $status);
-
-        if ($status->failed()) {
-            return $this->mapPostFailure($status);
-        }
-
-        if ((string) $status->json('status') !== 'FINISHED') {
-            return ReplyPostResult::failed('Threads reply is still processing');
+        if ($notReady !== null) {
+            return $notReady;
         }
 
         try {
-            $publish = $this->http->asForm()->post(self::BASE_URL.'/'.$threadsUserId.'/threads_publish', [
+            $publish = $this->request(self::PUBLISH_TIMEOUT_SECONDS)->asForm()->post(self::BASE_URL.'/'.$threadsUserId.'/threads_publish', [
                 'creation_id' => $containerId,
                 'access_token' => $token,
             ]);
         } catch (ConnectionException $e) {
-            return ReplyPostResult::failed($e->getMessage());
+            ConnectionFailure::report($e);
+
+            return ReplyPostResult::failed('Threads may have posted this reply. Check the post before you send it again.');
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $publish);
@@ -183,12 +190,62 @@ class ThreadsEngagementConnector implements EngagementConnector
                 'access_token' => (string) ($credentials['access_token'] ?? ''),
             ]);
         } catch (ConnectionException $e) {
-            return ReplyActionResult::failed($e->getMessage());
+            return ReplyActionResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_DELETE, $account, $response);
 
         return $response->failed() ? $this->mapActionFailure($response) : ReplyActionResult::ok();
+    }
+
+    private function request(int $timeoutSeconds = self::REQUEST_TIMEOUT_SECONDS): PendingRequest
+    {
+        return $this->http->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)->timeout($timeoutSeconds);
+    }
+
+    /**
+     * Poll until the container is publishable. Returns null when ready, or the
+     * failure otherwise. A new container is not ready at once.
+     */
+    private function awaitContainer(ConnectedAccount $account, string $containerId, string $token): ?ReplyPostResult
+    {
+        $deadline = now()->addSeconds(self::CONTAINER_WAIT_SECONDS);
+
+        while (true) {
+            $waitFailure = 'Threads is still processing the reply. Try again in a moment.';
+
+            try {
+                $response = $this->request()->get(self::BASE_URL.'/'.$containerId, [
+                    'fields' => 'status,error_message',
+                    'access_token' => $token,
+                ]);
+
+                $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $response);
+
+                if ($response->failed()) {
+                    return $this->mapPostFailure($response);
+                }
+
+                $status = (string) $response->json('status');
+
+                if ($status === 'FINISHED') {
+                    return null;
+                }
+
+                if ($status !== 'IN_PROGRESS') {
+                    return ReplyPostResult::failed((string) ($response->json('error_message') ?: "Threads could not process the reply ({$status})."));
+                }
+            } catch (ConnectionException $e) {
+                // Nothing is published yet, so a failed check is safe to repeat.
+                $waitFailure = ConnectionFailure::report($e);
+            }
+
+            if (now()->addSeconds(self::CONTAINER_POLL_INTERVAL_SECONDS)->greaterThan($deadline)) {
+                return ReplyPostResult::failed($waitFailure);
+            }
+
+            Sleep::for(self::CONTAINER_POLL_INTERVAL_SECONDS)->seconds();
+        }
     }
 
     private function mapPostFailure(Response $response): ReplyPostResult

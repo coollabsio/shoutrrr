@@ -12,6 +12,7 @@ import { useImageEditor } from '@/hooks/compose/use-image-editor';
 import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
 import { usePublishStatus } from '@/hooks/compose/use-publish-status';
+import { useSaveMention } from '@/hooks/compose/use-save-mention';
 import { useVideoEditor } from '@/hooks/compose/use-video-editor';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import {
@@ -189,12 +190,10 @@ export default function Composer({
     const schedulingTz = useSchedulingTimezone();
     const confirm = useConfirm();
     const { shell } = usePage().props;
-    const saveMentionHttp = useHttp<
-        Record<string, never>,
-        { mention: WorkspaceMention }
-    >({});
     const deleteMentionHttp = useHttp<Record<string, never>, unknown>({});
     const [savedMentions, setSavedMentions] = useState(initialSavedMentions);
+    const { saveMention, processing: saveMentionProcessing } =
+        useSaveMention(setSavedMentions);
     useEffect(() => {
         setSavedMentions(initialSavedMentions);
     }, [initialSavedMentions]);
@@ -897,28 +896,6 @@ export default function Composer({
         renameMention(mention, savedMentionToPlaceholder(saved));
     }
 
-    async function saveMention(mention: MentionPlaceholder): Promise<void> {
-        saveMentionHttp.transform(() => ({
-            name: mention.label,
-            handles: mention.handles,
-        }));
-        const response = await saveMentionHttp.post(
-            WorkspaceMentionController.store().url,
-        );
-
-        setSavedMentions((current) => {
-            const others = current.filter(
-                (item) =>
-                    item.id !== response.mention.id &&
-                    item.name !== response.mention.name,
-            );
-
-            return [...others, response.mention].sort((left, right) =>
-                left.name.localeCompare(right.name),
-            );
-        });
-    }
-
     async function deleteMention(saved: WorkspaceMention): Promise<void> {
         const confirmed = await confirm({
             title: `Delete ${saved.name}?`,
@@ -932,9 +909,15 @@ export default function Composer({
             return;
         }
 
-        await deleteMentionHttp.delete(
-            WorkspaceMentionController.destroy(saved.id).url,
-        );
+        try {
+            await deleteMentionHttp.delete(
+                WorkspaceMentionController.destroy(saved.id).url,
+            );
+        } catch {
+            toast.error('Could not delete the mention.');
+
+            return;
+        }
 
         setSavedMentions((current) =>
             current.filter((item) => item.id !== saved.id),
@@ -1159,7 +1142,7 @@ export default function Composer({
                     onMentionNameChange={renameMention}
                     onApplySavedMention={applySavedMention}
                     onSaveMention={saveMention}
-                    saveMentionProcessing={saveMentionHttp.processing}
+                    saveMentionProcessing={saveMentionProcessing}
                     onDeleteMention={deleteMention}
                     onMentionsChange={(mentions) =>
                         dispatch({ type: 'setMentions', mentions })

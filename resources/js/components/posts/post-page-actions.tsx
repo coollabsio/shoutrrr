@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/icons';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { dayjs } from '@/lib/datetime/dayjs';
+import { failureToasts } from '@/lib/http/errors';
 import { postCapabilities } from '@/lib/posts/capabilities';
 import { postLiveStatus } from '@/lib/posts/live-status';
 import { index as engagementRoute } from '@/routes/engagement';
@@ -100,12 +101,20 @@ export function PostPageActions({ post }: Props) {
         setRescheduling(true);
     }
 
+    // Each request ends in `.catch`: these handlers already told the user.
+    const failureHandlers = failureToasts('Could not update the post.');
+
     async function saveReschedule() {
         http.transform(() => ({ scheduled_at: pickedAt }));
-        await http.put(PostScheduleController.update(post.id).url, {
-            onSuccess: refresh,
-        });
-        setRescheduling(false);
+        await http
+            .put(PostScheduleController.update(post.id).url, {
+                ...failureHandlers,
+                onSuccess: () => {
+                    refresh();
+                    setRescheduling(false);
+                },
+            })
+            .catch(() => {});
     }
 
     async function handleUnschedule() {
@@ -119,9 +128,12 @@ export function PostPageActions({ post }: Props) {
             return;
         }
         http.transform(() => ({ scheduled_at: null }));
-        await http.put(PostScheduleController.update(post.id).url, {
-            onSuccess: refresh,
-        });
+        await http
+            .put(PostScheduleController.update(post.id).url, {
+                ...failureHandlers,
+                onSuccess: refresh,
+            })
+            .catch(() => {});
     }
 
     async function handleRetry() {
@@ -130,9 +142,12 @@ export function PostPageActions({ post }: Props) {
             return;
         }
         http.transform(() => ({}));
-        await http.post(retryRoute({ post: post.id, target: failed.id }).url, {
-            onSuccess: refresh,
-        });
+        await http
+            .post(retryRoute({ post: post.id, target: failed.id }).url, {
+                ...failureHandlers,
+                onSuccess: refresh,
+            })
+            .catch(() => {});
     }
 
     async function handleDelete() {

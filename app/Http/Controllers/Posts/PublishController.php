@@ -30,7 +30,7 @@ class PublishController extends Controller
         if ($post->loadMissing('targets')->targets->isEmpty()) {
             return response()->json([
                 'message' => 'Select at least one account to publish.',
-            ], 422);
+            ], 409);
         }
 
         if (! $subscriptions->canPublish($workspace)) {
@@ -45,7 +45,7 @@ class PublishController extends Controller
             return response()->json([
                 'message' => "Some accounts can't be published yet.",
                 'blocked' => $blocked,
-            ], 422);
+            ], 409);
         }
 
         $post->forceFill(['status' => PostStatus::Publishing->value])->save();

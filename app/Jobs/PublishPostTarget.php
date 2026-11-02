@@ -25,6 +25,7 @@ use App\Services\Publishing\PostStatusRollup;
 use App\Services\Publishing\PublishConnectorRegistry;
 use App\Services\Publishing\SegmentMediaResolver;
 use App\Services\Publishing\TokenManager;
+use App\Support\ConnectionFailure;
 use App\Support\InstanceSettings;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -172,7 +173,7 @@ class PublishPostTarget implements ShouldQueue
                 // A transient token-endpoint failure (429/5xx/timeout) is not a bad
                 // credential — treat it as a retryable server error so the publish backs
                 // off and retries instead of flipping the account to needs-attention.
-                $result = PublishResult::failure(ErrorKind::ServerError, $e->getMessage());
+                $result = PublishResult::failure(ErrorKind::ServerError, ConnectionFailure::safeMessage($e));
             } catch (TokenRefreshException $e) {
                 $result = PublishResult::failure(ErrorKind::AuthExpired, $e->getMessage());
             }
@@ -292,11 +293,13 @@ class PublishPostTarget implements ShouldQueue
 
     private function markFailed(PostTarget $target, Throwable $e): void
     {
-        $this->closeOpenAttempt($target, 'failed', Str::limit($e->getMessage(), 1000));
+        $message = Str::limit(ConnectionFailure::safeMessage($e), 1000);
+
+        $this->closeOpenAttempt($target, 'failed', $message);
 
         $target->forceFill([
             'status' => PostTargetStatus::Failed->value,
-            'error_message' => Str::limit($e->getMessage(), 1000),
+            'error_message' => $message,
             'next_attempt_at' => null,
         ])->save();
 
