@@ -15,10 +15,14 @@ use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Publishing\TokenManager;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Sleep;
 
 beforeEach(function (): void {
@@ -174,4 +178,24 @@ test('the job gives up when the container never finishes', function (): void {
     Queue::assertPushed(SendReply::class, 1);
     expect($ourRow->fresh()->send_status)->toBe(SendStatus::Failed)
         ->and($ourRow->fresh()->send_error)->toContain('still processing');
+});
+
+test('a reply held back by the rate limit stays queued instead of failing', function (): void {
+    config(['queue.default' => 'database']);
+    RateLimiter::for('engagement-threads', fn (): Limit => Limit::perMinute(1)->by('test'));
+
+    $id = $this->postJson(route('engagement.respond', $this->reply), ['text' => 'thanks!'])
+        ->assertCreated()
+        ->json('reply.id');
+
+    foreach (range(1, 4) as $run) {
+        // Use up the limit first, so this run is released back onto the queue.
+        RateLimiter::hit(md5('engagement-threads'.'test'), 60);
+        Artisan::call('queue:work', ['connection' => 'database', '--once' => true]);
+        $this->travel(2)->minutes();
+    }
+
+    expect(DB::table('jobs')->count())->toBe(1)
+        ->and(DB::table('failed_jobs')->count())->toBe(0)
+        ->and(PostTargetReply::withoutGlobalScopes()->findOrFail($id)->send_status)->toBe(SendStatus::Sending);
 });

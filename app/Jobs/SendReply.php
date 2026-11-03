@@ -14,6 +14,7 @@ use App\Notifications\ReplyFailedNotification;
 use App\Services\Engagement\Contracts\PublishesReplyContainers;
 use App\Services\Engagement\EngagementConnectorRegistry;
 use App\Services\Publishing\TokenManager;
+use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\RateLimited;
@@ -27,7 +28,11 @@ class SendReply implements ShouldQueue
 
     public const int MAX_CONTAINER_CHECKS = 20;
 
-    public int $tries = 3;
+    /**
+     * A rate-limit release still counts as an attempt, so a reply waiting for its
+     * turn would fail after a few releases. Retry by time, and stop on real errors.
+     */
+    public int $maxExceptions = 3;
 
     public int $timeout = 300;
 
@@ -57,6 +62,11 @@ class SendReply implements ShouldQueue
     public function middleware(): array
     {
         return $this->containerId === null ? [new RateLimited("engagement-{$this->platform->value}")] : [];
+    }
+
+    public function retryUntil(): DateTimeInterface
+    {
+        return now()->addMinutes(10);
     }
 
     /**
