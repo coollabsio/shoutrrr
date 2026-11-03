@@ -255,7 +255,7 @@ function EngagementDisabledBanner({
 export const REPLY_POLL_MS = 2000;
 
 /** Five minutes: the queue worker may not be running, so do not poll forever. */
-const REPLY_POLL_LIMIT = 150;
+export const REPLY_POLL_LIMIT = 150;
 
 type RightPaneProps = {
     selected: ReplyItem;
@@ -353,6 +353,9 @@ export function RightPane({
             polls += 1;
             if (polls > REPLY_POLL_LIMIT) {
                 clearInterval(timer);
+                toast.warning(
+                    'This reply is still sending. Reload the page later to see the result.',
+                );
 
                 return;
             }

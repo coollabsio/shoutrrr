@@ -135,10 +135,10 @@ describe('relativeTime', () => {
 });
 
 describe('withoutFailedAttempts', () => {
-    it('drops unsent bubbles from an earlier attempt', () => {
+    it('drops failed bubbles from earlier attempts, stored or not', () => {
         const kept = [
             { id: 'stored-1', send_status: null },
-            { id: 'stored-2', send_status: 'failed' as const },
+            { id: 'stored-2', send_status: 'sent' as const },
             { id: 'temp-2', send_status: 'sending' as const },
         ];
 
@@ -146,6 +146,7 @@ describe('withoutFailedAttempts', () => {
             withoutFailedAttempts([
                 ...kept,
                 { id: 'temp-1', send_status: 'failed' as const },
+                { id: 'stored-3', send_status: 'failed' as const },
             ]),
         ).toEqual(kept);
     });

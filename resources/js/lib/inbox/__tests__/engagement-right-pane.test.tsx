@@ -4,10 +4,14 @@ import { createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EditorBodyHandle } from '@/components/compose/editor-body';
-import { REPLY_POLL_MS, RightPane } from '@/pages/engagement/index';
+import {
+    REPLY_POLL_LIMIT,
+    REPLY_POLL_MS,
+    RightPane,
+} from '@/pages/engagement/index';
 import type { ReplyItem } from '@/pages/engagement/types';
 
-const { post, toastError } = vi.hoisted(() => {
+const { post, toastError, toastWarning } = vi.hoisted(() => {
     // jsdom has no matchMedia, and a page import reads it on load.
     window.matchMedia = () =>
         ({
@@ -16,10 +20,12 @@ const { post, toastError } = vi.hoisted(() => {
             removeEventListener: () => {},
         }) as unknown as MediaQueryList;
 
-    return { post: vi.fn(), toastError: vi.fn() };
+    return { post: vi.fn(), toastError: vi.fn(), toastWarning: vi.fn() };
 });
 
-vi.mock('sonner', () => ({ toast: { error: toastError } }));
+vi.mock('sonner', () => ({
+    toast: { error: toastError, warning: toastWarning },
+}));
 
 vi.mock('@/hooks/compose/use-attachments', () => ({
     useAttachments: () => ({
@@ -104,6 +110,7 @@ describe('RightPane send', () => {
     beforeEach(() => {
         post.mockReset();
         toastError.mockReset();
+        toastWarning.mockReset();
         onResponded.mockReset();
         vi.stubGlobal(
             'fetch',
@@ -215,6 +222,20 @@ describe('RightPane send', () => {
             await act(async () => {});
 
             expect(onResponded).not.toHaveBeenCalled();
+        });
+
+        it('says the reply is still sending when it stops checking', async () => {
+            await sendAndPoll();
+            await act(async () => {
+                vi.advanceTimersByTime(REPLY_POLL_MS * REPLY_POLL_LIMIT);
+            });
+            const polls = vi.mocked(fetch).mock.calls.length;
+            await act(async () => {
+                vi.advanceTimersByTime(REPLY_POLL_MS * 3);
+            });
+
+            expect(vi.mocked(fetch).mock.calls.length).toBe(polls);
+            expect(toastWarning).toHaveBeenCalledOnce();
         });
 
         it('stops polling once the job has sent the reply', async () => {

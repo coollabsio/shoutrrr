@@ -58,14 +58,11 @@ export function initialsFrom(
     return letters.toUpperCase();
 }
 
-/** Drop unsent bubbles from earlier attempts: the draft is being sent again. */
+/** Drop failed bubbles from earlier attempts: the draft is being sent again. */
 export function withoutFailedAttempts<
     T extends { id: string; send_status: string | null },
 >(items: T[]): T[] {
-    return items.filter(
-        (item) =>
-            !(item.id.startsWith('temp-') && item.send_status === 'failed'),
-    );
+    return items.filter((item) => item.send_status !== 'failed');
 }
 
 /** Display handle with a leading @ when it isn't already a URL-style handle. */

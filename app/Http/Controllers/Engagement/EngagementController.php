@@ -357,6 +357,14 @@ class EngagementController extends Controller
 
         $mediaIds = array_values($request->validated('media', []));
 
+        // A new reply replaces our failed attempts at this one; they never reached the platform.
+        PostTargetReply::withoutGlobalScopes()
+            ->where('post_target_id', $reply->post_target_id)
+            ->where('parent_remote_id', $reply->remote_reply_id)
+            ->where('is_ours', true)
+            ->where('send_status', SendStatus::Failed->value)
+            ->delete();
+
         if ($mediaIds === [] && ! $reply->platform->sendsRepliesInBackground()) {
             $result = $registry->for($reply->platform)->postReply($account, $reply, (string) $request->validated('text'), $credentials);
 

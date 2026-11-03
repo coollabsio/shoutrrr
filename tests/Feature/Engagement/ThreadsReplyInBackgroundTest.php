@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Sleep;
+use Illuminate\Support\Str;
 
 beforeEach(function (): void {
     $this->workspace = Workspace::factory()->create();
@@ -74,6 +75,24 @@ function runThreadsReplyJob(SendReply $job): void
 {
     $job->handle(app(EngagementConnectorRegistry::class), app(TokenManager::class));
 }
+
+test('a new reply replaces an earlier failed attempt', function (): void {
+    $attempt = fn (SendStatus $status): PostTargetReply => PostTargetReply::factory()->for($this->reply->target, 'target')->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::Threads,
+        'remote_reply_id' => 'pending:'.Str::uuid(),
+        'parent_remote_id' => 'R1',
+        'is_ours' => true,
+        'send_status' => $status,
+    ]);
+    $failed = $attempt(SendStatus::Failed);
+    $sent = $attempt(SendStatus::Sent);
+
+    queueThreadsReply();
+
+    expect(PostTargetReply::withoutGlobalScopes()->find($failed->id))->toBeNull()
+        ->and(PostTargetReply::withoutGlobalScopes()->find($sent->id))->not->toBeNull();
+});
 
 test('a text reply on threads is queued and makes no platform call in the request', function (): void {
     Http::preventStrayRequests();
