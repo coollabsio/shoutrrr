@@ -6,7 +6,7 @@ namespace App\Enums;
 
 /**
  * The getting-started checklist steps. Most steps derive "done" from real data
- * (an account exists, a post exists, a teammate was invited). Timezone is the
+ * (an account exists, a sync pipeline exists, a post exists, a teammate was invited). Timezone is the
  * exception: there is no reliable data signal (UTC is a legitimate choice, not
  * "unset"), so it is click-to-complete — clicking records its key in the
  * workspace's onboarding_progress. This enum is the single source of truth
@@ -15,6 +15,7 @@ namespace App\Enums;
 enum OnboardingStep: string
 {
     case ConnectAccount = 'connect_account';
+    case EnableSync = 'enable_sync';
     case FirstPost = 'first_post';
     case Timezone = 'timezone';
     case InviteTeammate = 'invite_teammate';
@@ -32,6 +33,7 @@ enum OnboardingStep: string
     {
         return match ($this) {
             self::ConnectAccount => 'Connect an account',
+            self::EnableSync => 'Turn on sync',
             self::FirstPost => 'Compose your first post',
             self::Timezone => 'Set your workspace timezone',
             self::InviteTeammate => 'Invite a teammate',
@@ -45,6 +47,7 @@ enum OnboardingStep: string
     {
         return match ($this) {
             self::ConnectAccount => 'workspace.accounts.manage',
+            self::EnableSync => 'workspace.settings.manage',
             self::FirstPost => 'workspace.update',
             self::Timezone => 'workspace.settings.manage',
             self::InviteTeammate => 'workspace.users.manage',
@@ -58,6 +61,7 @@ enum OnboardingStep: string
     {
         return match ($this) {
             self::ConnectAccount => 'accounts.index',
+            self::EnableSync => 'sync.index',
             self::FirstPost => 'dashboard',
             self::Timezone => 'settings.workspace',
             self::InviteTeammate => 'settings.workspace.members',

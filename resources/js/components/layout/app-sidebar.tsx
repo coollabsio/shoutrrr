@@ -14,6 +14,7 @@ import type { IconComponent } from '@/components/ui/icons';
 import {
     Bell,
     Blocks,
+    Bot,
     CalendarDays,
     ChartColumn,
     ChevronRight,
@@ -119,6 +120,7 @@ const accountSettingsIcons: Record<AccountSettingsNavKey, IconComponent> = {
     connections: Plug,
     appearance: Sun,
     notifications: Bell,
+    agentic: Bot,
 };
 
 const versionBadgeClassName =
@@ -464,7 +466,7 @@ export function AppSidebar() {
                                                 </SidebarMenuButton>
                                             </SidebarMenuItem>
                                             {showSyncPipelines && (
-                                                <SidebarMenuItem>
+                                                <SidebarMenuItem className="mt-2">
                                                     <SidebarMenuButton
                                                         tooltip="Sync pipelines"
                                                         isActive={isCurrentOrParentUrl(

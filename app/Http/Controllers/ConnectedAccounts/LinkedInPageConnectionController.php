@@ -9,6 +9,7 @@ use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
+use App\Support\AccountConnectReturn;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,7 @@ class LinkedInPageConnectionController extends Controller
         $stash = $request->session()->get(self::SESSION_KEY);
 
         if (! is_array($stash)) {
-            return redirect()->route('accounts.index')->with('error', 'Your LinkedIn connection expired. Please try again.');
+            return AccountConnectReturn::redirect()->with('error', 'Your LinkedIn connection expired. Please try again.');
         }
 
         /** @var array<string, array{id: string, urn: string, name: string, vanityName: string}> $organizations */
@@ -83,7 +84,7 @@ class LinkedInPageConnectionController extends Controller
         $created = count($validated['selected']);
         $request->session()->forget(self::SESSION_KEY);
 
-        return redirect()->route('accounts.index')->with(
+        return AccountConnectReturn::redirect()->with(
             'success',
             $created === 1 ? '1 account connected.' : "{$created} accounts connected.",
         );

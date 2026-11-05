@@ -11,6 +11,13 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { resolveUiMode, type UiMode } from '@/lib/ui-mode';
+import { dashboard } from '@/routes';
+import { home as agenticHome } from '@/routes/agentic';
+
+const HOME: Record<UiMode, () => { url: string }> = {
+    agentic: agenticHome,
+    classic: dashboard,
+};
 
 const modes: {
     value: UiMode;
@@ -37,7 +44,11 @@ export function ModeSwitch() {
     const current = resolveUiMode(auth.user?.ui_mode);
 
     function select(next: UiMode) {
+        // The current mode acts as a link to its home, so it is a way back from
+        // Accounts, Sync, or Settings.
         if (next === current) {
+            router.visit(HOME[next]().url);
+
             return;
         }
 

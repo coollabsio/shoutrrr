@@ -13,6 +13,7 @@ describe('accountSettingsNavItems', () => {
             'Security',
             'Appearance',
             'Notifications',
+            'Agentic',
         ]);
     });
 

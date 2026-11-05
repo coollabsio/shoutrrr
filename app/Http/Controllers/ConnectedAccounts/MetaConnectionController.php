@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\Meta\MetaAssetEnumerator;
+use App\Support\AccountConnectReturn;
 use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,6 +56,7 @@ class MetaConnectionController extends Controller
 
         // Drop any half-finished picker stash so a re-connect starts clean.
         $request->session()->forget(self::SESSION_KEY);
+        AccountConnectReturn::remember($request);
         $request->session()->save();
 
         // setScopes (not scopes): Socialite's Facebook driver defaults include
@@ -210,7 +212,7 @@ class MetaConnectionController extends Controller
 
         $request->session()->forget(self::SESSION_KEY);
 
-        return redirect()->route('accounts.index')->with(
+        return AccountConnectReturn::redirect()->with(
             'success',
             $created === 1 ? '1 account connected.' : "{$created} accounts connected.",
         );
@@ -351,7 +353,7 @@ class MetaConnectionController extends Controller
 
     private function failed(string $message): RedirectResponse
     {
-        return redirect()->route('accounts.index')->with('error', $message);
+        return AccountConnectReturn::redirect()->with('error', $message);
     }
 
     /**

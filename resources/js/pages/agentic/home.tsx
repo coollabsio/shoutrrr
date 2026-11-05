@@ -1,300 +1,278 @@
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import ApiKeysController from '@/actions/App/Http/Controllers/Settings/ApiKeysController';
 import SyncPipelinesController from '@/actions/App/Http/Controllers/Settings/SyncPipelinesController';
+import { AccountAvatar } from '@/components/common/account-avatar';
+import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { Button } from '@/components/ui/button';
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { Check, ChevronDown, Copy, RefreshCw } from '@/components/ui/icons';
-import { Input } from '@/components/ui/input';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { useClipboard } from '@/hooks/use-clipboard';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Check } from '@/components/ui/icons';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { cn } from '@/lib/utils';
 import { index as accountsRoute } from '@/routes/accounts';
 import { home as agenticHome } from '@/routes/agentic';
+import { edit as editAgenticSettings } from '@/routes/agentic-settings';
+import type { PlatformName } from '@/types/compose';
 
-type ActivityItem = {
-    id: string;
-    kind: string;
+type ConnectablePlatform = {
+    platform: string;
     label: string;
-    detail: string | null;
-    succeeded: boolean | null;
-    occurred_at: string;
+    method: string;
+    url: string;
+};
+
+type HomeAccount = {
+    id: string;
+    platform: string;
+    handle: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    supports_native: boolean;
+};
+
+type SyncSuggestion = {
+    name: string;
+    source_connected_account_id: string;
+    destination_connected_account_ids: string[];
+};
+
+type RecentPost = {
+    id: string;
+    base_text: string;
+    origin: string;
+    status: string;
+    status_label: string;
+    platforms: string[];
+    updated_at: string;
+    scheduled_at: string | null;
+    published_at: string | null;
 };
 
 type Props = {
-    mcp: {
-        endpoint: string;
-        docs_url: string;
-    };
-    api: {
-        base_url: string;
-        publish_example: string;
-        schedule_example: string;
-    };
-    setup: {
-        accounts: number;
-        agent_connected: boolean;
-    };
+    platforms: ConnectablePlatform[];
+    accounts: HomeAccount[];
     sync: {
         total: number;
         enabled: number;
+        can_create: boolean;
+        can_track: boolean;
+        suggestion: SyncSuggestion | null;
     };
-    activity: ActivityItem[];
+    recent_posts: RecentPost[] | null;
 };
 
-type ClientKey = 'claude' | 'chatgpt' | 'claude-code' | 'cursor' | 'other';
+const ORIGIN_LABEL: Record<string, string> = {
+    sync: 'Synced',
+    agent: 'AI assistant',
+    external: 'Posted natively',
+    composer: 'Composer',
+};
 
-const CLIENTS: { key: ClientKey; label: string }[] = [
-    { key: 'claude', label: 'Claude' },
-    { key: 'chatgpt', label: 'ChatGPT' },
-    { key: 'claude-code', label: 'Claude Code' },
-    { key: 'cursor', label: 'Cursor' },
-    { key: 'other', label: 'Other' },
-];
+/** LinkedIn Pages is a connect flow, not a platform, so it uses the LinkedIn mark. */
+function glyphFor(platform: string): PlatformName {
+    return (
+        platform === 'linkedin-pages' ? 'linkedin' : platform
+    ) as PlatformName;
+}
 
-const EXAMPLE_PROMPTS = [
-    'Help me connect my Bluesky account to Shoutrrr.',
-    'Post "We just shipped a new release!" to all my accounts.',
-    'Schedule a post for tomorrow at 9:00 that says "Good morning!".',
-    'What posts do I have scheduled this week?',
-];
-
-const SYNC_PROMPT =
-    'Set up a sync: when I post on X, also post it to Bluesky and LinkedIn.';
+function accountName(account: HomeAccount): string {
+    return account.display_name ?? account.handle;
+}
 
 export default function AgenticHome({
-    mcp,
-    api,
-    setup,
+    platforms,
+    accounts,
     sync,
-    activity,
+    recent_posts,
 }: Props) {
+    return (
+        <>
+            <Head title={recent_posts === null ? 'Get started' : 'Home'} />
+            <div className="mx-auto flex w-full max-w-2xl flex-col gap-10 px-4 pt-10 pb-16">
+                {recent_posts === null ? (
+                    <Setup
+                        platforms={platforms}
+                        accounts={accounts}
+                        sync={sync}
+                    />
+                ) : (
+                    <RecentPosts posts={recent_posts} sync={sync} />
+                )}
+            </div>
+        </>
+    );
+}
+
+function Setup({
+    platforms,
+    accounts,
+    sync,
+}: Pick<Props, 'platforms' | 'accounts' | 'sync'>) {
     const { workspaces } = usePage().props;
     const canManageWorkspace = (workspaces.current?.permissions ?? []).includes(
         'workspace.settings.manage',
     );
-    const [client, setClient] = useState<ClientKey>('claude');
-    const [developerOpen, setDeveloperOpen] = useState(false);
+    const syncDone = sync.total > 0;
 
     return (
         <>
-            <Head title="Get started" />
-            <div className="mx-auto flex w-full max-w-2xl flex-col gap-10 px-4 pt-10 pb-16">
-                <header className="flex flex-col gap-2">
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Post to social media from your AI assistant
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Connect Shoutrrr to Claude, ChatGPT, or another AI app.
-                        Then ask it to write, post, or schedule for you, in
-                        plain words.
-                    </p>
-                </header>
+            <header className="flex flex-col gap-2">
+                <h1 className="text-2xl font-semibold tracking-tight">
+                    Post once, show up everywhere
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                    Connect your social accounts and turn on sync. When you post
+                    on one account, Shoutrrr copies the post to your other
+                    accounts.
+                </p>
+            </header>
 
-                <ol className="flex flex-col gap-4">
-                    <Step
-                        number={1}
-                        done={setup.accounts > 0}
-                        title="Connect your social accounts"
-                        description={
-                            setup.accounts > 0
-                                ? `${setup.accounts} ${setup.accounts === 1 ? 'account is' : 'accounts are'} connected. You can add more at any time.`
-                                : 'Choose where your posts go: X, LinkedIn, Bluesky, Facebook, Instagram, Threads, or Discord.'
-                        }
-                    >
-                        <Button
-                            nativeButton={false}
-                            variant={setup.accounts > 0 ? 'outline' : 'default'}
-                            className="self-start"
-                            render={<Link href={accountsRoute()} />}
-                        >
-                            {setup.accounts > 0
-                                ? 'Manage accounts'
-                                : 'Connect accounts'}
-                        </Button>
-                    </Step>
-
-                    <Step
-                        number={2}
-                        done={setup.agent_connected}
-                        title="Add Shoutrrr to your AI assistant"
-                        description={
-                            setup.agent_connected
-                                ? 'An assistant is connected. To add another app, follow the same steps.'
-                                : 'Pick the app you use and follow the steps. You sign in to Shoutrrr one time to approve it.'
-                        }
-                    >
-                        <ToggleGroup
-                            value={[client]}
-                            onValueChange={(value) => {
-                                const next = value[0] as ClientKey | undefined;
-                                if (next) {
-                                    setClient(next);
-                                }
-                            }}
-                            variant="outline"
-                            size="sm"
-                            className="flex-wrap"
-                        >
-                            {CLIENTS.map((item) => (
-                                <ToggleGroupItem
-                                    key={item.key}
-                                    value={item.key}
-                                    className="px-3 text-xs"
-                                >
-                                    {item.label}
-                                </ToggleGroupItem>
-                            ))}
-                        </ToggleGroup>
-                        <ClientInstructions
-                            client={client}
-                            endpoint={mcp.endpoint}
-                        />
-                    </Step>
-
-                    <Step
-                        number={3}
-                        done={false}
-                        title="Ask your assistant to post"
-                        description="Talk to it like you talk to a person. Before it publishes, it asks you to confirm. Some examples:"
-                    >
-                        <ul className="flex flex-col gap-2">
-                            {EXAMPLE_PROMPTS.map((prompt) => (
-                                <PromptRow key={prompt} prompt={prompt} />
-                            ))}
-                        </ul>
-                    </Step>
-                </ol>
-
-                <section className="flex flex-col gap-4 rounded-2xl border border-primary/40 bg-primary/5 p-5">
-                    <div className="flex gap-4">
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                            <RefreshCw className="size-4" aria-hidden="true" />
-                        </span>
-                        <div className="flex min-w-0 flex-1 flex-col gap-1">
-                            <h2 className="font-medium">
-                                Post once, show up everywhere
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                {sync.total > 0
-                                    ? `${sync.enabled} of ${sync.total} sync ${sync.total === 1 ? 'pipeline is' : 'pipelines are'} on. Each post on a source account is copied to its other accounts.`
-                                    : 'A sync copies each post from one account to up to three others. Ask your assistant to set one up:'}
-                            </p>
-                        </div>
-                    </div>
-                    <ul className="flex flex-col gap-2 pl-11">
-                        <PromptRow prompt={SYNC_PROMPT} />
-                    </ul>
-                    {canManageWorkspace ? (
-                        <Button
-                            nativeButton={false}
-                            variant={sync.total > 0 ? 'outline' : 'default'}
-                            className="ml-11 self-start"
-                            render={
-                                <Link href={SyncPipelinesController.index()} />
-                            }
-                        >
-                            {sync.total > 0 ? 'Manage syncs' : 'Set up a sync'}
-                        </Button>
-                    ) : null}
-                </section>
-
-                <section className="flex flex-col gap-3">
-                    <h2 className="text-sm font-medium">Recent activity</h2>
-                    {activity.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                            Nothing yet. When your assistant posts or schedules
-                            something, it shows here.
-                        </p>
-                    ) : (
-                        <ul className="flex flex-col gap-2">
-                            {activity.map((item) => (
+            <ol className="flex flex-col gap-4">
+                <Step
+                    number={1}
+                    done={accounts.length >= 2}
+                    title="Connect your social accounts"
+                    description={
+                        accounts.length === 0
+                            ? 'Connect at least two accounts. Sync copies posts from one account to the others.'
+                            : accounts.length === 1
+                              ? 'One account is connected. Connect one more to turn on sync.'
+                              : `${accounts.length} accounts are connected. You can add more at any time.`
+                    }
+                >
+                    {accounts.length > 0 ? (
+                        <ul className="flex flex-wrap gap-2">
+                            {accounts.map((account) => (
                                 <li
-                                    key={item.id}
-                                    className="flex items-baseline justify-between gap-3 text-sm"
+                                    key={account.id}
+                                    className="flex items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm"
                                 >
-                                    <span className="truncate">
-                                        {item.label}
-                                        {item.succeeded === false ? (
-                                            <span className="text-destructive">
-                                                {' '}
-                                                · failed
-                                            </span>
-                                        ) : null}
-                                    </span>
-                                    <span className="shrink-0 text-muted-foreground">
-                                        {dayjs(item.occurred_at).fromNow()}
+                                    <AccountAvatar
+                                        platform={account.platform}
+                                        handle={account.handle}
+                                        avatarUrl={account.avatar_url}
+                                        ringClassName="ring-card"
+                                    />
+                                    <span className="max-w-40 truncate">
+                                        {accountName(account)}
                                     </span>
                                 </li>
                             ))}
                         </ul>
-                    )}
-                </section>
+                    ) : null}
+                    <PlatformButtons platforms={platforms} />
+                </Step>
 
-                <Collapsible
-                    open={developerOpen}
-                    onOpenChange={setDeveloperOpen}
+                <Step
+                    number={2}
+                    done={syncDone}
+                    title="Turn on sync"
+                    description={
+                        syncDone
+                            ? `${sync.enabled} of ${sync.total} sync ${sync.total === 1 ? 'pipeline is' : 'pipelines are'} on. Post on a source account, and your posts show here.`
+                            : 'Pick the account you post on most. Shoutrrr copies each new post from it to the accounts you select.'
+                    }
                 >
-                    <CollapsibleTrigger
-                        render={
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="px-0 text-muted-foreground"
-                            />
-                        }
-                    >
-                        For developers: use the REST API
-                        <ChevronDown
-                            aria-hidden="true"
-                            className={cn(
-                                'size-4 transition-transform',
-                                developerOpen && 'rotate-180',
-                            )}
-                        />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="flex flex-col gap-3 pt-3">
-                        <p className="text-sm text-muted-foreground">
-                            Scripts and your own tools can post without an AI
-                            assistant. Create an API key, then send requests to{' '}
-                            <code className="font-mono text-xs">
-                                {api.base_url}
-                            </code>
-                            . Use a new Idempotency-Key for each post, so a
-                            retry does not post twice.
-                        </p>
-                        <CodeBlock value={api.publish_example} />
-                        <CodeBlock value={api.schedule_example} />
-                        <div className="flex gap-4 text-sm">
-                            {canManageWorkspace ? (
-                                <Link
-                                    href={ApiKeysController.index()}
-                                    className="underline-offset-4 hover:underline"
+                    <SyncStep
+                        accounts={accounts}
+                        sync={sync}
+                        canManage={canManageWorkspace}
+                    />
+                </Step>
+            </ol>
+
+            <p className="text-sm text-muted-foreground">
+                Do you want an AI assistant to post for you? Go to{' '}
+                <Link
+                    href={editAgenticSettings()}
+                    className="text-foreground underline-offset-4 hover:underline"
+                >
+                    Settings → Agentic
+                </Link>
+                .
+            </p>
+        </>
+    );
+}
+
+function RecentPosts({
+    posts,
+    sync,
+}: {
+    posts: RecentPost[];
+    sync: Props['sync'];
+}) {
+    return (
+        <>
+            <header className="flex items-end justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-2xl font-semibold tracking-tight">
+                        Recent posts
+                    </h1>
+                    <p className="text-sm text-muted-foreground">
+                        {sync.total > 0
+                            ? `${sync.enabled} of ${sync.total} sync ${sync.total === 1 ? 'pipeline is' : 'pipelines are'} on.`
+                            : 'No sync is on.'}
+                    </p>
+                </div>
+                <Link
+                    href={SyncPipelinesController.index()}
+                    className="shrink-0 text-sm text-muted-foreground underline-offset-4 hover:underline"
+                >
+                    Manage syncs
+                </Link>
+            </header>
+
+            {posts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No posts yet.</p>
+            ) : (
+                <ul className="flex flex-col gap-3">
+                    {posts.map((post) => (
+                        <li
+                            key={post.id}
+                            className="flex flex-col gap-2 rounded-2xl border bg-card p-4"
+                        >
+                            <p className="line-clamp-3 text-sm whitespace-pre-line">
+                                {post.base_text}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1.5">
+                                    {post.platforms.map((platform) => (
+                                        <PlatformGlyph
+                                            key={platform}
+                                            platform={glyphFor(platform)}
+                                            size={12}
+                                        />
+                                    ))}
+                                </span>
+                                <span>
+                                    {ORIGIN_LABEL[post.origin] ?? post.origin}
+                                </span>
+                                <span
+                                    className={cn(
+                                        (post.status === 'failed' ||
+                                            post.status === 'partial') &&
+                                            'text-destructive',
+                                    )}
                                 >
-                                    Create an API key
-                                </Link>
-                            ) : null}
-                            <a
-                                href={mcp.docs_url}
-                                className="text-muted-foreground underline-offset-4 hover:underline"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                Read the docs
-                            </a>
-                        </div>
-                    </CollapsibleContent>
-                </Collapsible>
-            </div>
+                                    {post.status_label}
+                                </span>
+                                <span className="ml-auto">
+                                    {dayjs(
+                                        post.published_at ??
+                                            post.scheduled_at ??
+                                            post.updated_at,
+                                    ).fromNow()}
+                                </span>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </>
     );
 }
@@ -302,12 +280,14 @@ export default function AgenticHome({
 function Step({
     number,
     done,
+    optional = false,
     title,
     description,
     children,
 }: {
     number: number;
     done: boolean;
+    optional?: boolean;
     title: string;
     description: string;
     children: ReactNode;
@@ -324,7 +304,14 @@ function Step({
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-3">
                 <div className="flex flex-col gap-1">
-                    <h2 className="font-medium">{title}</h2>
+                    <h2 className="font-medium">
+                        {title}
+                        {optional ? (
+                            <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                Optional
+                            </span>
+                        ) : null}
+                    </h2>
                     <p className="text-sm text-muted-foreground">
                         {description}
                     </p>
@@ -335,165 +322,281 @@ function Step({
     );
 }
 
-function ClientInstructions({
-    client,
-    endpoint,
-}: {
-    client: ClientKey;
-    endpoint: string;
-}) {
-    const url = <CopyField value={endpoint} label="Shoutrrr URL" />;
-
-    switch (client) {
-        case 'claude':
-            return (
-                <Instructions>
-                    <li>
-                        In Claude, open <b>Settings</b>, then <b>Connectors</b>.
-                    </li>
-                    <li>
-                        Click <b>Add custom connector</b>. Type <b>Shoutrrr</b>{' '}
-                        as the name and paste this URL:
-                        {url}
-                    </li>
-                    <li>
-                        Click <b>Connect</b>, then sign in to Shoutrrr and
-                        approve.
-                    </li>
-                </Instructions>
-            );
-        case 'chatgpt':
-            return (
-                <Instructions>
-                    <li>
-                        In ChatGPT, open <b>Settings</b>, then <b>Apps</b>, then{' '}
-                        <b>Advanced settings</b>. Turn on <b>Developer mode</b>.
-                    </li>
-                    <li>
-                        Click <b>Create</b>. Type <b>Shoutrrr</b> as the name,
-                        paste this URL, and select <b>OAuth</b>:{url}
-                    </li>
-                    <li>Sign in to Shoutrrr and approve.</li>
-                </Instructions>
-            );
-        case 'claude-code':
-            return (
-                <Instructions>
-                    <li>
-                        In a terminal, run:
-                        <CopyField
-                            value={`claude mcp add --transport http shoutrrr ${endpoint}`}
-                        />
-                    </li>
-                    <li>
-                        In Claude Code, type <b>/mcp</b>, select <b>shoutrrr</b>
-                        , then sign in to Shoutrrr and approve.
-                    </li>
-                </Instructions>
-            );
-        case 'cursor':
-            return (
-                <Instructions>
-                    <li>
-                        Open <b>~/.cursor/mcp.json</b> and add:
-                        <CodeBlock
-                            value={JSON.stringify(
-                                { mcpServers: { shoutrrr: { url: endpoint } } },
-                                null,
-                                2,
-                            )}
-                        />
-                    </li>
-                    <li>
-                        Open Cursor <b>Settings</b>, then <b>MCP</b>. When
-                        Cursor asks, sign in to Shoutrrr and approve.
-                    </li>
-                </Instructions>
-            );
-        case 'other':
-            return (
-                <Instructions>
-                    <li>
-                        Find where your app adds a <b>custom connector</b> or a{' '}
-                        <b>remote MCP server</b>. Paste this URL:{url}
-                    </li>
-                    <li>When the app asks, sign in to Shoutrrr and approve.</li>
-                </Instructions>
-            );
-    }
-}
-
-function Instructions({ children }: { children: ReactNode }) {
-    return (
-        <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm marker:text-muted-foreground [&_b]:font-medium">
-            {children}
-        </ol>
-    );
-}
-
-function PromptRow({ prompt }: { prompt: string }) {
-    const [copiedText, copy] = useClipboard();
-    const copied = copiedText === prompt;
-
-    async function onCopy() {
-        if (!(await copy(prompt))) {
-            toast.error('Could not copy. Select the text and copy it.');
-        }
-    }
-
-    return (
-        <li className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 py-2 pr-2 pl-3 text-sm">
-            <span>{prompt}</span>
+function PlatformButtons({ platforms }: { platforms: ConnectablePlatform[] }) {
+    if (platforms.length === 0) {
+        return (
             <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="shrink-0"
-                aria-label={copied ? 'Copied' : 'Copy'}
-                onClick={onCopy}
-            >
-                {copied ? <Check /> : <Copy />}
-            </Button>
-        </li>
-    );
-}
-
-function CopyField({ value, label }: { value: string; label?: string }) {
-    const [copiedText, copy] = useClipboard();
-
-    async function onCopy() {
-        if (!(await copy(value))) {
-            toast.error('Could not copy. Select the text and copy it.');
-        }
-    }
-
-    return (
-        <div className="mt-2 flex gap-2">
-            <Input
-                readOnly
-                value={value}
-                aria-label={label ?? value}
-                onFocus={(event) => event.target.select()}
-                className="font-mono text-xs"
-            />
-            <Button
-                type="button"
+                nativeButton={false}
                 variant="outline"
-                className="shrink-0"
-                onClick={onCopy}
+                className="self-start"
+                render={<Link href={accountsRoute()} />}
             >
-                {copiedText === value ? <Check /> : <Copy />}
-                {copiedText === value ? 'Copied' : 'Copy'}
+                Manage accounts
             </Button>
+        );
+    }
+
+    return (
+        <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {platforms.map((platform) => {
+                    const content = (
+                        <>
+                            <PlatformGlyph
+                                platform={glyphFor(platform.platform)}
+                                size={14}
+                            />
+                            <span className="truncate">{platform.label}</span>
+                        </>
+                    );
+
+                    // OAuth leaves the app, so it needs a full page load.
+                    // Webhooks and app passwords are pasted on the Accounts page.
+                    return platform.method === 'oauth' ? (
+                        <Button
+                            key={platform.platform}
+                            nativeButton={false}
+                            variant="outline"
+                            className="justify-start"
+                            render={<a href={platform.url} />}
+                        >
+                            {content}
+                        </Button>
+                    ) : (
+                        <Button
+                            key={platform.platform}
+                            nativeButton={false}
+                            variant="outline"
+                            className="justify-start"
+                            render={<Link href={platform.url} />}
+                        >
+                            {content}
+                        </Button>
+                    );
+                })}
+            </div>
+            <Link
+                href={accountsRoute()}
+                className="self-start text-sm text-muted-foreground underline-offset-4 hover:underline"
+            >
+                Manage accounts
+            </Link>
         </div>
     );
 }
 
-function CodeBlock({ value }: { value: string }) {
+function SyncStep({
+    accounts,
+    sync,
+    canManage,
+}: {
+    accounts: HomeAccount[];
+    sync: Props['sync'];
+    canManage: boolean;
+}) {
+    if (sync.total > 0) {
+        return canManage ? (
+            <Button
+                nativeButton={false}
+                variant="outline"
+                className="self-start"
+                render={<Link href={SyncPipelinesController.index()} />}
+            >
+                Manage syncs
+            </Button>
+        ) : null;
+    }
+
+    if (!canManage) {
+        return (
+            <p className="text-sm text-muted-foreground">
+                Ask a workspace admin to turn on sync.
+            </p>
+        );
+    }
+
+    if (sync.suggestion === null) {
+        return (
+            <p className="text-sm text-muted-foreground">
+                Connect at least two accounts first.
+            </p>
+        );
+    }
+
+    if (!sync.can_create) {
+        return (
+            <p className="text-sm text-muted-foreground">
+                Your plan does not allow more sync pipelines.
+            </p>
+        );
+    }
+
     return (
-        <pre className="mt-2 overflow-x-auto rounded-xl border bg-muted/50 p-3 font-mono text-xs leading-5">
-            {value}
-        </pre>
+        <SyncSuggestionForm
+            accounts={accounts}
+            suggestion={sync.suggestion}
+            canTrack={sync.can_track}
+        />
+    );
+}
+
+function SyncSuggestionForm({
+    accounts,
+    suggestion,
+    canTrack,
+}: {
+    accounts: HomeAccount[];
+    suggestion: SyncSuggestion;
+    canTrack: boolean;
+}) {
+    const [source, setSource] = useState(
+        suggestion.source_connected_account_id,
+    );
+    const [destinations, setDestinations] = useState<string[]>(
+        suggestion.destination_connected_account_ids,
+    );
+    const [processing, setProcessing] = useState(false);
+    const sourceAccount = accounts.find((account) => account.id === source);
+    const tooMany = destinations.length > 3;
+
+    function selectSource(id: string) {
+        setSource(id);
+        setDestinations((current) => {
+            const rest = current.filter((d) => d !== id);
+            // Keep the previous source as a destination, so a swap is one click.
+            return rest.length < 3 && source !== id ? [...rest, source] : rest;
+        });
+    }
+
+    function toggleDestination(id: string) {
+        setDestinations((current) =>
+            current.includes(id)
+                ? current.filter((d) => d !== id)
+                : [...current, id],
+        );
+    }
+
+    function submit() {
+        if (sourceAccount === undefined) {
+            return;
+        }
+
+        router.post(
+            SyncPipelinesController.store().url,
+            {
+                name: `${accountName(sourceAccount)} sync`,
+                source_connected_account_id: source,
+                destination_connected_account_ids: destinations,
+                track_source: true,
+            },
+            {
+                preserveScroll: true,
+                onStart: () => setProcessing(true),
+                onFinish: () => setProcessing(false),
+                onError: (errors) => {
+                    toast.error(
+                        Object.values(errors)[0] ??
+                            'Could not turn on sync. Try again.',
+                    );
+                },
+            },
+        );
+    }
+
+    return (
+        <div className="flex flex-col gap-4">
+            <div className="grid gap-2">
+                <Label>Post on</Label>
+                <RadioGroup
+                    value={source}
+                    onValueChange={(value) => selectSource(value as string)}
+                >
+                    {accounts.map((account) => (
+                        <div
+                            key={account.id}
+                            className="flex items-center gap-3 text-sm"
+                        >
+                            <RadioGroupItem
+                                id={`sync-source-${account.id}`}
+                                value={account.id}
+                            />
+                            <Label
+                                htmlFor={`sync-source-${account.id}`}
+                                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 font-normal"
+                            >
+                                <AccountAvatar
+                                    platform={account.platform}
+                                    handle={account.handle}
+                                    avatarUrl={account.avatar_url}
+                                    ringClassName="ring-card"
+                                />
+                                <span className="truncate">
+                                    {accountName(account)}
+                                </span>
+                            </Label>
+                        </div>
+                    ))}
+                </RadioGroup>
+            </div>
+
+            <div className="grid gap-2">
+                <Label>Copy to (up to 3)</Label>
+                {accounts
+                    .filter((account) => account.id !== source)
+                    .map((account) => (
+                        <div
+                            key={account.id}
+                            className="flex items-center gap-3 text-sm"
+                        >
+                            <Checkbox
+                                id={`sync-dest-${account.id}`}
+                                checked={destinations.includes(account.id)}
+                                onCheckedChange={() =>
+                                    toggleDestination(account.id)
+                                }
+                            />
+                            <Label
+                                htmlFor={`sync-dest-${account.id}`}
+                                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 font-normal"
+                            >
+                                <AccountAvatar
+                                    platform={account.platform}
+                                    handle={account.handle}
+                                    avatarUrl={account.avatar_url}
+                                    ringClassName="ring-card"
+                                />
+                                <span className="truncate">
+                                    {accountName(account)}
+                                </span>
+                            </Label>
+                        </div>
+                    ))}
+                {tooMany ? (
+                    <p className="text-sm text-destructive">
+                        Select 3 accounts or fewer.
+                    </p>
+                ) : null}
+            </div>
+
+            {sourceAccount ? (
+                <p className="text-sm text-muted-foreground">
+                    {!sourceAccount.supports_native
+                        ? 'This account cannot be tracked. Only posts that you publish through Shoutrrr are copied.'
+                        : canTrack
+                          ? 'Posts that you make directly on this account are copied too.'
+                          : 'Your plan cannot track more accounts. Only posts that you publish through Shoutrrr are copied.'}
+                </p>
+            ) : null}
+
+            <Button
+                type="button"
+                className="self-start"
+                disabled={processing || destinations.length === 0 || tooMany}
+                onClick={submit}
+            >
+                {processing ? 'Turning on…' : 'Turn on sync'}
+            </Button>
+        </div>
     );
 }
 

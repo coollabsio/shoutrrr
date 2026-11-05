@@ -11,6 +11,7 @@ use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
 use App\Services\ConnectedAccounts\XAccountCapabilities;
+use App\Support\AccountConnectReturn;
 use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,7 @@ class OAuthConnectionController extends Controller
         $resolved = $this->resolveOAuthPlatform($platform);
 
         $request->user()->can('create', ConnectedAccount::class) ?: abort(403);
+        AccountConnectReturn::remember($request);
 
         return $this->driver($resolved)->setScopes($this->scopesFor($resolved))->redirect();
     }
@@ -64,7 +66,7 @@ class OAuthConnectionController extends Controller
             if ($exception instanceof InvalidStateException && $this->hasSuccessfulConnectionFlash($request, $resolved)) {
                 $request->session()->keep('success');
 
-                return redirect()->route('accounts.index');
+                return AccountConnectReturn::redirect();
             }
 
             Log::warning('Connected-account OAuth callback failed.', [
@@ -125,13 +127,13 @@ class OAuthConnectionController extends Controller
 
         $this->connections->store($data, $request->user());
 
-        return redirect()->route('accounts.index')
+        return AccountConnectReturn::redirect()
             ->with('success', $this->successMessage($resolved));
     }
 
     private function failed(string $message): RedirectResponse
     {
-        return redirect()->route('accounts.index')->with('error', $message);
+        return AccountConnectReturn::redirect()->with('error', $message);
     }
 
     private function successMessage(Platform $platform): string

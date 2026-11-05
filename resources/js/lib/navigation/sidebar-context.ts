@@ -42,6 +42,7 @@ const ACCOUNT_PREFIXES = [
     '/settings/appearance',
     '/settings/notifications',
     '/settings/connections',
+    '/settings/agentic',
 ];
 
 /**

@@ -4,158 +4,173 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Enums\AgentIntentAction;
-use App\Models\AgentIntent;
+use App\Enums\PostOrigin;
+use App\Enums\PostStatus;
 use App\Models\ConnectedAccount;
-use App\Models\McpGrantWorkspace;
+use App\Models\Post;
 use App\Models\SyncPipeline;
-use App\Models\UsageEvent;
 use App\Models\User;
 use App\Models\Workspace;
-use App\Support\UsageOperation;
+use App\Services\Billing\WorkspaceSubscriptionGate;
+use App\Services\ConnectedAccounts\AccountConnectLinks;
+use App\Support\PostListItem;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class AgenticHomeController extends Controller
 {
+    public function __construct(
+        private readonly AccountConnectLinks $connectLinks,
+        private readonly WorkspaceSubscriptionGate $subscriptions,
+    ) {}
+
     /**
-     * Agentic home: connect an agent over MCP OAuth. The agent does the rest.
+     * Agentic home. Before anything is posted it walks through setup: connect
+     * accounts, then turn on sync. After that it shows recent posts. The MCP
+     * and REST API setup lives in Settings → Agentic.
      */
     public function index(Request $request): Response
     {
         /** @var User $user */
         $user = $request->user();
-        $workspaceId = $user->currentWorkspace instanceof Workspace
-            ? $user->currentWorkspace->id
-            : null;
+        $workspace = $user->currentWorkspace instanceof Workspace ? $user->currentWorkspace : null;
+        $accounts = $workspace === null ? collect() : $this->enabledAccounts($workspace->id);
 
         return Inertia::render('agentic/home', [
-            'mcp' => [
-                'endpoint' => url('/mcp'),
-                'docs_url' => 'https://shoutrrr.com/docs/mcp',
-            ],
-            'api' => [
-                'base_url' => url('/api/v1'),
-                'publish_example' => $this->publishExample(),
-                'schedule_example' => $this->scheduleExample(),
-            ],
-            'setup' => $this->setupProgress($workspaceId),
-            'sync' => $this->syncSummary($workspaceId),
-            'activity' => $workspaceId === null ? [] : $this->activity($workspaceId),
+            'platforms' => $user->can('create', ConnectedAccount::class) ? $this->connectablePlatforms() : [],
+            'accounts' => $accounts->map(fn (ConnectedAccount $account): array => [
+                'id' => $account->id,
+                'platform' => $account->platform->value,
+                'handle' => $account->handle,
+                'display_name' => $account->display_name,
+                'avatar_url' => $account->avatar_url,
+                'supports_native' => $account->platform->supportsNativeRead(),
+            ])->values()->all(),
+            'sync' => $workspace === null ? $this->emptySync() : $this->syncState($workspace, $accounts),
+            'recent_posts' => $workspace === null ? null : $this->recentPosts($workspace->id),
         ]);
     }
 
     /**
-     * @return array{accounts: int, agent_connected: bool}
+     * Once sync or an assistant has posted, the home is a feed of recent posts
+     * and setup moves out of the way. Null until then.
+     *
+     * @return list<array<string, mixed>>|null
      */
-    private function setupProgress(?string $workspaceId): array
+    private function recentPosts(string $workspaceId): ?array
     {
-        if ($workspaceId === null) {
-            return ['accounts' => 0, 'agent_connected' => false];
+        $hasPosted = Post::query()
+            ->where('workspace_id', $workspaceId)
+            ->whereIn('origin', [PostOrigin::Sync, PostOrigin::Agent])
+            ->exists();
+
+        if (! $hasPosted) {
+            return null;
         }
 
-        return [
-            'accounts' => ConnectedAccount::query()->where('workspace_id', $workspaceId)->enabled()->count(),
-            'agent_connected' => McpGrantWorkspace::query()->where('workspace_id', $workspaceId)->exists(),
-        ];
+        return array_values(Post::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('status', '!=', PostStatus::Draft)
+            ->with(['targets', 'media', 'author'])
+            ->latest()
+            ->limit(20)
+            ->get()
+            ->map(fn (Post $post): array => PostListItem::make($post))
+            ->all());
     }
 
     /**
-     * @return array{total: int, enabled: int}
+     * @return Collection<int, ConnectedAccount>
      */
-    private function syncSummary(?string $workspaceId): array
+    private function enabledAccounts(string $workspaceId): Collection
     {
-        if ($workspaceId === null) {
-            return ['total' => 0, 'enabled' => 0];
+        return ConnectedAccount::query()
+            ->where('workspace_id', $workspaceId)
+            ->enabled()
+            ->oldest()
+            ->get();
+    }
+
+    /**
+     * @return list<array{platform: string, label: string, method: string, url: string}>
+     */
+    private function connectablePlatforms(): array
+    {
+        $platforms = [];
+
+        foreach ($this->connectLinks->listReturningToAgentic() as $link) {
+            if ($link['available'] && $link['url'] !== null) {
+                $platforms[] = [
+                    'platform' => $link['platform'],
+                    'label' => $link['label'],
+                    'method' => $link['method'],
+                    'url' => $link['url'],
+                ];
+            }
         }
 
-        $pipelines = SyncPipeline::query()->where('workspace_id', $workspaceId);
+        return $platforms;
+    }
+
+    /**
+     * @return array{total: int, enabled: int, can_create: bool, can_track: bool, suggestion: null}
+     */
+    private function emptySync(): array
+    {
+        return ['total' => 0, 'enabled' => 0, 'can_create' => false, 'can_track' => false, 'suggestion' => null];
+    }
+
+    /**
+     * @param  Collection<int, ConnectedAccount>  $accounts
+     * @return array{total: int, enabled: int, can_create: bool, can_track: bool, suggestion: array{name: string, source_connected_account_id: string, destination_connected_account_ids: list<string>}|null}
+     */
+    private function syncState(Workspace $workspace, Collection $accounts): array
+    {
+        $pipelines = SyncPipeline::query()->where('workspace_id', $workspace->id);
+        $total = (clone $pipelines)->count();
 
         return [
-            'total' => (clone $pipelines)->count(),
+            'total' => $total,
             'enabled' => (clone $pipelines)->where('enabled', true)->count(),
+            'can_create' => $this->subscriptions->canCreateSyncPipeline($workspace),
+            'can_track' => $this->subscriptions->canTrackNativeAccount($workspace),
+            'suggestion' => $total === 0 ? $this->suggestPipeline($accounts) : null,
         ];
     }
 
     /**
-     * @return list<array{id: string, kind: string, label: string, detail: string|null, succeeded: bool|null, occurred_at: string}>
+     * First sync to offer: the oldest account that can be tracked natively is
+     * the source, so posts made directly on that platform sync too. LinkedIn and
+     * Discord cannot be tracked, so they are only a source when nothing else is.
+     *
+     * @param  Collection<int, ConnectedAccount>  $accounts
+     * @return array{name: string, source_connected_account_id: string, destination_connected_account_ids: list<string>}|null
      */
-    private function activity(string $workspaceId): array
+    private function suggestPipeline(Collection $accounts): ?array
     {
-        /** @var list<array{id: string, kind: string, label: string, detail: string|null, succeeded: bool|null, occurred_at: string, sort: string}> $items */
-        $items = [];
-
-        foreach (AgentIntent::query()->where('workspace_id', $workspaceId)->latest()->limit(8)->get() as $intent) {
-            $occurredAt = $intent->created_at?->toIso8601String() ?? now()->toIso8601String();
-            $items[] = [
-                'id' => 'intent-'.$intent->id,
-                'kind' => 'intent',
-                'label' => $intent->action === AgentIntentAction::ScheduleAt ? 'Scheduled a post' : 'Published a post',
-                'detail' => null,
-                'succeeded' => null,
-                'occurred_at' => $occurredAt,
-                'sort' => $occurredAt,
-            ];
+        if ($accounts->count() < 2) {
+            return null;
         }
 
-        foreach (
-            UsageEvent::query()
-                ->where('workspace_id', $workspaceId)
-                ->where('operation', UsageOperation::MCP_REQUEST)
-                ->latest('occurred_at')
-                ->limit(8)
-                ->get() as $event
-        ) {
-            $occurredAt = $event->occurred_at->toIso8601String();
-            $status = is_array($event->meta) ? ($event->meta['status'] ?? null) : null;
-            $items[] = [
-                'id' => 'mcp-'.$event->id,
-                'kind' => 'mcp',
-                'label' => 'Assistant request',
-                'detail' => is_int($status) || is_string($status) ? 'HTTP '.$status : null,
-                'succeeded' => $event->succeeded,
-                'occurred_at' => $occurredAt,
-                'sort' => $occurredAt,
-            ];
+        $source = $accounts->first(fn (ConnectedAccount $account): bool => $account->platform->supportsNativeRead())
+            ?? $accounts->first();
+
+        if (! $source instanceof ConnectedAccount) {
+            return null;
         }
 
-        usort($items, fn (array $left, array $right): int => $right['sort'] <=> $left['sort']);
+        $destinations = array_values($accounts
+            ->reject(fn (ConnectedAccount $account): bool => $account->id === $source->id)
+            ->take(3)
+            ->map(fn (ConnectedAccount $account): string => $account->id)
+            ->all());
 
-        return array_map(
-            fn (array $item): array => [
-                'id' => $item['id'],
-                'kind' => $item['kind'],
-                'label' => $item['label'],
-                'detail' => $item['detail'],
-                'succeeded' => $item['succeeded'],
-                'occurred_at' => $item['occurred_at'],
-            ],
-            array_slice($items, 0, 8),
-        );
-    }
-
-    private function publishExample(): string
-    {
-        return <<<'TXT'
-POST /api/v1/intents/publish-now
-Idempotency-Key: <unique-key>
-Authorization: Bearer <api-key>
-Content-Type: application/json
-
-{"text":"Hello from an agent","destination":{"kind":"all"}}
-TXT;
-    }
-
-    private function scheduleExample(): string
-    {
-        return <<<'TXT'
-POST /api/v1/intents/schedule-at
-Idempotency-Key: <unique-key>
-Authorization: Bearer <api-key>
-Content-Type: application/json
-
-{"text":"Hello later","destination":{"kind":"all"},"scheduled_at":"2026-11-01T15:00:00Z"}
-TXT;
+        return [
+            'name' => $source->platform->label().' '.$source->handle.' sync',
+            'source_connected_account_id' => $source->id,
+            'destination_connected_account_ids' => $destinations,
+        ];
     }
 }

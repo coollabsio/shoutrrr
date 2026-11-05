@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
 #[Name('create_sync_pipeline')]
-#[Description('Create a sync pipeline that reposts from one connected account to up to three others. The source cannot also be a destination. Optional track_source turns on native tracking for the source when the plan allows it.')]
+#[Description('Create a sync pipeline that reposts from one connected account to up to three others. The source cannot also be a destination. track_source defaults to true: the source is also tracked for posts made directly on its platform, when the platform and plan allow it. Pass false to sync only posts published through Shoutrrr.')]
 class CreateSyncPipelineTool extends WorkspaceTool
 {
     public function handle(Request $request, SyncPipelineService $pipelines): Response
@@ -62,7 +62,7 @@ class CreateSyncPipelineTool extends WorkspaceTool
             'source_connected_account_id' => $schema->string()->description('Account whose posts are copied.')->required(),
             'destination_connected_account_ids' => $schema->array()->description('One to three destination account ids. Must not include the source.')->required(),
             'enabled' => $schema->boolean()->description('Whether the pipeline starts enabled. Defaults to true.'),
-            'track_source' => $schema->boolean()->description('Also track posts the source publishes outside Shoutrrr, when that platform supports it.'),
+            'track_source' => $schema->boolean()->description('Also track posts the source publishes outside Shoutrrr, when that platform supports it. Defaults to true.'),
         ];
     }
 }

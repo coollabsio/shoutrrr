@@ -1,5 +1,6 @@
 import type { Link } from '@inertiajs/react';
 
+import { edit as editAgenticSettings } from '@/routes/agentic-settings';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editConnections } from '@/routes/connections';
 import { preferences as notificationPreferences } from '@/routes/notifications';
@@ -11,7 +12,8 @@ export type AccountSettingsNavKey =
     | 'security'
     | 'connections'
     | 'appearance'
-    | 'notifications';
+    | 'notifications'
+    | 'agentic';
 
 export type AccountSettingsNavItem = {
     key: AccountSettingsNavKey;
@@ -42,5 +44,6 @@ export function accountSettingsNavItems({
             title: 'Notifications',
             href: notificationPreferences(),
         },
+        { key: 'agentic', title: 'Agentic', href: editAgenticSettings() },
     ];
 }

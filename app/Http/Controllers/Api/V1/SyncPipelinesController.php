@@ -41,8 +41,8 @@ class SyncPipelinesController extends Controller
     }
 
     /**
-     * Fails with 422 when the plan's pipeline limit is reached. With
-     * track_source, the source is also watched for posts published outside
+     * Fails with 422 when the plan's pipeline limit is reached. Unless
+     * track_source is false, the source is also watched for posts published outside
      * Shoutrrr when its platform and plan allow it; tracked_source reports
      * whether that happened.
      */

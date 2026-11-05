@@ -1,12 +1,12 @@
 <?php
 
+use App\Enums\PostOrigin;
+use App\Enums\PostStatus;
 use App\Enums\UiMode;
-use App\Models\AgentIntent;
-use App\Models\UsageEvent;
+use App\Models\Post;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
-use App\Support\UsageOperation;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('new users default to agentic and home lands there', function () {
@@ -78,26 +78,12 @@ test('guests cannot change mode', function () {
     $this->put(route('ui-mode.update'), ['mode' => 'classic'])->assertRedirect(route('login'));
 });
 
-test('agentic home shows setup, sync, and recent activity', function () {
+test('agentic home shows setup until sync or an assistant has posted', function () {
     $workspace = Workspace::factory()->create();
     $user = User::factory()->create(['current_workspace_id' => $workspace->id]);
     WorkspaceMembership::factory()->owner()->create([
         'workspace_id' => $workspace->id,
         'user_id' => $user->id,
-    ]);
-
-    AgentIntent::factory()->create([
-        'workspace_id' => $workspace->id,
-        'user_id' => $user->id,
-        'idempotency_key' => 'home-intent',
-    ]);
-
-    UsageEvent::factory()->create([
-        'workspace_id' => $workspace->id,
-        'operation' => UsageOperation::MCP_REQUEST,
-        'succeeded' => true,
-        'meta' => ['status' => 200],
-        'occurred_at' => now(),
     ]);
 
     $this->actingAs($user)
@@ -106,11 +92,67 @@ test('agentic home shows setup, sync, and recent activity', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('agentic/home')
             ->where('auth.user.ui_mode', 'agentic')
-            ->where('mcp.endpoint', url('/mcp'))
             ->where('sync.total', 0)
-            ->where('setup.accounts', 0)
-            ->where('setup.agent_connected', false)
-            ->has('activity', 2)
+            ->where('accounts', [])
+            ->where('sync.suggestion', null)
+            ->where('recent_posts', null)
+            ->missing('mcp')
+        );
+});
+
+test('agentic home shows recent posts once an assistant or sync has posted', function () {
+    $workspace = Workspace::factory()->create();
+    $user = User::factory()->create(['current_workspace_id' => $workspace->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+    ]);
+
+    $composed = Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'author_id' => $user->id,
+        'status' => PostStatus::Published,
+        'created_at' => now()->subHour(),
+    ]);
+    Post::factory()->create(['workspace_id' => $workspace->id, 'author_id' => $user->id]);
+
+    $this->actingAs($user)
+        ->get(route('agentic.home'))
+        ->assertInertia(fn (Assert $page) => $page->where('recent_posts', null));
+
+    $agentPost = Post::factory()->create([
+        'workspace_id' => $workspace->id,
+        'author_id' => $user->id,
+        'origin' => PostOrigin::Agent,
+        'status' => PostStatus::Scheduled,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('agentic.home'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('recent_posts', 2)
+            ->where('recent_posts.0.id', $agentPost->id)
+            ->where('recent_posts.0.origin', 'agent')
+            ->where('recent_posts.1.id', $composed->id)
+        );
+});
+
+test('agentic settings show the MCP endpoint and REST API examples', function () {
+    $workspace = Workspace::factory()->create();
+    $user = User::factory()->create(['current_workspace_id' => $workspace->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('agentic-settings.edit'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('settings/agentic')
+            ->where('mcp.endpoint', url('/mcp'))
+            ->where('api.base_url', url('/api/v1'))
+            ->where('agent_connected', false)
             ->has('api.publish_example')
             ->has('api.schedule_example')
         );

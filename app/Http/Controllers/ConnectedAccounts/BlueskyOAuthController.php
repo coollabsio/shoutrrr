@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\BlueskyOAuthConnector;
+use App\Support\AccountConnectReturn;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -25,6 +26,7 @@ class BlueskyOAuthController extends Controller
     public function redirect(Request $request): RedirectResponse
     {
         $request->user()->can('create', ConnectedAccount::class) ?: abort(403);
+        AccountConnectReturn::remember($request);
 
         $validated = $request->validate([
             'identifier' => ['nullable', 'string', 'max:255'],
@@ -43,7 +45,7 @@ class BlueskyOAuthController extends Controller
                 $validated['pds_url'] ?? null,
             );
         } catch (RuntimeException $exception) {
-            return redirect()->route('accounts.index')->with('error', $exception->getMessage());
+            return AccountConnectReturn::redirect()->with('error', $exception->getMessage());
         }
 
         $request->session()->put(self::SESSION_KEY.'.'.$authorization['state'], $authorization['context']);
@@ -77,14 +79,14 @@ class BlueskyOAuthController extends Controller
         $request->user()->can('create', ConnectedAccount::class) ?: abort(403);
 
         if ($request->filled('error')) {
-            return redirect()->route('accounts.index')->with('error', 'Bluesky did not authorize the connection.');
+            return AccountConnectReturn::redirect()->with('error', 'Bluesky did not authorize the connection.');
         }
 
         $state = (string) $request->query('state');
         $context = $request->session()->pull(self::SESSION_KEY.'.'.$state);
 
         if (! is_array($context)) {
-            return redirect()->route('accounts.index')->with('error', 'Bluesky OAuth state expired. Please try again.');
+            return AccountConnectReturn::redirect()->with('error', 'Bluesky OAuth state expired. Please try again.');
         }
 
         try {
@@ -96,11 +98,11 @@ class BlueskyOAuthController extends Controller
         } catch (RuntimeException $exception) {
             Log::warning('Bluesky OAuth callback failed.', ['message' => $exception->getMessage()]);
 
-            return redirect()->route('accounts.index')->with('error', $exception->getMessage());
+            return AccountConnectReturn::redirect()->with('error', $exception->getMessage());
         }
 
         $this->connections->store($data, $request->user());
 
-        return redirect()->route('accounts.index')->with('success', 'Bluesky account connected.');
+        return AccountConnectReturn::redirect()->with('success', 'Bluesky account connected.');
     }
 }

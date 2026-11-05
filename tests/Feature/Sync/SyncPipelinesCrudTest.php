@@ -61,7 +61,7 @@ test('opting into tracking is ignored for a source on an unsupported platform', 
     ]);
 });
 
-test('a pipeline created without opting in does not track the source', function () {
+test('a pipeline created with track_source false does not track the source', function () {
     [, $workspace] = ownerActingIn();
     $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky]);
     $dest = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
@@ -70,6 +70,7 @@ test('a pipeline created without opting in does not track the source', function 
         'name' => 'No tracking',
         'source_connected_account_id' => $source->id,
         'destination_connected_account_ids' => [$dest->id],
+        'track_source' => false,
     ])->assertRedirect();
 
     $this->assertDatabaseMissing('connected_account_native_watches', [

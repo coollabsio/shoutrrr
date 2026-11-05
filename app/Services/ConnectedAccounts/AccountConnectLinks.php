@@ -7,6 +7,7 @@ namespace App\Services\ConnectedAccounts;
 use App\Enums\Platform;
 use App\Http\Controllers\ConnectedAccounts\LinkedInPageOAuthController;
 use App\Models\ConnectedAccount;
+use App\Support\AccountConnectReturn;
 use App\Support\InstanceSettings;
 
 /**
@@ -31,6 +32,25 @@ class AccountConnectLinks
         $rows[] = $this->describe('linkedin-pages');
 
         return $rows;
+    }
+
+    /**
+     * Same as list(), but each OAuth URL brings the user back to the Agentic
+     * home when the provider finishes. Webhook and app-password rows still open
+     * the Accounts page, because the human pastes the secret there.
+     *
+     * @return list<array{platform: string, label: string, method: string, available: bool, reason: string|null, url: string|null, human_action: string}>
+     */
+    public function listReturningToAgentic(): array
+    {
+        return array_map(function (array $row): array {
+            if ($row['method'] === 'oauth' && $row['url'] !== null) {
+                $separator = str_contains($row['url'], '?') ? '&' : '?';
+                $row['url'] .= $separator.http_build_query(['return' => AccountConnectReturn::QUERY_VALUE]);
+            }
+
+            return $row;
+        }, $this->list());
     }
 
     /**

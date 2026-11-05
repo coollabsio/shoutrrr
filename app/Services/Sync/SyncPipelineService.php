@@ -89,7 +89,10 @@ class SyncPipelineService
 
         $trackedSource = false;
 
-        if ($validated['track_source'] ?? false) {
+        // Track by default: a sync is most useful when posts made directly on the
+        // source platform are copied too. trackIfEligible() skips it when the
+        // platform or the plan does not allow it.
+        if ($validated['track_source'] ?? true) {
             $source = ConnectedAccount::query()
                 ->where('workspace_id', $workspace->id)
                 ->whereKey($validated['source_connected_account_id'])
