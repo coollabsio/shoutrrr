@@ -73,7 +73,9 @@ return [
     |
     */
 
-    'home' => '/dashboard',
+    // The "/" route sends each user to their Agentic or Classic home. Passkey
+    // sign-in reads this value once at boot, so it cannot be per-user.
+    'home' => '/',
 
     /*
     |--------------------------------------------------------------------------

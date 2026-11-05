@@ -27,9 +27,11 @@ export default function McpLanding() {
                     </h1>
                     <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
                         You've found the Shoutrrr Model Context Protocol (MCP)
-                        endpoint. It's how AI agents talk to Shoutrrr, so
-                        there's not much to see in a browser — but you're in the
-                        right place if you're setting one up.
+                        endpoint. It's how AI agents talk to Shoutrrr. Agentic
+                        is the default home in the app and includes this setup;
+                        Classic remains a full mode for the composer and
+                        calendar. There's not much to see in a browser — but
+                        you're in the right place if you're setting an agent up.
                     </p>
 
                     <div className="mx-auto mt-6 max-w-md rounded-xl border bg-muted/50 p-4 text-left">

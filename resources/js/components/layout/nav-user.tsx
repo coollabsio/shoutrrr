@@ -26,36 +26,40 @@ export function NavUser() {
     }
 
     return (
-        <SidebarMenu>
-            <SidebarMenuItem>
-                <DropdownMenu>
-                    <DropdownMenuTrigger
-                        render={
-                            <SidebarMenuButton
-                                size="lg"
-                                className="group text-sidebar-accent-foreground data-[popup-open]:bg-sidebar-accent"
-                                data-test="sidebar-menu-button"
-                            />
-                        }
-                    >
-                        <UserInfo user={auth.user} />
-                        <ChevronsUpDown className="ml-auto size-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                        className="w-(--anchor-width) min-w-56 rounded-lg"
-                        align="end"
-                        side={
-                            isMobile
-                                ? 'bottom'
-                                : state === 'collapsed'
-                                  ? 'left'
-                                  : 'bottom'
-                        }
-                    >
-                        <UserMenuContent user={auth.user} />
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </SidebarMenuItem>
-        </SidebarMenu>
+        <>
+            <SidebarMenu>
+                <SidebarMenuItem>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            render={
+                                <SidebarMenuButton
+                                    size="sm"
+                                    className="h-8 rounded-lg border border-sidebar-border px-2 text-xs font-medium data-[popup-open]:bg-black/5 dark:data-[popup-open]:bg-white/6"
+                                    data-test="sidebar-menu-button"
+                                    aria-label={`Account menu for ${auth.user.name}`}
+                                />
+                            }
+                        >
+                            <UserInfo user={auth.user} compact />
+                            <ChevronsUpDown className="ml-auto size-3.5 text-neutral-400" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            className="w-52 min-w-0 rounded-lg"
+                            sideOffset={8}
+                            align="start"
+                            side={
+                                isMobile
+                                    ? 'top'
+                                    : state === 'collapsed'
+                                      ? 'right'
+                                      : 'top'
+                            }
+                        >
+                            <UserMenuContent user={auth.user} />
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </SidebarMenuItem>
+            </SidebarMenu>
+        </>
     );
 }

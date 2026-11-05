@@ -23,6 +23,6 @@ test('dashboard shares onboarding prop for the current workspace owner', functio
             ->where('onboarding.welcomed', false)
             ->where('onboarding.dismissed', false)
             ->where('onboarding.complete', false)
-            ->has('onboarding.steps', 4)
+            ->has('onboarding.steps', 5)
         );
 });

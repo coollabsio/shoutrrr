@@ -54,19 +54,50 @@ class DraftService
             ]);
 
             $accountIds = $this->resolveDestinationAccountIds($workspaceId, $destination);
+            [$autoSplitByAccount, $overrideByAccount, $formatByAccount] = $this->perAccountInputs($accountIds, $data);
+
+            if ($data instanceof DraftData && $data->mediaIdsProvided) {
+                $this->attachMedia($post, $data->mediaIds);
+            }
             // Pass the DraftData so the created targets carry the thread's
             // segment_breaks from the first save (placements settle on the next
             // PUT once their media is attached).
-            $formatByAccount = [];
-            foreach ($accountIds as $accountId) {
-                if ($data instanceof DraftData && $data->hasFormatFor($accountId)) {
-                    $formatByAccount[$accountId] = $data->formatFor($accountId);
-                }
-            }
-            $this->syncTargets($post, $accountIds, $segments, [], [], $post->mentions ?? [], $formatByAccount, $data);
+            $this->syncTargets($post, $accountIds, $segments, $autoSplitByAccount, $overrideByAccount, $post->mentions ?? [], $formatByAccount, $data);
 
             return $post->load('targets');
         });
+    }
+
+    /**
+     * Only carry explicitly-sent per-account settings into the merge; otherwise
+     * syncTargets preserves the survivor's existing value (or the default).
+     *
+     * @param  list<string>  $accountIds
+     * @return array{0: array<string, bool>, 1: array<string, array{segments: list<string>, media_ids: list<string>}|null>, 2: array<string, string>}
+     */
+    private function perAccountInputs(array $accountIds, ?DraftData $data): array
+    {
+        $autoSplitByAccount = [];
+        $overrideByAccount = [];
+        $formatByAccount = [];
+
+        if (! $data instanceof DraftData) {
+            return [$autoSplitByAccount, $overrideByAccount, $formatByAccount];
+        }
+
+        foreach ($accountIds as $accountId) {
+            if ($data->hasAutoSplitFor($accountId)) {
+                $autoSplitByAccount[$accountId] = $data->autoSplitFor($accountId);
+            }
+            if ($data->hasOverrideFor($accountId)) {
+                $overrideByAccount[$accountId] = $data->overrideFor($accountId);
+            }
+            if ($data->hasFormatFor($accountId)) {
+                $formatByAccount[$accountId] = $data->formatFor($accountId);
+            }
+        }
+
+        return [$autoSplitByAccount, $overrideByAccount, $formatByAccount];
     }
 
     /**
@@ -352,22 +383,7 @@ class DraftService
             ];
             $accountIds = $this->resolveDestinationAccountIds($post->workspace_id, $destination);
 
-            // Only carry an explicitly-sent override/auto-split into the merge;
-            // otherwise syncTargets preserves the survivor's existing value.
-            $autoSplitByAccount = [];
-            $overrideByAccount = [];
-            $formatByAccount = [];
-            foreach ($accountIds as $accountId) {
-                if ($data->hasAutoSplitFor($accountId)) {
-                    $autoSplitByAccount[$accountId] = $data->autoSplitFor($accountId);
-                }
-                if ($data->hasOverrideFor($accountId)) {
-                    $overrideByAccount[$accountId] = $data->overrideFor($accountId);
-                }
-                if ($data->hasFormatFor($accountId)) {
-                    $formatByAccount[$accountId] = $data->formatFor($accountId);
-                }
-            }
+            [$autoSplitByAccount, $overrideByAccount, $formatByAccount] = $this->perAccountInputs($accountIds, $data);
 
             $attributes = [
                 'segments' => $data->segments,
@@ -542,7 +558,9 @@ class DraftService
     }
 
     /**
-     * Attach the given media (in order) to the post and detach any others.
+     * Attach the given media (in order) to the post and detach any others. Only
+     * unattached media or media this post already owns can be attached; an id
+     * that belongs to another post or a direct message is skipped, not moved.
      *
      * @param  list<string>  $mediaIds
      */
@@ -558,6 +576,8 @@ class DraftService
             PostMedia::withoutGlobalScopes()
                 ->where('workspace_id', $post->workspace_id)
                 ->whereKey($mediaId)
+                ->whereNull('direct_message_id')
+                ->where(fn (Builder $query): Builder => $query->whereNull('post_id')->orWhere('post_id', $post->id))
                 ->update(['post_id' => $post->id, 'position' => $position]);
         }
     }

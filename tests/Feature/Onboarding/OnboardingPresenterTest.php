@@ -2,6 +2,7 @@
 
 use App\Models\ConnectedAccount;
 use App\Models\Post;
+use App\Models\SyncPipeline;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
@@ -20,14 +21,14 @@ function ownerWithWorkspaceForOnboarding(): array
     return [$workspace, $user];
 }
 
-test('owner sees all four steps, none done on a fresh workspace', function () {
+test('owner sees all five steps, none done on a fresh workspace', function () {
     [$workspace, $user] = ownerWithWorkspaceForOnboarding();
 
     $data = OnboardingPresenter::make($workspace, $user);
 
-    expect($data['steps'])->toHaveCount(4)
+    expect($data['steps'])->toHaveCount(5)
         ->and(collect($data['steps'])->pluck('key')->all())
-        ->toBe(['connect_account', 'first_post', 'timezone', 'invite_teammate'])
+        ->toBe(['connect_account', 'enable_sync', 'first_post', 'timezone', 'invite_teammate'])
         ->and(collect($data['steps'])->every(fn ($s) => $s['done'] === false))->toBeTrue()
         ->and($data['complete'])->toBeFalse();
 });
@@ -49,7 +50,12 @@ test('read-only member sees no steps and is never complete', function () {
 test('non-timezone steps derive done-state from real data', function () {
     [$workspace, $user] = ownerWithWorkspaceForOnboarding();
 
-    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $destination = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
+    SyncPipeline::factory()->create([
+        'workspace_id' => $workspace->id,
+        'source_connected_account_id' => $source->id,
+    ])->destinations()->sync([$destination->id]);
     Post::factory()->create(['workspace_id' => $workspace->id, 'author_id' => $user->id]);
     WorkspaceInvitation::factory()->create(['workspace_id' => $workspace->id]);
 
@@ -58,6 +64,7 @@ test('non-timezone steps derive done-state from real data', function () {
 
     expect($steps['connect_account']['done'])->toBeTrue()
         ->and($steps['connect_account']['clickToComplete'])->toBeFalse()
+        ->and($steps['enable_sync']['done'])->toBeTrue()
         ->and($steps['first_post']['done'])->toBeTrue()
         ->and($steps['invite_teammate']['done'])->toBeTrue()
         // Timezone is click-to-complete: not done just because data exists.
@@ -69,7 +76,11 @@ test('timezone step completes only when recorded in progress', function () {
     [$workspace, $user] = ownerWithWorkspaceForOnboarding();
 
     // Everything except timezone is satisfied by data.
-    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    SyncPipeline::factory()->create([
+        'workspace_id' => $workspace->id,
+        'source_connected_account_id' => $source->id,
+    ]);
     Post::factory()->create(['workspace_id' => $workspace->id, 'author_id' => $user->id]);
     WorkspaceInvitation::factory()->create(['workspace_id' => $workspace->id]);
 
@@ -90,4 +101,19 @@ test('welcomed and dismissed mirror the workspace timestamps', function () {
 
     expect($data['welcomed'])->toBeTrue()
         ->and($data['dismissed'])->toBeFalse();
+});
+
+test('enable sync counts as done when recorded in progress, even without a pipeline', function () {
+    [$workspace, $user] = ownerWithWorkspaceForOnboarding();
+
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    Post::factory()->create(['workspace_id' => $workspace->id, 'author_id' => $user->id]);
+    WorkspaceInvitation::factory()->create(['workspace_id' => $workspace->id]);
+    $workspace->forceFill(['onboarding_progress' => ['timezone', 'enable_sync']])->save();
+
+    $data = OnboardingPresenter::make($workspace->fresh(), $user);
+
+    expect($workspace->syncPipelines()->exists())->toBeFalse()
+        ->and(collect($data['steps'])->keyBy('key')['enable_sync']['done'])->toBeTrue()
+        ->and($data['complete'])->toBeTrue();
 });

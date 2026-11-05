@@ -17,6 +17,7 @@ import {
     Clock,
     PenLine,
     Radio,
+    RefreshCw,
     UserPlus,
     X,
 } from '@/components/ui/icons';
@@ -31,6 +32,7 @@ type StepIconComponent = React.ComponentType<{ className?: string }>;
 
 const STEP_ICONS: Record<string, StepIconComponent> = {
     connect_account: Radio,
+    enable_sync: RefreshCw,
     first_post: PenLine,
     timezone: Clock,
     invite_teammate: UserPlus,

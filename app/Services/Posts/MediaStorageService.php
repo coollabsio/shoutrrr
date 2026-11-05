@@ -93,7 +93,7 @@ class MediaStorageService
      *
      * @throws RuntimeException if the download fails or the file is not a probeable MP4.
      */
-    public function storeVideoFromUrl(string $workspaceId, string $url): PostMedia
+    public function storeVideoFromUrl(string $workspaceId, string $url, ?string $altText = null): PostMedia
     {
         $temp = tempnam(sys_get_temp_dir(), 'video');
         if ($temp === false) {
@@ -125,6 +125,7 @@ class MediaStorageService
                 'width' => $meta['width'],
                 'height' => $meta['height'],
                 'duration_seconds' => $meta['duration_seconds'],
+                'alt_text' => $altText,
                 'position' => 0,
             ]);
         } finally {

@@ -12,7 +12,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('list_shares')]
 #[Description('List active (non-revoked, non-expired) share links for a post in the bound workspace.')]
 class ListSharesTool extends WorkspaceTool
 {

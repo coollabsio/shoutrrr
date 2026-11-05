@@ -11,8 +11,10 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('List connected social accounts (X, LinkedIn, Bluesky) in the bound workspace with their connection status.')]
+#[Name('list_connected_accounts')]
+#[Description('List the connected social accounts in the bound workspace with their platform and connection status. Use list_platforms for the platforms this instance supports.')]
 class ListConnectedAccountsTool extends WorkspaceTool
 {
     public function handle(Request $request): Response

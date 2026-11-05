@@ -14,7 +14,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('get_calendar')]
 #[Description('List scheduled and published posts for a calendar month (YYYY-MM), padded to a 6-week grid.')]
 class GetCalendarTool extends WorkspaceTool
 {

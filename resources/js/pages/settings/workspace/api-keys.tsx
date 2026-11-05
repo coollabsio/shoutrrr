@@ -160,7 +160,10 @@ export default function ApiKeys({ apiKeys }: Props) {
                         <CardTitle>API keys</CardTitle>
                         <CardDescription>
                             Call the Shoutrrr API from scripts, cron jobs, and
-                            integrations. Each key acts on this workspace only.
+                            agents. Write keys can use the idempotent
+                            publish-now and schedule-at intents. Each key acts
+                            on this workspace only. MCP setup lives on the
+                            Agentic home.
                         </CardDescription>
                         {apiKeys.length > 0 && (
                             <CardAction>

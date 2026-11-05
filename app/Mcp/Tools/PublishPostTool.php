@@ -15,7 +15,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('publish_post_now')]
 #[Description('Publish a post to its connected accounts immediately. Irreversible and outward-facing. Requires confirm=true. Publishing is asynchronous — poll get_post for per-target results.')]
 class PublishPostTool extends WorkspaceTool
 {

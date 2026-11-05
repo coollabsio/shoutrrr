@@ -99,4 +99,20 @@ abstract class WorkspaceTool extends Tool
             $consequence.' This action cannot be undone. Confirm with the human, then call again with confirm set to true.'
         );
     }
+
+    /**
+     * Same permission check the settings controllers use when there is no policy.
+     * Call after bindWorkspace().
+     */
+    protected function requirePermission(Request $request, string $permission): ?Response
+    {
+        $user = $request->user();
+        $workspaceId = Context::get('workspace_id');
+
+        if (! $user instanceof User || ! is_string($workspaceId) || ! $user->hasAllPermissions([$permission], $workspaceId)) {
+            return Response::error('You do not have permission to perform this action in this workspace.');
+        }
+
+        return null;
+    }
 }

@@ -70,8 +70,8 @@ function CommandInput({
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="h-8! bg-input/50">
+    <div data-slot="command-input-wrapper" data-chrome-search className="p-1 pb-0">
+      <InputGroup className="h-8! bg-input/50 shadow-none">
         <CommandPrimitive.Input
           ref={ref}
           data-slot="command-input"

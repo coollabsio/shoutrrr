@@ -9,9 +9,9 @@ use App\Http\Requests\PostingSchedule\UpdatePostingScheduleRequest;
 use App\Models\PostingSchedule;
 use App\Models\PostingScheduleSlot;
 use App\Models\User;
+use App\Services\Posts\PostingScheduleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -45,49 +45,17 @@ class PostingScheduleController extends Controller
         ]);
     }
 
-    public function update(UpdatePostingScheduleRequest $request): RedirectResponse
+    public function update(UpdatePostingScheduleRequest $request, PostingScheduleService $schedules): RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
         $workspace = $user->currentWorkspace;
         abort_if($workspace === null, 404);
 
-        /** @var array{slots?: list<array{weekday: int, hour: int, minute?: int}>} $data */
+        /** @var array{slots?: list<array{weekday: int, hour: int, minute?: int|null}>} $data */
         $data = $request->validated();
-        $slots = $data['slots'] ?? [];
 
-        DB::transaction(function () use ($workspace, $slots): void {
-            $schedule = PostingSchedule::query()->firstOrCreate(
-                ['workspace_id' => $workspace->id],
-            );
-
-            $schedule->slots()->delete();
-
-            $seen = [];
-            $position = 0;
-            $rows = [];
-
-            foreach ($slots as $slot) {
-                $minute = $slot['minute'] ?? 0;
-                $key = $slot['weekday'].':'.$slot['hour'].':'.$minute;
-
-                if (isset($seen[$key])) {
-                    continue;
-                }
-
-                $seen[$key] = true;
-                $rows[] = [
-                    'weekday' => $slot['weekday'],
-                    'hour' => $slot['hour'],
-                    'minute' => $minute,
-                    'position' => $position++,
-                ];
-            }
-
-            if ($rows !== []) {
-                $schedule->slots()->createMany($rows);
-            }
-        });
+        $schedules->update($workspace->id, null, $data['slots'] ?? []);
 
         return back()->with('success', 'Queue saved.');
     }

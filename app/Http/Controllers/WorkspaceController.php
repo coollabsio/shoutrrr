@@ -12,6 +12,7 @@ use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
 use App\Models\WorkspaceMembership;
 use App\Services\Workspace\WorkspaceInvitationService;
+use App\Support\ProductHome;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +43,7 @@ class WorkspaceController extends Controller
             $user->forceFill(['current_workspace_id' => $workspace->id])->save();
         });
 
-        return redirect()->route('dashboard')->with('success', 'Workspace created successfully.');
+        return ProductHome::redirect($user)->with('success', 'Workspace created successfully.');
     }
 
     public function switch(Request $request): RedirectResponse
@@ -58,7 +59,7 @@ class WorkspaceController extends Controller
 
         $user->forceFill(['current_workspace_id' => $request->input('workspace_id')])->save();
 
-        return redirect()->route('dashboard')->with('success', 'Workspace switched.');
+        return ProductHome::redirect($user)->with('success', 'Workspace switched.');
     }
 
     public function leave(Request $request, Workspace $workspace): RedirectResponse
@@ -84,7 +85,7 @@ class WorkspaceController extends Controller
             }
         });
 
-        return redirect()->route('dashboard')->with('success', 'You left the workspace.');
+        return ProductHome::redirect($user)->with('success', 'You left the workspace.');
     }
 
     public function destroy(Request $request, Workspace $workspace): RedirectResponse
@@ -123,7 +124,7 @@ class WorkspaceController extends Controller
             $workspace->delete(); // cascades memberships + invitations via FK
         });
 
-        return redirect()->route('dashboard')->with('success', 'Workspace deleted.');
+        return ProductHome::redirect($user)->with('success', 'Workspace deleted.');
     }
 
     public function transferOwnership(TransferOwnershipRequest $request, Workspace $workspace): RedirectResponse
@@ -169,8 +170,8 @@ class WorkspaceController extends Controller
             $result = app(WorkspaceInvitationService::class)->accept($invitation, $user);
 
             return $result->wasSuccessful()
-                ? redirect()->route('dashboard')->with('success', $result->message)
-                : redirect()->route('dashboard')->with('error', $result->message);
+                ? ProductHome::redirect($user)->with('success', $result->message)
+                : ProductHome::redirect($user)->with('error', $result->message);
         }
 
         return Inertia::render('auth/workspace-invitation', [

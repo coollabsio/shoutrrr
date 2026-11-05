@@ -165,6 +165,26 @@ function bindConnector(PublishResult|callable $result): void
 }
 
 /**
+ * Owner of a workspace with an MCP token. Write tools need owner permissions;
+ * bindTokenToWorkspace alone creates a member.
+ *
+ * @return array{0: User, 1: Workspace}
+ */
+function mcpOwner(): array
+{
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    WorkspaceMembership::factory()->owner()->create([
+        'workspace_id' => $workspace->id,
+        'user_id' => $user->id,
+    ]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    bindTokenToWorkspace($user, $workspace);
+
+    return [$user, $workspace];
+}
+
+/**
  * Create a Passport access token bound to the given workspace and install it
  * on the user so that WorkspaceTool::workspaceId() can resolve it via token().
  *

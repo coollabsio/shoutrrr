@@ -22,6 +22,17 @@ class RespondToReplyRequest extends FormRequest
     {
         /** @var PostTargetReply $reply */
         $reply = $this->route('reply');
+
+        return self::rulesFor($reply);
+    }
+
+    /**
+     * Shared with the MCP respond_to_reply tool.
+     *
+     * @return array<string, mixed>
+     */
+    public static function rulesFor(PostTargetReply $reply): array
+    {
         $max = $reply->target?->account?->maxTextLength() ?? $reply->platform->maxLength();
 
         // maxMedia() is the composer's per-post limit and says nothing about

@@ -42,6 +42,56 @@ final class NextSlotResolver
     }
 
     /**
+     * The next open slot, or the requested one when it is still open. A
+     * requested time that is not an open slot resolves to null.
+     */
+    public function pick(Workspace $workspace, ?string $requestedSlot): ?CarbonImmutable
+    {
+        $availableSlots = $this->availableSlots($workspace);
+
+        if ($requestedSlot === null) {
+            return $availableSlots[0] ?? null;
+        }
+
+        $requested = CarbonImmutable::parse($requestedSlot)->setTimezone('UTC')->toIso8601String();
+
+        foreach ($availableSlots as $slot) {
+            if ($slot->setTimezone('UTC')->toIso8601String() === $requested) {
+                return $slot;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The composer's "next slot" view: whether a schedule exists, the next open
+     * slots as ISO-8601 UTC strings, and the schedule's timezone.
+     *
+     * @return array{has_schedule: bool, slot: string|null, slots: list<string>, timezone: string}
+     */
+    public function summary(Workspace $workspace): array
+    {
+        /** @var PostingSchedule|null $schedule */
+        $schedule = PostingSchedule::query()
+            ->where('workspace_id', $workspace->id)
+            ->with('slots')
+            ->first();
+
+        $hasSchedule = $schedule !== null && $schedule->slots->isNotEmpty();
+        $slots = $hasSchedule
+            ? array_map(static fn (CarbonImmutable $slot): string => $slot->toIso8601String(), $this->availableSlots($workspace))
+            : [];
+
+        return [
+            'has_schedule' => $hasSchedule,
+            'slot' => $slots[0] ?? null,
+            'slots' => $slots,
+            'timezone' => $schedule !== null ? $schedule->timezone : 'UTC',
+        ];
+    }
+
+    /**
      * Resolve the next open future posting slots for the workspace, as UTC instants.
      *
      * Returns at most {@see self::TARGET_SLOTS} slots, ascending, scanning forward up

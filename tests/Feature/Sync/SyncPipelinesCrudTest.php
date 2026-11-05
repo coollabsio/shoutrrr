@@ -61,7 +61,7 @@ test('opting into tracking is ignored for a source on an unsupported platform', 
     ]);
 });
 
-test('a pipeline created without opting in does not track the source', function () {
+test('a pipeline created with track_source false does not track the source', function () {
     [, $workspace] = ownerActingIn();
     $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky]);
     $dest = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
@@ -70,6 +70,7 @@ test('a pipeline created without opting in does not track the source', function 
         'name' => 'No tracking',
         'source_connected_account_id' => $source->id,
         'destination_connected_account_ids' => [$dest->id],
+        'track_source' => false,
     ])->assertRedirect();
 
     $this->assertDatabaseMissing('connected_account_native_watches', [
@@ -120,7 +121,7 @@ test('creation rejects the source as its own destination', function () {
         'name' => 'Self',
         'source_connected_account_id' => $source->id,
         'destination_connected_account_ids' => [$source->id],
-    ])->assertSessionHasErrors('destination_connected_account_ids.0');
+    ])->assertSessionHasErrors(['destination_connected_account_ids' => 'The source account cannot also be a destination.']);
 
     expect(SyncPipeline::count())->toBe(0);
 });
@@ -189,6 +190,22 @@ test('the settings page renders', function () {
     $this->get('/sync')
         ->assertOk()
         ->assertInertia(fn ($page) => $page->component('sync')->has('accounts'));
+});
+
+test('the settings page keeps disabled pipeline accounts visible but not selectable', function () {
+    [, $workspace] = ownerActingIn();
+    $disabled = ConnectedAccount::factory()->disabled()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky]);
+    $enabled = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
+
+    $this->get('/sync')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('sync')
+            ->has('accounts', 2)
+            ->where('accounts', fn ($accounts) => collect($accounts)->firstWhere('id', $disabled->id)['enabled'] === false)
+            ->has('selectableAccounts', 1)
+            ->where('selectableAccounts.0.id', $enabled->id)
+            ->has('trackableAccounts', 0));
 });
 
 test('the settings page exposes native tracking data', function () {

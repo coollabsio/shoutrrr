@@ -2,7 +2,7 @@ import { Link } from '@inertiajs/react';
 
 import { index } from '@/routes/accounts';
 
-type Account = { handle: string; status: string };
+type Account = { handle: string; status: string; enabled: boolean };
 
 export function PipelineConnectionWarning({
     enabled,
@@ -12,7 +12,8 @@ export function PipelineConnectionWarning({
     accounts: (Account | undefined)[];
 }) {
     const unavailable = accounts.filter(
-        (account) => !account || account.status !== 'active',
+        (account) =>
+            !account || !account.enabled || account.status !== 'active',
     );
 
     if (!enabled || unavailable.length === 0) {
@@ -25,7 +26,7 @@ export function PipelineConnectionWarning({
             {unavailable
                 .map((account) => account?.handle ?? 'an unavailable account')
                 .join(', ')}
-            . Reconnect these accounts to resume affected syncs.{' '}
+            . Enable or reconnect these accounts to resume affected syncs.{' '}
             <Link href={index()} className="font-medium underline">
                 Check connected accounts
             </Link>

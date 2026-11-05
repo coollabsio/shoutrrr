@@ -7,7 +7,7 @@ export default function AppLogo() {
                 <AppLogoIcon className="size-6 text-primary" />
             </div>
             <div className="grid flex-1 text-left group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-[13px] leading-tight font-semibold tracking-tight">
+                <span className="truncate text-[15px] leading-tight font-bold tracking-tight">
                     Shoutrrr
                 </span>
             </div>

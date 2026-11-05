@@ -11,7 +11,10 @@ use App\Http\Middleware\EnsureMetricsEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\SetFortifyHome;
 use App\Http\Middleware\WorkspaceMiddleware;
+use App\Models\User;
+use App\Support\ProductHome;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -40,6 +43,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        $middleware->redirectUsersTo(function (Request $request): string {
+            $user = $request->user();
+
+            return ProductHome::url($user instanceof User ? $user : null);
+        });
+
         $middleware->alias([
             'engagement.enabled' => EnsureEngagementEnabled::class,
             'messages.enabled' => EnsureMessagesEnabled::class,
@@ -54,6 +63,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // the security headers onto the final response.
             SecurityHeaders::class,
             HandleAppearance::class,
+            SetFortifyHome::class,
             // WorkspaceMiddleware must run BEFORE HandleInertiaRequests: Inertia
             // resolves share() (which reads workspace-scoped shell data) inside
             // its own handle() before calling $next, so the workspace_id context

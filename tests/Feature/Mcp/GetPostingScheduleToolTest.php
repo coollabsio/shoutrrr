@@ -20,3 +20,14 @@ test('get_posting_schedule returns the workspace schedule and slots', function (
         ->assertSee('America/New_York')
         ->assertSee('"minute": 30');
 });
+
+test('get_posting_schedule returns a null timezone and no slots before a schedule exists', function (): void {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create();
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    bindTokenToWorkspace($user, $workspace);
+
+    ShoutrrrServer::actingAs($user)->tool(GetPostingScheduleTool::class, [])
+        ->assertOk()
+        ->assertSee(['"timezone": null', '"slots": []']);
+});

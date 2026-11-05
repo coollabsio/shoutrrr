@@ -9,4 +9,5 @@ enum PostOrigin: string
     case Composer = 'composer';
     case Sync = 'sync';
     case External = 'external';
+    case Agent = 'agent';
 }

@@ -115,8 +115,9 @@ export function WelcomeModal({ welcomed }: { welcomed: boolean }) {
                         </span>
                     </DialogTitle>
                     <DialogDescription>
-                        Write once, send everywhere. Connect a destination and
-                        your posts go out to every account at once.
+                        Post once, show up everywhere. Connect your accounts,
+                        then turn on sync: each post on one account is copied to
+                        your other accounts.
                     </DialogDescription>
                 </DialogHeader>
 

@@ -31,7 +31,7 @@ test('does not send verification notification if email is verified', function ()
 
     $this->actingAs($user)
         ->post(route('verification.send'))
-        ->assertRedirect(route('dashboard', absolute: false));
+        ->assertRedirect(route('agentic.home', absolute: false));
 
     Notification::assertNothingSent();
 });
@@ -44,7 +44,7 @@ test('does not send verification notification when mail delivery verification is
 
     $this->actingAs($user)
         ->post(route('verification.send'))
-        ->assertRedirect(route('dashboard', absolute: false));
+        ->assertRedirect(route('agentic.home', absolute: false));
 
     Notification::assertNothingSent();
 });

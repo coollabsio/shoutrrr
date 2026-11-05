@@ -14,7 +14,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('create_share_link')]
 #[Description('Create a share link for a post. Returns a public URL that can be shared without authentication.')]
 class CreateShareLinkTool extends WorkspaceTool
 {

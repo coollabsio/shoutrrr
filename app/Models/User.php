@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Casts\NotificationPreferencesCast;
 use App\Enums\InstanceRole;
 use App\Enums\SocialProvider;
+use App\Enums\UiMode;
 use App\Support\FileStorage;
 use App\Support\Notifications\NotificationPreferences;
 use Database\Factories\UserFactory;
@@ -41,14 +42,22 @@ use Override;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property NotificationPreferences|null $notification_preferences
+ * @property UiMode $ui_mode
  */
 #[Appends(['avatar'])]
-#[Fillable(['name', 'email', 'password', 'current_workspace_id', 'avatar_path', 'notification_preferences', 'instance_role'])]
+#[Fillable(['name', 'email', 'password', 'current_workspace_id', 'avatar_path', 'notification_preferences', 'instance_role', 'ui_mode'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasUuids, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'ui_mode' => 'agentic',
+    ];
 
     /**
      * Get the attributes that should be cast.
@@ -64,7 +73,13 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
             'two_factor_confirmed_at' => 'datetime',
             'notification_preferences' => NotificationPreferencesCast::class,
             'instance_role' => InstanceRole::class,
+            'ui_mode' => UiMode::class,
         ];
+    }
+
+    public function uiMode(): UiMode
+    {
+        return $this->ui_mode ?? UiMode::Agentic;
     }
 
     public function getAvatarAttribute(): string

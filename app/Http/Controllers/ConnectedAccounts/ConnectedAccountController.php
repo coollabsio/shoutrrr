@@ -4,26 +4,21 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\ConnectedAccounts;
 
-use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ConnectedAccount\UpdateAutoRepostRequest;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\BlueskyConnector;
+use App\Services\ConnectedAccounts\ConnectedAccountSettings;
 use App\Services\ConnectedAccounts\DiscordConnector;
-use App\Services\ConnectedAccounts\XAccountCapabilities;
-use App\Services\Publishing\TokenManager;
+use App\Services\ConnectedAccounts\XAccountTierRefresher;
 use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Date;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
-use Throwable;
 
 class ConnectedAccountController extends Controller
 {
@@ -31,8 +26,7 @@ class ConnectedAccountController extends Controller
         private readonly BlueskyConnector $connector,
         private readonly DiscordConnector $discord,
         private readonly AccountConnectionService $connections,
-        private readonly XAccountCapabilities $xCapabilities,
-        private readonly TokenManager $tokens,
+        private readonly XAccountTierRefresher $xTiers,
     ) {}
 
     public function index(Request $request): Response
@@ -204,37 +198,20 @@ class ConnectedAccountController extends Controller
         return redirect()->route('accounts.index')->with('success', 'Account reconnected.');
     }
 
-    public function makeDefault(Request $request, ConnectedAccount $account): RedirectResponse
+    public function makeDefault(Request $request, ConnectedAccount $account, ConnectedAccountSettings $settings): RedirectResponse
     {
         $request->user()->can('update', $account) ?: abort(403);
 
-        $workspace = $request->user()->currentWorkspace()->firstOrFail();
-
-        $workspace->forceFill([
-            'default_connected_account_id' => $account->id,
-        ])->save();
+        $settings->makeDefault($account);
 
         return redirect()->route('accounts.index')->with('success', "{$account->handle} is now the default account.");
     }
 
-    public function toggle(Request $request, ConnectedAccount $account): RedirectResponse
+    public function toggle(Request $request, ConnectedAccount $account, ConnectedAccountSettings $settings): RedirectResponse
     {
         $request->user()->can('update', $account) ?: abort(403);
 
-        DB::transaction(function () use ($request, $account): void {
-            $disabling = ! $account->isDisabled();
-
-            $account->forceFill([
-                'disabled_at' => $disabling ? Date::now() : null,
-            ])->save();
-
-            if ($disabling) {
-                $workspace = $request->user()->currentWorkspace()->first();
-                if ($workspace?->default_connected_account_id === $account->id) {
-                    $workspace->forceFill(['default_connected_account_id' => null])->save();
-                }
-            }
-        });
+        $settings->setEnabled($account, $account->isDisabled());
 
         $message = $account->isDisabled()
             ? "{$account->handle} is disabled."
@@ -243,32 +220,15 @@ class ConnectedAccountController extends Controller
         return redirect()->route('accounts.index')->with('success', $message);
     }
 
-    public function autoRepost(UpdateAutoRepostRequest $request, ConnectedAccount $account): RedirectResponse
+    public function autoRepost(UpdateAutoRepostRequest $request, ConnectedAccount $account, ConnectedAccountSettings $settings): RedirectResponse
     {
         $validated = $request->validated();
 
-        // Only meaningful on platforms with a native repost API.
-        $enabled = $account->platform->supportsRepost() && (bool) $validated['enabled'];
-
-        $updates = array_filter([
-            'enabled' => $enabled,
-            'min_percentile' => isset($validated['min_percentile']) ? (float) $validated['min_percentile'] : null,
-        ], fn ($value): bool => $value !== null);
-
-        // Read-modify-write at both levels: never overwrite the whole capabilities
-        // array, and never clobber a previously stored min_percentile when a
-        // request (e.g. a disable toggle) omits it. Serialize against concurrent
-        // capability writers (e.g. an X tier refresh) by locking the row for the
-        // read-modify-write so one save can't clobber the other's JSON column.
-        DB::transaction(function () use ($account, $updates): void {
-            $locked = ConnectedAccount::query()->lockForUpdate()->findOrFail($account->id);
-
-            $autoRepost = [...($locked->capabilities['auto_repost'] ?? []), ...$updates];
-
-            $locked->forceFill([
-                'capabilities' => [...($locked->capabilities ?? []), 'auto_repost' => $autoRepost],
-            ])->save();
-        });
+        $settings->setAutoRepost(
+            $account,
+            (bool) $validated['enabled'],
+            isset($validated['min_percentile']) ? (float) $validated['min_percentile'] : null,
+        );
 
         return redirect()->route('accounts.index')->with('success', 'Auto-repost updated.');
     }
@@ -281,46 +241,9 @@ class ConnectedAccountController extends Controller
             return back()->with('error', 'Only X accounts have a subscription tier.');
         }
 
-        try {
-            $credentials = $this->tokens->fresh($account);
-            $capabilities = $this->xCapabilities->tryForAccessToken(
-                isset($credentials['access_token']) ? (string) $credentials['access_token'] : null,
-            );
-        } catch (Throwable $exception) {
-            Log::warning('Could not refresh X account subscription tier.', [
-                'account_id' => $account->id,
-                'exception' => $exception::class,
-                'message' => $exception->getMessage(),
-            ]);
-
+        if (! $this->xTiers->refresh($account)) {
             return back()->with('error', "We couldn't refresh {$account->handle}'s X account tier. Your existing limit was kept.");
         }
-
-        if ($capabilities === null) {
-            return back()->with('error', "We couldn't refresh {$account->handle}'s X account tier. Your existing limit was kept.");
-        }
-
-        // Lock the row for the capabilities read-modify-write so a concurrent
-        // auto-repost toggle (which writes the same JSON column) can't clobber
-        // the freshly-fetched tier, or vice versa.
-        DB::transaction(function () use ($account, $capabilities): void {
-            $locked = ConnectedAccount::query()->lockForUpdate()->findOrFail($account->id);
-
-            $locked->forceFill([
-                'capabilities' => array_replace($locked->capabilities ?? [], $capabilities),
-                // A successful authenticated X lookup proves the stored access token
-                // is usable. Recover an account that a previous refresh failure left
-                // blocked, otherwise publishing would fail before it can use that
-                // still-valid token.
-                'status' => ConnectedAccountStatus::Active->value,
-                'refresh_failed_at' => null,
-                'refresh_failure_reason' => null,
-            ])->save();
-        });
-
-        // The write landed on the locked instance; refresh so the message reads
-        // the newly-stored tier rather than the pre-refresh capabilities.
-        $account->refresh();
 
         return back()->with(
             'success',
@@ -328,17 +251,11 @@ class ConnectedAccountController extends Controller
         );
     }
 
-    public function destroy(Request $request, ConnectedAccount $account): RedirectResponse
+    public function destroy(Request $request, ConnectedAccount $account, ConnectedAccountSettings $settings): RedirectResponse
     {
         $request->user()->can('delete', $account) ?: abort(403);
 
-        $workspace = $request->user()->currentWorkspace()->first();
-        if ($workspace?->default_connected_account_id === $account->id) {
-            $workspace->forceFill(['default_connected_account_id' => null])->save();
-        }
-
-        $account->secret()->delete();
-        $account->delete();
+        $settings->disconnect($account);
         Inertia::clearHistory();
 
         return redirect()->route('accounts.index')->with('success', 'Account disconnected.');

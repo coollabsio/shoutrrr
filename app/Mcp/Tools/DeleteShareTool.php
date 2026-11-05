@@ -12,7 +12,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('delete_share')]
 #[Description('Revoke a share link for a post in the bound workspace.')]
 class DeleteShareTool extends WorkspaceTool
 {

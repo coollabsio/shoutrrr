@@ -21,6 +21,16 @@ class RespondToMessageRequest extends FormRequest
         /** @var Conversation $conversation */
         $conversation = $this->route('conversation');
 
+        return self::rulesFor($conversation);
+    }
+
+    /**
+     * Shared with the MCP `reply_to_conversation` tool.
+     *
+     * @return array<string, mixed>
+     */
+    public static function rulesFor(Conversation $conversation): array
+    {
         // Zero on Bluesky, so `max:0` is what rejects an attachment there.
         $maxMedia = $conversation->platform->maxDirectMessageMedia();
 

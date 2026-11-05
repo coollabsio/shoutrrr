@@ -20,8 +20,12 @@ describe('pipeline connection warning', () => {
             <PipelineConnectionWarning
                 enabled
                 accounts={[
-                    { handle: '@heyandras', status: 'active' },
-                    { handle: '@heyandras.dev', status: 'needs_attention' },
+                    { handle: '@heyandras', status: 'active', enabled: true },
+                    {
+                        handle: '@heyandras.dev',
+                        status: 'needs_attention',
+                        enabled: true,
+                    },
                 ]}
             />,
         );
@@ -31,6 +35,21 @@ describe('pipeline connection warning', () => {
         expect(screen.getByRole('link')).toHaveAttribute('href', '/accounts');
         expect(screen.getByRole('link')).toHaveTextContent(
             'Check connected accounts',
+        );
+    });
+
+    it('names disabled accounts in an enabled pipeline', () => {
+        render(
+            <PipelineConnectionWarning
+                enabled
+                accounts={[
+                    { handle: '@acme', status: 'active', enabled: false },
+                    { handle: '@ok', status: 'active', enabled: true },
+                ]}
+            />,
+        );
+        expect(screen.getByRole('alert')).toHaveTextContent(
+            'Sync is blocked for @acme. Enable or reconnect',
         );
     });
 
@@ -47,7 +66,9 @@ describe('pipeline connection warning', () => {
             render(
                 <PipelineConnectionWarning
                     enabled={enabled}
-                    accounts={[{ handle: '@healthy', status: 'active' }]}
+                    accounts={[
+                        { handle: '@healthy', status: 'active', enabled: true },
+                    ]}
                 />,
             );
             expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -58,7 +79,13 @@ describe('pipeline connection warning', () => {
         render(
             <PipelineConnectionWarning
                 enabled={false}
-                accounts={[{ handle: '@offline', status: 'needs_attention' }]}
+                accounts={[
+                    {
+                        handle: '@offline',
+                        status: 'needs_attention',
+                        enabled: true,
+                    },
+                ]}
             />,
         );
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();

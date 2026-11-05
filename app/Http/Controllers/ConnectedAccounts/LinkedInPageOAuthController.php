@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\LinkedIn\LinkedInOrganizationDiscovery;
 use App\Services\ConnectedAccounts\LinkedIn\LinkedInOrganizationDiscoveryException;
+use App\Support\AccountConnectReturn;
 use App\Support\InstanceSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -68,6 +69,7 @@ class LinkedInPageOAuthController extends Controller
     public function redirect(Request $request): SymfonyRedirectResponse
     {
         $this->abortUnlessAvailable($request);
+        AccountConnectReturn::remember($request);
 
         // Stateless, like MetaConnectionController: the `auth` middleware plus the
         // explicit POST on the picker are the CSRF gates. `state` is echoed for
@@ -226,6 +228,6 @@ class LinkedInPageOAuthController extends Controller
 
     private function failed(string $message): RedirectResponse
     {
-        return redirect()->route('accounts.index')->with('error', $message);
+        return AccountConnectReturn::redirect()->with('error', $message);
     }
 }
