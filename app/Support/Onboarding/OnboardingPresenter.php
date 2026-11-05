@@ -57,7 +57,10 @@ class OnboardingPresenter
             OnboardingStep::Timezone => in_array($step->value, $progress, true),
             // Data-derived: done when the underlying thing actually exists.
             OnboardingStep::ConnectAccount => $workspace->connectedAccounts()->exists(),
-            OnboardingStep::EnableSync => $workspace->syncPipelines()->exists(),
+            // Also done when recorded in progress: workspaces that had finished
+            // onboarding before this step existed were grandfathered there.
+            OnboardingStep::EnableSync => in_array($step->value, $progress, true)
+                || $workspace->syncPipelines()->exists(),
             OnboardingStep::FirstPost => $workspace->posts()->exists(),
             OnboardingStep::InviteTeammate => $workspace->members()->count() >= 2
                 || $workspace->invitations()->exists(),

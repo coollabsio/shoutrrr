@@ -11,7 +11,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('list_account_sets')]
 #[Description('List saved account sets (named groups of connected accounts) in the bound workspace.')]
 class ListAccountSetsTool extends WorkspaceTool
 {

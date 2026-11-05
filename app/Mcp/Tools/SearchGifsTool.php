@@ -10,6 +10,7 @@ use App\Models\Post;
 use App\Services\Gifs\KlipyClient;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -41,16 +42,25 @@ class SearchGifsTool extends WorkspaceTool
             'page' => ['nullable', 'integer', 'min:1', 'max:50'],
         ]);
 
+        $catalog = $validated['catalog'] ?? 'gif';
+        $query = trim((string) ($validated['query'] ?? ''));
+        $page = $validated['page'] ?? 1;
+
         try {
-            $result = $klipy->browse($validated['catalog'] ?? 'gif', $validated['query'] ?? null, $validated['page'] ?? 1);
+            // Same key, TTL, and cached shape as the web GIF browser.
+            $result = Cache::remember(KlipyClient::browseCacheKey($catalog, $query, $page), KlipyClient::BROWSE_CACHE_SECONDS, static function () use ($klipy, $catalog, $query, $page): array {
+                $browsed = $klipy->browse($catalog, $query, $page);
+
+                return [
+                    'items' => array_map(static fn (GifItem $item): array => $item->toArray(), $browsed['items']),
+                    'has_next' => $browsed['has_next'],
+                ];
+            });
         } catch (RuntimeException) {
             return Response::error('GIF search is unavailable right now.');
         }
 
-        return Response::text(json_encode([
-            'items' => array_map(static fn (GifItem $item): array => $item->toArray(), $result['items']),
-            'has_next' => $result['has_next'],
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+        return Response::text(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
     /**

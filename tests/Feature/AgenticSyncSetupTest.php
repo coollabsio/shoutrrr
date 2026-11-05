@@ -1,8 +1,12 @@
 <?php
 
 use App\Enums\Platform;
+use App\Enums\PostOrigin;
+use App\Enums\PostStatus;
 use App\Models\ConnectedAccount;
+use App\Models\Post;
 use App\Models\SyncPipeline;
+use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function configureXOAuth(): void
@@ -108,4 +112,32 @@ test('a new sync pipeline tracks its source by default', function () {
     ])->assertRedirect();
 
     $this->assertDatabaseHas('connected_account_native_watches', ['connected_account_id' => $source->id]);
+});
+
+test('agentic home shows the empty state when the current workspace is not the user\'s', function () {
+    [, $foreign] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $foreign->id]);
+    $destination = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $foreign->id]);
+    SyncPipeline::factory()->create([
+        'workspace_id' => $foreign->id,
+        'source_connected_account_id' => $source->id,
+    ])->destinations()->sync([$destination->id]);
+    Post::factory()->create([
+        'workspace_id' => $foreign->id,
+        'origin' => PostOrigin::Sync,
+        'status' => PostStatus::Published,
+    ]);
+
+    $outsider = User::factory()->create(['current_workspace_id' => $foreign->id]);
+
+    $this->actingAs($outsider)
+        ->get(route('agentic.home'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('agentic/home')
+            ->where('accounts', [])
+            ->where('recent_posts', null)
+            ->where('sync.total', 0)
+            ->where('sync.suggestion', null)
+        );
 });

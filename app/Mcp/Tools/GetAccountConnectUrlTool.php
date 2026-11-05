@@ -20,7 +20,7 @@ class GetAccountConnectUrlTool extends WorkspaceTool
 {
     public function handle(Request $request, AccountConnectLinks $links): Response
     {
-        if ($this->bindWorkspace($request) === null) {
+        if (($workspaceId = $this->bindWorkspace($request)) === null) {
             return Response::error('This connection is not bound to a workspace. Reconnect and select a workspace.');
         }
 
@@ -34,7 +34,7 @@ class GetAccountConnectUrlTool extends WorkspaceTool
             'pds_url' => ['nullable', 'url', 'max:255'],
         ]);
 
-        $link = $links->describe($validated['platform'], [
+        $link = $links->forWorkspace($workspaceId)->describe($validated['platform'], [
             'identifier' => $validated['identifier'] ?? null,
             'pds_url' => $validated['pds_url'] ?? null,
         ]);

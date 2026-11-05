@@ -165,16 +165,6 @@ function bindConnector(PublishResult|callable $result): void
 }
 
 /**
- * Create a Passport access token bound to the given workspace and install it
- * on the user so that WorkspaceTool::workspaceId() can resolve it via token().
- *
- * We create the Token model directly (bypassing the OAuth flow) because the
- * full personal-access grant requires a running authorization server. We then
- * wrap it in an AccessToken (the ScopeAuthorizable that withAccessToken expects),
- * with 'oauth_access_token_id' set so AccessToken::__get('id') proxies to the
- * underlying Token id, which is what WorkspaceTool::workspaceId() reads.
- */
-/**
  * Owner of a workspace with an MCP token. Write tools need owner permissions;
  * bindTokenToWorkspace alone creates a member.
  *
@@ -194,6 +184,16 @@ function mcpOwner(): array
     return [$user, $workspace];
 }
 
+/**
+ * Create a Passport access token bound to the given workspace and install it
+ * on the user so that WorkspaceTool::workspaceId() can resolve it via token().
+ *
+ * We create the Token model directly (bypassing the OAuth flow) because the
+ * full personal-access grant requires a running authorization server. We then
+ * wrap it in an AccessToken (the ScopeAuthorizable that withAccessToken expects),
+ * with 'oauth_access_token_id' set so AccessToken::__get('id') proxies to the
+ * underlying Token id, which is what WorkspaceTool::workspaceId() reads.
+ */
 function bindTokenToWorkspace(User $user, Workspace $workspace): void
 {
     // A real MCP grant is only ever issued for a workspace the user belongs to

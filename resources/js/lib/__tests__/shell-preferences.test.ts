@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+    applyShellPreferences,
     customThemePresets,
     parseCustomTheme,
     readShellPreferences,
@@ -19,6 +23,95 @@ function memoryStorage() {
         clear: () => values.clear(),
     };
 }
+
+const themeVariables = [
+    '--theme-bg',
+    '--theme-text',
+    '--theme-sidebar',
+    '--theme-sidebar-text',
+    '--theme-selected',
+    '--theme-selected-text',
+    '--theme-accent',
+    '--theme-accent-foreground',
+];
+
+/** Runs the pre-paint inline script from the Blade partial against the current localStorage. */
+function runPrePaintScript(): void {
+    const blade = readFileSync(
+        resolve(
+            import.meta.dirname,
+            '../../../views/partials/theme-script.blade.php',
+        ),
+        'utf8',
+    );
+    const body = blade
+        .match(/<script[^>]*>([\s\S]*)<\/script>/)![1]
+        .replace(/\{\{[^}]*\}\}/g, 'system');
+
+    // Evaluates the repo's own inline script; jsdom does not run injected <script> tags here.
+    // oxlint-disable-next-line no-implied-eval
+    new Function(body)();
+}
+
+function resetRoot(): void {
+    const root = document.documentElement;
+    root.removeAttribute('style');
+    root.removeAttribute('class');
+    delete root.dataset.theme;
+}
+
+function paintedTheme(): Record<string, string | boolean> {
+    const root = document.documentElement;
+
+    return {
+        dark: root.classList.contains('dark'),
+        ...Object.fromEntries(
+            themeVariables.map((name) => [
+                name,
+                root.style.getPropertyValue(name),
+            ]),
+        ),
+    };
+}
+
+describe('pre-paint theme script', () => {
+    beforeEach(() => {
+        vi.stubGlobal('localStorage', memoryStorage());
+        resetRoot();
+    });
+
+    it.each(['#f2458f', '#bd93f9', '#2f81f7', '#808080', '#0a0a0a', '#ffffff'])(
+        'paints custom color %s the same way hydration does',
+        (color) => {
+            localStorage.setItem('theme', 'custom');
+            localStorage.setItem(
+                'customTheme',
+                [color, color, color, color].join(','),
+            );
+
+            runPrePaintScript();
+            const prePaint = paintedTheme();
+            resetRoot();
+            applyShellPreferences(readShellPreferences());
+
+            expect(prePaint).toEqual(paintedTheme());
+        },
+    );
+
+    it('falls back to the same default swatch as hydration without a saved custom theme', () => {
+        localStorage.setItem('theme', 'custom');
+
+        runPrePaintScript();
+        const prePaint = paintedTheme();
+        resetRoot();
+        applyShellPreferences(readShellPreferences());
+
+        expect(prePaint).toEqual(paintedTheme());
+        expect(prePaint['--theme-accent']).toBe(
+            customThemePresets[0].swatch.accent,
+        );
+    });
+});
 
 describe('shell preferences', () => {
     beforeEach(() => {

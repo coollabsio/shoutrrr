@@ -63,6 +63,7 @@ test('schedule_at creates a scheduled post', function () {
     $workspace = Workspace::factory()->create();
     $user->forceFill(['current_workspace_id' => $workspace->id])->save();
     bindTokenToWorkspace($user, $workspace);
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
 
     $response = ShoutrrrServer::actingAs($user)->tool(ScheduleAtTool::class, [
         'text' => 'Later',
@@ -141,6 +142,7 @@ test('publish_now rejects media from another workspace before creating a post', 
 
 test('schedule_at schedules a thread', function () {
     [$user, $workspace] = mcpOwner();
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
 
     ShoutrrrServer::actingAs($user)->tool(ScheduleAtTool::class, [
         'segments' => ['later one', 'later two'],
@@ -152,4 +154,38 @@ test('schedule_at schedules a thread', function () {
     $post = Post::query()->where('workspace_id', $workspace->id)->sole();
     expect($post->status)->toBe(PostStatus::Scheduled)
         ->and($post->segments)->toBe(['later one', 'later two']);
+});
+
+test('publish_now replays a post whose media it already attached', function () {
+    Queue::fake();
+    [$user, $workspace] = mcpOwner();
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $media = PostMedia::factory()->for($workspace)->create(['post_id' => null]);
+
+    $arguments = [
+        'text' => 'With an image',
+        'media_ids' => [$media->id],
+        'idempotency_key' => 'mcp-media-replay',
+        'confirm' => true,
+        'destination' => ['kind' => 'all'],
+    ];
+
+    ShoutrrrServer::actingAs($user)->tool(PublishNowTool::class, $arguments)->assertOk();
+    ShoutrrrServer::actingAs($user)->tool(PublishNowTool::class, $arguments)->assertOk()->assertSee('replayed');
+
+    expect(Post::query()->where('workspace_id', $workspace->id)->count())->toBe(1);
+    Queue::assertPushed(PublishPostTarget::class, 1);
+});
+
+test('schedule_at rejects a destination with no usable account', function () {
+    [$user, $workspace] = mcpOwner();
+
+    ShoutrrrServer::actingAs($user)->tool(ScheduleAtTool::class, [
+        'text' => 'Nowhere',
+        'idempotency_key' => 'mcp-sched-empty',
+        'scheduled_at' => now()->addDay()->toIso8601String(),
+        'destination' => ['kind' => 'all'],
+    ])->assertHasErrors(['Select at least one account to schedule.']);
+
+    expect(Post::query()->where('workspace_id', $workspace->id)->count())->toBe(0);
 });

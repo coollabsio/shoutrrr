@@ -102,3 +102,18 @@ test('welcomed and dismissed mirror the workspace timestamps', function () {
     expect($data['welcomed'])->toBeTrue()
         ->and($data['dismissed'])->toBeFalse();
 });
+
+test('enable sync counts as done when recorded in progress, even without a pipeline', function () {
+    [$workspace, $user] = ownerWithWorkspaceForOnboarding();
+
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    Post::factory()->create(['workspace_id' => $workspace->id, 'author_id' => $user->id]);
+    WorkspaceInvitation::factory()->create(['workspace_id' => $workspace->id]);
+    $workspace->forceFill(['onboarding_progress' => ['timezone', 'enable_sync']])->save();
+
+    $data = OnboardingPresenter::make($workspace->fresh(), $user);
+
+    expect($workspace->syncPipelines()->exists())->toBeFalse()
+        ->and(collect($data['steps'])->keyBy('key')['enable_sync']['done'])->toBeTrue()
+        ->and($data['complete'])->toBeTrue();
+});

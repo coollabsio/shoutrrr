@@ -279,3 +279,21 @@ test('engagement tools are refused when engagement is off on the instance', func
     ShoutrrrServer::actingAs($this->user)->tool(ListRepliesTool::class, [])
         ->assertHasErrors(['Engagement is turned off']);
 });
+
+test('respond_to_reply matches the web limit of 30 replies per minute', function (): void {
+    fakeMcpEngagementConnector(fn ($c) => $c->shouldReceive('postReply')->times(30)->andReturn(ReplyPostResult::rateLimited('slow down')));
+
+    foreach (range(1, 30) as $_) {
+        ShoutrrrServer::actingAs($this->user)->tool(RespondToReplyTool::class, [
+            'reply_id' => $this->reply->id,
+            'text' => 'Thanks!',
+            'confirm' => true,
+        ])->assertHasErrors(['slow down']);
+    }
+
+    ShoutrrrServer::actingAs($this->user)->tool(RespondToReplyTool::class, [
+        'reply_id' => $this->reply->id,
+        'text' => 'Thanks!',
+        'confirm' => true,
+    ])->assertHasErrors(['Too many replies.']);
+});

@@ -16,7 +16,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('queue_post')]
 #[Description('Schedule a post into the next open slot of the workspace posting schedule, or into a specific open slot from get_next_slot. The returned post.scheduled_at is the chosen slot.')]
 class QueuePostTool extends WorkspaceTool
 {

@@ -41,6 +41,11 @@ class UpdateMediaAltTool extends WorkspaceTool
             return $denied;
         }
 
+        // The recipient already received this file; its alt text is part of a sent message.
+        if ($media->direct_message_id !== null) {
+            return Response::error('This media was already sent in a direct message and can no longer be changed.');
+        }
+
         if ($post instanceof Post && ! $post->status->isEditable()) {
             return Response::error('This post can no longer be edited.');
         }

@@ -13,6 +13,7 @@ use App\Mcp\Tools\UpdateSyncPipelineTool;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountNativeWatch;
 use App\Models\PostingSchedule;
+use App\Models\PostingScheduleSlot;
 use App\Models\SyncPipeline;
 use App\Models\User;
 use App\Models\Workspace;
@@ -139,4 +140,46 @@ test('set_native_tracking reports the plan cap as a tool error', function (): vo
     ])->assertHasErrors(["You've reached your plan's limit of 1 tracked accounts."]);
 
     expect(ConnectedAccountNativeWatch::query()->where('connected_account_id', $next->id)->exists())->toBeFalse();
+});
+
+test('update_posting_schedule requires confirm before removing existing slots', function (): void {
+    [$user, $workspace] = mcpOwner();
+    $schedule = PostingSchedule::factory()->create(['workspace_id' => $workspace->id, 'timezone' => 'UTC']);
+    PostingScheduleSlot::factory()->create(['posting_schedule_id' => $schedule->id, 'weekday' => 1, 'hour' => 9, 'minute' => 0, 'position' => 0]);
+    PostingScheduleSlot::factory()->create(['posting_schedule_id' => $schedule->id, 'weekday' => 2, 'hour' => 10, 'minute' => 0, 'position' => 1]);
+
+    ShoutrrrServer::actingAs($user)->tool(UpdatePostingScheduleTool::class, ['slots' => []])
+        ->assertHasErrors(['This will remove 2 existing queue slots.']);
+    ShoutrrrServer::actingAs($user)->tool(UpdatePostingScheduleTool::class, ['slots' => [['weekday' => 1, 'hour' => 9]]])
+        ->assertHasErrors(['This will remove 1 existing queue slot.']);
+    expect($schedule->slots()->count())->toBe(2);
+
+    ShoutrrrServer::actingAs($user)->tool(UpdatePostingScheduleTool::class, ['slots' => [], 'confirm' => true])
+        ->assertOk()
+        ->assertSee('"slots": []');
+    expect($schedule->slots()->count())->toBe(0);
+});
+
+test('update_posting_schedule adds slots or changes the timezone without confirm', function (): void {
+    [$user, $workspace] = mcpOwner();
+    $schedule = PostingSchedule::factory()->create(['workspace_id' => $workspace->id, 'timezone' => 'UTC']);
+    PostingScheduleSlot::factory()->create(['posting_schedule_id' => $schedule->id, 'weekday' => 1, 'hour' => 9, 'minute' => 0, 'position' => 0]);
+
+    ShoutrrrServer::actingAs($user)->tool(UpdatePostingScheduleTool::class, ['timezone' => 'Europe/Budapest'])->assertOk();
+    ShoutrrrServer::actingAs($user)->tool(UpdatePostingScheduleTool::class, [
+        'slots' => [['weekday' => 1, 'hour' => 9, 'minute' => 0], ['weekday' => 3, 'hour' => 14]],
+    ])->assertOk();
+
+    expect($schedule->fresh()->timezone)->toBe('Europe/Budapest')
+        ->and($schedule->slots()->count())->toBe(2);
+});
+
+test('update_posting_schedule validates before asking for confirm', function (): void {
+    [$user, $workspace] = mcpOwner();
+    $schedule = PostingSchedule::factory()->create(['workspace_id' => $workspace->id, 'timezone' => 'UTC']);
+    PostingScheduleSlot::factory()->create(['posting_schedule_id' => $schedule->id, 'weekday' => 1, 'hour' => 9, 'minute' => 0, 'position' => 0]);
+
+    ShoutrrrServer::actingAs($user)->tool(UpdatePostingScheduleTool::class, ['slots' => [['weekday' => 9, 'hour' => 9]]])
+        ->assertHasErrors(['weekday']);
+    expect($schedule->slots()->count())->toBe(1);
 });

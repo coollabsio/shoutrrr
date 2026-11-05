@@ -28,7 +28,21 @@ class KlipyClient
     /** Mime per file-format key Klipy returns. */
     private const array MIMES = ['gif' => 'image/gif', 'webp' => 'image/webp', 'mp4' => 'video/mp4'];
 
+    /** Browse results are cached briefly; trending and popular searches repeat across users. */
+    public const int BROWSE_CACHE_SECONDS = 60;
+
     public function __construct(private readonly HttpFactory $http) {}
+
+    /**
+     * Cache key shared by the web GIF browser and the MCP search tool, so both
+     * reuse one cached Klipy response.
+     */
+    public static function browseCacheKey(string $catalog, ?string $query, int $page): string
+    {
+        $rating = (string) config('services.klipy.rating', 'pg-13');
+
+        return "gifs:{$catalog}:{$rating}:{$page}:".md5(trim((string) $query));
+    }
 
     public function configured(): bool
     {

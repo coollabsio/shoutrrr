@@ -22,6 +22,7 @@ use Override;
  * @property string $idempotency_key
  * @property AgentIntentAction $action
  * @property string $request_hash
+ * @property Carbon|null $dispatched_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -46,6 +47,7 @@ class AgentIntent extends Model
     {
         return [
             'action' => AgentIntentAction::class,
+            'dispatched_at' => 'datetime',
         ];
     }
 

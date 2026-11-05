@@ -11,7 +11,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('list_workspaces')]
 #[Description('List the workspace this connection is bound to plus the users other workspaces. Reconnect to operate on a different workspace.')]
 class ListWorkspacesTool extends WorkspaceTool
 {

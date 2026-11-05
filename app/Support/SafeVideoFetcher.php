@@ -9,6 +9,7 @@ use App\Support\Concerns\PinsCurlResolution;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -20,6 +21,12 @@ use RuntimeException;
 class SafeVideoFetcher
 {
     use PinsCurlResolution;
+
+    /**
+     * One message for refused connections and HTTP errors alike, so the
+     * caller cannot use the fetcher to tell open ports from closed ones.
+     */
+    private const string DOWNLOAD_FAILED = 'Could not download the video.';
 
     public function __construct(private readonly HttpFactory $http) {}
 
@@ -123,7 +130,7 @@ class SafeVideoFetcher
         }
 
         $host = strtolower(trim($rawHost, '[]'));
-        $ips = $this->resolveValidatedIps($host);
+        $ips = PublicIp::resolve($host);
 
         try {
             $response = $this->http
@@ -135,63 +142,18 @@ class SafeVideoFetcher
                     ...$options,
                 ])
                 ->get($url);
-        } catch (ConnectionException) {
-            throw new RuntimeException('Could not connect to the video host.');
+        } catch (ConnectionException $e) {
+            Log::info('Video download failed to connect.', ['url' => $url, 'error' => $e->getMessage()]);
+
+            throw new RuntimeException(self::DOWNLOAD_FAILED);
         }
 
         if (! $response->successful()) {
-            throw new RuntimeException('Could not download the clip (HTTP '.$response->status().').');
+            Log::info('Video download returned an error status.', ['url' => $url, 'status' => $response->status()]);
+
+            throw new RuntimeException(self::DOWNLOAD_FAILED);
         }
 
         return $response;
-    }
-
-    // --- SSRF helpers: copied verbatim from SafeImageFetcher, except
-    // pinnedResolution(), shared via the PinsCurlResolution trait -----------
-
-    /**
-     * Resolve a hostname (or accept an IP literal) and reject if any resolved
-     * address is private or reserved.
-     *
-     * @return non-empty-list<string>
-     *
-     * @throws RuntimeException
-     */
-    private function resolveValidatedIps(string $host): array
-    {
-        if ($host === 'localhost' || str_ends_with($host, '.local') || str_ends_with($host, '.internal')) {
-            throw new RuntimeException('That host is not allowed.');
-        }
-
-        // If the host is already an IP literal, validate it directly. Otherwise
-        // resolve A (IPv4) and AAAA (IPv6) records.
-        $ips = filter_var($host, FILTER_VALIDATE_IP) !== false
-            ? [$host]
-            : array_merge(gethostbynamel($host) ?: [], $this->resolveAaaa($host));
-
-        if ($ips === []) {
-            throw new RuntimeException('That host could not be resolved.');
-        }
-
-        foreach ($ips as $ip) {
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-                throw new RuntimeException('That host resolves to a private or reserved address.');
-            }
-        }
-
-        return $ips;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function resolveAaaa(string $host): array
-    {
-        $records = @dns_get_record($host, DNS_AAAA) ?: [];
-
-        return array_values(array_filter(array_map(
-            static fn (array $r): ?string => $r['ipv6'] ?? null,
-            $records,
-        )));
     }
 }

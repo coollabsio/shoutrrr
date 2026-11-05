@@ -10,6 +10,7 @@ use App\Services\Posts\PostDuplicator;
 use App\Support\PostView;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -19,6 +20,9 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description('Copy a published, partial, failed, or missed post into a new draft, including its text, media, destination, and per-account settings. Returns the new draft.')]
 class DuplicatePostTool extends WorkspaceTool
 {
+    /** Mirrors the Classic route's throttle:30,1 on posts.duplicate. */
+    private const int MAX_ATTEMPTS_PER_MINUTE = 30;
+
     public function handle(Request $request, PostDuplicator $duplicator): Response
     {
         if ($this->bindWorkspace($request) === null) {
@@ -39,6 +43,14 @@ class DuplicatePostTool extends WorkspaceTool
         if (! $post->status->isDuplicable()) {
             return Response::error('Only published, partial, failed, or missed posts can be copied. Edit a draft or scheduled post with update_post instead.');
         }
+
+        $limiterKey = 'mcp:duplicate-post:'.$request->user()?->getAuthIdentifier();
+
+        if (RateLimiter::tooManyAttempts($limiterKey, self::MAX_ATTEMPTS_PER_MINUTE)) {
+            return Response::error('Too many post copies. Try again in '.RateLimiter::availableIn($limiterKey).' seconds.');
+        }
+
+        RateLimiter::hit($limiterKey, 60);
 
         $draft = $duplicator->duplicate($post);
 

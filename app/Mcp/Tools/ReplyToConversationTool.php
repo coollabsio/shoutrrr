@@ -12,6 +12,7 @@ use App\Services\Messaging\ConversationReplier;
 use App\Support\MessageListItem;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -22,6 +23,9 @@ use Laravel\Mcp\Server\Attributes\Name;
 class ReplyToConversationTool extends WorkspaceTool
 {
     use OpensInbox;
+
+    /** Mirrors the Classic route's throttle:30,1 on messages.respond. */
+    private const int MAX_ATTEMPTS_PER_MINUTE = 30;
 
     public function handle(Request $request, ConversationReplier $replier): Response
     {
@@ -41,6 +45,14 @@ class ReplyToConversationTool extends WorkspaceTool
         if ($unconfirmed = $this->requireConfirmation($request, "This will send a direct message to {$recipient}.")) {
             return $unconfirmed;
         }
+
+        $limiterKey = 'mcp:reply-to-conversation:'.$request->user()?->getAuthIdentifier();
+
+        if (RateLimiter::tooManyAttempts($limiterKey, self::MAX_ATTEMPTS_PER_MINUTE)) {
+            return Response::error('Too many direct messages. Try again in '.RateLimiter::availableIn($limiterKey).' seconds.');
+        }
+
+        RateLimiter::hit($limiterKey, 60);
 
         /** @var list<string> $mediaIds */
         $mediaIds = $validated['media'] ?? [];

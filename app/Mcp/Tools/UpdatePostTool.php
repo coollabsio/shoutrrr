@@ -17,7 +17,9 @@ use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('update_post')]
 #[Description('Update a draft post: text, destination, per-account overrides, and attached media. Pass expected_updated_at (from get_post) for optimistic concurrency; a mismatch returns a stale-write error.')]
 class UpdatePostTool extends WorkspaceTool
 {

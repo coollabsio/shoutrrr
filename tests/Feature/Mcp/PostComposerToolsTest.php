@@ -9,6 +9,9 @@ use App\Mcp\Tools\DuplicatePostTool;
 use App\Mcp\Tools\GetNextSlotTool;
 use App\Mcp\Tools\SearchGifsTool;
 use App\Mcp\Tools\UpdateMediaAltTool;
+use App\Models\ConnectedAccount;
+use App\Models\Conversation;
+use App\Models\DirectMessage;
 use App\Models\Post;
 use App\Models\PostingSchedule;
 use App\Models\PostingScheduleSlot;
@@ -130,6 +133,22 @@ test('add_post_video reports a rejected download', function (): void {
     expect(PostMedia::query()->count())->toBe(0);
 });
 
+test('add_post_video is limited to 5 downloads per minute per user', function (): void {
+    [$user] = mcpOwner();
+
+    $fetcher = Mockery::mock(SafeVideoFetcher::class);
+    $fetcher->shouldReceive('fetchToFile')->times(5)->andThrow(new RuntimeException('Could not download the video.'));
+    app()->instance(SafeVideoFetcher::class, $fetcher);
+
+    foreach (range(1, 5) as $attempt) {
+        ShoutrrrServer::actingAs($user)->tool(AddPostVideoTool::class, ['url' => 'https://example.com/clip.mp4'])
+            ->assertHasErrors(['Could not download the video.']);
+    }
+
+    ShoutrrrServer::actingAs($user)->tool(AddPostVideoTool::class, ['url' => 'https://example.com/clip.mp4'])
+        ->assertHasErrors(['Too many video downloads. Try again in']);
+});
+
 test('update_media_alt sets alt text on library and draft media', function (): void {
     [$user, $workspace] = mcpOwner();
     $library = PostMedia::factory()->for($workspace)->create(['post_id' => null, 'alt_text' => null]);
@@ -230,4 +249,51 @@ test('attach_gif refuses a variant off the klipy cdn', function (): void {
     ])->assertHasErrors(['That is not a supported GIF source.']);
 
     expect(PostMedia::query()->count())->toBe(0);
+});
+
+test('duplicate_post matches the web limit of 30 copies per minute', function (): void {
+    [$user, $workspace] = mcpOwner();
+    $source = Post::factory()->for($workspace)->create(['status' => PostStatus::Published]);
+
+    foreach (range(1, 30) as $_) {
+        ShoutrrrServer::actingAs($user)->tool(DuplicatePostTool::class, ['post_id' => $source->id])->assertOk();
+    }
+
+    ShoutrrrServer::actingAs($user)->tool(DuplicatePostTool::class, ['post_id' => $source->id])
+        ->assertHasErrors(['Too many post copies.']);
+
+    expect(Post::query()->where('workspace_id', $workspace->id)->count())->toBe(31);
+});
+
+test('search_gifs serves a repeated search from the shared browse cache', function (): void {
+    config()->set('services.klipy.key', 'test-key');
+    Http::fake(['https://api.klipy.com/*' => Http::response([
+        'result' => true,
+        'data' => ['has_next' => false, 'data' => [[
+            'id' => 1,
+            'slug' => 'yay-1',
+            'title' => 'Yay',
+            'file' => ['sm' => ['gif' => ['url' => 'https://static.klipy.com/sm.gif', 'width' => 120, 'height' => 90, 'size' => 1000]]],
+        ]]],
+    ])]);
+    [$user] = mcpOwner();
+
+    ShoutrrrServer::actingAs($user)->tool(SearchGifsTool::class, ['query' => 'yay'])->assertOk()->assertSee('"slug": "yay-1"');
+    ShoutrrrServer::actingAs($user)->tool(SearchGifsTool::class, ['query' => 'yay'])->assertOk()->assertSee('"slug": "yay-1"');
+    $this->actingAs($user)->getJson('/gifs/gif?q=yay')->assertOk()->assertJsonPath('items.0.slug', 'yay-1');
+
+    Http::assertSentCount(1);
+});
+
+test('update_media_alt refuses media already sent in a direct message', function (): void {
+    [$user, $workspace] = mcpOwner();
+    $account = ConnectedAccount::factory()->for($workspace)->create();
+    $conversation = Conversation::factory()->for($account, 'account')->create(['workspace_id' => $workspace->id]);
+    $message = DirectMessage::factory()->for($conversation)->create(['workspace_id' => $workspace->id]);
+    $sent = PostMedia::factory()->for($workspace)->create(['direct_message_id' => $message->id, 'alt_text' => 'kept']);
+
+    ShoutrrrServer::actingAs($user)->tool(UpdateMediaAltTool::class, ['media_id' => $sent->id, 'alt_text' => 'new'])
+        ->assertHasErrors(['This media was already sent in a direct message and can no longer be changed.']);
+
+    expect($sent->fresh()->alt_text)->toBe('kept');
 });

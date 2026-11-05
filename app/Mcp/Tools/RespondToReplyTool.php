@@ -11,6 +11,7 @@ use App\Services\Engagement\ReplyInbox;
 use App\Support\ReplyListItem;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -20,6 +21,9 @@ use Laravel\Mcp\Server\Attributes\Name;
 #[Description('Publicly reply to an inbound reply from the account that published the post. Text-only replies post immediately; replies with media are queued (send_status "sending"). Requires confirm=true.')]
 class RespondToReplyTool extends EngagementTool
 {
+    /** Mirrors the Classic route's throttle:30,1 on engagement.respond. */
+    private const int MAX_ATTEMPTS_PER_MINUTE = 30;
+
     public function handle(Request $request, ReplyInbox $inbox): Response
     {
         if ($error = $this->bindEngagement($request)) {
@@ -39,6 +43,14 @@ class RespondToReplyTool extends EngagementTool
         if ($unconfirmed = $this->requireConfirmation($request, 'This will publish a public reply on '.$reply->platform->value.'.')) {
             return $unconfirmed;
         }
+
+        $limiterKey = 'mcp:respond-to-reply:'.$request->user()?->getAuthIdentifier();
+
+        if (RateLimiter::tooManyAttempts($limiterKey, self::MAX_ATTEMPTS_PER_MINUTE)) {
+            return Response::error('Too many replies. Try again in '.RateLimiter::availableIn($limiterKey).' seconds.');
+        }
+
+        RateLimiter::hit($limiterKey, 60);
 
         $result = $inbox->respond($reply, (string) ($validated['text'] ?? ''), array_values($validated['media'] ?? []));
 

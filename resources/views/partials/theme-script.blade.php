@@ -18,15 +18,17 @@
             const body = String(value || '').trim().replace(/^#/, '');
             return /^[a-f\d]{6}$/i.test(body) ? '#' + body.toLowerCase() : null;
         };
-        const darkColor = (value) => {
-            const color = hex(value);
-            if (!color) return true;
+        // Mirrors isDarkColor() and the default swatch in resources/js/lib/shell-preferences.ts.
+        const luminance = (color) => {
             const channels = color.match(/[a-f\d]{2}/gi).map((part) => {
                 const channel = parseInt(part, 16) / 255;
                 return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
             });
-            const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
-            return 1.05 / (luminance + 0.05) >= (luminance + 0.05) / 0.2126;
+            return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+        };
+        const darkColor = (value) => {
+            const lum = luminance(hex(value) || '#000000');
+            return 1.05 / (lum + 0.05) >= (lum + 0.05) / (luminance('#18181b') + 0.05);
         };
 
         let dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -38,7 +40,7 @@
                     colors = { sidebar: parts[0], selected: parts[1], accent: parts[2], background: parts[3] };
                 }
             } catch (e) {}
-            colors = colors || { sidebar: '#1a0f2d', selected: '#1c1c1c', accent: '#6b16ed', background: '#0a0a0a' };
+            colors = colors || { sidebar: '#0d1307', selected: '#1c2414', accent: '#7ccf00', background: '#0a0a0a' };
             dark = darkColor(colors.background);
             const text = (value) => darkColor(value) ? '#f4f4f5' : '#18181b';
             root.style.setProperty('--theme-bg', colors.background);

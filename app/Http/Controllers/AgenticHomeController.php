@@ -35,7 +35,11 @@ class AgenticHomeController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
-        $workspace = $user->currentWorkspace instanceof Workspace ? $user->currentWorkspace : null;
+        // A stale current_workspace_id (e.g. removed from that workspace) falls
+        // back to the empty state instead of leaking its data or a 403.
+        $workspace = $user->currentWorkspace instanceof Workspace && $user->can('viewAny', Post::class)
+            ? $user->currentWorkspace
+            : null;
         $accounts = $workspace === null ? collect() : $this->enabledAccounts($workspace->id);
 
         return Inertia::render('agentic/home', [

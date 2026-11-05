@@ -9,6 +9,7 @@ use App\Models\Post;
 use App\Services\Posts\MediaStorageService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -16,9 +17,12 @@ use Laravel\Mcp\Server\Attributes\Name;
 use RuntimeException;
 
 #[Name('add_post_video')]
-#[Description('Attach an MP4 video to the workspace media library by downloading it from a public URL (capped at the largest size any platform accepts). Returns the media id to use in create_post/update_post media_ids. A post takes one video, or images, not both.')]
+#[Description('Attach an MP4 video to the workspace media library by downloading it from a public URL (capped at the largest size any platform accepts). Returns the media id to use in create_post/update_post media_ids. A post takes one video, or images, not both. Limited to 5 downloads per minute.')]
 class AddPostVideoTool extends WorkspaceTool
 {
+    /** Each call can pull up to 1 GiB synchronously, so cap it per user. */
+    private const int MAX_ATTEMPTS_PER_MINUTE = 5;
+
     public function handle(Request $request, MediaStorageService $media): Response
     {
         $workspaceId = $this->bindWorkspace($request);
@@ -34,6 +38,14 @@ class AddPostVideoTool extends WorkspaceTool
             'url' => ['required', 'url'],
             'alt_text' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        $limiterKey = 'mcp:add-post-video:'.$request->user()?->getAuthIdentifier();
+
+        if (RateLimiter::tooManyAttempts($limiterKey, self::MAX_ATTEMPTS_PER_MINUTE)) {
+            return Response::error('Too many video downloads. Try again in '.RateLimiter::availableIn($limiterKey).' seconds.');
+        }
+
+        RateLimiter::hit($limiterKey, 60);
 
         try {
             $stored = $media->storeVideoFromUrl($workspaceId, $validated['url'], $validated['alt_text'] ?? null);

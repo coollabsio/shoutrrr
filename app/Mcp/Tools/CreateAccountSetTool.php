@@ -12,7 +12,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('create_account_set')]
 #[Description('Create a named account set (a reusable group of connected accounts) in the bound workspace.')]
 class CreateAccountSetTool extends WorkspaceTool
 {

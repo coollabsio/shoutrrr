@@ -64,17 +64,20 @@ class SyncPipelineService
      */
     public function create(Workspace $workspace, User $user, array $validated): array
     {
-        if (! $this->gate->canCreateSyncPipeline($workspace)) {
-            $max = (int) config('subscriptions.max_sync_pipelines');
-
-            throw ValidationException::withMessages([
-                'name' => "You've reached your plan's limit of {$max} sync pipelines. Delete one to create another.",
-            ]);
-        }
-
-        $this->assertSourceNotDestination($validated['source_connected_account_id'], $validated['destination_connected_account_ids']);
-
         $pipeline = DB::transaction(function () use ($workspace, $user, $validated): SyncPipeline {
+            // Serializes concurrent creates per workspace so two requests cannot both pass the cap.
+            $locked = Workspace::query()->whereKey($workspace->id)->lockForUpdate()->firstOrFail();
+
+            if (! $this->gate->canCreateSyncPipeline($locked)) {
+                $max = (int) config('subscriptions.max_sync_pipelines');
+
+                throw ValidationException::withMessages([
+                    'name' => "You've reached your plan's limit of {$max} sync pipelines. Delete one to create another.",
+                ]);
+            }
+
+            $this->assertSourceNotDestination($validated['source_connected_account_id'], $validated['destination_connected_account_ids']);
+
             $pipeline = SyncPipeline::query()->create([
                 'workspace_id' => $workspace->id,
                 'source_connected_account_id' => $validated['source_connected_account_id'],

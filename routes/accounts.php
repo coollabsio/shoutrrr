@@ -11,6 +11,7 @@ use App\Http\Controllers\ConnectedAccounts\LinkedInPageOAuthController;
 use App\Http\Controllers\ConnectedAccounts\MetaConnectionController;
 use App\Http\Controllers\ConnectedAccounts\OAuthConnectionController;
 use App\Http\Controllers\OAuth\BlueskyClientMetadataController;
+use App\Http\Middleware\SwitchWorkspaceFromConnectLink;
 use App\Models\ConnectedAccount;
 use Illuminate\Support\Facades\Route;
 
@@ -30,10 +31,12 @@ Route::bind('account', fn (string $value): ConnectedAccount => ConnectedAccount:
     ->firstOrFail());
 
 Route::middleware(['auth', 'verified'])->group(function (): void {
-    Route::get('accounts', [ConnectedAccountController::class, 'index'])->name('accounts.index');
+    Route::get('accounts', [ConnectedAccountController::class, 'index'])
+        ->middleware(SwitchWorkspaceFromConnectLink::class)
+        ->name('accounts.index');
 
     Route::get('accounts/connect/bluesky/oauth', [BlueskyOAuthController::class, 'redirect'])
-        ->middleware('throttle:10,1')
+        ->middleware(['throttle:10,1', SwitchWorkspaceFromConnectLink::class])
         ->name('accounts.bluesky.oauth');
 
     Route::get('accounts/callback/bluesky/oauth', [BlueskyOAuthController::class, 'callback'])
@@ -53,7 +56,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // routes in registration order, and Platform::tryFrom('meta') is null, so
     // the wildcard route's resolveOAuthPlatform() would otherwise 404 first.
     Route::get('accounts/connect/meta', [MetaConnectionController::class, 'redirect'])
-        ->middleware('throttle:10,1')
+        ->middleware(['throttle:10,1', SwitchWorkspaceFromConnectLink::class])
         ->name('accounts.meta.redirect');
 
     Route::get('accounts/callback/meta', [MetaConnectionController::class, 'callback'])
@@ -68,7 +71,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // come before the generic `{platform}` wildcard route (Platform::tryFrom
     // ('linkedin-pages') is null, so the wildcard would 404 first).
     Route::get('accounts/connect/linkedin-pages', [LinkedInPageOAuthController::class, 'redirect'])
-        ->middleware('throttle:10,1')
+        ->middleware(['throttle:10,1', SwitchWorkspaceFromConnectLink::class])
         ->name('accounts.linkedin-pages.redirect');
 
     Route::get('accounts/callback/linkedin-pages', [LinkedInPageOAuthController::class, 'callback'])
@@ -80,7 +83,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->name('accounts.linkedin.store');
 
     Route::get('accounts/connect/{platform}', [OAuthConnectionController::class, 'redirect'])
-        ->middleware('throttle:10,1')
+        ->middleware(['throttle:10,1', SwitchWorkspaceFromConnectLink::class])
         ->name('accounts.connect');
 
     Route::get('accounts/callback/{platform}', [OAuthConnectionController::class, 'callback'])

@@ -22,9 +22,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:api', ResolveApiWorkspace::class, 'throttle:api', RecordApiUsage::class])
     ->group(function (): void {
         Route::get('platforms', [PlatformsController::class, 'index']);
-        Route::get('platforms/{platform}/connect-url', [PlatformsController::class, 'connectUrl']);
         Route::get('connected-accounts', [ConnectedAccountsController::class, 'index']);
-        Route::get('connected-accounts/{id}/reconnect-url', [ConnectedAccountsController::class, 'reconnectUrl']);
         Route::get('sync-pipelines', [SyncPipelinesController::class, 'index']);
         Route::get('posts', [PostsController::class, 'index']);
         Route::get('posts/{id}', [PostsController::class, 'show']);
@@ -34,6 +32,9 @@ Route::middleware(['auth:api', ResolveApiWorkspace::class, 'throttle:api', Recor
         Route::get('posts/{id}/shares', [SharesController::class, 'index']);
 
         Route::middleware(RequireWriteScope::class)->group(function (): void {
+            Route::get('platforms/{platform}/connect-url', [PlatformsController::class, 'connectUrl']);
+            Route::get('connected-accounts/{id}/reconnect-url', [ConnectedAccountsController::class, 'reconnectUrl']);
+
             Route::post('intents/publish-now', [IntentsController::class, 'publishNow']);
             Route::post('intents/schedule-at', [IntentsController::class, 'scheduleAt']);
 

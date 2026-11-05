@@ -16,7 +16,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('retry_post_target')]
 #[Description('Retry a failed or skipped publish target. Outward-facing (re-attempts a live post). Requires confirm=true.')]
 class RetryPostTargetTool extends WorkspaceTool
 {

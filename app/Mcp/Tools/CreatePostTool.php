@@ -17,7 +17,9 @@ use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('create_post')]
 #[Description('Create a new draft post in the bound workspace. Destination kind is all (every connected account), set (an account set id), or account (a single connected account id). Supports threads (segments), media, mentions, and per-account targets (auto_split, format, content_override).')]
 class CreatePostTool extends WorkspaceTool
 {

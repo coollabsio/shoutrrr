@@ -7,6 +7,11 @@ use App\Models\AgentIntent;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostMedia;
+use App\Models\Workspace;
+use App\Services\Posts\PublishPrecheck;
+use App\Services\Publishing\PostStatusRollup;
+use App\Services\Publishing\PublishDispatcher;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 
 test('publish now creates an agent post and is idempotent', function () {
@@ -95,6 +100,7 @@ test('a read-only key cannot publish now', function () {
 
 test('schedule at creates a scheduled agent post and replays it', function () {
     [$user, $workspace, $token] = issuedKey();
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
     $when = now()->addDay()->toIso8601String();
 
     $payload = [
@@ -195,6 +201,122 @@ test('publish now requires text or segments', function () {
         ->postJson('/api/v1/intents/publish-now', ['destination' => ['kind' => 'all']])
         ->assertStatus(422)
         ->assertJsonValidationErrors('text');
+});
+
+test('schedule at rejects a destination with no usable account and leaves nothing behind', function (string $kind) {
+    [, $workspace, $token] = issuedKey();
+    $account = match ($kind) {
+        'foreign' => ConnectedAccount::factory()->create(['workspace_id' => Workspace::factory()->create()->id]),
+        'disabled' => ConnectedAccount::factory()->disabled()->create(['workspace_id' => $workspace->id]),
+        default => null,
+    };
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', "sched-empty-{$kind}")
+        ->postJson('/api/v1/intents/schedule-at', [
+            'text' => 'Nowhere to go',
+            'destination' => ['kind' => 'account', 'id' => $account?->id ?? '01HZZZZZZZZZZZZZZZZZZZZZZZ'],
+            'scheduled_at' => now()->addDay()->toIso8601String(),
+        ])
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'Select at least one account to schedule.');
+
+    expect(Post::query()->where('workspace_id', $workspace->id)->count())->toBe(0)
+        ->and(AgentIntent::query()->count())->toBe(0);
+})->with(['unknown', 'foreign', 'disabled']);
+
+test('a publish now replay dispatches again when the first dispatch failed', function () {
+    Queue::fake();
+    [, $workspace, $token] = issuedKey();
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    app()->instance(PublishDispatcher::class, new class(app(PublishPrecheck::class), app(PostStatusRollup::class)) extends PublishDispatcher
+    {
+        public bool $failNext = true;
+
+        public function dispatchForPost(Post $post): void
+        {
+            if ($this->failNext) {
+                $this->failNext = false;
+
+                throw new RuntimeException('queue down');
+            }
+
+            parent::dispatchForPost($post);
+        }
+    });
+    $payload = ['text' => 'Retry me', 'destination' => ['kind' => 'all']];
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-queue-down')
+        ->postJson('/api/v1/intents/publish-now', $payload)
+        ->assertStatus(500);
+
+    Queue::assertNothingPushed();
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-queue-down')
+        ->postJson('/api/v1/intents/publish-now', $payload)
+        ->assertOk()
+        ->assertJsonPath('idempotent_replay', true);
+
+    Queue::assertPushed(PublishPostTarget::class, 1);
+
+    Cache::flush();
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-queue-down')
+        ->postJson('/api/v1/intents/publish-now', $payload)
+        ->assertOk();
+
+    Queue::assertPushed(PublishPostTarget::class, 1);
+});
+
+test('a publish now replay still succeeds after the subscription lapsed', function () {
+    Queue::fake();
+    config(['subscriptions.enabled' => true]);
+    [, $workspace, $token] = issuedKey();
+    $workspace->forceFill(['is_initial' => true])->save();
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $payload = ['text' => 'Before the lapse', 'destination' => ['kind' => 'all']];
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-lapsed')
+        ->postJson('/api/v1/intents/publish-now', $payload)
+        ->assertStatus(202);
+
+    $workspace->forceFill(['is_initial' => false])->save();
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-lapsed')
+        ->postJson('/api/v1/intents/publish-now', $payload)
+        ->assertOk()
+        ->assertJsonPath('idempotent_replay', true);
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-lapsed-new')
+        ->postJson('/api/v1/intents/publish-now', $payload)
+        ->assertStatus(402);
+});
+
+test('publish now rejects media already attached to another post', function () {
+    Queue::fake();
+    [$user, $workspace, $token] = issuedKey();
+    ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]);
+    $owner = Post::factory()->create(['workspace_id' => $workspace->id, 'author_id' => $user->id]);
+    $media = PostMedia::factory()->for($workspace)->create(['post_id' => $owner->id]);
+
+    $this->withToken($token)
+        ->withHeader('Idempotency-Key', 'intent-steal')
+        ->postJson('/api/v1/intents/publish-now', [
+            'text' => 'Borrowed image',
+            'media_ids' => [$media->id],
+            'destination' => ['kind' => 'all'],
+        ])
+        ->assertStatus(422)
+        ->assertJsonPath('missing_media_ids', [$media->id]);
+
+    expect($media->fresh()->post_id)->toBe($owner->id)
+        ->and(Post::query()->where('workspace_id', $workspace->id)->count())->toBe(1);
 });
 
 test('openapi spec documents the intent endpoints', function () {

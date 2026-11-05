@@ -20,7 +20,7 @@ class ListPlatformsTool extends WorkspaceTool
 {
     public function handle(Request $request, AccountConnectLinks $links): Response
     {
-        if ($this->bindWorkspace($request) === null) {
+        if (($workspaceId = $this->bindWorkspace($request)) === null) {
             return Response::error('This connection is not bound to a workspace. Reconnect and select a workspace.');
         }
 
@@ -29,7 +29,7 @@ class ListPlatformsTool extends WorkspaceTool
         }
 
         return Response::text(json_encode([
-            'platforms' => $links->list(),
+            'platforms' => $links->forWorkspace($workspaceId)->list(),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 

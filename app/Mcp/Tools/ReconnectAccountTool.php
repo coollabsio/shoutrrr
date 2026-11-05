@@ -20,7 +20,7 @@ class ReconnectAccountTool extends WorkspaceTool
 {
     public function handle(Request $request, AccountConnectLinks $links): Response
     {
-        if ($this->bindWorkspace($request) === null) {
+        if (($workspaceId = $this->bindWorkspace($request)) === null) {
             return Response::error('This connection is not bound to a workspace. Reconnect and select a workspace.');
         }
 
@@ -38,7 +38,7 @@ class ReconnectAccountTool extends WorkspaceTool
             return $denied;
         }
 
-        $link = $links->reconnect($account);
+        $link = $links->forWorkspace($workspaceId)->reconnect($account);
 
         if (! $link['available'] || $link['url'] === null) {
             return Response::error($link['reason'] ?? 'That account cannot be reconnected on this instance.');

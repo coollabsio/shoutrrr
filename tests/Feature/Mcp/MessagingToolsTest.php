@@ -235,3 +235,24 @@ test('messaging tools deny a user removed from the bound workspace', function ()
 
     Http::assertNothingSent();
 });
+
+test('reply_to_conversation matches the web limit of 30 messages per minute', function (): void {
+    Http::fake(['api.twitter.com/2/dm_conversations/*/messages' => fn () => Http::response(['data' => ['dm_event_id' => 'sent-'.fake()->uuid()]], 201)]);
+    $conversation = xConversation($this->workspace);
+
+    foreach (range(1, 30) as $_) {
+        ShoutrrrServer::actingAs($this->user)->tool(ReplyToConversationTool::class, [
+            'conversation_id' => $conversation->id,
+            'text' => 'hello there',
+            'confirm' => true,
+        ])->assertOk();
+    }
+
+    ShoutrrrServer::actingAs($this->user)->tool(ReplyToConversationTool::class, [
+        'conversation_id' => $conversation->id,
+        'text' => 'hello there',
+        'confirm' => true,
+    ])->assertHasErrors(['Too many direct messages.']);
+
+    Http::assertSentCount(30);
+});

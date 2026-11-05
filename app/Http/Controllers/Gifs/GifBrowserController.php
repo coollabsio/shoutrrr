@@ -21,14 +21,9 @@ class GifBrowserController extends Controller
     {
         $query = $request->string('q')->trim()->limit(100, '')->toString();
         $page = max(1, min(50, $request->integer('page', 1)));
-        $rating = (string) config('services.klipy.rating', 'pg-13');
-
-        // Trending and popular searches repeat constantly across users; a short
-        // TTL keeps the grid instant without serving stale content.
-        $key = "gifs:{$catalog}:{$rating}:{$page}:".md5($query);
 
         try {
-            $result = Cache::remember($key, 60, fn (): array => $this->encode(
+            $result = Cache::remember(KlipyClient::browseCacheKey($catalog, $query, $page), KlipyClient::BROWSE_CACHE_SECONDS, fn (): array => $this->encode(
                 $this->klipy->browse($catalog, $query, $page)
             ));
         } catch (RuntimeException) {

@@ -9,6 +9,7 @@ use App\Models\ConnectedAccountNativeWatch;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Billing\WorkspaceSubscriptionGate;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -31,15 +32,13 @@ class NativeTracking
             ]);
         }
 
-        if (! $this->withinCap($workspace, $account)) {
+        if (! $this->watchWithinCap($workspace, $user, $account)) {
             $max = (int) config('subscriptions.max_native_tracked');
 
             throw ValidationException::withMessages([
                 'account' => "You've reached your plan's limit of {$max} tracked accounts. Untrack one to track another.",
             ]);
         }
-
-        $this->watch($workspace, $user, $account);
     }
 
     /**
@@ -48,13 +47,7 @@ class NativeTracking
      */
     public function trackIfEligible(Workspace $workspace, User $user, ConnectedAccount $account): bool
     {
-        if (! $account->platform->supportsNativeRead() || ! $this->withinCap($workspace, $account)) {
-            return false;
-        }
-
-        $this->watch($workspace, $user, $account);
-
-        return true;
+        return $account->platform->supportsNativeRead() && $this->watchWithinCap($workspace, $user, $account);
     }
 
     public function untrack(ConnectedAccount $account): void
@@ -65,16 +58,25 @@ class NativeTracking
             ->delete();
     }
 
-    private function withinCap(Workspace $workspace, ConnectedAccount $account): bool
+    /**
+     * Checks the cap and creates the watch under a lock on the workspace row, so
+     * concurrent enables cannot both pass the cap. Returns whether the account is tracked.
+     */
+    private function watchWithinCap(Workspace $workspace, User $user, ConnectedAccount $account): bool
     {
-        return $account->nativeWatch()->exists() || $this->gate->canTrackNativeAccount($workspace);
-    }
+        return DB::transaction(function () use ($workspace, $user, $account): bool {
+            $locked = Workspace::query()->whereKey($workspace->id)->lockForUpdate()->firstOrFail();
 
-    private function watch(Workspace $workspace, User $user, ConnectedAccount $account): void
-    {
-        ConnectedAccountNativeWatch::query()->firstOrCreate(
-            ['connected_account_id' => $account->id],
-            ['workspace_id' => $workspace->id, 'enabled_at' => now(), 'enabled_by' => $user->id],
-        );
+            if (! $account->nativeWatch()->exists() && ! $this->gate->canTrackNativeAccount($locked)) {
+                return false;
+            }
+
+            ConnectedAccountNativeWatch::query()->firstOrCreate(
+                ['connected_account_id' => $account->id],
+                ['workspace_id' => $workspace->id, 'enabled_at' => now(), 'enabled_by' => $user->id],
+            );
+
+            return true;
+        });
     }
 }

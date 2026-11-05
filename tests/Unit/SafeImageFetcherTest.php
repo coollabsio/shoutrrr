@@ -1,8 +1,15 @@
 <?php
 
 use App\Support\SafeImageFetcher;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+function onePixelPng(): string
+{
+    return (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+}
 
 test('rejects non-http(s) schemes', function (): void {
     $fetcher = new SafeImageFetcher(app(HttpFactory::class));
@@ -75,4 +82,43 @@ test('brackets IPv6 addresses in the curl resolution pin', function (): void {
     // IPv4 addresses stay unbracketed.
     expect($fetcher->exposePin('cdn.example.com', 'https', 'https://cdn.example.com/a.png', ['1.2.3.4']))
         ->toBe([CURLOPT_RESOLVE => ['cdn.example.com:443:1.2.3.4']]);
+});
+
+test('rejects addresses in special-purpose ranges the PHP filter flags miss', function (string $url): void {
+    Http::fake(fn () => Http::response(onePixelPng(), 200, ['Content-Type' => 'image/png']));
+
+    expect(fn () => (new SafeImageFetcher(app(HttpFactory::class)))->fetch($url))
+        ->toThrow(RuntimeException::class, 'That host resolves to a private or reserved address.');
+    Http::assertNothingSent();
+})->with([
+    'CGNAT cloud metadata' => ['http://100.100.100.200/a.png'],
+    'benchmarking' => ['http://198.18.0.1/a.png'],
+    'IETF protocol assignments' => ['http://192.0.0.1/a.png'],
+    'this network' => ['http://0.0.0.0/a.png'],
+    'NAT64 metadata' => ['http://[64:ff9b::a9fe:a9fe]/a.png'],
+    '6to4' => ['http://[2002:a9fe:a9fe::1]/a.png'],
+    'IPv4-mapped metadata' => ['http://[::ffff:169.254.169.254]/a.png'],
+]);
+
+test('allows a public ip literal', function (): void {
+    Http::fake(fn () => Http::response(onePixelPng(), 200, ['Content-Type' => 'image/png']));
+
+    expect((new SafeImageFetcher(app(HttpFactory::class)))->fetch('https://93.184.215.14/a.png')['mime'])->toBe('image/png');
+});
+
+test('returns the same message for HTTP errors and refused connections, logging the detail', function (): void {
+    Log::spy();
+    Http::fake([
+        'https://93.184.215.14/*' => Http::response('nope', 503),
+        'https://93.184.215.15/*' => fn () => throw new ConnectionException('Connection refused'),
+    ]);
+    $fetcher = new SafeImageFetcher(app(HttpFactory::class));
+
+    expect(fn () => $fetcher->fetch('https://93.184.215.14/a.png'))
+        ->toThrow(RuntimeException::class, 'Could not download the image.')
+        ->and(fn () => $fetcher->fetch('https://93.184.215.15/a.png'))
+        ->toThrow(RuntimeException::class, 'Could not download the image.');
+
+    Log::shouldHaveReceived('info')->withArgs(fn (string $message, array $context): bool => ($context['status'] ?? null) === 503)->once();
+    Log::shouldHaveReceived('info')->withArgs(fn (string $message, array $context): bool => ($context['error'] ?? null) === 'Connection refused')->once();
 });

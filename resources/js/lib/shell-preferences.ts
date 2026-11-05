@@ -319,7 +319,6 @@ export function applyShellPreferences(preferences: ShellPreferences): void {
 
     if (preferences.theme === 'custom') {
         const colors = preferences.customTheme;
-        const sidebarDark = isDarkColor(colors.sidebar);
         root.style.setProperty('--theme-bg', colors.background);
         root.style.setProperty(
             '--theme-text',
@@ -340,13 +339,7 @@ export function applyShellPreferences(preferences: ShellPreferences): void {
             '--theme-accent-foreground',
             readableTextOn(colors.accent),
         );
-        root.dataset.sidebarScheme =
-            sidebarDark === dark ? '' : sidebarDark ? 'dark' : 'light';
-        if (root.dataset.sidebarScheme === '') {
-            delete root.dataset.sidebarScheme;
-        }
     } else {
-        delete root.dataset.sidebarScheme;
         root.style.removeProperty('--theme-bg');
         root.style.removeProperty('--theme-text');
         root.style.removeProperty('--theme-sidebar');

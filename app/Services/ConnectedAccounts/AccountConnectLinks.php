@@ -9,14 +9,34 @@ use App\Http\Controllers\ConnectedAccounts\LinkedInPageOAuthController;
 use App\Models\ConnectedAccount;
 use App\Support\AccountConnectReturn;
 use App\Support\InstanceSettings;
+use Illuminate\Support\Facades\URL;
 
 /**
  * Browser URLs that start Classic's connect and reconnect flows. Neither MCP nor the REST API ever
  * completes provider OAuth or stores a webhook or app password.
+ *
+ * Links for an agent come from forWorkspace(): they are signed and carry the agent's workspace, so
+ * SwitchWorkspaceFromConnectLink moves the human's browser into that workspace before the flow
+ * starts. Without it the account would land in whatever workspace the browser happens to have open.
  */
 class AccountConnectLinks
 {
+    public const SIGNED_LINK_MINUTES = 60;
+
+    private ?string $workspaceId = null;
+
     public function __construct(private readonly InstanceSettings $settings) {}
+
+    /**
+     * Copy whose URLs are signed and switch the browser to the given workspace.
+     */
+    public function forWorkspace(string $workspaceId): self
+    {
+        $links = clone $this;
+        $links->workspaceId = $workspaceId;
+
+        return $links;
+    }
 
     /**
      * @return list<array{platform: string, label: string, method: string, available: bool, reason: string|null, url: string|null, human_action: string}>
@@ -80,7 +100,7 @@ class AccountConnectLinks
                 $resolved->value,
                 $resolved->label(),
                 'webhook',
-                route('accounts.index'),
+                $this->url('accounts.index'),
                 'Discord connects with a webhook, not OAuth. Open this page and paste the webhook there. Do not send the webhook URL to the agent.',
             );
         }
@@ -98,7 +118,7 @@ class AccountConnectLinks
                 $resolved->value,
                 $resolved->label(),
                 'oauth',
-                route('accounts.meta.redirect'),
+                $this->url('accounts.meta.redirect'),
                 'Open this URL and finish Facebook Login in the browser. Pick the Facebook Page or Instagram account there. The agent cannot complete OAuth.',
             );
         }
@@ -107,7 +127,7 @@ class AccountConnectLinks
             $resolved->value,
             $resolved->label(),
             'oauth',
-            route('accounts.connect', ['platform' => $resolved->value]),
+            $this->url('accounts.connect', ['platform' => $resolved->value]),
             'Open this URL and finish '.$resolved->label().' authorization in the browser. The agent cannot complete OAuth.',
         );
     }
@@ -135,7 +155,7 @@ class AccountConnectLinks
                 $account->platform->value,
                 $account->platform->label(),
                 'webhook',
-                route('accounts.index'),
+                $this->url('accounts.index'),
                 'Open Accounts and paste a new Discord webhook for '.$account->handle.'. Do not send the webhook URL to the agent.',
             );
         }
@@ -149,7 +169,7 @@ class AccountConnectLinks
                 $account->platform->value,
                 $account->platform->label(),
                 'app_password',
-                route('accounts.index'),
+                $this->url('accounts.index'),
                 'Open Accounts and resubmit the Bluesky app password for '.$account->handle.'. Do not send the password to the agent.',
             );
         }
@@ -172,7 +192,7 @@ class AccountConnectLinks
             $platform->value,
             $platform->label(),
             'oauth',
-            route('accounts.bluesky.oauth', $parameters),
+            $this->url('accounts.bluesky.oauth', $parameters),
             'Open this URL to start Bluesky OAuth in the browser. An app password, if you use one instead, is entered on the Accounts page — do not send it to the agent.',
         );
     }
@@ -195,9 +215,29 @@ class AccountConnectLinks
             'linkedin-pages',
             'LinkedIn Pages',
             'oauth',
-            route('accounts.linkedin-pages.redirect'),
+            $this->url('accounts.linkedin-pages.redirect'),
             'Open this URL and finish LinkedIn Pages authorization in the browser. The agent cannot complete OAuth.',
         );
+    }
+
+    /**
+     * The signature covers the path and query only, so the link still verifies
+     * when a proxy changes the scheme or host the app sees.
+     *
+     * @param  array<string, string>  $parameters
+     */
+    private function url(string $route, array $parameters = []): string
+    {
+        if ($this->workspaceId === null) {
+            return route($route, $parameters);
+        }
+
+        return url(URL::temporarySignedRoute(
+            $route,
+            now()->addMinutes(self::SIGNED_LINK_MINUTES),
+            [...$parameters, 'workspace' => $this->workspaceId],
+            absolute: false,
+        ));
     }
 
     private function methodFor(Platform $platform): string

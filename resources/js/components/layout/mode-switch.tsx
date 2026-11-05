@@ -11,13 +11,6 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { resolveUiMode, type UiMode } from '@/lib/ui-mode';
-import { dashboard } from '@/routes';
-import { home as agenticHome } from '@/routes/agentic';
-
-const HOME: Record<UiMode, () => { url: string }> = {
-    agentic: agenticHome,
-    classic: dashboard,
-};
 
 const modes: {
     value: UiMode;
@@ -44,11 +37,7 @@ export function ModeSwitch() {
     const current = resolveUiMode(auth.user?.ui_mode);
 
     function select(next: UiMode) {
-        // The current mode acts as a link to its home, so it is a way back from
-        // Accounts, Sync, or Settings.
         if (next === current) {
-            router.visit(HOME[next]().url);
-
             return;
         }
 
@@ -63,7 +52,7 @@ export function ModeSwitch() {
         <SidebarGroup>
             <SidebarGroupLabel>Mode</SidebarGroupLabel>
             <SidebarGroupContent>
-                <SidebarMenu role="radiogroup" aria-label="Product mode">
+                <SidebarMenu aria-label="Product mode">
                     {modes.map((item) => {
                         const selected = current === item.value;
 
@@ -73,8 +62,7 @@ export function ModeSwitch() {
                                     type="button"
                                     tooltip={item.hint}
                                     isActive={selected}
-                                    aria-checked={selected}
-                                    role="radio"
+                                    aria-pressed={selected}
                                     onClick={() => select(item.value)}
                                 >
                                     <item.icon aria-hidden="true" />

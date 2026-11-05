@@ -11,7 +11,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('remove_post_media')]
 #[Description('Remove an image from the workspace media library by id.')]
 class RemovePostMediaTool extends WorkspaceTool
 {

@@ -558,7 +558,9 @@ class DraftService
     }
 
     /**
-     * Attach the given media (in order) to the post and detach any others.
+     * Attach the given media (in order) to the post and detach any others. Only
+     * unattached media or media this post already owns can be attached; an id
+     * that belongs to another post or a direct message is skipped, not moved.
      *
      * @param  list<string>  $mediaIds
      */
@@ -574,6 +576,8 @@ class DraftService
             PostMedia::withoutGlobalScopes()
                 ->where('workspace_id', $post->workspace_id)
                 ->whereKey($mediaId)
+                ->whereNull('direct_message_id')
+                ->where(fn (Builder $query): Builder => $query->whereNull('post_id')->orWhere('post_id', $post->id))
                 ->update(['post_id' => $post->id, 'position' => $position]);
         }
     }

@@ -12,7 +12,9 @@ use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
 
+#[Name('get_posting_schedule')]
 #[Description('Get the bound workspace posting schedule: timezone and the recurring weekly time slots used when queueing posts.')]
 class GetPostingScheduleTool extends WorkspaceTool
 {

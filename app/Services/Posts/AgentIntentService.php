@@ -24,6 +24,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Throwable;
 
 /**
  * Create-and-publish or create-and-schedule in one idempotent step.
@@ -31,6 +32,12 @@ use Illuminate\Support\Facades\Gate;
  */
 class AgentIntentService
 {
+    /**
+     * How often a transaction that hit a SQLite "database is locked" (or another
+     * concurrency error Laravel detects) is retried before giving up.
+     */
+    private const int TRANSACTION_ATTEMPTS = 3;
+
     public function __construct(
         private readonly DraftService $drafts,
         private readonly PublishDispatcher $dispatcher,
@@ -45,8 +52,6 @@ class AgentIntentService
     public function publishNow(User $user, string $workspaceId, string $idempotencyKey, IntentContent $content, array $destination): array
     {
         $this->assertMemberCanCreate($user);
-        $this->assertCanPublish($workspaceId);
-        $this->assertMediaInWorkspace($workspaceId, $content->mediaIds);
 
         $resolved = $this->claim(
             $user,
@@ -77,9 +82,7 @@ class AgentIntentService
             },
         );
 
-        if (! $resolved['replay']) {
-            $this->dispatcher->dispatchForPost($resolved['post']);
-        }
+        $this->dispatchOnce($resolved['intent'], $resolved['post']);
 
         return $this->present($resolved['post'], $resolved['replay']);
     }
@@ -91,8 +94,6 @@ class AgentIntentService
     public function scheduleAt(User $user, string $workspaceId, string $idempotencyKey, IntentContent $content, array $destination, string $scheduledAt): array
     {
         $this->assertMemberCanCreate($user);
-        $this->assertCanPublish($workspaceId);
-        $this->assertMediaInWorkspace($workspaceId, $content->mediaIds);
 
         $resolved = $this->claim(
             $user,
@@ -108,6 +109,10 @@ class AgentIntentService
                     throw new AgentIntentRejectedException('Choose a time in the future — a post cannot be scheduled in the past.');
                 }
 
+                if ($post->targets()->doesntExist()) {
+                    throw new AgentIntentRejectedException('Select at least one account to schedule.');
+                }
+
                 $post->scheduled_at = $when;
                 $post->status = PostStatus::Scheduled;
                 $post->save();
@@ -118,9 +123,13 @@ class AgentIntentService
     }
 
     /**
+     * Replay an existing intent for this key, or run the publish gates and create
+     * the post. The replay lookup comes before the gates so a retry still returns
+     * the original post after the subscription lapsed or its media got attached.
+     *
      * @param  array{kind: string, id?: string|null}  $destination
      * @param  Closure(Post): void  $apply
-     * @return array{post: Post, replay: bool}
+     * @return array{intent: AgentIntent, post: Post, replay: bool}
      */
     private function claim(
         User $user,
@@ -146,6 +155,9 @@ class AgentIntentService
                     return $this->replay($existing, $fingerprint);
                 }
 
+                $this->assertCanPublish($workspaceId);
+                $this->assertMediaAvailable($workspaceId, $content->mediaIds);
+
                 $segments = $content->effectiveSegments();
                 $post = $this->drafts->createDraft(
                     $workspaceId,
@@ -164,7 +176,7 @@ class AgentIntentService
 
                 $apply($post);
 
-                AgentIntent::query()->create([
+                $intent = AgentIntent::query()->create([
                     'workspace_id' => $workspaceId,
                     'user_id' => $user->id,
                     'post_id' => $post->id,
@@ -173,8 +185,8 @@ class AgentIntentService
                     'request_hash' => $fingerprint,
                 ]);
 
-                return ['post' => $post, 'replay' => false];
-            });
+                return ['intent' => $intent, 'post' => $post, 'replay' => false];
+            }, self::TRANSACTION_ATTEMPTS);
         } catch (UniqueConstraintViolationException) {
             $existing = AgentIntent::query()
                 ->where('workspace_id', $workspaceId)
@@ -190,7 +202,7 @@ class AgentIntentService
     }
 
     /**
-     * @return array{post: Post, replay: bool}
+     * @return array{intent: AgentIntent, post: Post, replay: bool}
      */
     private function replay(AgentIntent $existing, string $fingerprint): array
     {
@@ -203,7 +215,37 @@ class AgentIntentService
             throw new AgentIntentRejectedException('The original post for this idempotency key no longer exists.', 409);
         }
 
-        return ['post' => $post->load(['targets.account', 'media']), 'replay' => true];
+        return ['intent' => $existing, 'post' => $post->load(['targets.account', 'media']), 'replay' => true];
+    }
+
+    /**
+     * Push the publish jobs for a publishing post exactly once. The original
+     * request and any replay both come through here. The conditional update on
+     * dispatched_at claims the dispatch; if the dispatch throws (queue down),
+     * the claim is released so a replay with the same key retries it.
+     */
+    private function dispatchOnce(AgentIntent $intent, Post $post): void
+    {
+        if ($post->status !== PostStatus::Publishing) {
+            return;
+        }
+
+        $claimed = AgentIntent::query()
+            ->whereKey($intent->id)
+            ->whereNull('dispatched_at')
+            ->update(['dispatched_at' => Date::now()]);
+
+        if ($claimed === 0) {
+            return;
+        }
+
+        try {
+            $this->dispatcher->dispatchForPost($post);
+        } catch (Throwable $exception) {
+            AgentIntent::query()->whereKey($intent->id)->update(['dispatched_at' => null]);
+
+            throw $exception;
+        }
     }
 
     /**
@@ -227,12 +269,12 @@ class AgentIntentService
     }
 
     /**
-     * DraftService attaches only media it finds in the workspace and skips the
+     * DraftService attaches only unattached media from the workspace and skips the
      * rest, which would publish a post silently missing an image. Reject instead.
      *
      * @param  list<string>  $mediaIds
      */
-    private function assertMediaInWorkspace(string $workspaceId, array $mediaIds): void
+    private function assertMediaAvailable(string $workspaceId, array $mediaIds): void
     {
         if ($mediaIds === []) {
             return;
@@ -240,6 +282,8 @@ class AgentIntentService
 
         $found = PostMedia::withoutGlobalScopes()
             ->where('workspace_id', $workspaceId)
+            ->whereNull('post_id')
+            ->whereNull('direct_message_id')
             ->whereIn('id', $mediaIds)
             ->pluck('id')
             ->all();

@@ -48,7 +48,7 @@ class ConnectedAccountsController extends Controller
         $account = $this->findAccountOrFail($id);
         $this->authorize('update', $account);
 
-        $link = $links->reconnect($account);
+        $link = $links->forWorkspace($account->workspace_id)->reconnect($account);
 
         if (! $link['available'] || $link['url'] === null) {
             abort(422, $link['reason'] ?? 'That account cannot be reconnected on this instance.');

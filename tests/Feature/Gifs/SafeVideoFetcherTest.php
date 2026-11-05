@@ -4,6 +4,7 @@ use App\Support\SafeVideoFetcher;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /** Minimal ISO-BMFF header: 4-byte size, then 'ftyp'. */
 function fakeMp4Bytes(int $padding = 1024): string
@@ -64,7 +65,56 @@ test('rejects when the connection fails, without leaking the raw cURL message', 
     });
 
     expect(fn () => app(SafeVideoFetcher::class)->fetch('https://example.com/clip.mp4'))
-        ->toThrow(RuntimeException::class, 'Could not connect to the video host.');
+        ->toThrow(RuntimeException::class, 'Could not download the video.');
+});
+
+test('rejects addresses in special-purpose ranges the PHP filter flags miss', function (string $url) {
+    Http::fake(fn () => Http::response(fakeMp4Bytes()));
+
+    expect(fn () => app(SafeVideoFetcher::class)->fetch($url))
+        ->toThrow(RuntimeException::class, 'That host resolves to a private or reserved address.');
+    Http::assertNothingSent();
+})->with([
+    'CGNAT' => ['http://100.64.0.1/clip.mp4'],
+    'CGNAT cloud metadata' => ['http://100.100.100.200/clip.mp4'],
+    'benchmarking' => ['http://198.18.0.1/clip.mp4'],
+    'benchmarking upper half' => ['http://198.19.255.254/clip.mp4'],
+    'IETF protocol assignments' => ['http://192.0.0.1/clip.mp4'],
+    'this network' => ['http://0.1.2.3/clip.mp4'],
+    'unspecified' => ['http://0.0.0.0/clip.mp4'],
+    'multicast' => ['http://224.0.0.1/clip.mp4'],
+    'NAT64 metadata' => ['http://[64:ff9b::a9fe:a9fe]/clip.mp4'],
+    '6to4' => ['http://[2002:a9fe:a9fe::1]/clip.mp4'],
+    'Teredo' => ['http://[2001::1]/clip.mp4'],
+    'IPv4-mapped metadata' => ['http://[::ffff:169.254.169.254]/clip.mp4'],
+    'IPv4-mapped loopback' => ['http://[::ffff:127.0.0.1]/clip.mp4'],
+    'IPv4-mapped CGNAT' => ['http://[::ffff:100.100.100.200]/clip.mp4'],
+]);
+
+test('allows a public address', function (string $url) {
+    Http::fake(fn () => Http::response(fakeMp4Bytes()));
+
+    expect(app(SafeVideoFetcher::class)->fetch($url)['mime'])->toBe('video/mp4');
+})->with([
+    'IPv4' => ['https://93.184.215.14/clip.mp4'],
+    'IPv6' => ['https://[2606:4700::1111]/clip.mp4'],
+]);
+
+test('returns the same message for HTTP errors and refused connections, logging the detail', function () {
+    Log::spy();
+    Http::fake([
+        'https://93.184.215.14/*' => Http::response('nope', 404),
+        'https://93.184.215.15/*' => fn () => throw new ConnectionException('Connection refused'),
+    ]);
+    $fetcher = app(SafeVideoFetcher::class);
+
+    expect(fn () => $fetcher->fetch('https://93.184.215.14/clip.mp4'))
+        ->toThrow(RuntimeException::class, 'Could not download the video.')
+        ->and(fn () => $fetcher->fetch('https://93.184.215.15/clip.mp4'))
+        ->toThrow(RuntimeException::class, 'Could not download the video.');
+
+    Log::shouldHaveReceived('info')->withArgs(fn (string $message, array $context): bool => ($context['status'] ?? null) === 404)->once();
+    Log::shouldHaveReceived('info')->withArgs(fn (string $message, array $context): bool => ($context['error'] ?? null) === 'Connection refused')->once();
 });
 
 test('pins curl resolution to the validated ip for hostnames (DNS-rebinding defense)', function (): void {
