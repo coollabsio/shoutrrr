@@ -8,6 +8,7 @@ use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Connectors\ThreadsEngagementConnector;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 
@@ -94,7 +95,7 @@ test('postReply creates a container with reply_to_id, polls, then publishes', fu
         && $req['access_token'] === 't');
 
     Http::assertSent(fn ($req) => str_contains($req->url(), '/CONTAINER1')
-        && $req['fields'] === 'status');
+        && $req['fields'] === 'status,error_message');
 
     Http::assertSent(fn ($req) => str_contains($req->url(), '/THREADSUSER1/threads_publish')
         && $req['creation_id'] === 'CONTAINER1');
@@ -120,7 +121,7 @@ test('postReply declines media (Threads replies cannot carry attachments in this
     expect($result->status)->toBe(EngagementStatus::Unsupported);
 });
 
-test('postReply returns failed when the container never finishes processing', function () {
+test('postReply hands back the container while it is processing', function () {
     Http::fake([
         'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
         'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'IN_PROGRESS']),
@@ -134,7 +135,108 @@ test('postReply returns failed when the container never finishes processing', fu
 
     $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
 
+    expect($result->isOk())->toBeFalse();
+    expect($result->processingContainerId)->toBe('CONTAINER1');
+
+    Http::assertNotSent(fn ($req) => str_contains($req->url(), 'threads_publish'));
+});
+
+test('postReply treats a status check that cannot connect as still processing', function () {
+    Http::fake([
+        'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
+        'graph.threads.net/v1.0/CONTAINER1*' => fn () => throw new ConnectionException('cURL error 28: Operation timed out'),
+    ]);
+
+    $parent = PostTargetReply::factory()->create([
+        'platform' => Platform::Threads,
+        'remote_reply_id' => 'R1',
+        'parent_remote_id' => 'MEDIA1',
+    ]);
+
+    $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
+
+    expect($result->processingContainerId)->toBe('CONTAINER1');
+});
+
+test('publishContainer keeps the status check short', function () {
+    $options = [];
+    Http::fake(function ($request, array $requestOptions) use (&$options) {
+        $options = $requestOptions;
+
+        return Http::response(['status' => 'IN_PROGRESS']);
+    });
+
+    threadsEngagementConnector()->publishContainer(threadsEngagementAccount(), 'CONTAINER1', ['access_token' => 't']);
+
+    expect($options['connect_timeout'])->toBeLessThanOrEqual(5)
+        ->and($options['timeout'])->toBeLessThanOrEqual(10);
+});
+
+test('publishContainer publishes a finished container without creating another', function () {
+    Http::fake([
+        'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'FINISHED']),
+        'graph.threads.net/v1.0/THREADSUSER1/threads_publish' => Http::response(['id' => 'R2']),
+    ]);
+
+    $result = threadsEngagementConnector()->publishContainer(threadsEngagementAccount(), 'CONTAINER1', ['access_token' => 't']);
+
+    expect($result->remoteReplyId)->toBe('R2');
+
+    Http::assertNotSent(fn ($req) => str_ends_with($req->url(), '/THREADSUSER1/threads'));
+});
+
+test('postReply does not invite a retry when the publish outcome is unknown', function () {
+    Http::fake([
+        'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
+        'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'FINISHED']),
+        'graph.threads.net/v1.0/THREADSUSER1/threads_publish' => fn () => throw new ConnectionException('cURL error 28: Operation timed out'),
+    ]);
+
+    $parent = PostTargetReply::factory()->create([
+        'platform' => Platform::Threads,
+        'remote_reply_id' => 'R1',
+        'parent_remote_id' => 'MEDIA1',
+    ]);
+
+    $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
+
     expect($result->status)->toBe(EngagementStatus::Failed);
+    expect($result->message)->toContain('may have posted');
+});
+
+test('postReply falls back when Threads gives a blank reason', function () {
+    Http::fake([
+        'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
+        'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'ERROR', 'error_message' => '']),
+    ]);
+
+    $parent = PostTargetReply::factory()->create([
+        'platform' => Platform::Threads,
+        'remote_reply_id' => 'R1',
+        'parent_remote_id' => 'MEDIA1',
+    ]);
+
+    $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
+
+    expect($result->message)->toBe('Threads could not process the reply (ERROR).');
+});
+
+test('postReply stops polling and reports why when Threads rejects the container', function () {
+    Http::fake([
+        'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
+        'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'ERROR', 'error_message' => 'THREADS_API__REPLY_FAILED']),
+    ]);
+
+    $parent = PostTargetReply::factory()->create([
+        'platform' => Platform::Threads,
+        'remote_reply_id' => 'R1',
+        'parent_remote_id' => 'MEDIA1',
+    ]);
+
+    $result = threadsEngagementConnector()->postReply(threadsEngagementAccount(), $parent, 'thanks!', ['access_token' => 't']);
+
+    expect($result->status)->toBe(EngagementStatus::Failed);
+    expect($result->message)->toBe('THREADS_API__REPLY_FAILED');
 
     Http::assertNotSent(fn ($req) => str_contains($req->url(), 'threads_publish'));
 });

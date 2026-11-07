@@ -1,6 +1,7 @@
 import { Link, router, useHttp } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { toast } from 'sonner';
 
 import ComposerController from '@/actions/App/Http/Controllers/Posts/ComposerController';
 import PostingScheduleController from '@/actions/App/Http/Controllers/Posts/PostingScheduleController';
@@ -19,6 +20,11 @@ import {
     OPTIMISTIC_SCHEDULE,
     type OptimisticSubmit,
 } from '@/lib/compose/publish-status';
+import {
+    actionErrorMessage,
+    firstValidationError,
+    settle,
+} from '@/lib/http/errors';
 import { cn } from '@/lib/utils';
 import { index as billingRoute } from '@/routes/billing';
 import { publish, queue } from '@/routes/posts';
@@ -37,7 +43,7 @@ type Props = {
      * Awaited before publishing so the publish never races the save that
      * attaches media to the post.
      */
-    onSaveDraft: () => Promise<void>;
+    onSaveDraft: () => Promise<boolean>;
     /** Ensure a persisted post id before publishing; returns the post id. */
     onEnsurePost: () => Promise<string>;
     /** When in queue mode, true if there is no slot to queue into (no schedule, full, loading, or error). */
@@ -219,9 +225,11 @@ export function SubmitBar({
         // Flush pending edits AND wait for them to persist before publishing —
         // otherwise the publish request races the save that attaches media to
         // the post, and the post publishes without its media.
-        await onSaveDraft();
-        const id = postId ?? (await onEnsurePost());
+        const saved = await onSaveDraft();
+        const id = saved ? (postId ?? (await onEnsurePost())) : '';
         if (!id) {
+            toast.error('Could not save the post, so it was not submitted.');
+
             return;
         }
 
@@ -233,7 +241,7 @@ export function SubmitBar({
             router.visit(ComposerController.show(id).url);
         };
         const handleSubmitException = (
-            response: { status: number; data?: unknown },
+            response: { status: number; data: string },
             revert: () => void,
         ) => {
             revert();
@@ -242,25 +250,44 @@ export function SubmitBar({
 
                 return;
             }
-            if (response.status === 422) {
-                const blocked = parseServerBlocked(response.data);
-                if (blocked.length > 0) {
-                    setServerBlocked(blocked);
-                    setShowBlocked(true);
-                }
+            const blocked = parseServerBlocked(response.data);
+            if (blocked.length > 0) {
+                setServerBlocked(blocked);
+                setShowBlocked(true);
+
+                return;
             }
+            toast.error(
+                actionErrorMessage(response, 'Could not submit the post.'),
+            );
+        };
+        const handleNetworkError = (revert: () => void) => {
+            revert();
+            toast.error('Could not reach the server.');
         };
 
         if (tray.mode === 'now') {
             // Flip the chips to "Publishing" instantly; revert if the call fails.
             const revert = onOptimisticSubmit(OPTIMISTIC_PUBLISH);
             http.transform(() => ({}));
-            await http.post(publish(id).url, {
-                onSuccess,
-                onHttpException: (response) =>
-                    handleSubmitException(response, revert),
-                onNetworkError: revert,
-            });
+            // The callbacks above handle every failure.
+            await settle(
+                http.post(publish(id).url, {
+                    onSuccess,
+                    onError: (errors) => {
+                        revert();
+                        toast.error(
+                            firstValidationError(
+                                errors,
+                                'Could not submit the post.',
+                            ),
+                        );
+                    },
+                    onHttpException: (response) =>
+                        handleSubmitException(response, revert),
+                    onNetworkError: () => handleNetworkError(revert),
+                }),
+            );
 
             return;
         }
@@ -271,17 +298,28 @@ export function SubmitBar({
             http.transform(() =>
                 tray.pickedAt ? { scheduled_at: tray.pickedAt } : {},
             );
-            await http.post(queue(id).url, {
-                onSuccess,
-                // 422 = no open slot in the workspace posting schedule.
-                onHttpException: (response) => {
-                    handleSubmitException(response, revert);
-                    if (response.status === 422) {
+            // The callbacks above handle every failure.
+            await settle(
+                http.post(queue(id).url, {
+                    onSuccess,
+                    // A malformed slot time: same outcome as a slot that is taken.
+                    onError: () => {
+                        revert();
                         setNoSlot(true);
-                    }
-                },
-                onNetworkError: revert,
-            });
+                    },
+                    // 409 = no open slot in the workspace posting schedule.
+                    onHttpException: (response) => {
+                        if (response.status === 409) {
+                            revert();
+                            setNoSlot(true);
+
+                            return;
+                        }
+                        handleSubmitException(response, revert);
+                    },
+                    onNetworkError: () => handleNetworkError(revert),
+                }),
+            );
 
             return;
         }
@@ -289,17 +327,20 @@ export function SubmitBar({
         // mode === 'pick' → schedule at the chosen time (existing M2 path).
         const revert = onOptimisticSubmit(OPTIMISTIC_SCHEDULE);
         http.transform(() => ({ scheduled_at: tray.pickedAt }));
-        await http.put(PostScheduleController.update(id).url, {
-            onSuccess,
-            // 422 = the chosen time is in the past (server guard).
-            onHttpException: (response) => {
-                handleSubmitException(response, revert);
-                if (response.status === 422) {
+        // The callbacks above handle every failure.
+        await settle(
+            http.put(PostScheduleController.update(id).url, {
+                onSuccess,
+                // A 422 reaches only onError: the chosen time is in the past.
+                onError: () => {
+                    revert();
                     setPastTime(true);
-                }
-            },
-            onNetworkError: revert,
-        });
+                },
+                onHttpException: (response) =>
+                    handleSubmitException(response, revert),
+                onNetworkError: () => handleNetworkError(revert),
+            }),
+        );
     }
 
     useEffect(() => {

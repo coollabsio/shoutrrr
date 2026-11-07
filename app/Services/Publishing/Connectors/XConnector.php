@@ -19,6 +19,7 @@ use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Repost\Contracts\RepostConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\InstanceSettings;
 use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
@@ -147,7 +148,7 @@ class XConnector implements PublishConnector, RepostConnector
         } catch (XRequestFailed $e) {
             return $this->mapFailure($e->response, 'X image upload');
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         return PublishResult::success(array_values($remoteIds));
@@ -170,7 +171,7 @@ class XConnector implements PublishConnector, RepostConnector
                 ->acceptJson()
                 ->post("https://api.twitter.com/2/users/{$userId}/retweets", ['tweet_id' => $tweetId]);
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);

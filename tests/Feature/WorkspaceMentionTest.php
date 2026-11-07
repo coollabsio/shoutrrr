@@ -202,3 +202,20 @@ it('drops an unresolvable LinkedIn org reference (vanity slug needs the lookup A
         ->assertSuccessful()
         ->assertJsonMissingPath('mention.handles.linkedin_urn');
 });
+
+it('explains which characters a mention name may use', function () {
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['owner_id' => $user->id]);
+    $user->forceFill(['current_workspace_id' => $workspace->id])->save();
+    Context::add('workspace_id', $workspace->id);
+
+    $this->actingAs($user)
+        ->postJson(route('workspace-mentions.store'), [
+            'name' => '@José',
+            'handles' => ['x' => '@jose'],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors([
+            'name' => 'A mention name can use only letters A to Z, numbers, dots, dashes, and underscores.',
+        ]);
+});

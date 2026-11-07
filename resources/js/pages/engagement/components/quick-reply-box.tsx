@@ -1,11 +1,17 @@
-import { useHttp, usePage } from '@inertiajs/react';
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { usePage } from '@inertiajs/react';
+import {
+    useEffect,
+    useRef,
+    useState,
+    type RefObject,
+    useImperativeHandle,
+    type Ref,
+} from 'react';
 
 import ReplyImageEditController from '@/actions/App/Http/Controllers/Engagement/ReplyImageEditController';
 import ReplyMediaController from '@/actions/App/Http/Controllers/Engagement/ReplyMediaController';
 import ReplyVideoUploadController from '@/actions/App/Http/Controllers/Engagement/ReplyVideoUploadController';
 import ReplyGifController from '@/actions/App/Http/Controllers/Gifs/ReplyGifController';
-import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
 import EditorBody, {
     type EditorBodyHandle,
 } from '@/components/compose/editor-body';
@@ -21,6 +27,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useAttachments } from '@/hooks/compose/use-attachments';
 import { useEmojiPreferences } from '@/hooks/compose/use-emoji-preferences';
+import { useSaveMention } from '@/hooks/compose/use-save-mention';
 import {
     replaceMentionLabel,
     replaceMentionTokens,
@@ -54,9 +61,20 @@ type Props = {
     disabled?: boolean;
     disabledReason?: string;
     editorRef?: RefObject<EditorBodyHandle | null>;
+    /** Lets the inbox put a failed reply back in the box. */
+    restoreRef?: Ref<ReplyDraftHandle>;
     /** Workspace saved-mention library, shared with the composer's picker. */
     savedMentions?: WorkspaceMention[];
-    onSend: (text: string, mediaIds: string[]) => Promise<void>;
+    onSend: (
+        text: string,
+        mediaIds: string[],
+        media: MediaView[],
+    ) => Promise<boolean>;
+};
+
+export type ReplyDraftHandle = {
+    /** Put text and attachments back, without overwriting a newer draft. */
+    restore: (text: string, media: MediaView[]) => void;
 };
 
 export function QuickReplyBox({
@@ -67,6 +85,7 @@ export function QuickReplyBox({
     disabled,
     disabledReason,
     editorRef: editorRefProp,
+    restoreRef,
     savedMentions: initialSavedMentions = EMPTY_SAVED_MENTIONS,
     onSend,
 }: Props) {
@@ -79,10 +98,8 @@ export function QuickReplyBox({
     useEffect(() => {
         setSavedMentions(initialSavedMentions);
     }, [initialSavedMentions]);
-    const saveMentionHttp = useHttp<
-        Record<string, never>,
-        { mention: WorkspaceMention }
-    >({});
+    const { saveMention, processing: saveMentionProcessing } =
+        useSaveMention(setSavedMentions);
 
     // Paste and drag/drop are unwired too, not just the buttons.
     const canAttachMedia = REPLY_MEDIA_PLATFORMS.includes(platform);
@@ -145,27 +162,6 @@ export function QuickReplyBox({
         );
     }
 
-    async function saveMention(mention: MentionPlaceholder): Promise<void> {
-        saveMentionHttp.transform(() => ({
-            name: mention.label,
-            handles: mention.handles,
-        }));
-        const response = await saveMentionHttp.post(
-            WorkspaceMentionController.store().url,
-        );
-        setSavedMentions((current) => {
-            const others = current.filter(
-                (item) =>
-                    item.id !== response.mention.id &&
-                    item.name !== response.mention.name,
-            );
-
-            return [...others, response.mention].sort((left, right) =>
-                left.name.localeCompare(right.name),
-            );
-        });
-    }
-
     // What actually gets sent: mention labels resolved to this platform's handle.
     // Char counting also uses the resolved text so the count matches the payload.
     const outgoing = replaceMentionTokens(text, mentions, platform);
@@ -175,21 +171,33 @@ export function QuickReplyBox({
     const empty = outgoing.trim() === '' && media.length === 0;
     const canSend = !empty && !tooLong && !sending && !rm.isUploading;
 
+    useImperativeHandle(restoreRef, () => ({
+        restore(draft, restoredMedia) {
+            if (editorRef.current?.isEmpty()) {
+                editorRef.current.insertText(draft);
+            }
+            setMedia((current) =>
+                current.length > 0 ? current : restoredMedia,
+            );
+        },
+    }));
+
     async function send() {
         if (!canSend) {
             return;
         }
         setSending(true);
-        try {
-            await onSend(
-                outgoing,
-                media.map((m) => m.id),
-            );
+        const sent = await onSend(
+            outgoing,
+            media.map((m) => m.id),
+            media,
+        );
+        setSending(false);
+        // A failed send keeps the draft, so the user can try again.
+        if (sent) {
             setText('');
             setMedia([]);
             setMentions([]);
-        } finally {
-            setSending(false);
         }
     }
 
@@ -242,7 +250,7 @@ export function QuickReplyBox({
                         renameMention(mention, savedMentionToPlaceholder(saved))
                     }
                     onSaveMention={saveMention}
-                    saveMentionProcessing={saveMentionHttp.processing}
+                    saveMentionProcessing={saveMentionProcessing}
                     placeholder={
                         replyingTo
                             ? `Reply to ${replyingTo}…`

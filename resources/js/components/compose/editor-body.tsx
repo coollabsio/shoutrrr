@@ -98,7 +98,7 @@ type EditorBodyProps = {
         mention: MentionPlaceholder,
         saved: WorkspaceMention,
     ) => void;
-    onSaveMention?: (mention: MentionPlaceholder) => Promise<void>;
+    onSaveMention?: (mention: MentionPlaceholder) => Promise<boolean>;
     saveMentionProcessing?: boolean;
     onDeleteMention?: (saved: WorkspaceMention) => void | Promise<void>;
     markerState?: {
@@ -129,6 +129,8 @@ type EditorBodyProps = {
 export type EditorBodyHandle = {
     /** Insert text (e.g. an emoji) at the current selection and refocus. */
     insertText: (text: string) => void;
+    /** Whether the editor holds no text. */
+    isEmpty: () => boolean;
     /** Move focus into the editor with the caret at the end. */
     focus: () => void;
     /** Release focus from the editor. */
@@ -322,6 +324,7 @@ function EditorBodyInner(
             insertText: (text: string) => {
                 editor?.chain().focus().insertContent(text).run();
             },
+            isEmpty: () => editor?.isEmpty ?? true,
             focus: () => {
                 editor?.commands.focus('end');
             },

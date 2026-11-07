@@ -20,6 +20,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { dayjs } from '@/lib/datetime/dayjs';
+import { failureToasts, settle } from '@/lib/http/errors';
 
 type Props = {
     postId: string;
@@ -81,14 +82,15 @@ export function ShareDialog({ postId, open, onOpenChange }: Props) {
 
     async function fetchActiveShares() {
         setLoadingList(true);
-        try {
-            const result = await http.get(
+        const result = await settle(
+            http.get(
                 PostShareController.index(postId).url,
-                { onNetworkError: () => undefined },
-            );
-            setActiveShares(result as unknown as ShareItem[]);
-        } finally {
-            setLoadingList(false);
+                failureToasts('Could not load the links.'),
+            ),
+        );
+        setLoadingList(false);
+        if (result.ok) {
+            setActiveShares(result.value as unknown as ShareItem[]);
         }
     }
 
@@ -103,31 +105,33 @@ export function ShareDialog({ postId, open, onOpenChange }: Props) {
     async function handleCreate() {
         const expiresAt = resolveExpiresAt(preset, customLocal);
         setCreating(true);
-        try {
-            http.transform(() => ({ expires_at: expiresAt }));
-            const result = await http.post(
+        http.transform(() => ({ expires_at: expiresAt }));
+        const result = await settle(
+            http.post(
                 PostShareController.store(postId).url,
-                { onNetworkError: () => undefined },
-            );
-            setMinted(result as unknown as CreatedShare);
+                failureToasts('Could not create the link.'),
+            ),
+        );
+        setCreating(false);
+        if (result.ok) {
+            setMinted(result.value as unknown as CreatedShare);
             void fetchActiveShares();
-        } finally {
-            setCreating(false);
         }
     }
 
     async function handleRevoke(shareId: string) {
         setRevokingId(shareId);
-        try {
-            http.transform(() => ({}));
-            await http.delete(
+        http.transform(() => ({}));
+        const result = await settle(
+            http.delete(
                 PostShareController.destroy({ post: postId, share: shareId })
                     .url,
-                { onNetworkError: () => undefined },
-            );
+                failureToasts('Could not revoke the link.'),
+            ),
+        );
+        setRevokingId(null);
+        if (result.ok) {
             void fetchActiveShares();
-        } finally {
-            setRevokingId(null);
         }
     }
 

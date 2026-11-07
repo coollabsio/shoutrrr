@@ -78,6 +78,9 @@ export function ReplyThread({
                                 ) : reply.send_status === 'failed' ? (
                                     <span className="text-destructive-foreground/80">
                                         Failed to send
+                                        {reply.send_error
+                                            ? `: ${reply.send_error}`
+                                            : ''}
                                     </span>
                                 ) : (
                                     <>

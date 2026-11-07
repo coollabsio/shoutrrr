@@ -13,7 +13,9 @@ use App\Models\ConnectedAccount;
 use App\Models\PostTarget;
 use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\EngagementConnector;
+use App\Services\Engagement\Contracts\PublishesReplyContainers;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
@@ -28,13 +30,13 @@ use Illuminate\Http\Client\Response;
  * `Unsupported` so the inbox degrades cleanly rather than erroring.
  *
  * Threads has no dedicated reply endpoint: a reply is a normal two-step
- * container publish (create → poll → publish) with `reply_to_id` set on the
+ * container publish (create → check → publish) with `reply_to_id` set on the
  * container-creation call, mirroring `ThreadsConnector::publish()`. Media on
  * replies is declined in this first cut. Threads has no documented
  * reply-like API, so like/unlike always return `Unsupported` without making
  * a request.
  */
-class ThreadsEngagementConnector implements EngagementConnector
+class ThreadsEngagementConnector implements EngagementConnector, PublishesReplyContainers
 {
     use TracksUsage;
 
@@ -114,7 +116,7 @@ class ThreadsEngagementConnector implements EngagementConnector
                 'access_token' => $token,
             ]);
         } catch (ConnectionException $e) {
-            return ReplyPostResult::failed($e->getMessage());
+            return ReplyPostResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $container);
@@ -129,23 +131,45 @@ class ThreadsEngagementConnector implements EngagementConnector
             return ReplyPostResult::failed('Threads did not return a container id');
         }
 
+        return $this->publishContainer($account, $containerId, $credentials);
+    }
+
+    /**
+     * Publish the container if it is ready. This makes one check and never waits:
+     * Meta can take about 30 seconds, and SendReply comes back for a processing one.
+     */
+    public function publishContainer(ConnectedAccount $account, string $containerId, array $credentials): ReplyPostResult
+    {
+        $token = (string) ($credentials['access_token'] ?? '');
+        $threadsUserId = (string) $account->remote_account_id;
+
         try {
-            $status = $this->http->get(self::BASE_URL.'/'.$containerId, [
-                'fields' => 'status',
+            // Short limits: a hung check should hand the queue worker back, not hold it.
+            $response = $this->http->connectTimeout(5)->timeout(10)->get(self::BASE_URL.'/'.$containerId, [
+                'fields' => 'status,error_message',
                 'access_token' => $token,
             ]);
         } catch (ConnectionException $e) {
-            return ReplyPostResult::failed($e->getMessage());
+            // Nothing is published yet, so a failed check is safe to repeat.
+            ConnectionFailure::report($e);
+
+            return ReplyPostResult::processing($containerId);
         }
 
-        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $status);
+        $this->meter(UsageCategory::ExternalApi, UsageOperation::MEDIA_STATUS_POLL, $account, $response);
 
-        if ($status->failed()) {
-            return $this->mapPostFailure($status);
+        if ($response->failed()) {
+            return $this->mapPostFailure($response);
         }
 
-        if ((string) $status->json('status') !== 'FINISHED') {
-            return ReplyPostResult::failed('Threads reply is still processing');
+        $status = (string) $response->json('status');
+
+        if ($status === 'IN_PROGRESS') {
+            return ReplyPostResult::processing($containerId);
+        }
+
+        if ($status !== 'FINISHED') {
+            return ReplyPostResult::failed((string) ($response->json('error_message') ?: "Threads could not process the reply ({$status})."));
         }
 
         try {
@@ -154,7 +178,9 @@ class ThreadsEngagementConnector implements EngagementConnector
                 'access_token' => $token,
             ]);
         } catch (ConnectionException $e) {
-            return ReplyPostResult::failed($e->getMessage());
+            ConnectionFailure::report($e);
+
+            return ReplyPostResult::failed('Threads may have posted this reply. Check the post before you send it again.');
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $publish);
@@ -183,7 +209,7 @@ class ThreadsEngagementConnector implements EngagementConnector
                 'access_token' => (string) ($credentials['access_token'] ?? ''),
             ]);
         } catch (ConnectionException $e) {
-            return ReplyActionResult::failed($e->getMessage());
+            return ReplyActionResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_DELETE, $account, $response);

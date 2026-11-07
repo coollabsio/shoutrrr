@@ -46,7 +46,7 @@ function renderReplyBox(
         createElement(QuickReplyBox, {
             replyId: 'reply-1',
             platform: overrides.platform ?? 'bluesky',
-            onSend: async () => {},
+            onSend: async () => true,
         }),
     );
 }

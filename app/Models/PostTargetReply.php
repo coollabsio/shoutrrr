@@ -38,6 +38,7 @@ use Override;
  * @property string|null $like_remote_id
  * @property bool $is_ours
  * @property SendStatus|null $send_status
+ * @property string|null $send_error
  * @property CarbonImmutable $fetched_at
  */
 #[Fillable([
@@ -60,6 +61,7 @@ use Override;
     'like_remote_id',
     'is_ours',
     'send_status',
+    'send_error',
     'fetched_at',
 ])]
 class PostTargetReply extends Model

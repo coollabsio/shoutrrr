@@ -163,7 +163,32 @@ test('threads rejects a post with neither text nor media', function () {
         ->and($result->errorKind)->toBe(ErrorKind::Validation);
 });
 
-test('threads returns a MediaProcessing failure while the container status is IN_PROGRESS, polling with fields=status', function () {
+test('threads falls back when Threads gives a blank reason', function () {
+    Http::fake([
+        'https://graph.threads.net/v1.0/threads123/threads' => Http::response(['id' => 'container-1']),
+        'https://graph.threads.net/v1.0/container-1*' => Http::response(['status' => 'ERROR', 'error_message' => '']),
+    ]);
+
+    $result = app(ThreadsConnector::class)->publish(threadsContext(['processing']));
+
+    expect($result->errorMessage)->toBe('Threads container processing failed (ERROR).');
+});
+
+test('threads shows the reason Threads gives for a failed container', function () {
+    Http::fake([
+        'https://graph.threads.net/v1.0/threads123/threads' => Http::response(['id' => 'container-1']),
+        'https://graph.threads.net/v1.0/container-1*' => Http::response(['status' => 'ERROR', 'error_message' => 'THREADS_API__MEDIA_DOWNLOAD_FAILED']),
+    ]);
+
+    $result = app(ThreadsConnector::class)->publish(threadsContext(['processing']));
+
+    expect($result->errorKind)->toBe(ErrorKind::ServerError)
+        ->and($result->errorMessage)->toBe('THREADS_API__MEDIA_DOWNLOAD_FAILED');
+
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'threads_publish'));
+});
+
+test('threads returns a MediaProcessing failure while the container status is IN_PROGRESS, polling with fields=status,error_message', function () {
     Http::fake([
         'https://graph.threads.net/v1.0/threads123/threads' => Http::response(['id' => 'container-1']),
         'https://graph.threads.net/v1.0/container-1*' => Http::response(['status' => 'IN_PROGRESS']),
@@ -176,7 +201,7 @@ test('threads returns a MediaProcessing failure while the container status is IN
         ->and($result->retryAfter)->toBe(6);
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/container-1')
-        && ($request['fields'] ?? null) === 'status');
+        && ($request['fields'] ?? null) === 'status,error_message');
 
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'threads_publish'));
 });

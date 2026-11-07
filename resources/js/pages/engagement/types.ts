@@ -15,6 +15,7 @@ export type ReplyItem = {
     can_like: boolean;
     is_ours: boolean;
     send_status: 'sending' | 'sent' | 'failed' | null;
+    send_error: string | null;
     status: 'pending' | 'responded' | 'archived';
     post_target_id: string;
     post_id: string | null;

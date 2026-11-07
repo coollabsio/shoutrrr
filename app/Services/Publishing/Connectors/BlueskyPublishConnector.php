@@ -25,6 +25,7 @@ use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Repost\Contracts\RepostConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\UsageOperation;
 use Closure;
 use GuzzleHttp\Psr7\Utils;
@@ -195,7 +196,7 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
         } catch (BlueskyValidationFailed $e) {
             return PublishResult::failure(ErrorKind::Validation, $e->getMessage());
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         return PublishResult::success(array_values($remoteIds));
@@ -218,7 +219,7 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
         } catch (BlueskyRequestFailed) {
             return PublishResult::failure(ErrorKind::ServerError, 'Could not resolve the Bluesky post to repost.');
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         try {
@@ -232,7 +233,7 @@ class BlueskyPublishConnector implements PublishConnector, RepostConnector
                 ],
             ]);
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);

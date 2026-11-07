@@ -5,6 +5,7 @@ import {
     applyOptimisticSubmit,
     type OptimisticSubmit,
 } from '@/lib/compose/publish-status';
+import { failureToasts, settle } from '@/lib/http/errors';
 import { retry as retryRoute } from '@/routes/posts/targets';
 import type { PostView } from '@/types/compose';
 
@@ -65,22 +66,20 @@ export function usePublishStatus({ pagePost }: UsePublishStatus) {
             return;
         }
         setRetryingIds((prev) => new Set(prev).add(targetId));
-        try {
-            const result = await http.post(
-                retryRoute({
-                    post: snapshot.id,
-                    target: targetId,
-                }).url,
-                { onNetworkError: () => undefined },
-            );
-            setSnapshot(result.post);
-        } finally {
-            setRetryingIds((prev) => {
-                const next = new Set(prev);
-                next.delete(targetId);
+        const result = await settle(
+            http.post(
+                retryRoute({ post: snapshot.id, target: targetId }).url,
+                failureToasts('Could not retry the post.'),
+            ),
+        );
+        setRetryingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(targetId);
 
-                return next;
-            });
+            return next;
+        });
+        if (result.ok) {
+            setSnapshot(result.value.post);
         }
     }
 

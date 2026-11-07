@@ -32,6 +32,8 @@ class WorkspaceMentionController extends Controller
             'name' => ['required', 'string', 'max:80', 'regex:/^@[A-Za-z0-9_.-]+$/'],
             'handles' => ['required', 'array'],
             ...$handleRules,
+        ], [
+            'name.regex' => 'A mention name can use only letters A to Z, numbers, dots, dashes, and underscores.',
         ]);
         $handles = [];
         foreach ($allowedPlatforms as $platform) {

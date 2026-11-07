@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import MentionPicker, {
@@ -185,6 +185,48 @@ describe('saved mention editing', () => {
             name: `Delete ${savedMention.name}`,
         });
         expect(noDeleteButton).not.toBeInTheDocument();
+    });
+});
+
+describe('saving a mention', () => {
+    const activeMention: MentionPlaceholder = {
+        id: 'mention-1',
+        label: '@saved',
+        handles: { x: '@saved_x' },
+    } as MentionPlaceholder;
+    const savedMention: WorkspaceMention = {
+        id: 'saved-1',
+        name: '@saved',
+        handles: { x: '@saved_x' },
+    } as WorkspaceMention;
+
+    it('leaves the mention open when the save fails', async () => {
+        const unhandledRejection = vi.fn();
+        process.on('unhandledRejection', unhandledRejection);
+        const onMentionComplete = vi.fn();
+
+        render(
+            <MentionPicker
+                activeMention={activeMention}
+                savedMentions={[savedMention]}
+                activePlatforms={['x']}
+                onApplySavedMention={vi.fn()}
+                onUpdateMention={vi.fn()}
+                onMentionComplete={onMentionComplete}
+                onSaveMention={async () => false}
+            />,
+        );
+        fireEvent.click(
+            screen.getByRole('button', { name: `Edit ${savedMention.name}` }),
+        );
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /save/i }));
+            await new Promise((settled) => setTimeout(settled));
+        });
+        process.off('unhandledRejection', unhandledRejection);
+
+        expect(onMentionComplete).not.toHaveBeenCalled();
+        expect(unhandledRejection).not.toHaveBeenCalled();
     });
 });
 

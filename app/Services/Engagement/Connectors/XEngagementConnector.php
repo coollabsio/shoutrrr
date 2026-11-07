@@ -17,6 +17,7 @@ use App\Models\PostTargetReply;
 use App\Services\Engagement\Contracts\BatchEngagementConnector;
 use App\Services\Engagement\Contracts\EngagementConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\RetryAfter;
 use App\Support\UsageOperation;
 use Carbon\CarbonImmutable;
@@ -368,7 +369,7 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
         } catch (XReplyMediaFailed $e) {
             return ReplyPostResult::failed($this->excerpt($e->response));
         } catch (ConnectionException $e) {
-            return ReplyPostResult::failed($e->getMessage());
+            return ReplyPostResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_SEND, $account, $response);
@@ -393,7 +394,7 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
                     'tweet_id' => $reply->remote_reply_id,
                 ]);
         } catch (ConnectionException $e) {
-            return ReplyActionResult::failed($e->getMessage());
+            return ReplyActionResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_LIKE, $account, $response);
@@ -407,7 +408,7 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
             $response = $this->http->withToken((string) ($credentials['access_token'] ?? ''))->acceptJson()
                 ->delete(self::BASE.'/users/'.$account->remote_account_id.'/likes/'.$reply->remote_reply_id);
         } catch (ConnectionException $e) {
-            return ReplyActionResult::failed($e->getMessage());
+            return ReplyActionResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_UNLIKE, $account, $response);
@@ -421,7 +422,7 @@ class XEngagementConnector implements BatchEngagementConnector, EngagementConnec
             $response = $this->http->withToken((string) ($credentials['access_token'] ?? ''))->acceptJson()
                 ->delete(self::BASE.'/tweets/'.$reply->remote_reply_id);
         } catch (ConnectionException $e) {
-            return ReplyActionResult::failed($e->getMessage());
+            return ReplyActionResult::failed(ConnectionFailure::report($e));
         }
 
         $this->meter(UsageCategory::ExternalApi, UsageOperation::REPLY_DELETE, $account, $response);

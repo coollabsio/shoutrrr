@@ -19,6 +19,7 @@ use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Repost\Contracts\RepostConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -141,7 +142,7 @@ class LinkedInConnector implements PublishConnector, RepostConnector
         } catch (LinkedInRequestFailed $e) {
             return $this->mapFailure($e->response);
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         if ($urn === '') {
@@ -179,7 +180,7 @@ class LinkedInConnector implements PublishConnector, RepostConnector
                 ->acceptJson()
                 ->post(self::POSTS_URL, $body);
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         $this->meter(UsageCategory::Publish, UsageOperation::POST, $context->account, $response);

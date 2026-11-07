@@ -17,6 +17,7 @@ use App\Services\Media\PublicMediaUrl;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -145,7 +146,7 @@ class ThreadsConnector implements PublishConnector
             // won't change that, so fail with the reason rather than looping.
             return PublishResult::failure(ErrorKind::Unsupported, $e->getMessage());
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         return PublishResult::success(array_values($remoteIds));
@@ -301,7 +302,7 @@ class ThreadsConnector implements PublishConnector
     private function pollContainer(PublishContext $context, string $containerId, string $token): ?PublishResult
     {
         $response = $this->http->get(self::BASE_URL.'/'.$containerId, [
-            'fields' => 'status',
+            'fields' => 'status,error_message',
             'access_token' => $token,
         ]);
 
@@ -318,7 +319,7 @@ class ThreadsConnector implements PublishConnector
             'IN_PROGRESS' => PublishResult::failure(ErrorKind::MediaProcessing, 'Threads is processing the media.', retryAfter: 6),
             default => PublishResult::failure(
                 ErrorKind::ServerError,
-                "Threads container processing failed ({$status}).",
+                (string) ($response->json('error_message') ?: "Threads container processing failed ({$status})."),
                 $response->status(),
                 $this->excerpt($response),
             ),

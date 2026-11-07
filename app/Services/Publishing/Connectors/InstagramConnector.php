@@ -18,6 +18,7 @@ use App\Services\Media\PublicMediaUrl;
 use App\Services\Publishing\Connectors\Concerns\MapsHttpErrors;
 use App\Services\Publishing\Contracts\PublishConnector;
 use App\Services\Usage\Concerns\TracksUsage;
+use App\Support\ConnectionFailure;
 use App\Support\UsageOperation;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -113,7 +114,7 @@ class InstagramConnector implements PublishConnector
             // won't change that, so fail with the reason rather than looping.
             return PublishResult::failure(ErrorKind::Unsupported, $e->getMessage());
         } catch (ConnectionException $e) {
-            return PublishResult::failure(ErrorKind::Network, $e->getMessage());
+            return PublishResult::failure(ErrorKind::Network, ConnectionFailure::report($e), excerpt: $e->getMessage());
         }
 
         if ($mediaId === '') {

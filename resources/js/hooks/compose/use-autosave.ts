@@ -48,7 +48,7 @@ export function useAutosave({
     // The save currently in flight, tracked as a promise (not a boolean) so a
     // forced `flush` can await it before starting the next save — this is what
     // lets publishing wait for the draft (media, targets) to be persisted first.
-    const inFlight = useRef<Promise<void> | null>(null);
+    const inFlight = useRef<Promise<boolean> | null>(null);
     // Latest known post id, mirrored in a ref so a concurrent `ensurePost` can
     // read it after awaiting an in-flight create (the reducer `state` closure is
     // stale inside an async call).
@@ -118,9 +118,11 @@ export function useAutosave({
             ...buildPutBody(state, accountIds),
             expected_updated_at: baselineRef.current,
         }));
+        let saved = false;
         await http.put(PostController.update(postId).url, {
             // onSuccess's first arg is the parsed response body (TResponse).
             onSuccess: (data) => {
+                saved = true;
                 baselineRef.current = data.post.updated_at;
                 dispatch({ type: 'saveSucceeded', post: data.post });
                 onSaved?.();
@@ -139,6 +141,9 @@ export function useAutosave({
             },
             onNetworkError: () => dispatch({ type: 'saveFailedOffline' }),
         });
+        if (!saved) {
+            throw new Error('The save was rejected.');
+        }
     }
 
     /**
@@ -147,13 +152,13 @@ export function useAutosave({
      * tracked promise never rejects (failures are surfaced via the save
      * callbacks → reducer), so awaiting it never blocks a subsequent publish.
      */
-    function enqueueSave(work: () => Promise<unknown>): Promise<void> {
+    function enqueueSave(work: () => Promise<unknown>): Promise<boolean> {
         const prior = inFlight.current ?? Promise.resolve();
-        const tracked: Promise<void> = prior
+        const tracked: Promise<boolean> = prior
             .then(work, work)
             .then(
-                () => undefined,
-                () => undefined,
+                () => true,
+                () => false,
             )
             .finally(() => {
                 if (inFlight.current === tracked) {
@@ -207,7 +212,7 @@ export function useAutosave({
      * are durably persisted, so callers (e.g. publishing) can rely on media and
      * targets being saved server-side before the publish request fires.
      */
-    async function flush(): Promise<void> {
+    async function flush(): Promise<boolean> {
         if (timer.current) {
             clearTimeout(timer.current);
             timer.current = null;
@@ -218,16 +223,16 @@ export function useAutosave({
             await inFlight.current;
         }
         if (state.saveState === 'saved' || state.saveState === 'idle') {
-            return;
+            return true;
         }
         // Same empty-draft guard as the debounced path: forcing a save (e.g. on
         // a destination change or blur) must not create a blank draft either.
         if (postIdRef.current === null && !composerHasContent(state)) {
             dispatch({ type: 'saveSkippedEmpty' });
 
-            return;
+            return true;
         }
-        await enqueueSave(persist);
+        return enqueueSave(persist);
     }
 
     // Debounce while dirty. `save` is intentionally re-created each render so the

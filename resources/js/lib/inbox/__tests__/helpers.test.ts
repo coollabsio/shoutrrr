@@ -6,10 +6,12 @@ import {
     actionErrorMessage,
     adjacentIndex,
     atHandle,
+    firstValidationError,
     initialsFrom,
     isBareShortcut,
     isTypingTarget,
     nextAfterArchive,
+    withoutFailedAttempts,
     relativeTime,
 } from '../helpers';
 
@@ -129,5 +131,35 @@ describe('relativeTime', () => {
         );
         expect(relativeTime(null)).toBe('');
         expect(relativeTime('not-a-date')).toBe('');
+    });
+});
+
+describe('withoutFailedAttempts', () => {
+    it('drops failed bubbles from earlier attempts, stored or not', () => {
+        const kept = [
+            { id: 'stored-1', send_status: null },
+            { id: 'stored-2', send_status: 'sent' as const },
+            { id: 'temp-2', send_status: 'sending' as const },
+        ];
+
+        expect(
+            withoutFailedAttempts([
+                ...kept,
+                { id: 'temp-1', send_status: 'failed' as const },
+                { id: 'stored-3', send_status: 'failed' as const },
+            ]),
+        ).toEqual(kept);
+    });
+});
+
+describe('firstValidationError', () => {
+    it('returns the first validation message', () => {
+        expect(firstValidationError({ text: 'Too long.' }, 'Fallback')).toBe(
+            'Too long.',
+        );
+    });
+
+    it('falls back when there are no messages', () => {
+        expect(firstValidationError({}, 'Fallback')).toBe('Fallback');
     });
 });

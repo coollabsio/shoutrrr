@@ -46,7 +46,7 @@ class PostQueueController extends Controller
                 'message' => $request->filled('scheduled_at')
                     ? 'Choose an open slot from your posting queue.'
                     : 'No open posting slot available. Add posting-schedule slots in settings.',
-            ], 422);
+            ], 409);
         }
 
         $post->scheduled_at = $slot;

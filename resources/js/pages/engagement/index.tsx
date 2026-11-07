@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useLiveProps } from '@/hooks/use-live-props';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { failureToasts, settle } from '@/lib/http/errors';
 import {
     disabledPlatformLabels,
     platformKeys,
@@ -56,14 +57,18 @@ import {
     thread as threadRoute,
     unlike as unlikeRoute,
 } from '@/routes/engagement';
+import type { MediaView } from '@/types/compose';
 import type { PlatformName, WorkspaceMention } from '@/types/compose';
 
-import { QuickReplyBox } from './components/quick-reply-box';
+import {
+    QuickReplyBox,
+    type ReplyDraftHandle,
+} from './components/quick-reply-box';
 import { ReplyFilters } from './components/reply-filters';
 import { ReplyStream } from './components/reply-stream';
 import { ReplyThread } from './components/reply-thread';
 import {
-    actionErrorMessage,
+    withoutFailedAttempts,
     adjacentIndex,
     atHandle,
     engagementShortcut,
@@ -248,6 +253,27 @@ function EngagementDisabledBanner({
     );
 }
 
+type ThreadResponse = { post_excerpt: string | null; thread: ReplyItem[] };
+
+/** The thread around a reply, or null when it cannot be loaded right now. */
+async function loadThread(id: string): Promise<ThreadResponse | null> {
+    const response = await settle(
+        fetch(threadRoute(id).url, { headers: { Accept: 'application/json' } }),
+    );
+    if (!response.ok || !response.value.ok) {
+        return null;
+    }
+    const body = await settle<ThreadResponse>(response.value.json());
+
+    return body.ok ? body.value : null;
+}
+
+/** How often the pane re-reads a thread while a reply sends in the background. */
+export const REPLY_POLL_MS = 2000;
+
+/** Five minutes: the queue worker may not be running, so do not poll forever. */
+export const REPLY_POLL_LIMIT = 150;
+
 type RightPaneProps = {
     selected: ReplyItem;
     onArchived: (id: string) => void;
@@ -263,7 +289,7 @@ type RightPaneProps = {
  * response into a fresh `GET /engagement`, which drops the deferred `replies`
  * scroll prop and blanks the left list to a skeleton.
  */
-function RightPane({
+export function RightPane({
     selected,
     onArchived,
     onResponded,
@@ -303,26 +329,87 @@ function RightPane({
     );
 
     useEffect(() => {
+        // Ignore an answer that arrives after the selection moved on.
+        let current = true;
         setLoading(true);
-        fetch(threadRoute(selectedId).url, {
-            headers: { Accept: 'application/json' },
-        })
-            .then((r) => r.json())
-            .then(
-                (data: {
-                    post_excerpt: string | null;
-                    thread: ReplyItem[];
-                }) => {
-                    setPostExcerpt(data.post_excerpt);
-                    setThread(data.thread);
-                },
-            )
-            .catch(() => {
-                setPostExcerpt(null);
-                setThread([]);
-            })
-            .finally(() => setLoading(false));
+        void loadThread(selectedId).then((data) => {
+            if (!current) {
+                return;
+            }
+            setPostExcerpt(data?.post_excerpt ?? null);
+            setThread(data?.thread ?? []);
+            setLoading(false);
+        });
+
+        return () => {
+            current = false;
+        };
     }, [selectedId]);
+
+    // Rows a queue worker is still sending; temp rows are in the request itself.
+    const hasQueuedReply = thread.some(
+        (r) => r.send_status === 'sending' && !r.id.startsWith('temp-'),
+    );
+    // Replies sent from here: the draft to restore if the job fails, and the
+    // conversation to mark replied once it sends.
+    const queuedReplies = useRef(
+        new Map<
+            string,
+            { draft: string; media: MediaView[]; parentId: string }
+        >(),
+    );
+    const replyBoxRef = useRef<ReplyDraftHandle>(null);
+
+    useEffect(() => {
+        if (!hasQueuedReply) {
+            return;
+        }
+
+        let polls = 0;
+        const timer = setInterval(() => {
+            polls += 1;
+            if (polls > REPLY_POLL_LIMIT) {
+                clearInterval(timer);
+                toast.warning(
+                    'This reply is still sending. Reload the page later to see the result.',
+                );
+
+                return;
+            }
+            void loadThread(selectedId).then((data) => {
+                // A failed poll changes nothing; the next one tries again.
+                if (data === null) {
+                    return;
+                }
+                const latest = new Map(data.thread.map((r) => [r.id, r]));
+                setThread((prev) => prev.map((r) => latest.get(r.id) ?? r));
+            });
+        }, REPLY_POLL_MS);
+
+        return () => clearInterval(timer);
+    }, [hasQueuedReply, selectedId]);
+
+    useEffect(() => {
+        for (const reply of thread) {
+            const queued = queuedReplies.current.get(reply.id);
+            if (queued === undefined || reply.send_status === 'sending') {
+                continue;
+            }
+            if (reply.send_status === 'sent') {
+                queuedReplies.current.delete(reply.id);
+                onResponded(queued.parentId);
+                continue;
+            }
+            // The box now belongs to another conversation: keep the draft until
+            // its own conversation is open again.
+            if (queued.parentId !== selectedId) {
+                continue;
+            }
+            queuedReplies.current.delete(reply.id);
+            toast.error(reply.send_error ?? 'Could not send the reply.');
+            replyBoxRef.current?.restore(queued.draft, queued.media);
+        }
+    }, [thread, selectedId, onResponded]);
 
     function setSendStatus(id: string, status: ReplyItem['send_status']) {
         setThread((prev) =>
@@ -330,10 +417,15 @@ function RightPane({
         );
     }
 
-    async function send(text: string, mediaIds: string[]) {
+    /** Sends the draft; false when it did not send, so the box keeps it. */
+    async function send(
+        text: string,
+        mediaIds: string[],
+        media: MediaView[],
+    ): Promise<boolean> {
         const tempId = `temp-${Date.now()}`;
         setThread((prev) => [
-            ...prev,
+            ...withoutFailedAttempts(prev),
             {
                 ...selected,
                 id: tempId,
@@ -347,29 +439,36 @@ function RightPane({
         // `media` is an array of already-uploaded media ids, not Files, so this
         // stays a JSON request — no `forceFormData`.
         respondHttp.transform(() => ({ text, media: mediaIds }));
-        // Failures rethrow so QuickReplyBox's `await onSend(...)` still sees them.
-        await respondHttp.post(respondRoute(selected.id).url, {
-            onSuccess: ({ reply }) => {
-                // The server row carries the real id and send_status (media
-                // replies hand off to a job and stay "sending").
-                setThread((prev) =>
-                    prev.map((r) => (r.id === tempId ? reply : r)),
-                );
-                onResponded(selected.id);
-            },
-            onError: () => setSendStatus(tempId, 'failed'),
-            onHttpException: (r) => {
-                setSendStatus(tempId, 'failed');
-                toast.error(actionErrorMessage(r, 'Could not send the reply.'));
-            },
-            onNetworkError: () => {
-                setSendStatus(tempId, 'failed');
-                toast.error('Could not reach the server.');
-            },
-        });
+        const result = await settle(
+            respondHttp.post(
+                respondRoute(selected.id).url,
+                failureToasts('Could not send the reply.'),
+            ),
+        );
+        if (!result.ok) {
+            setSendStatus(tempId, 'failed');
+
+            return false;
+        }
+
+        // The server row carries the real id and send_status (a reply handed
+        // off to a job stays "sending").
+        const { reply } = result.value;
+        if (reply.send_status === 'sending') {
+            queuedReplies.current.set(reply.id, {
+                draft: text,
+                media,
+                parentId: selected.id,
+            });
+        } else {
+            onResponded(selected.id);
+        }
+        setThread((prev) => prev.map((r) => (r.id === tempId ? reply : r)));
+
+        return true;
     }
 
-    function toggleLike(reply: ReplyItem) {
+    async function toggleLike(reply: ReplyItem) {
         const wasLiked = reply.is_liked;
         const setLiked = (isLiked: boolean) =>
             setThread((prev) =>
@@ -377,75 +476,52 @@ function RightPane({
                     r.id === reply.id ? { ...r, is_liked: isLiked } : r,
                 ),
             );
-        const restore = () => setLiked(wasLiked);
         const fallback = wasLiked
             ? 'Could not remove the like.'
             : 'Could not like this reply.';
 
         setLiked(!wasLiked);
 
-        void likeHttp[wasLiked ? 'delete' : 'post'](
-            (wasLiked ? unlikeRoute : likeRoute)(reply.id).url,
-            {
-                // Reconcile against the server rather than trusting the flip.
-                onSuccess: ({ is_liked }) => setLiked(is_liked),
-                onError: restore,
-                onHttpException: (r) => {
-                    restore();
-                    toast.error(actionErrorMessage(r, fallback));
-                },
-                onNetworkError: () => {
-                    restore();
-                    toast.error('Could not reach the server.');
-                },
-            },
-            // `submit()` rethrows after the callbacks; they already handled it.
-        ).catch(() => {});
+        const result = await settle(
+            likeHttp[wasLiked ? 'delete' : 'post'](
+                (wasLiked ? unlikeRoute : likeRoute)(reply.id).url,
+                failureToasts(fallback),
+            ),
+        );
+        // Reconcile against the server rather than trusting the flip.
+        setLiked(result.ok ? result.value.is_liked : wasLiked);
     }
 
-    function remove(reply: ReplyItem) {
+    async function remove(reply: ReplyItem) {
         const index = thread.findIndex((r) => r.id === reply.id);
-        const restore = () =>
+        setThread((prev) => prev.filter((r) => r.id !== reply.id));
+
+        const result = await settle(
+            deleteHttp.delete(
+                destroyRoute(reply.id).url,
+                failureToasts('Could not delete the reply.'),
+            ),
+        );
+        if (!result.ok) {
             setThread((prev) => {
                 const next = [...prev];
                 next.splice(index < 0 ? next.length : index, 0, reply);
 
                 return next;
             });
-
-        setThread((prev) => prev.filter((r) => r.id !== reply.id));
-
-        void deleteHttp
-            .delete(destroyRoute(reply.id).url, {
-                onError: restore,
-                onHttpException: (r) => {
-                    restore();
-                    toast.error(
-                        actionErrorMessage(r, 'Could not delete the reply.'),
-                    );
-                },
-                onNetworkError: () => {
-                    restore();
-                    toast.error('Could not reach the server.');
-                },
-            })
-            .catch(() => {});
+        }
     }
 
-    function archive() {
-        void archiveHttp
-            .post(archiveRoute(selected.id).url, {
-                onSuccess: () => onArchived(selected.id),
-                onHttpException: (r) => {
-                    toast.error(
-                        actionErrorMessage(r, 'Could not archive the reply.'),
-                    );
-                },
-                onNetworkError: () => {
-                    toast.error('Could not reach the server.');
-                },
-            })
-            .catch(() => {});
+    async function archive() {
+        const result = await settle(
+            archiveHttp.post(
+                archiveRoute(selected.id).url,
+                failureToasts('Could not archive the reply.'),
+            ),
+        );
+        if (result.ok) {
+            onArchived(selected.id);
+        }
     }
 
     return (
@@ -551,7 +627,7 @@ function RightPane({
                                 size="sm"
                                 aria-label="Archive reply"
                                 className="gap-1.5 text-muted-foreground hover:text-foreground"
-                                onClick={archive}
+                                onClick={() => void archive()}
                             />
                         }
                     >
@@ -572,8 +648,8 @@ function RightPane({
                 postExcerpt={postExcerpt}
                 thread={thread}
                 loading={loading}
-                onToggleLike={toggleLike}
-                onDelete={remove}
+                onToggleLike={(reply) => void toggleLike(reply)}
+                onDelete={(reply) => void remove(reply)}
             />
 
             {/* Key by conversation so switching replies gives a fresh draft:
@@ -593,6 +669,7 @@ function RightPane({
                         : undefined
                 }
                 editorRef={replyEditorRef}
+                restoreRef={replyBoxRef}
                 savedMentions={savedMentions}
                 onSend={send}
             />
@@ -741,26 +818,21 @@ export default function EngagementIndex({
         });
     }
 
-    function archiveSelected() {
+    async function archiveSelected() {
         if (!selected) {
             return;
         }
 
         const archivedId = selected.id;
-
-        void archiveHttp
-            .post(archiveRoute(archivedId).url, {
-                onSuccess: () => handleArchived(archivedId),
-                onHttpException: (r) => {
-                    toast.error(
-                        actionErrorMessage(r, 'Could not archive the reply.'),
-                    );
-                },
-                onNetworkError: () => {
-                    toast.error('Could not reach the server.');
-                },
-            })
-            .catch(() => {});
+        const result = await settle(
+            archiveHttp.post(
+                archiveRoute(archivedId).url,
+                failureToasts('Could not archive the reply.'),
+            ),
+        );
+        if (result.ok) {
+            handleArchived(archivedId);
+        }
     }
 
     function focusReply() {
@@ -807,7 +879,7 @@ export default function EngagementIndex({
                     moveSelection(-1);
                     break;
                 case 'archive':
-                    archiveSelected();
+                    void archiveSelected();
                     break;
                 case 'open':
                     openSelectedComment();
@@ -836,34 +908,29 @@ export default function EngagementIndex({
         router.reload({ only: ['shell.unreadReplies'] });
     }
 
-    function markAllRead() {
-        void readAllHttp
-            .post(readAllRoute({ query: filters }).url, {
-                onSuccess: () => {
-                    // Adopt the refetched list outright: the unread view should
-                    // empty and the rest lose their unread markers.
-                    router.reload({
-                        only: ['replies', 'shell.unreadReplies'],
-                        reset: ['replies'],
-                        onSuccess: (page) => {
-                            setOnScreen(
-                                (page.props as Partial<PageProps>).replies
-                                    ?.data ?? [],
-                            );
-                            setRevealedIds([]);
-                        },
-                    });
-                },
-                onHttpException: (r) => {
-                    toast.error(
-                        actionErrorMessage(r, 'Could not mark replies read.'),
-                    );
-                },
-                onNetworkError: () => {
-                    toast.error('Could not reach the server.');
-                },
-            })
-            .catch(() => {});
+    async function markAllRead() {
+        const result = await settle(
+            readAllHttp.post(
+                readAllRoute({ query: filters }).url,
+                failureToasts('Could not mark replies read.'),
+            ),
+        );
+        if (!result.ok) {
+            return;
+        }
+
+        // Adopt the refetched list outright: the unread view should
+        // empty and the rest lose their unread markers.
+        router.reload({
+            only: ['replies', 'shell.unreadReplies'],
+            reset: ['replies'],
+            onSuccess: (page) => {
+                setOnScreen(
+                    (page.props as Partial<PageProps>).replies?.data ?? [],
+                );
+                setRevealedIds([]);
+            },
+        });
     }
 
     function handleResponded(id: string) {
