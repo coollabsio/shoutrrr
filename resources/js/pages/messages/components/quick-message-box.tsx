@@ -40,7 +40,7 @@ type Props = {
     maxLength?: number;
     editorRef?: RefObject<HTMLTextAreaElement | null>;
     /** Whole `MediaView`s, not ids, so the optimistic bubble can show the image. */
-    onSend: (text: string, media: MediaView[]) => Promise<void>;
+    onSend: (text: string, media: MediaView[]) => Promise<boolean>;
 };
 
 export function QuickMessageBox({
@@ -113,14 +113,12 @@ export function QuickMessageBox({
             return;
         }
         setSending(true);
-        try {
-            await onSend(text, media);
+        const sent = await onSend(text, media);
+        setSending(false);
+        // A failed send keeps the draft, so the user can try again.
+        if (sent) {
             setText('');
             setMedia([]);
-        } catch {
-            // onSend reports the failure; keep the draft for a retry.
-        } finally {
-            setSending(false);
         }
     }
 

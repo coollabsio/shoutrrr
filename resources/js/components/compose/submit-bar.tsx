@@ -20,7 +20,11 @@ import {
     OPTIMISTIC_SCHEDULE,
     type OptimisticSubmit,
 } from '@/lib/compose/publish-status';
-import { actionErrorMessage, firstValidationError } from '@/lib/http/errors';
+import {
+    actionErrorMessage,
+    firstValidationError,
+    settle,
+} from '@/lib/http/errors';
 import { cn } from '@/lib/utils';
 import { index as billingRoute } from '@/routes/billing';
 import { publish, queue } from '@/routes/posts';
@@ -266,21 +270,24 @@ export function SubmitBar({
             // Flip the chips to "Publishing" instantly; revert if the call fails.
             const revert = onOptimisticSubmit(OPTIMISTIC_PUBLISH);
             http.transform(() => ({}));
-            await http.post(publish(id).url, {
-                onSuccess,
-                onError: (errors) => {
-                    revert();
-                    toast.error(
-                        firstValidationError(
-                            errors,
-                            'Could not submit the post.',
-                        ),
-                    );
-                },
-                onHttpException: (response) =>
-                    handleSubmitException(response, revert),
-                onNetworkError: () => handleNetworkError(revert),
-            });
+            // The callbacks above handle every failure.
+            await settle(
+                http.post(publish(id).url, {
+                    onSuccess,
+                    onError: (errors) => {
+                        revert();
+                        toast.error(
+                            firstValidationError(
+                                errors,
+                                'Could not submit the post.',
+                            ),
+                        );
+                    },
+                    onHttpException: (response) =>
+                        handleSubmitException(response, revert),
+                    onNetworkError: () => handleNetworkError(revert),
+                }),
+            );
 
             return;
         }
@@ -291,25 +298,28 @@ export function SubmitBar({
             http.transform(() =>
                 tray.pickedAt ? { scheduled_at: tray.pickedAt } : {},
             );
-            await http.post(queue(id).url, {
-                onSuccess,
-                // A malformed slot time: same outcome as a slot that is taken.
-                onError: () => {
-                    revert();
-                    setNoSlot(true);
-                },
-                // 409 = no open slot in the workspace posting schedule.
-                onHttpException: (response) => {
-                    if (response.status === 409) {
+            // The callbacks above handle every failure.
+            await settle(
+                http.post(queue(id).url, {
+                    onSuccess,
+                    // A malformed slot time: same outcome as a slot that is taken.
+                    onError: () => {
                         revert();
                         setNoSlot(true);
+                    },
+                    // 409 = no open slot in the workspace posting schedule.
+                    onHttpException: (response) => {
+                        if (response.status === 409) {
+                            revert();
+                            setNoSlot(true);
 
-                        return;
-                    }
-                    handleSubmitException(response, revert);
-                },
-                onNetworkError: () => handleNetworkError(revert),
-            });
+                            return;
+                        }
+                        handleSubmitException(response, revert);
+                    },
+                    onNetworkError: () => handleNetworkError(revert),
+                }),
+            );
 
             return;
         }
@@ -317,17 +327,20 @@ export function SubmitBar({
         // mode === 'pick' → schedule at the chosen time (existing M2 path).
         const revert = onOptimisticSubmit(OPTIMISTIC_SCHEDULE);
         http.transform(() => ({ scheduled_at: tray.pickedAt }));
-        await http.put(PostScheduleController.update(id).url, {
-            onSuccess,
-            // A 422 reaches only onError: the chosen time is in the past.
-            onError: () => {
-                revert();
-                setPastTime(true);
-            },
-            onHttpException: (response) =>
-                handleSubmitException(response, revert),
-            onNetworkError: () => handleNetworkError(revert),
-        });
+        // The callbacks above handle every failure.
+        await settle(
+            http.put(PostScheduleController.update(id).url, {
+                onSuccess,
+                // A 422 reaches only onError: the chosen time is in the past.
+                onError: () => {
+                    revert();
+                    setPastTime(true);
+                },
+                onHttpException: (response) =>
+                    handleSubmitException(response, revert),
+                onNetworkError: () => handleNetworkError(revert),
+            }),
+        );
     }
 
     useEffect(() => {
@@ -347,7 +360,7 @@ export function SubmitBar({
             }
 
             event.preventDefault();
-            handleSubmit().catch(() => {});
+            void handleSubmit();
         }
 
         document.addEventListener('keydown', onKeyDown);
@@ -368,9 +381,7 @@ export function SubmitBar({
         <TrayButton
             variant="primary"
             disabled={!canSubmit}
-            onClick={() => {
-                handleSubmit().catch(() => {});
-            }}
+            onClick={() => void handleSubmit()}
             className="flex-1 sm:flex-none"
         >
             <Send className="size-3.5" aria-hidden="true" />

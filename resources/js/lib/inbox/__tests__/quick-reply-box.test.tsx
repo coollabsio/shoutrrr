@@ -38,7 +38,7 @@ Range.prototype.getBoundingClientRect = () => ({}) as DOMRect;
 
 describe('QuickReplyBox send', () => {
     it('clears the editor after a reply is sent', async () => {
-        const onSend = vi.fn(async () => {});
+        const onSend = vi.fn(async () => true);
         const editorRef = createRef<EditorBodyHandle>();
         const { container } = render(
             <QuickReplyBox
@@ -65,13 +65,8 @@ describe('QuickReplyBox send', () => {
         expect(editor().textContent).toBe('');
     });
 
-    it('keeps the draft and handles the rejection when a send fails', async () => {
-        const unhandledRejection = vi.fn();
-        process.on('unhandledRejection', unhandledRejection);
-
-        const onSend = vi.fn(async () => {
-            throw new Error('Threads is still processing the reply.');
-        });
+    it('keeps the draft when a send fails', async () => {
+        const onSend = vi.fn(async () => false);
         const editorRef = createRef<EditorBodyHandle>();
         const { container } = render(
             <QuickReplyBox
@@ -92,17 +87,12 @@ describe('QuickReplyBox send', () => {
         await act(async () => {
             fireEvent.click(screen.getByRole('button', { name: /reply/i }));
         });
-        // Node reports unhandled rejections after the microtask queue drains.
-        await new Promise((resolve) => setTimeout(resolve));
-        process.off('unhandledRejection', unhandledRejection);
-
-        expect(unhandledRejection).not.toHaveBeenCalled();
         expect(editor().textContent).toBe('Thanks for the feedback!');
         expect(screen.getByRole('button', { name: /reply/i })).toBeEnabled();
     });
 
     it('restores text and attachments from a failed reply', async () => {
-        const onSend = vi.fn(async () => {});
+        const onSend = vi.fn(async () => true);
         const editorRef = createRef<EditorBodyHandle>();
         const restoreRef = createRef<ReplyDraftHandle>();
         const { container } = render(

@@ -2,12 +2,12 @@ import { useHttp } from '@inertiajs/react';
 import type { Dispatch, SetStateAction } from 'react';
 
 import WorkspaceMentionController from '@/actions/App/Http/Controllers/WorkspaceMentionController';
-import { failureToasts, requireResponse } from '@/lib/http/errors';
+import { failureToasts, settle } from '@/lib/http/errors';
 import type { MentionPlaceholder, WorkspaceMention } from '@/types/compose';
 
 /**
- * Saves a mention to the workspace library. Rejects when the save fails, so the
- * mention picker stays open; the user has already been told why.
+ * Saves a mention to the workspace library. Resolves false when the save
+ * fails, so the mention picker stays open; the user has already been told why.
  */
 export function useSaveMention(
     setSavedMentions: Dispatch<SetStateAction<WorkspaceMention[]>>,
@@ -16,18 +16,22 @@ export function useSaveMention(
         {},
     );
 
-    async function saveMention(mention: MentionPlaceholder): Promise<void> {
+    async function saveMention(mention: MentionPlaceholder): Promise<boolean> {
         http.transform(() => ({
             name: mention.label,
             handles: mention.handles,
         }));
-        const response = requireResponse(
-            await http.post(
+        const result = await settle(
+            http.post(
                 WorkspaceMentionController.store().url,
                 failureToasts('Could not save the mention.'),
             ),
         );
+        if (!result.ok) {
+            return false;
+        }
 
+        const response = result.value;
         setSavedMentions((current) => {
             const others = current.filter(
                 (item) =>
@@ -39,6 +43,8 @@ export function useSaveMention(
                 left.name.localeCompare(right.name),
             );
         });
+
+        return true;
     }
 
     return { saveMention, processing: http.processing };

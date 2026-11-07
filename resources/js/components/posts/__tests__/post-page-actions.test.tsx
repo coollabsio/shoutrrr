@@ -106,7 +106,7 @@ describe('PostPageActions failures', () => {
 
     it('closes the reschedule form on success', async () => {
         put.mockImplementation(async (_url, options) => {
-            options.onSuccess({ post: scheduled });
+            options.onSuccess?.({ post: scheduled });
 
             return { post: scheduled };
         });

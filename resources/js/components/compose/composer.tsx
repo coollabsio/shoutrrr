@@ -42,6 +42,7 @@ import {
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
 import { precheckAccount, precheckDestinations } from '@/lib/compose/precheck';
 import { readVideoMetadata, videoLimitsForTargets } from '@/lib/compose/video';
+import { failureToasts, settle } from '@/lib/http/errors';
 import {
     defaultSettings,
     normalizeSettings,
@@ -909,19 +910,17 @@ export default function Composer({
             return;
         }
 
-        try {
-            await deleteMentionHttp.delete(
+        const result = await settle(
+            deleteMentionHttp.delete(
                 WorkspaceMentionController.destroy(saved.id).url,
-            );
-        } catch {
-            toast.error('Could not delete the mention.');
-
-            return;
-        }
-
-        setSavedMentions((current) =>
-            current.filter((item) => item.id !== saved.id),
+                failureToasts('Could not delete the mention.'),
+            ),
         );
+        if (result.ok) {
+            setSavedMentions((current) =>
+                current.filter((item) => item.id !== saved.id),
+            );
+        }
     }
 
     function handleSegments(segments: string[], breakIds: string[]) {

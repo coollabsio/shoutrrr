@@ -213,7 +213,7 @@ describe('saving a mention', () => {
                 onApplySavedMention={vi.fn()}
                 onUpdateMention={vi.fn()}
                 onMentionComplete={onMentionComplete}
-                onSaveMention={() => Promise.reject(new Error('Rejected'))}
+                onSaveMention={async () => false}
             />,
         );
         fireEvent.click(

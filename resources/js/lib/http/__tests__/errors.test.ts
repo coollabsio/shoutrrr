@@ -1,15 +1,31 @@
 import { describe, expect, it } from 'vitest';
 
-import { requireResponse } from '../errors';
+import { settle } from '../errors';
 
-describe('requireResponse', () => {
-    it('returns a response body', () => {
+describe('settle', () => {
+    it('reports the value of a request that worked', async () => {
         const body = { mention: { id: '1' } };
 
-        expect(requireResponse(body)).toBe(body);
+        expect(await settle(Promise.resolve(body))).toEqual({
+            ok: true,
+            value: body,
+        });
     });
 
-    it('throws on the empty result of a 422', () => {
-        expect(() => requireResponse(undefined)).toThrow();
+    it('treats an empty 204 body as success', async () => {
+        expect(await settle(Promise.resolve(null))).toEqual({
+            ok: true,
+            value: null,
+        });
+    });
+
+    it('reports a 422, which resolves with nothing', async () => {
+        expect(await settle(Promise.resolve(undefined))).toEqual({ ok: false });
+    });
+
+    it('reports a failed request instead of throwing', async () => {
+        expect(await settle(Promise.reject(new Error('502')))).toEqual({
+            ok: false,
+        });
     });
 });

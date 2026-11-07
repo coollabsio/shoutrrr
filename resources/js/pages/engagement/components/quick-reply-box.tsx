@@ -69,7 +69,7 @@ type Props = {
         text: string,
         mediaIds: string[],
         media: MediaView[],
-    ) => Promise<void>;
+    ) => Promise<boolean>;
 };
 
 export type ReplyDraftHandle = {
@@ -187,19 +187,17 @@ export function QuickReplyBox({
             return;
         }
         setSending(true);
-        try {
-            await onSend(
-                outgoing,
-                media.map((m) => m.id),
-                media,
-            );
+        const sent = await onSend(
+            outgoing,
+            media.map((m) => m.id),
+            media,
+        );
+        setSending(false);
+        // A failed send keeps the draft, so the user can try again.
+        if (sent) {
             setText('');
             setMedia([]);
             setMentions([]);
-        } catch {
-            // onSend reports the failure; keep the draft for a retry.
-        } finally {
-            setSending(false);
         }
     }
 

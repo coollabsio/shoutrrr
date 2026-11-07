@@ -89,6 +89,7 @@ describe('RightPane send', () => {
         vi.stubGlobal(
             'fetch',
             vi.fn(async () => ({
+                ok: true,
                 json: async () => ({ messages: [], data: [] }),
             })),
         );
@@ -136,7 +137,7 @@ describe('RightPane send', () => {
         };
 
         post.mockImplementation(async (_url, options) => {
-            options.onSuccess({ message });
+            options.onSuccess?.({ message });
 
             return { message };
         });

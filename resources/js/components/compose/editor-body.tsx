@@ -98,7 +98,7 @@ type EditorBodyProps = {
         mention: MentionPlaceholder,
         saved: WorkspaceMention,
     ) => void;
-    onSaveMention?: (mention: MentionPlaceholder) => Promise<void>;
+    onSaveMention?: (mention: MentionPlaceholder) => Promise<boolean>;
     saveMentionProcessing?: boolean;
     onDeleteMention?: (saved: WorkspaceMention) => void | Promise<void>;
     markerState?: {

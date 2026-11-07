@@ -54,7 +54,7 @@ function renderMessageBox(
             conversationId: 'conversation-1',
             platform: overrides.platform ?? 'x',
             canReply: overrides.canReply ?? true,
-            onSend: async () => {},
+            onSend: async () => true,
         }),
     );
 }

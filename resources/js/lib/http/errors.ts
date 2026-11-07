@@ -53,11 +53,25 @@ export function failureToasts(fallback: string) {
     };
 }
 
-/** `useHttp` resolves with nothing on a 422: treat that as the failure it is. */
-export function requireResponse<T>(response: T | undefined): T {
-    if (response === undefined) {
-        throw new Error('The server rejected the request.');
-    }
+/** How a request ended: its value, or not ok when it failed. */
+export type Settled<T> = { ok: true; value: T } | { ok: false };
 
-    return response;
+/**
+ * Waits for a request and reports how it ended, instead of throwing.
+ *
+ * A `useHttp` request calls its `onError`, `onHttpException`, or
+ * `onNetworkError` callback first, and then still rejects; on a 422 it
+ * resolves with nothing. The callbacks tell the user what went wrong, so the
+ * caller only needs to know whether the request worked.
+ */
+export async function settle<T>(
+    request: Promise<T | undefined>,
+): Promise<Settled<T>> {
+    try {
+        const value = await request;
+
+        return value === undefined ? { ok: false } : { ok: true, value };
+    } catch {
+        return { ok: false };
+    }
 }

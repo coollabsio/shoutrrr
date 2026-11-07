@@ -115,6 +115,7 @@ describe('RightPane send', () => {
         vi.stubGlobal(
             'fetch',
             vi.fn(async () => ({
+                ok: true,
                 json: async () => ({ post_excerpt: null, thread: [] }),
             })),
         );
@@ -144,6 +145,7 @@ describe('RightPane send', () => {
             vi.stubGlobal(
                 'fetch',
                 vi.fn(async () => ({
+                    ok: true,
                     json: async () => ({
                         post_excerpt: null,
                         thread: [{ ...queued, ...reply }],
@@ -154,7 +156,7 @@ describe('RightPane send', () => {
 
         async function sendAndPoll(): Promise<HTMLElement> {
             post.mockImplementation(async (_url, options) => {
-                options.onSuccess({ reply: queued });
+                options.onSuccess?.({ reply: queued });
 
                 return { reply: queued };
             });
@@ -242,7 +244,7 @@ describe('RightPane send', () => {
             const other: ReplyItem = { ...selected, id: 'reply-9' };
             const editorRef = createRef<EditorBodyHandle>();
             post.mockImplementation(async (_url, options) => {
-                options.onSuccess({ reply: queued });
+                options.onSuccess?.({ reply: queued });
 
                 return { reply: queued };
             });
@@ -288,6 +290,7 @@ describe('RightPane send', () => {
             await vi.waitFor(() => expect(editor()).not.toBeNull());
             await act(async () => {
                 stalePoll({
+                    ok: true,
                     json: async () => ({
                         post_excerpt: null,
                         thread: [{ ...queued, send_status: 'failed' }],
@@ -319,7 +322,7 @@ describe('RightPane send', () => {
         it('leaves a new draft alone when the job fails', async () => {
             const editorRef = createRef<EditorBodyHandle>();
             post.mockImplementation(async (_url, options) => {
-                options.onSuccess({ reply: queued });
+                options.onSuccess?.({ reply: queued });
 
                 return { reply: queued };
             });
@@ -366,7 +369,7 @@ describe('RightPane send', () => {
         const reply = { ...selected, id: 'reply-2', is_ours: true };
 
         post.mockImplementation(async (_url, options) => {
-            options.onSuccess({ reply });
+            options.onSuccess?.({ reply });
 
             return { reply };
         });

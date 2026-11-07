@@ -42,18 +42,19 @@ describe('useSaveMention', () => {
         toastError.mockReset();
     });
 
-    it('rejects and shows the reason on a 422, with the list unchanged', async () => {
+    it('reports a 422 and shows the reason, with the list unchanged', async () => {
         // useHttp fires onError and resolves with nothing on a 422.
         post.mockImplementation(async (_url, options) => {
             options.onError({ name: 'That name is not valid.' });
         });
         const { result } = renderSaveMention();
 
+        let saved: boolean | undefined;
         await act(async () => {
-            await expect(
-                result.current.saveMention(placeholder),
-            ).rejects.toThrow();
+            saved = await result.current.saveMention(placeholder);
         });
+
+        expect(saved).toBe(false);
 
         expect(result.current.savedMentions).toEqual([existing]);
         expect(toastError).toHaveBeenCalledWith('That name is not valid.');

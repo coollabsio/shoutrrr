@@ -1,6 +1,5 @@
 import { Deferred, Head, router, useHttp } from '@inertiajs/react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { toast } from 'sonner';
 
 import { PlatformGlyph } from '@/components/common/platform-glyph';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,7 +16,7 @@ import { Kbd } from '@/components/ui/kbd';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { requireResponse } from '@/lib/http/errors';
+import { failureToasts, settle } from '@/lib/http/errors';
 import { platformLabel } from '@/lib/platforms';
 import { cn } from '@/lib/utils';
 import {
@@ -34,8 +33,6 @@ import { MessageStream } from './components/message-stream';
 import { MessageThread } from './components/message-thread';
 import { QuickMessageBox } from './components/quick-message-box';
 import {
-    actionErrorMessage,
-    firstValidationError,
     withoutFailedAttempts,
     adjacentIndex,
     atHandle,
@@ -134,6 +131,21 @@ type ConversationOverride = Partial<
     >
 > & { archived?: boolean };
 
+/** A conversation's messages, or null when they cannot be loaded right now. */
+async function loadMessages(id: string): Promise<MessageItem[] | null> {
+    const response = await settle(
+        fetch(threadRoute(id).url, { headers: { Accept: 'application/json' } }),
+    );
+    if (!response.ok || !response.value.ok) {
+        return null;
+    }
+    const body = await settle<{ messages: MessageItem[] }>(
+        response.value.json(),
+    );
+
+    return body.ok ? body.value.messages : null;
+}
+
 type RightPaneProps = {
     selected: ConversationItem;
     onArchived: (id: string) => void;
@@ -167,18 +179,20 @@ export function RightPane({
     const selectedId = selected.id;
 
     useEffect(() => {
+        // Ignore an answer that arrives after the selection moved on.
+        let current = true;
         setLoading(true);
-        fetch(threadRoute(selectedId).url, {
-            headers: { Accept: 'application/json' },
-        })
-            .then((r) => r.json())
-            .then((data: { messages: MessageItem[] }) => {
-                setThread(data.messages);
-            })
-            .catch(() => {
-                setThread([]);
-            })
-            .finally(() => setLoading(false));
+        void loadMessages(selectedId).then((messages) => {
+            if (!current) {
+                return;
+            }
+            setThread(messages ?? []);
+            setLoading(false);
+        });
+
+        return () => {
+            current = false;
+        };
     }, [selectedId]);
 
     function setSendStatus(id: string, status: MessageItem['send_status']) {
@@ -187,7 +201,8 @@ export function RightPane({
         );
     }
 
-    async function send(text: string, media: MediaView[]) {
+    /** Sends the draft; false when it did not send, so the box keeps it. */
+    async function send(text: string, media: MediaView[]): Promise<boolean> {
         const tempId = `temp-${Date.now()}`;
         const now = new Date().toISOString();
         setThread((prev) => [
@@ -214,63 +229,44 @@ export function RightPane({
             text,
             media: media.map((m) => m.id),
         }));
-        // Failures rethrow so QuickMessageBox's `await onSend(...)` still sees
-        // them, but the box already reflects the sending/failed state above.
-        const response = await respondHttp.post(respondRoute(selected.id).url, {
-            onSuccess: ({ message }) => {
-                setThread((prev) =>
-                    prev.map((m) => (m.id === tempId ? message : m)),
-                );
-                // A media-only message has no text to preview.
-                onResponded(
-                    selected.id,
-                    text.trim() !== ''
-                        ? text
-                        : media[0]?.kind === 'video'
-                          ? 'Video'
-                          : 'Photo',
-                    now,
-                );
-            },
-            onError: (errors) => {
-                setSendStatus(tempId, 'failed');
-                toast.error(
-                    firstValidationError(errors, 'Could not send the message.'),
-                );
-            },
-            onHttpException: (r) => {
-                setSendStatus(tempId, 'failed');
-                toast.error(
-                    actionErrorMessage(r, 'Could not send the message.'),
-                );
-            },
-            onNetworkError: () => {
-                setSendStatus(tempId, 'failed');
-                toast.error('Could not reach the server.');
-            },
-        });
+        const result = await settle(
+            respondHttp.post(
+                respondRoute(selected.id).url,
+                failureToasts('Could not send the message.'),
+            ),
+        );
+        if (!result.ok) {
+            setSendStatus(tempId, 'failed');
 
-        // Reject on a 422 too, so QuickMessageBox keeps the draft.
-        requireResponse(response);
+            return false;
+        }
+
+        const { message } = result.value;
+        setThread((prev) => prev.map((m) => (m.id === tempId ? message : m)));
+        // A media-only message has no text to preview.
+        onResponded(
+            selected.id,
+            text.trim() !== ''
+                ? text
+                : media[0]?.kind === 'video'
+                  ? 'Video'
+                  : 'Photo',
+            now,
+        );
+
+        return true;
     }
 
-    function archive() {
-        void archiveHttp
-            .post(archiveRoute(selected.id).url, {
-                onSuccess: () => onArchived(selected.id),
-                onHttpException: (r) => {
-                    toast.error(
-                        actionErrorMessage(
-                            r,
-                            'Could not archive the conversation.',
-                        ),
-                    );
-                },
-                onNetworkError: () => {
-                    toast.error('Could not reach the server.');
-                },
-            })
-            .catch(() => {});
+    async function archive() {
+        const result = await settle(
+            archiveHttp.post(
+                archiveRoute(selected.id).url,
+                failureToasts('Could not archive the conversation.'),
+            ),
+        );
+        if (result.ok) {
+            onArchived(selected.id);
+        }
     }
 
     return (
@@ -314,7 +310,7 @@ export function RightPane({
                     size="sm"
                     aria-label="Archive conversation"
                     className="gap-1.5 text-muted-foreground hover:text-foreground"
-                    onClick={archive}
+                    onClick={() => void archive()}
                 >
                     <Archive className="size-4" />
                     <Kbd className="h-5 min-w-5 px-1 text-[10px]">A</Kbd>
@@ -383,16 +379,18 @@ export default function MessagesIndex({ conversations, filters }: PageProps) {
         });
     const filtered = filters.archived;
 
-    function markRead(id: string) {
-        void readHttp
-            .post(readRoute(id).url, { onSuccess: () => handleRead(id) })
-            .catch(() => {});
+    async function markRead(id: string) {
+        // A failed mark leaves the conversation unread, which is still correct.
+        const result = await settle(readHttp.post(readRoute(id).url));
+        if (result.ok) {
+            handleRead(id);
+        }
     }
 
     function selectConversation(next: ConversationItem | null) {
         setSelected(next);
         if (next && next.unread_count > 0) {
-            markRead(next.id);
+            void markRead(next.id);
         }
     }
 
@@ -433,29 +431,21 @@ export default function MessagesIndex({ conversations, filters }: PageProps) {
         });
     }
 
-    function archiveSelected() {
+    async function archiveSelected() {
         if (!selected) {
             return;
         }
 
         const archivedId = selected.id;
-
-        void archiveHttp
-            .post(archiveRoute(archivedId).url, {
-                onSuccess: () => handleArchived(archivedId),
-                onHttpException: (r) => {
-                    toast.error(
-                        actionErrorMessage(
-                            r,
-                            'Could not archive the conversation.',
-                        ),
-                    );
-                },
-                onNetworkError: () => {
-                    toast.error('Could not reach the server.');
-                },
-            })
-            .catch(() => {});
+        const result = await settle(
+            archiveHttp.post(
+                archiveRoute(archivedId).url,
+                failureToasts('Could not archive the conversation.'),
+            ),
+        );
+        if (result.ok) {
+            handleArchived(archivedId);
+        }
     }
 
     function focusMessageBox() {
@@ -484,7 +474,7 @@ export default function MessagesIndex({ conversations, filters }: PageProps) {
                     moveSelection(-1);
                     break;
                 case 'archive':
-                    archiveSelected();
+                    void archiveSelected();
                     break;
                 case 'reply':
                     focusMessageBox();

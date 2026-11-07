@@ -58,7 +58,7 @@ type MentionPickerProps = {
         previous: MentionPlaceholder,
         next: MentionPlaceholder,
     ) => void;
-    onSaveMention?: (mention: MentionPlaceholder) => Promise<void>;
+    onSaveMention?: (mention: MentionPlaceholder) => Promise<boolean>;
     saveMentionProcessing?: boolean;
     /** Delete a saved mention from the workspace library. Hidden when omitted. */
     onDeleteMention?: (saved: WorkspaceMention) => void | Promise<void>;
@@ -196,13 +196,10 @@ export default function MentionPicker({
             return;
         }
 
-        try {
-            await onSaveMention(mention);
-        } catch {
-            // The save already told the user; keep the picker open.
-            return;
+        // A failed save keeps the picker open; the save told the user why.
+        if (await onSaveMention(mention)) {
+            onMentionComplete?.(mention);
         }
-        onMentionComplete?.(mention);
     }
 
     function openCreateMode() {
