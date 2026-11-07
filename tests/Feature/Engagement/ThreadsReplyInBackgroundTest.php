@@ -4,6 +4,7 @@ use App\Enums\Platform;
 use App\Enums\ReplyStatus;
 use App\Enums\SendStatus;
 use App\Enums\WorkspaceRole;
+use App\Exceptions\ReplyMayHavePosted;
 use App\Jobs\SendReply;
 use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
@@ -92,6 +93,34 @@ test('a new reply replaces an earlier failed attempt', function (): void {
 
     expect(PostTargetReply::withoutGlobalScopes()->find($failed->id))->toBeNull()
         ->and(PostTargetReply::withoutGlobalScopes()->find($sent->id))->not->toBeNull();
+});
+
+test('a reply that posted but could not be saved is not sent again', function (): void {
+    Http::fake([
+        'graph.threads.net/v1.0/THREADSUSER1/threads' => Http::response(['id' => 'CONTAINER1']),
+        'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'FINISHED']),
+        'graph.threads.net/v1.0/THREADSUSER1/threads_publish' => Http::response(['id' => 'R2']),
+    ]);
+    $ourRow = queueThreadsReply();
+    PostTargetReply::saving(function (PostTargetReply $row): void {
+        if ($row->remote_reply_id === 'R2') {
+            throw new RuntimeException('database went away');
+        }
+    });
+
+    $job = threadsReplyJob($ourRow)->withFakeQueueInteractions();
+    runThreadsReplyJob($job);
+
+    $job->assertFailedWith(ReplyMayHavePosted::class);
+});
+
+test('a job that failed after posting tells the user not to send again', function (): void {
+    $ourRow = queueThreadsReply();
+
+    threadsReplyJob($ourRow)->failed(new ReplyMayHavePosted(new RuntimeException('database went away')));
+
+    expect($ourRow->fresh()->send_status)->toBe(SendStatus::Failed)
+        ->and($ourRow->fresh()->send_error)->toContain('may have posted');
 });
 
 test('a text reply on threads is queued and makes no platform call in the request', function (): void {

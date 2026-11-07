@@ -49,6 +49,18 @@ function render(thread: ReplyItem[] = []): string {
 }
 
 describe('ReplyThread', () => {
+    it('shows why our reply failed', () => {
+        const markup = render([
+            reply({
+                is_ours: true,
+                send_status: 'failed',
+                send_error: 'Reply not allowed',
+            }),
+        ]);
+
+        expect(markup).toContain('Failed to send: Reply not allowed');
+    });
+
     it('shows the your-post excerpt without a platform open link', () => {
         const html = render();
 

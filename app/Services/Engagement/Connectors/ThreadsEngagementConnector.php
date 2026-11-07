@@ -144,7 +144,8 @@ class ThreadsEngagementConnector implements EngagementConnector, PublishesReplyC
         $threadsUserId = (string) $account->remote_account_id;
 
         try {
-            $response = $this->http->get(self::BASE_URL.'/'.$containerId, [
+            // Short limits: a hung check should hand the queue worker back, not hold it.
+            $response = $this->http->connectTimeout(5)->timeout(10)->get(self::BASE_URL.'/'.$containerId, [
                 'fields' => 'status,error_message',
                 'access_token' => $token,
             ]);

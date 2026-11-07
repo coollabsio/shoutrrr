@@ -57,9 +57,13 @@ import {
     thread as threadRoute,
     unlike as unlikeRoute,
 } from '@/routes/engagement';
+import type { MediaView } from '@/types/compose';
 import type { PlatformName, WorkspaceMention } from '@/types/compose';
 
-import { QuickReplyBox } from './components/quick-reply-box';
+import {
+    QuickReplyBox,
+    type ReplyDraftHandle,
+} from './components/quick-reply-box';
 import { ReplyFilters } from './components/reply-filters';
 import { ReplyStream } from './components/reply-stream';
 import { ReplyThread } from './components/reply-thread';
@@ -340,8 +344,12 @@ export function RightPane({
     // Replies sent from here: the draft to restore if the job fails, and the
     // conversation to mark replied once it sends.
     const queuedReplies = useRef(
-        new Map<string, { draft: string; parentId: string }>(),
+        new Map<
+            string,
+            { draft: string; media: MediaView[]; parentId: string }
+        >(),
     );
+    const replyBoxRef = useRef<ReplyDraftHandle>(null);
 
     useEffect(() => {
         if (!hasQueuedReply) {
@@ -380,17 +388,21 @@ export function RightPane({
             if (queued === undefined || reply.send_status === 'sending') {
                 continue;
             }
-            queuedReplies.current.delete(reply.id);
             if (reply.send_status === 'sent') {
+                queuedReplies.current.delete(reply.id);
                 onResponded(queued.parentId);
-            } else {
-                toast.error(reply.send_error ?? 'Could not send the reply.');
-                if (replyEditorRef?.current?.isEmpty()) {
-                    replyEditorRef.current.insertText(queued.draft);
-                }
+                continue;
             }
+            // The box now belongs to another conversation: keep the draft until
+            // its own conversation is open again.
+            if (queued.parentId !== selectedId) {
+                continue;
+            }
+            queuedReplies.current.delete(reply.id);
+            toast.error(reply.send_error ?? 'Could not send the reply.');
+            replyBoxRef.current?.restore(queued.draft, queued.media);
         }
-    }, [thread, replyEditorRef, onResponded]);
+    }, [thread, selectedId, onResponded]);
 
     function setSendStatus(id: string, status: ReplyItem['send_status']) {
         setThread((prev) =>
@@ -398,7 +410,7 @@ export function RightPane({
         );
     }
 
-    async function send(text: string, mediaIds: string[]) {
+    async function send(text: string, mediaIds: string[], media: MediaView[]) {
         const tempId = `temp-${Date.now()}`;
         setThread((prev) => [
             ...withoutFailedAttempts(prev),
@@ -423,6 +435,7 @@ export function RightPane({
                 if (reply.send_status === 'sending') {
                     queuedReplies.current.set(reply.id, {
                         draft: text,
+                        media,
                         parentId: selected.id,
                     });
                 } else {
@@ -676,6 +689,7 @@ export function RightPane({
                         : undefined
                 }
                 editorRef={replyEditorRef}
+                restoreRef={replyBoxRef}
                 savedMentions={savedMentions}
                 onSend={send}
             />

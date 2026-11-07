@@ -158,6 +158,20 @@ test('postReply treats a status check that cannot connect as still processing', 
     expect($result->processingContainerId)->toBe('CONTAINER1');
 });
 
+test('publishContainer keeps the status check short', function () {
+    $options = [];
+    Http::fake(function ($request, array $requestOptions) use (&$options) {
+        $options = $requestOptions;
+
+        return Http::response(['status' => 'IN_PROGRESS']);
+    });
+
+    threadsEngagementConnector()->publishContainer(threadsEngagementAccount(), 'CONTAINER1', ['access_token' => 't']);
+
+    expect($options['connect_timeout'])->toBeLessThanOrEqual(5)
+        ->and($options['timeout'])->toBeLessThanOrEqual(10);
+});
+
 test('publishContainer publishes a finished container without creating another', function () {
     Http::fake([
         'graph.threads.net/v1.0/CONTAINER1*' => Http::response(['status' => 'FINISHED']),

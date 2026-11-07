@@ -238,6 +238,67 @@ describe('RightPane send', () => {
             expect(toastWarning).toHaveBeenCalledOnce();
         });
 
+        it('keeps a failed draft out of another conversation', async () => {
+            const other: ReplyItem = { ...selected, id: 'reply-9' };
+            const editorRef = createRef<EditorBodyHandle>();
+            post.mockImplementation(async (_url, options) => {
+                options.onSuccess({ reply: queued });
+
+                return { reply: queued };
+            });
+            vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+            const props = {
+                onArchived: vi.fn(),
+                onResponded,
+                replyEditorRef: editorRef,
+                savedMentions: [],
+            };
+            const { container, rerender } = render(
+                <RightPane selected={selected} {...props} />,
+            );
+            const editor = () =>
+                container.querySelector('.ProseMirror') as HTMLElement;
+            await vi.waitFor(() => expect(editor()).not.toBeNull());
+            await act(async () => {
+                editorRef.current?.insertText('First reply');
+            });
+            await act(async () => {
+                fireEvent.click(
+                    screen.getByRole('button', { name: /^reply/i }),
+                );
+            });
+            await act(async () => {});
+
+            // A poll for the first conversation answers after the switch.
+            let answerPoll: (value: unknown) => void = () => {};
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(
+                    () =>
+                        new Promise((resolve) => {
+                            answerPoll = resolve;
+                        }),
+                ),
+            );
+            await act(async () => {
+                vi.advanceTimersByTime(REPLY_POLL_MS);
+            });
+            const stalePoll = answerPoll;
+            rerender(<RightPane selected={other} {...props} />);
+            await vi.waitFor(() => expect(editor()).not.toBeNull());
+            await act(async () => {
+                stalePoll({
+                    json: async () => ({
+                        post_excerpt: null,
+                        thread: [{ ...queued, send_status: 'failed' }],
+                    }),
+                });
+            });
+            await act(async () => {});
+
+            expect(editor().textContent).toBe('');
+        });
+
         it('stops polling once the job has sent the reply', async () => {
             await sendAndPoll();
             respondWithThread({ send_status: 'sent' });

@@ -7,6 +7,7 @@ namespace App\Jobs;
 use App\Enums\Platform;
 use App\Enums\ReplyStatus;
 use App\Enums\SendStatus;
+use App\Exceptions\ReplyMayHavePosted;
 use App\Exceptions\TokenRefreshException;
 use App\Models\PostMedia;
 use App\Models\PostTargetReply;
@@ -139,16 +140,21 @@ class SendReply implements ShouldQueue
             return;
         }
 
-        $ourRow->forceFill([
-            'remote_reply_id' => $result->remoteReplyId,
-            'remote_cid' => $result->remoteCid,
-            'send_status' => SendStatus::Sent->value,
-        ])->save();
+        // The platform has the reply now: a retry from here would post it twice.
+        try {
+            $ourRow->forceFill([
+                'remote_reply_id' => $result->remoteReplyId,
+                'remote_cid' => $result->remoteCid,
+                'send_status' => SendStatus::Sent->value,
+            ])->save();
 
-        $parent->forceFill([
-            'status' => ReplyStatus::Responded->value,
-            'our_reply_remote_id' => $result->remoteReplyId,
-        ])->save();
+            $parent->forceFill([
+                'status' => ReplyStatus::Responded->value,
+                'our_reply_remote_id' => $result->remoteReplyId,
+            ])->save();
+        } catch (Throwable $e) {
+            $this->fail(new ReplyMayHavePosted($e));
+        }
     }
 
     /**
@@ -163,7 +169,7 @@ class SendReply implements ShouldQueue
         // Don't report failure (or re-notify) for a reply that actually went out
         // — handle() may have posted successfully and thrown only afterwards.
         if ($ourRow !== null && $ourRow->send_status !== SendStatus::Sent) {
-            $this->failRow($ourRow);
+            $this->failRow($ourRow, $e instanceof ReplyMayHavePosted ? ReplyMayHavePosted::USER_MESSAGE : null);
         }
     }
 

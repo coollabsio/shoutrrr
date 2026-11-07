@@ -4,7 +4,11 @@ import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { EditorBodyHandle } from '@/components/compose/editor-body';
-import { QuickReplyBox } from '@/pages/engagement/components/quick-reply-box';
+import {
+    QuickReplyBox,
+    type ReplyDraftHandle,
+} from '@/pages/engagement/components/quick-reply-box';
+import type { MediaView } from '@/types/compose';
 
 vi.mock('@/hooks/compose/use-attachments', () => ({
     useAttachments: () => ({
@@ -57,7 +61,7 @@ describe('QuickReplyBox send', () => {
             fireEvent.click(screen.getByRole('button', { name: /reply/i }));
         });
 
-        expect(onSend).toHaveBeenCalledWith('Thanks for the feedback!', []);
+        expect(onSend).toHaveBeenCalledWith('Thanks for the feedback!', [], []);
         expect(editor().textContent).toBe('');
     });
 
@@ -95,5 +99,38 @@ describe('QuickReplyBox send', () => {
         expect(unhandledRejection).not.toHaveBeenCalled();
         expect(editor().textContent).toBe('Thanks for the feedback!');
         expect(screen.getByRole('button', { name: /reply/i })).toBeEnabled();
+    });
+
+    it('restores text and attachments from a failed reply', async () => {
+        const onSend = vi.fn(async () => {});
+        const editorRef = createRef<EditorBodyHandle>();
+        const restoreRef = createRef<ReplyDraftHandle>();
+        const { container } = render(
+            <QuickReplyBox
+                replyId="reply-1"
+                platform="x"
+                editorRef={editorRef}
+                restoreRef={restoreRef}
+                onSend={onSend}
+            />,
+        );
+        await vi.waitFor(() =>
+            expect(container.querySelector('.ProseMirror')).not.toBeNull(),
+        );
+
+        await act(async () => {
+            restoreRef.current?.restore('Thanks!', [
+                { id: 'media-1' } as MediaView,
+            ]);
+        });
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /reply/i }));
+        });
+
+        expect(onSend).toHaveBeenCalledWith(
+            'Thanks!',
+            ['media-1'],
+            [{ id: 'media-1' }],
+        );
     });
 });

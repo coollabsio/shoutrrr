@@ -1,5 +1,12 @@
 import { usePage } from '@inertiajs/react';
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import {
+    useEffect,
+    useRef,
+    useState,
+    type RefObject,
+    useImperativeHandle,
+    type Ref,
+} from 'react';
 
 import ReplyImageEditController from '@/actions/App/Http/Controllers/Engagement/ReplyImageEditController';
 import ReplyMediaController from '@/actions/App/Http/Controllers/Engagement/ReplyMediaController';
@@ -54,9 +61,20 @@ type Props = {
     disabled?: boolean;
     disabledReason?: string;
     editorRef?: RefObject<EditorBodyHandle | null>;
+    /** Lets the inbox put a failed reply back in the box. */
+    restoreRef?: Ref<ReplyDraftHandle>;
     /** Workspace saved-mention library, shared with the composer's picker. */
     savedMentions?: WorkspaceMention[];
-    onSend: (text: string, mediaIds: string[]) => Promise<void>;
+    onSend: (
+        text: string,
+        mediaIds: string[],
+        media: MediaView[],
+    ) => Promise<void>;
+};
+
+export type ReplyDraftHandle = {
+    /** Put text and attachments back, without overwriting a newer draft. */
+    restore: (text: string, media: MediaView[]) => void;
 };
 
 export function QuickReplyBox({
@@ -67,6 +85,7 @@ export function QuickReplyBox({
     disabled,
     disabledReason,
     editorRef: editorRefProp,
+    restoreRef,
     savedMentions: initialSavedMentions = EMPTY_SAVED_MENTIONS,
     onSend,
 }: Props) {
@@ -152,6 +171,17 @@ export function QuickReplyBox({
     const empty = outgoing.trim() === '' && media.length === 0;
     const canSend = !empty && !tooLong && !sending && !rm.isUploading;
 
+    useImperativeHandle(restoreRef, () => ({
+        restore(draft, restoredMedia) {
+            if (editorRef.current?.isEmpty()) {
+                editorRef.current.insertText(draft);
+            }
+            setMedia((current) =>
+                current.length > 0 ? current : restoredMedia,
+            );
+        },
+    }));
+
     async function send() {
         if (!canSend) {
             return;
@@ -161,6 +191,7 @@ export function QuickReplyBox({
             await onSend(
                 outgoing,
                 media.map((m) => m.id),
+                media,
             );
             setText('');
             setMedia([]);
