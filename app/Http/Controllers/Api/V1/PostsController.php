@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Dto\Post\DraftData;
+use App\Enums\Platform;
 use App\Enums\PostFormat;
 use App\Enums\PostStatus;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesWorkspacePost;
@@ -19,6 +20,7 @@ use App\Services\Posts\PostStaleWriteException;
 use App\Support\CursorPage;
 use App\Support\PostListItem;
 use App\Support\PostView;
+use App\Support\XTaggedUsers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Context;
@@ -77,10 +79,11 @@ class PostsController extends Controller
             'targets' => ['array'],
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
+            ...XTaggedUsers::rules(),
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
         ]);
 
-        $this->ensureFormatsSupported($validated['targets'] ?? []);
+        $this->ensureTargetOptionsSupported($validated['targets'] ?? []);
 
         /** @var User $user */
         $user = $request->user();
@@ -126,6 +129,7 @@ class PostsController extends Controller
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
             'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
+            ...XTaggedUsers::rules(),
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.media_ids' => ['array'],
@@ -136,7 +140,7 @@ class PostsController extends Controller
             'expected_updated_at' => ['nullable', 'string'],
         ]);
 
-        $this->ensureFormatsSupported($validated['targets'] ?? []);
+        $this->ensureTargetOptionsSupported($validated['targets'] ?? []);
 
         try {
             $updated = $drafts->updateDraft($model, DraftData::fromArray($validated));
@@ -174,12 +178,13 @@ class PostsController extends Controller
     /**
      * Reject a per-target `format` the target's platform does not offer (e.g.
      * Reels on X) — the same set the web composer exposes via PostFormat::forPlatform.
+     * Also reject photo tags on a platform other than X.
      *
-     * @param  array<int, array{connected_account_id: string, format?: string|null}>  $targets
+     * @param  array<int, array{connected_account_id: string, format?: string|null, tagged_handles?: list<string>|null}>  $targets
      *
      * @throws ValidationException
      */
-    private function ensureFormatsSupported(array $targets): void
+    private function ensureTargetOptionsSupported(array $targets): void
     {
         $accounts = ConnectedAccount::query()
             ->whereKey(array_column($targets, 'connected_account_id'))
@@ -189,8 +194,9 @@ class PostsController extends Controller
 
         foreach ($targets as $index => $target) {
             $format = PostFormat::tryFrom((string) ($target['format'] ?? ''));
+            $tagged = ($target['tagged_handles'] ?? []) !== [];
 
-            if (! $format instanceof PostFormat) {
+            if (! $format instanceof PostFormat && ! $tagged) {
                 continue;
             }
 
@@ -202,8 +208,12 @@ class PostsController extends Controller
                 continue;
             }
 
-            if (! in_array($format, PostFormat::forPlatform($account->platform), true)) {
+            if ($format instanceof PostFormat && ! in_array($format, PostFormat::forPlatform($account->platform), true)) {
                 $errors["targets.{$index}.format"] = "The {$format->value} format is not available on {$account->platform->value}.";
+            }
+
+            if ($tagged && $account->platform !== Platform::X) {
+                $errors["targets.{$index}.tagged_handles"] = 'Photo tags are only available on X.';
             }
         }
 

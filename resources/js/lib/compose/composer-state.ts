@@ -1,3 +1,4 @@
+import { hasTaggablePhotos } from '@/lib/compose/tagged-people';
 import { segmentRefs } from '@/lib/compose/tiptap-doc';
 import {
     type Account,
@@ -48,6 +49,8 @@ export type ComposerState = {
     destination: Destination;
     autoSplitByAccount: Record<string, boolean>;
     formatByAccount: Record<string, PostFormat>;
+    /** X handles to tag in the photos; an account is absent until it has had tags. */
+    taggedByAccount: Record<string, string[]>;
     overrideByAccount: Record<string, string[] | undefined>;
     media: MediaView[];
     /** Ordered ids of tiptap segment breaks; segment refs are derived from these. */
@@ -74,6 +77,7 @@ export type ComposerAction =
     | { type: 'setSkipSync'; value: boolean }
     | { type: 'toggleAutoSplit'; accountId: string }
     | { type: 'setFormat'; accountId: string; format: PostFormat }
+    | { type: 'setTaggedHandles'; accountId: string; handles: string[] }
     | { type: 'disableAutoSplit'; accountIds: string[] }
     | { type: 'setOverrideSegments'; accountId: string; segments: string[] }
     | { type: 'discardOverride'; accountId: string }
@@ -151,6 +155,7 @@ export function initialComposerState(
         destination: initialDestination ?? { kind: 'all' },
         autoSplitByAccount: {},
         formatByAccount: {},
+        taggedByAccount: {},
         overrideByAccount: {},
         media: [],
         segmentBreaks: [],
@@ -347,6 +352,7 @@ function withOrphanMediaOnHead(
 function hydrate(post: PostView): ComposerState {
     const autoSplitByAccount: Record<string, boolean> = {};
     const formatByAccount: Record<string, PostFormat> = {};
+    const taggedByAccount: Record<string, string[]> = {};
     const overrideByAccount: Record<string, string[] | undefined> = {};
     const placementsByAccount: Record<string, Record<string, string[]>> = {};
     // Raw canonical grouping drives the per-account divergence check below;
@@ -360,6 +366,10 @@ function hydrate(post: PostView): ComposerState {
     for (const target of post.targets) {
         autoSplitByAccount[target.connected_account_id] = target.auto_split;
         formatByAccount[target.connected_account_id] = target.format;
+        if (target.tagged_handles && target.tagged_handles.length > 0) {
+            taggedByAccount[target.connected_account_id] =
+                target.tagged_handles;
+        }
         const overrideSegments = target.content_override?.segments;
         if (overrideSegments !== undefined && overrideSegments !== null) {
             overrideByAccount[target.connected_account_id] = overrideSegments;
@@ -399,6 +409,7 @@ function hydrate(post: PostView): ComposerState {
                       : { kind: 'all' },
         autoSplitByAccount,
         formatByAccount,
+        taggedByAccount,
         overrideByAccount,
         media: post.media,
         segmentBreaks: post.segment_breaks ?? [],
@@ -524,6 +535,16 @@ export function composerReducer(
                 formatByAccount: {
                     ...state.formatByAccount,
                     [action.accountId]: action.format,
+                },
+                saveState: 'dirty',
+            };
+
+        case 'setTaggedHandles':
+            return {
+                ...state,
+                taggedByAccount: {
+                    ...state.taggedByAccount,
+                    [action.accountId]: action.handles,
                 },
                 saveState: 'dirty',
             };
@@ -853,6 +874,7 @@ export type PutTarget = {
     connected_account_id: string;
     auto_split: boolean;
     format: PostFormat;
+    tagged_handles?: string[];
     content_override: { segments: string[]; media_ids: string[] } | null;
     segment_breaks?: string[];
     placements?: Placement[];
@@ -916,11 +938,21 @@ export function buildPutBody(
                 : null;
 
         const divergedPlacements = state.placementsByAccount[accountId];
+        const tagged = state.taggedByAccount[accountId];
 
         return {
             connected_account_id: accountId,
             auto_split: state.autoSplitByAccount[accountId] ?? true,
             format: state.formatByAccount[accountId] ?? 'feed',
+            // Tags can't exist without a photo, so they're dropped while none is
+            // attached; the list stays in state and returns with the next photo.
+            ...(tagged !== undefined
+                ? {
+                      tagged_handles: hasTaggablePhotos(state.media)
+                          ? tagged
+                          : [],
+                  }
+                : {}),
             content_override,
             ...(divergedPlacements !== undefined
                 ? {

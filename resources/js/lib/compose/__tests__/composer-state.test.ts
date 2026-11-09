@@ -814,6 +814,26 @@ describe('buildPutBody', () => {
         const body = buildPutBody(state, ['a1', 'a2']);
         expect(body.media_ids).toEqual(['m1', 'm2']);
     });
+
+    it('sends tagged handles only while a photo is attached, and keeps them in state', () => {
+        let state = composerReducer(hydrated(), {
+            type: 'setTaggedHandles',
+            accountId: 'a1',
+            handles: ['ada'],
+        });
+        expect(buildPutBody(state, ['a1', 'a2']).targets).toMatchObject([
+            { tagged_handles: [] },
+            {},
+        ]);
+        expect(buildPutBody(state, ['a2']).targets[0]).not.toHaveProperty(
+            'tagged_handles',
+        );
+
+        state = { ...state, media: [mediaFixture('p1')] };
+        expect(buildPutBody(state, ['a1']).targets[0].tagged_handles).toEqual([
+            'ada',
+        ]);
+    });
 });
 
 describe('composerHasContent', () => {

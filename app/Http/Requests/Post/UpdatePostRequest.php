@@ -6,6 +6,7 @@ namespace App\Http\Requests\Post;
 
 use App\Enums\PostFormat;
 use App\Http\Requests\Post\Concerns\DerivesMentionHandleRules;
+use App\Support\XTaggedUsers;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -41,6 +42,7 @@ class UpdatePostRequest extends FormRequest
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
             'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
+            ...XTaggedUsers::rules(),
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.segments' => ['array'],

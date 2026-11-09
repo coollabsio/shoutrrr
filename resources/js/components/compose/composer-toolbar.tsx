@@ -5,6 +5,7 @@ import type { BoostValue } from '@/components/compose/boost-popover';
 import { BoostPopover } from '@/components/compose/boost-popover';
 import { EmojiPopover } from '@/components/compose/emoji-popover';
 import { GifPopover } from '@/components/compose/gif-popover';
+import { TagPeoplePopover } from '@/components/compose/tag-people-popover';
 import {
     ImagePlay,
     Paperclip,
@@ -20,6 +21,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { EmojiSkinTone } from '@/lib/compose/emoji/types';
+import { hasTaggablePhotos } from '@/lib/compose/tagged-people';
 import { cn } from '@/lib/utils';
 import type {
     Account,
@@ -37,6 +39,9 @@ type Props = {
     /** Per-account post format; only meaningful for Instagram & Facebook. */
     format?: PostFormat;
     onFormatChange?: (format: PostFormat) => void;
+    /** X handles tagged in this account's photos; the control shows only on X with a photo attached. */
+    taggedHandles?: string[];
+    onTaggedHandlesChange?: (handles: string[]) => void;
     overrideActive: boolean;
     /** When false, hides Override + Auto-split (generic tab has no platform). */
     showSplitControls?: boolean;
@@ -82,6 +87,8 @@ export function ComposerToolbar({
     autoSplit,
     format = 'feed',
     onFormatChange,
+    taggedHandles = [],
+    onTaggedHandlesChange,
     overrideActive,
     showSplitControls = true,
     media,
@@ -115,6 +122,11 @@ export function ComposerToolbar({
         !readOnly &&
         onFormatChange !== undefined &&
         (activePlatform === 'instagram' || activePlatform === 'facebook');
+    const showTagPeople =
+        !readOnly &&
+        onTaggedHandlesChange !== undefined &&
+        activePlatform === 'x' &&
+        hasTaggablePhotos(media);
     const formatOptions: { value: PostFormat; label: string }[] = [
         { value: 'feed', label: 'Feed' },
         { value: 'reels', label: 'Reels' },
@@ -247,6 +259,13 @@ export function ComposerToolbar({
                         </button>
                     ))}
                 </div>
+            )}
+
+            {showTagPeople && (
+                <TagPeoplePopover
+                    handles={taggedHandles}
+                    onChange={onTaggedHandlesChange}
+                />
             )}
 
             {showSplitControls && !readOnly && (
