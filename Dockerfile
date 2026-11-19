@@ -8,7 +8,7 @@ ARG SERVERSIDEUP_PHP_VERSION=8.5-frankenphp-trixie
 # https://www.postgresql.org/support/versioning/
 ARG POSTGRES_VERSION=17
 # https://github.com/oven-sh/bun/releases
-ARG BUN_VERSION=1.4.4
+ARG BUN_VERSION=1.4.5
 ARG USER_ID=9999
 ARG GROUP_ID=9999
 # The running app version, set by the release pipeline from the published git
