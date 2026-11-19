@@ -522,3 +522,19 @@ test('blockingTargets allows a GIF mixed with an image on LinkedIn', function ()
 
     expect($blocked)->toBe([]);
 });
+
+test('blockingTargets flags tagged people on an X target without a photo', function () {
+    $post = Post::factory()->create();
+    PostTarget::factory()->for($post)->create([
+        'platform' => Platform::X->value,
+        'tagged_users' => [['handle' => 'ada', 'id' => null]],
+    ]);
+
+    $blocked = app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media']));
+
+    expect($blocked[0]['issues'])->toBe(['tags_need_photos']);
+
+    PostMedia::factory()->for($post)->create(['mime' => 'image/jpeg']);
+
+    expect(app(PublishPrecheck::class)->blockingTargets($post->fresh(['targets.account', 'media'])))->toBe([]);
+});

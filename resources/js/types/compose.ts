@@ -152,6 +152,7 @@ export type TargetView = {
     content_override: { segments?: string[]; media_ids?: string[] } | null;
     auto_split: boolean;
     format: PostFormat;
+    tagged_handles?: string[];
     issues: string[];
     status: TargetStatus;
     error_kind: string | null;

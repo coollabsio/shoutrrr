@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Dto\Post;
 
+use App\Support\XTaggedUsers;
+
 final class DraftData
 {
     /**
@@ -16,7 +18,7 @@ final class DraftData
      * @param  list<string>  $destinationIds
      * @param  list<string>  $mediaIds
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
-     * @param  array<string, array{auto_split?: bool, format?: string, content_override?: array{segments: list<string>, media_ids: list<string>}|null, placements?: list<array{media_id: string, segment_ref: string, position: int}>, segment_breaks?: list<string>}>  $targetsByAccount
+     * @param  array<string, array{auto_split?: bool, format?: string, content_override?: array{segments: list<string>, media_ids: list<string>}|null, placements?: list<array{media_id: string, segment_ref: string, position: int}>, segment_breaks?: list<string>, tagged_handles?: list<string>}>  $targetsByAccount
      * @param  list<string>  $segmentBreaks
      * @param  list<array{media_id: string, segment_ref: string, position: int}>  $placements
      */
@@ -87,6 +89,9 @@ final class DraftData
             if (array_key_exists('format', $target) && $target['format'] !== null) {
                 $entry['format'] = (string) $target['format'];
             }
+            if (array_key_exists('tagged_handles', $target)) {
+                $entry['tagged_handles'] = XTaggedUsers::normalize((array) $target['tagged_handles']);
+            }
             if (array_key_exists('placements', $target)) {
                 $entry['placements'] = self::readPlacements($target['placements']);
             }
@@ -150,6 +155,17 @@ final class DraftData
     public function formatFor(string $accountId): string
     {
         return $this->targetsByAccount[$accountId]['format'] ?? 'feed';
+    }
+
+    public function hasTaggedHandlesFor(string $accountId): bool
+    {
+        return array_key_exists('tagged_handles', $this->targetsByAccount[$accountId] ?? []);
+    }
+
+    /** @return list<string> */
+    public function taggedHandlesFor(string $accountId): array
+    {
+        return $this->targetsByAccount[$accountId]['tagged_handles'] ?? [];
     }
 
     /**

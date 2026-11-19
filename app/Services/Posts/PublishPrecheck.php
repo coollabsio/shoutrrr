@@ -85,6 +85,7 @@ class PublishPrecheck
             'video_too_large' => "The video is larger than {$label} allows.",
             'video_bad_aspect_ratio' => "The video's aspect ratio is outside {$label}'s allowed range (widest 3:1, tallest 1:3).",
             'gif_not_mixable' => "{$label} allows only one GIF and won't mix it with other media.",
+            'tags_need_photos' => 'Photo tags need at least one image; remove the tags or attach a photo.',
             'unplaced_media' => "Some attached media isn't placed in this post — remove it or add it to a thread section.",
             default => "{$label} can't publish this post yet.",
         }, $issues);
@@ -125,6 +126,12 @@ class PublishPrecheck
 
         foreach ($this->mediaIssues($target, $platform, $media) as $issue) {
             $issues[] = $issue;
+        }
+
+        // X only accepts tagged_user_ids alongside photos, never video or a GIF.
+        if (($target->tagged_users ?? []) !== []
+            && ! $media->contains(fn (PostMedia $item): bool => ! $item->isVideo() && $item->mime !== 'image/gif')) {
+            $issues[] = 'tags_need_photos';
         }
 
         return array_values(array_unique($issues));

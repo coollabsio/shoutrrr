@@ -191,6 +191,13 @@ class DraftService
             $currentFormat = $current instanceof PostTarget ? $current->format->value : null;
             $format = $formatByAccount[$accountId] ?? $currentFormat ?? 'feed';
 
+            // Photo tags exist on X only; a partial update that omits them keeps the stored ones.
+            $taggedUsers = match (true) {
+                $account->platform !== Platform::X => null,
+                $data instanceof DraftData && $data->hasTaggedHandlesFor($accountId) => $this->taggedUsers($data->taggedHandlesFor($accountId), $current),
+                default => $current instanceof PostTarget ? $current->tagged_users : null,
+            };
+
             $effectiveSegments = $override['segments'] ?? $segments;
             $resolvedSegments = array_map(
                 fn (string $segment): string => $this->resolveMentionTokens($segment, $mentions, $account->platform->value),
@@ -230,6 +237,7 @@ class DraftService
                     'content_override' => $override,
                     'auto_split' => $autoSplit,
                     'format' => $format,
+                    'tagged_users' => $taggedUsers,
                 ],
             );
 
@@ -239,6 +247,30 @@ class DraftService
                 $this->syncPlacements($post, $target, $placements);
             }
         }
+    }
+
+    /**
+     * Pair edited handles with the ids already resolved for them, so only new
+     * handles cost an X lookup at publish time.
+     *
+     * @param  list<string>  $handles
+     * @return list<array{handle: string, id: string|null}>|null
+     */
+    private function taggedUsers(array $handles, ?PostTarget $current): ?array
+    {
+        if ($handles === []) {
+            return null;
+        }
+
+        $knownIds = [];
+        foreach ($current instanceof PostTarget ? ($current->tagged_users ?? []) : [] as $user) {
+            $knownIds[strtolower($user['handle'])] = $user['id'];
+        }
+
+        return array_map(
+            static fn (string $handle): array => ['handle' => $handle, 'id' => $knownIds[strtolower($handle)] ?? null],
+            $handles,
+        );
     }
 
     /**
