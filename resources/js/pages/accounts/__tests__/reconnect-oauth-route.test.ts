@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
 import LinkedInPageOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/LinkedInPageOAuthController';
+import MetaConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/MetaConnectionController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import type { Account } from '@/components/accounts/types';
 import { reconnectOAuthUrl } from '@/pages/accounts/index';
@@ -83,6 +84,15 @@ describe('reconnectOAuthUrl', () => {
             OAuthConnectionController.redirect.url({ platform: 'linkedin' }),
         );
     });
+
+    it.each(['facebook', 'instagram'])(
+        'uses the shared Meta route for %s accounts',
+        (platform) => {
+            expect(reconnectOAuthUrl(account({ platform }))).toBe(
+                MetaConnectionController.redirect.url(),
+            );
+        },
+    );
 
     it('uses the generic OAuth route for other platforms', () => {
         expect(reconnectOAuthUrl(account({ platform: 'x' }))).toBe(

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import BlueskyOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/BlueskyOAuthController';
 import ConnectedAccountController from '@/actions/App/Http/Controllers/ConnectedAccounts/ConnectedAccountController';
 import LinkedInPageOAuthController from '@/actions/App/Http/Controllers/ConnectedAccounts/LinkedInPageOAuthController';
+import MetaConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/MetaConnectionController';
 import OAuthConnectionController from '@/actions/App/Http/Controllers/ConnectedAccounts/OAuthConnectionController';
 import { AccountCard } from '@/components/accounts/account-card';
 import { ConnectButtons } from '@/components/accounts/connect-buttons';
@@ -25,15 +26,23 @@ export const ACCOUNT_GRID_CLASS = 'grid grid-cols-1 gap-4 lg:grid-cols-2';
 
 /**
  * Resolve the OAuth redirect URL used to (re)connect an account. Bluesky has a
- * dedicated controller; every other platform shares the generic OAuth route.
- * A saved custom PDS is replayed as `pds_url` so reconnect targets the original
- * authorization server instead of falling back to the bsky.social default.
+ * dedicated controller, Facebook and Instagram share the Meta flow, and every
+ * other platform shares the generic OAuth route. A saved custom PDS is
+ * replayed as `pds_url` so reconnect targets the original authorization server
+ * instead of falling back to the bsky.social default.
  */
 export function reconnectOAuthUrl(account: Account): string {
     // LinkedIn Pages reconnect through the dedicated Community Management app,
     // not the personal LinkedIn OAuth flow that its member token can't reach.
     if (account.is_linkedin_page) {
         return LinkedInPageOAuthController.redirect.url();
+    }
+
+    // Facebook and Instagram reconnect through the shared Meta Login and
+    // Page-selection flow, like the connect menu. The generic OAuth route
+    // answers 404 for both.
+    if (account.platform === 'facebook' || account.platform === 'instagram') {
+        return MetaConnectionController.redirect.url();
     }
 
     if (account.platform !== 'bluesky') {
