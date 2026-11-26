@@ -19,6 +19,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { discordMentionLabels } from '@/lib/compose/mentions';
+import { sentToTikTokInbox } from '@/lib/compose/tiktok';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { formatCompact, formatFull } from '@/lib/format';
 import { LinkedText } from '@/lib/linked-text';
@@ -267,6 +268,11 @@ function PublishedCard({
                     {platformLabel(target.platform)}
                     {isThread && ` · ${sections.length} posts`}
                 </span>
+                {sentToTikTokInbox(target) && (
+                    <span className="ml-auto text-[12px] font-medium text-muted-foreground">
+                        Sent to the TikTok inbox
+                    </span>
+                )}
                 {permalink && (
                     <a
                         href={permalink}

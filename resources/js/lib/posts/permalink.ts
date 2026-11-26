@@ -34,6 +34,13 @@ export function postPermalink(
             return remoteId.startsWith('urn:li:')
                 ? `https://www.linkedin.com/feed/update/${remoteId}/`
                 : null;
+        case 'tiktok':
+            // A public post is stored under its numeric post id (photo posts
+            // redirect from /video/ to /photo/); a private post or an inbox
+            // draft only has a publish id, which has no page.
+            return h && /^\d+$/.test(remoteId)
+                ? `https://www.tiktok.com/@${h}/video/${remoteId}`
+                : null;
         default:
             return null;
     }

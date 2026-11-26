@@ -8,6 +8,7 @@ import {
     type Placement,
     type PostFormat,
     type PostView,
+    type TikTokOptions,
 } from '@/types/compose';
 
 /** Placement key used for media added before any explicit segment break exists. */
@@ -48,6 +49,8 @@ export type ComposerState = {
     destination: Destination;
     autoSplitByAccount: Record<string, boolean>;
     formatByAccount: Record<string, PostFormat>;
+    /** TikTok accounts only; an absent entry means the guideline defaults. */
+    tiktokByAccount: Record<string, TikTokOptions>;
     overrideByAccount: Record<string, string[] | undefined>;
     media: MediaView[];
     /** Ordered ids of tiptap segment breaks; segment refs are derived from these. */
@@ -74,6 +77,7 @@ export type ComposerAction =
     | { type: 'setSkipSync'; value: boolean }
     | { type: 'toggleAutoSplit'; accountId: string }
     | { type: 'setFormat'; accountId: string; format: PostFormat }
+    | { type: 'setTikTokOptions'; accountId: string; options: TikTokOptions }
     | { type: 'disableAutoSplit'; accountIds: string[] }
     | { type: 'setOverrideSegments'; accountId: string; segments: string[] }
     | { type: 'discardOverride'; accountId: string }
@@ -156,6 +160,7 @@ export function initialComposerState(
         destination: initialDestination ?? { kind: 'all' },
         autoSplitByAccount: {},
         formatByAccount: {},
+        tiktokByAccount: {},
         overrideByAccount: {},
         media: [],
         segmentBreaks: [],
@@ -352,6 +357,7 @@ function withOrphanMediaOnHead(
 function hydrate(post: PostView): ComposerState {
     const autoSplitByAccount: Record<string, boolean> = {};
     const formatByAccount: Record<string, PostFormat> = {};
+    const tiktokByAccount: Record<string, TikTokOptions> = {};
     const overrideByAccount: Record<string, string[] | undefined> = {};
     const placementsByAccount: Record<string, Record<string, string[]>> = {};
     // Raw canonical grouping drives the per-account divergence check below;
@@ -365,6 +371,9 @@ function hydrate(post: PostView): ComposerState {
     for (const target of post.targets) {
         autoSplitByAccount[target.connected_account_id] = target.auto_split;
         formatByAccount[target.connected_account_id] = target.format;
+        if (target.tiktok) {
+            tiktokByAccount[target.connected_account_id] = target.tiktok;
+        }
         const overrideSegments = target.content_override?.segments;
         if (overrideSegments !== undefined && overrideSegments !== null) {
             overrideByAccount[target.connected_account_id] = overrideSegments;
@@ -404,6 +413,7 @@ function hydrate(post: PostView): ComposerState {
                       : { kind: 'all' },
         autoSplitByAccount,
         formatByAccount,
+        tiktokByAccount,
         overrideByAccount,
         media: post.media,
         segmentBreaks: post.segment_breaks ?? [],
@@ -529,6 +539,16 @@ export function composerReducer(
                 formatByAccount: {
                     ...state.formatByAccount,
                     [action.accountId]: action.format,
+                },
+                saveState: 'dirty',
+            };
+
+        case 'setTikTokOptions':
+            return {
+                ...state,
+                tiktokByAccount: {
+                    ...state.tiktokByAccount,
+                    [action.accountId]: action.options,
                 },
                 saveState: 'dirty',
             };
@@ -865,6 +885,8 @@ export type PutTarget = {
     connected_account_id: string;
     auto_split: boolean;
     format: PostFormat;
+    /** Sent only for TikTok accounts the user has set options on. */
+    tiktok?: TikTokOptions;
     content_override: { segments: string[]; media_ids: string[] } | null;
     segment_breaks?: string[];
     placements?: Placement[];
@@ -928,11 +950,13 @@ export function buildPutBody(
                 : null;
 
         const divergedPlacements = state.placementsByAccount[accountId];
+        const tiktok = state.tiktokByAccount[accountId];
 
         return {
             connected_account_id: accountId,
             auto_split: state.autoSplitByAccount[accountId] ?? true,
             format: state.formatByAccount[accountId] ?? 'feed',
+            ...(tiktok !== undefined ? { tiktok } : {}),
             content_override,
             ...(divergedPlacements !== undefined
                 ? {
@@ -958,21 +982,25 @@ export function buildPutBody(
 }
 
 /** The per-account choices the draft-creating POST accepts. */
-export type CreateTarget = Pick<PutTarget, 'connected_account_id' | 'format'>;
+export type CreateTarget = Pick<
+    PutTarget,
+    'connected_account_id' | 'format' | 'tiktok'
+>;
 
 /**
- * Per-account choices for the first save. Without them a format picked before
- * the draft exists would be dropped, because the create marks the composer
- * saved and no PUT follows.
+ * Per-account choices for the first save. Without them a format or TikTok
+ * setting picked before the draft exists would be dropped, because the create
+ * marks the composer saved and no PUT follows.
  */
 export function buildCreateTargets(
     state: ComposerState,
     accountIds: string[],
 ): CreateTarget[] {
     return buildPutBody(state, accountIds).targets.map(
-        ({ connected_account_id, format }) => ({
+        ({ connected_account_id, format, tiktok }) => ({
             connected_account_id,
             format,
+            ...(tiktok !== undefined ? { tiktok } : {}),
         }),
     );
 }
@@ -1142,6 +1170,7 @@ const PERSISTED_FIELDS = [
     'destination',
     'autoSplitByAccount',
     'formatByAccount',
+    'tiktokByAccount',
     'overrideByAccount',
     'media',
     'segmentBreaks',

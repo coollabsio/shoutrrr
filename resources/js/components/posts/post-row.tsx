@@ -10,7 +10,7 @@ import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { dayjs, toUserTz } from '@/lib/datetime/dayjs';
 import { postStatusMeta } from '@/lib/posts/status';
 import { cn } from '@/lib/utils';
-import type { PlatformName, PostStatus } from '@/types/compose';
+import type { PlatformName, PostStatus, TargetView } from '@/types/compose';
 
 import { PostRowActions } from './post-row-actions';
 
@@ -29,7 +29,8 @@ export type PostRowData = {
     scheduled_at: string | null;
     published_at: string | null;
     platforms: PlatformName[];
-    targets: ChipTarget[];
+    /** `tiktok` lets the delete dialog tell an inbox draft from a live post. */
+    targets: (ChipTarget & Partial<Pick<TargetView, 'tiktok'>>)[];
     media_count: number;
     media_preview: { kind: 'image' | 'video'; url: string | null } | null;
 };

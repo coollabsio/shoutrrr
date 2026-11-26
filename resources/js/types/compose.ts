@@ -14,6 +14,43 @@ export type PlatformName =
 
 export type PostFormat = 'feed' | 'reels' | 'story';
 
+/** Direct Post publishes to the profile; inbox sends a draft to the creator's TikTok inbox. */
+export type TikTokPostMode = 'direct' | 'inbox';
+
+export type TikTokPrivacyLevel =
+    | 'PUBLIC_TO_EVERYONE'
+    | 'MUTUAL_FOLLOW_FRIENDS'
+    | 'FOLLOWER_OF_CREATOR'
+    | 'SELF_ONLY';
+
+/** Per-post TikTok choices, stored on the target (App\Dto\Post\TikTokPostOptions). */
+export type TikTokOptions = {
+    post_mode: TikTokPostMode;
+    privacy_level: TikTokPrivacyLevel | null;
+    allow_comment: boolean;
+    allow_duet: boolean;
+    allow_stitch: boolean;
+    disclose_commercial: boolean;
+    brand_organic: boolean;
+    branded_content: boolean;
+};
+
+/** What a TikTok creator may do right now, read fresh from TikTok while composing. */
+export type TikTokCreatorInfo = {
+    nickname: string;
+    username: string;
+    privacy_levels: { value: TikTokPrivacyLevel; label: string }[];
+    comment_disabled: boolean;
+    duet_disabled: boolean;
+    stitch_disabled: boolean;
+    max_video_duration_seconds: number;
+};
+
+export type TikTokCreatorState =
+    | { status: 'loading' }
+    | { status: 'available'; creator: TikTokCreatorInfo }
+    | { status: 'unavailable'; message: string };
+
 /**
  * Per-platform display text / handles for a mention, plus the non-platform
  * `linkedin_urn` key which carries a raw LinkedIn company URL / numeric id /
@@ -153,6 +190,8 @@ export type TargetView = {
     content_override: { segments?: string[]; media_ids?: string[] } | null;
     auto_split: boolean;
     format: PostFormat;
+    /** TikTok targets only; null everywhere else. */
+    tiktok?: TikTokOptions | null;
     issues: string[];
     status: TargetStatus;
     error_kind: string | null;

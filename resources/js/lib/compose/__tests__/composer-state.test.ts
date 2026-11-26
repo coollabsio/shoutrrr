@@ -1675,3 +1675,114 @@ describe('firstLineTitle', () => {
         expect(firstLineTitle([exact])).toBe(exact);
     });
 });
+
+describe('TikTok options', () => {
+    const chosen = {
+        post_mode: 'direct' as const,
+        privacy_level: 'FOLLOWER_OF_CREATOR' as const,
+        allow_comment: true,
+        allow_duet: false,
+        allow_stitch: false,
+        disclose_commercial: true,
+        brand_organic: true,
+        branded_content: false,
+    };
+
+    function withTikTokTarget(tiktok: TargetView['tiktok']): ComposerState {
+        const post: PostView = {
+            id: 'post-tt',
+            base_text: 'clip',
+            segments: ['clip'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-11-22T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            targets: [
+                targetFixture('tt1', { platform: 'tiktok', tiktok }),
+                targetFixture('x1'),
+            ],
+            media: [],
+        };
+
+        return composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+    }
+
+    it('hydrates the stored options for TikTok targets only', () => {
+        const state = withTikTokTarget(chosen);
+
+        expect(state.tiktokByAccount).toEqual({ tt1: chosen });
+    });
+
+    it('marks the draft dirty when the options change', () => {
+        const state = composerReducer(withTikTokTarget(null), {
+            type: 'setTikTokOptions',
+            accountId: 'tt1',
+            options: chosen,
+        });
+
+        expect(state.tiktokByAccount.tt1).toEqual(chosen);
+        expect(state.saveState).toBe('dirty');
+    });
+
+    it('sends options only for accounts that have them', () => {
+        const state = composerReducer(withTikTokTarget(null), {
+            type: 'setTikTokOptions',
+            accountId: 'tt1',
+            options: chosen,
+        });
+        const body = buildPutBody(state, ['tt1', 'x1']);
+
+        expect(body.targets[0].tiktok).toEqual(chosen);
+        expect(body.targets[1]).not.toHaveProperty('tiktok');
+    });
+
+    it('carries choices made before the first save into the create', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setTikTokOptions',
+            accountId: 'tt1',
+            options: chosen,
+        });
+
+        expect(buildCreateTargets(state, ['tt1', 'x1'])).toEqual([
+            { connected_account_id: 'tt1', format: 'feed', tiktok: chosen },
+            { connected_account_id: 'x1', format: 'feed' },
+        ]);
+    });
+
+    it('keeps the draft dirty when the options change after the snapshot a save sent', () => {
+        const sent = withTikTokTarget(null);
+        // The options change after the save took its snapshot, and
+        // 'saveStarted' then overwrites the change's 'dirty'.
+        let state = composerReducer(sent, {
+            type: 'setTikTokOptions',
+            accountId: 'tt1',
+            options: chosen,
+        });
+        state = composerReducer(state, { type: 'saveStarted' });
+
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: {
+                id: 'post-tt',
+                base_text: 'clip',
+                segments: ['clip'],
+                status: 'draft',
+                published_at: null,
+                updated_at: '2026-11-22T10:05:00+00:00',
+                scheduled_at: null,
+                auto_repost: null,
+                destination: { kind: 'all', id: null },
+                targets: [],
+                media: [],
+            },
+            sent,
+        });
+
+        expect(state.saveState).toBe('dirty');
+    });
+});

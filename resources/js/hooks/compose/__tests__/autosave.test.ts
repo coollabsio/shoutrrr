@@ -180,6 +180,43 @@ describe('useAutosave first save', () => {
             { connected_account_id: 'x-1', format: 'feed' },
         ]);
     });
+
+    it('sends TikTok settings picked before the draft exists', async () => {
+        const tiktok = {
+            post_mode: 'inbox' as const,
+            privacy_level: null,
+            allow_comment: false,
+            allow_duet: false,
+            allow_stitch: false,
+            disclose_commercial: false,
+            brand_organic: false,
+            branded_content: false,
+        };
+        act(() => {
+            root?.render(
+                createElement(Harness, {
+                    state: draftState({
+                        postId: null,
+                        tiktokByAccount: { 'acc-tiktok': tiktok },
+                    }),
+                    onSaved: vi.fn(),
+                    accountIds: ['acc-tiktok', 'acc-x'],
+                }),
+            );
+        });
+
+        await act(async () => {
+            await flushRef?.();
+        });
+
+        const buildBody = transform.mock.calls.at(-1)?.[0] as () => {
+            targets: unknown;
+        };
+        expect(buildBody().targets).toEqual([
+            { connected_account_id: 'acc-tiktok', format: 'feed', tiktok },
+            { connected_account_id: 'acc-x', format: 'feed' },
+        ]);
+    });
 });
 
 describe('useAutosave flush result', () => {

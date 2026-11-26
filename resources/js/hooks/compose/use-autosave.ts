@@ -271,6 +271,7 @@ export function useAutosave({
         state.overrideByAccount,
         state.autoSplitByAccount,
         state.formatByAccount,
+        state.tiktokByAccount,
         state.media,
         state.autoRepost,
         state.placements,

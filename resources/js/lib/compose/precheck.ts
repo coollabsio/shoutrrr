@@ -1,5 +1,12 @@
 import { replaceMentionTokens } from '@/lib/compose/mentions';
 import { measure } from '@/lib/compose/section-split';
+import {
+    DEFAULT_TIKTOK_OPTIONS,
+    DISCLOSURE_INCOMPLETE_HINT,
+    tikTokBlockReasons,
+    type TikTokBlockReason,
+    type TikTokPrecheck,
+} from '@/lib/compose/tiktok';
 import { platformLabel } from '@/lib/platforms';
 import type {
     Account,
@@ -8,6 +15,8 @@ import type {
     PlatformLimits,
     PlatformName,
     PostFormat,
+    TikTokCreatorState,
+    TikTokOptions,
 } from '@/types/compose';
 
 export type BlockReason =
@@ -21,7 +30,8 @@ export type BlockReason =
     | 'video_too_large'
     | 'gif_not_mixable'
     | 'reels_requires_video'
-    | 'story_requires_media';
+    | 'story_requires_media'
+    | TikTokBlockReason;
 
 /**
  * The reasons that are about the text itself. Only these turn the character
@@ -54,6 +64,8 @@ type PrecheckAccountInput = {
     hasVideo: boolean;
     format: PostFormat;
     limits: PlatformLimits;
+    /** TikTok accounts only: the post's TikTok choices and live creator info. */
+    tiktok?: TikTokPrecheck;
 };
 
 function byteLength(text: string): number {
@@ -83,6 +95,7 @@ export function precheckAccount({
     hasVideo,
     format,
     limits,
+    tiktok,
 }: PrecheckAccountInput): BlockReason[] {
     const reasons: BlockReason[] = [];
     const clean = segments
@@ -134,6 +147,10 @@ export function precheckAccount({
         reasons.push('story_requires_media');
     }
 
+    if (tiktok !== undefined) {
+        reasons.push(...tikTokBlockReasons(tiktok));
+    }
+
     return reasons;
 }
 
@@ -146,6 +163,8 @@ type PrecheckDestinationsInput = {
     media: MediaView[];
     limits: PlatformLimits[];
     formatByAccount: Record<string, PostFormat>;
+    tiktokByAccount?: Record<string, TikTokOptions>;
+    tiktokCreators?: Record<string, TikTokCreatorState>;
 };
 
 /**
@@ -168,6 +187,8 @@ export function precheckDestinations({
     media,
     limits,
     formatByAccount,
+    tiktokByAccount = {},
+    tiktokCreators = {},
 }: PrecheckDestinationsInput): AccountBlock[] {
     const blocks: AccountBlock[] = [];
     const mediaCount = media.length;
@@ -190,6 +211,14 @@ export function precheckDestinations({
             hasVideo,
             format: formatByAccount[account.id] ?? 'feed',
             limits: platformLimits,
+            tiktok:
+                account.platform === 'tiktok'
+                    ? tikTokPrecheckFor(
+                          tiktokByAccount[account.id],
+                          tiktokCreators[account.id],
+                          media,
+                      )
+                    : undefined,
         });
         if (reasons.length > 0) {
             blocks.push({
@@ -202,6 +231,25 @@ export function precheckDestinations({
     }
 
     return blocks;
+}
+
+/**
+ * The TikTok precheck input for one account: its stored choices (or the
+ * guideline defaults) checked against its live creator info and the post's media.
+ */
+export function tikTokPrecheckFor(
+    options: TikTokOptions | undefined,
+    creator: TikTokCreatorState | undefined,
+    media: MediaView[],
+): TikTokPrecheck {
+    const video = media.find((item) => item.kind === 'video');
+
+    return {
+        options: options ?? DEFAULT_TIKTOK_OPTIONS,
+        creator,
+        videoDurationSeconds: video?.duration_seconds ?? null,
+        isPhotoPost: video === undefined,
+    };
 }
 
 export function describeReason(
@@ -241,5 +289,17 @@ export function describeReason(
             return `${label} Reels need a video`;
         case 'story_requires_media':
             return `${label} Stories need an image or video`;
+        case 'tiktok_creator_unavailable':
+            return 'TikTok is not accepting posts from this account right now — try again later';
+        case 'tiktok_privacy_required':
+            return 'choose who can view this TikTok post';
+        case 'tiktok_privacy_unavailable':
+            return 'the chosen privacy level is no longer offered for this TikTok account — choose another';
+        case 'tiktok_interaction_disabled':
+            return 'this TikTok account has turned off an interaction you allowed — untick it';
+        case 'tiktok_video_too_long':
+            return 'the video is longer than this TikTok account can post';
+        case 'tiktok_disclosure_incomplete':
+            return DISCLOSURE_INCOMPLETE_HINT;
     }
 }

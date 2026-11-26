@@ -81,6 +81,19 @@ describe('shouldAllowSubmit', () => {
             }),
         ).toBe(true);
     });
+
+    it('holds the submit back while a required choice is pending', () => {
+        expect(
+            shouldAllowSubmit({
+                disabled: false,
+                hinted: true,
+                processing: false,
+                queueDisabled: false,
+                trayMode: 'now',
+                uploading: false,
+            }),
+        ).toBe(false);
+    });
 });
 
 describe('hasBlockingIssues', () => {

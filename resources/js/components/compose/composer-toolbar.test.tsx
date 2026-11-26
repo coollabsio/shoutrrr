@@ -51,6 +51,60 @@ describe('ComposerToolbar format picker', () => {
     });
 });
 
+describe('ComposerToolbar TikTok post mode', () => {
+    it('offers Post and Inbox draft for a TikTok account', () => {
+        const onTikTokPostModeChange = vi.fn();
+        render(
+            <ComposerToolbar
+                {...base}
+                activePlatform="tiktok"
+                tiktokPostMode="direct"
+                onTikTokPostModeChange={onTikTokPostModeChange}
+                onFormatChange={vi.fn()}
+            />,
+        );
+
+        expect(
+            screen.getByRole('group', { name: 'How to send to TikTok' }),
+        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Post' })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+        expect(
+            screen.queryByRole('button', { name: /stories/i }),
+        ).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Inbox draft' }));
+        expect(onTikTokPostModeChange).toHaveBeenCalledWith('inbox');
+    });
+
+    it('hides the TikTok switch on other platforms and when read-only', () => {
+        const { rerender } = render(
+            <ComposerToolbar
+                {...base}
+                activePlatform="instagram"
+                onTikTokPostModeChange={vi.fn()}
+            />,
+        );
+        expect(
+            screen.queryByRole('group', { name: 'How to send to TikTok' }),
+        ).not.toBeInTheDocument();
+
+        rerender(
+            <ComposerToolbar
+                {...base}
+                activePlatform="tiktok"
+                readOnly
+                onTikTokPostModeChange={vi.fn()}
+            />,
+        );
+        expect(
+            screen.queryByRole('group', { name: 'How to send to TikTok' }),
+        ).not.toBeInTheDocument();
+    });
+});
+
 describe('ComposerToolbar media button', () => {
     it('is icon-only but keeps its label and count', () => {
         render(
