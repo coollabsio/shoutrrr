@@ -111,7 +111,8 @@ test('the callback stores an active tiktok account with its tokens encrypted', f
         ->and($account->display_name)->toBe('Harbor Studio')
         ->and($account->secret->access_token)->toBe('tiktok-access')
         ->and($account->secret->refresh_token)->toBe('tiktok-refresh')
-        ->and($account->token_expires_at->between(now()->addSeconds(7100), now()->addSeconds(7201)))->toBeTrue();
+        ->and($account->token_expires_at->between(now()->addSeconds(7100), now()->addSeconds(7201)))->toBeTrue()
+        ->and($account->refresh_token_expires_at->between(now()->addSeconds(15551900), now()->addSeconds(15552001)))->toBeTrue();
 
     $stored = DB::table('connected_account_secrets')->where('connected_account_id', $account->id)->first();
     expect($stored->access_token)->not->toContain('tiktok-access')
@@ -126,6 +127,26 @@ test('the callback stores an active tiktok account with its tokens encrypted', f
     Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://open.tiktokapis.com/v2/user/info/')
         && $request->hasHeader('Authorization', 'Bearer tiktok-access')
         && str_contains($request->url(), 'fields=open_id%2Cavatar_url%2Cdisplay_name%2Cusername'));
+});
+
+test('reconnecting a tiktok account takes the new refresh token expiry and clears an old reminder', function () {
+    [, $workspace] = ownerActingIn();
+    $account = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::TikTok->value,
+        'remote_account_id' => 'open-123',
+        'refresh_token_expires_at' => now()->addDays(3),
+        'reconnect_reminded_at' => now()->subDays(11),
+    ]);
+    fakeTikTokOAuth(['refresh_expires_in' => 31536000]);
+    $state = startTikTokConnect();
+
+    test()->get("/accounts/callback/tiktok?code=auth-code&state={$state}")->assertRedirect(route('accounts.index'));
+
+    $account->refresh();
+    expect($account->refresh_token_expires_at->gt(now()->addDays(364)))->toBeTrue()
+        ->and($account->reconnect_reminded_at)->toBeNull()
+        ->and(ConnectedAccount::withoutGlobalScopes()->where('remote_account_id', 'open-123')->count())->toBe(1);
 });
 
 test('the callback refuses a state that does not match the session', function () {

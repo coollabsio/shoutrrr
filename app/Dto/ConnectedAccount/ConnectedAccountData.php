@@ -28,12 +28,14 @@ final readonly class ConnectedAccountData
         public ?array $session = null,
         public ?array $capabilities = null,
         public ?CarbonImmutable $tokenExpiresAt = null,
+        public ?CarbonImmutable $refreshTokenExpiresAt = null,
     ) {}
 
     public static function fromSocialite(Platform $platform, SocialiteUser $user): self
     {
         $attributes = get_object_vars($user);
         $expiresIn = $attributes['expiresIn'] ?? null;
+        $refreshExpiresIn = $attributes['refreshExpiresIn'] ?? null;
 
         return new self(
             platform: $platform,
@@ -45,6 +47,7 @@ final readonly class ConnectedAccountData
             accessToken: $attributes['token'] ?? null,
             refreshToken: $attributes['refreshToken'] ?? null,
             tokenExpiresAt: $expiresIn ? Date::now()->addSeconds((int) $expiresIn)->toImmutable() : null,
+            refreshTokenExpiresAt: $refreshExpiresIn ? Date::now()->addSeconds((int) $refreshExpiresIn)->toImmutable() : null,
         );
     }
 
@@ -66,6 +69,7 @@ final readonly class ConnectedAccountData
             session: $this->session,
             capabilities: $capabilities,
             tokenExpiresAt: $this->tokenExpiresAt,
+            refreshTokenExpiresAt: $this->refreshTokenExpiresAt,
         );
     }
 
@@ -88,6 +92,7 @@ final readonly class ConnectedAccountData
             session: $this->session,
             capabilities: $this->capabilities,
             tokenExpiresAt: $expiresAt,
+            refreshTokenExpiresAt: $this->refreshTokenExpiresAt,
         );
     }
 

@@ -146,11 +146,29 @@ class TikTokProvider extends AbstractProvider
     }
 
     /**
+     * Keep the refresh token's remaining lifetime, which the token response
+     * carries but Socialite drops.
+     *
+     * @param  array<string, mixed>  $response
+     * @param  array<string, mixed>  $user
+     */
+    protected function userInstance(array $response, array $user): User
+    {
+        $instance = parent::userInstance($response, $user);
+
+        if ($instance instanceof TikTokUser) {
+            $instance->setRefreshExpiresIn($response['refresh_expires_in'] ?? null);
+        }
+
+        return $instance;
+    }
+
+    /**
      * @param  array<string, mixed>  $user
      */
     protected function mapUserToObject(array $user): User
     {
-        return (new User)->setRaw($user)->map([
+        return (new TikTokUser)->setRaw($user)->map([
             'id' => $user['open_id'],
             'nickname' => $user['username'],
             'name' => $user['display_name'] ?? null,

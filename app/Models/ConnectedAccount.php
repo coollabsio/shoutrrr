@@ -13,6 +13,7 @@ use Carbon\CarbonImmutable;
 use Database\Factories\ConnectedAccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -36,9 +37,11 @@ use Override;
  * @property CarbonImmutable|null $disabled_at
  * @property array<string, mixed>|null $capabilities
  * @property CarbonImmutable|null $token_expires_at
+ * @property CarbonImmutable|null $refresh_token_expires_at
  * @property CarbonImmutable|null $last_refreshed_at
  * @property CarbonImmutable|null $refresh_failed_at
  * @property string|null $refresh_failure_reason
+ * @property CarbonImmutable|null $reconnect_reminded_at
  * @property CarbonImmutable|null $metrics_captured_at
  * @property MetricsStatus|null $metrics_status
  * @property CarbonImmutable|null $engagement_rate_limited_until
@@ -57,9 +60,11 @@ use Override;
     'disabled_at',
     'capabilities',
     'token_expires_at',
+    'refresh_token_expires_at',
     'last_refreshed_at',
     'refresh_failed_at',
     'refresh_failure_reason',
+    'reconnect_reminded_at',
     'metrics_captured_at',
     'metrics_status',
     'engagement_rate_limited_until',
@@ -77,17 +82,28 @@ class ConnectedAccount extends Model
                 return;
             }
 
-            $workspace = Workspace::query()->find($account->workspace_id);
-            $recipientIds = array_unique(array_filter([
-                $workspace?->owner_id,
-                $account->connected_by_user_id,
-            ]));
-
             Notification::send(
-                User::query()->whereKey($recipientIds)->get(),
+                $account->attentionRecipients(),
                 new AccountNeedsAttentionNotification($account, $account->workspace_id),
             );
         });
+    }
+
+    /**
+     * The people told when this account needs them to act: the owner of its
+     * workspace and whoever connected it.
+     *
+     * @return EloquentCollection<int, User>
+     */
+    public function attentionRecipients(): EloquentCollection
+    {
+        $workspace = Workspace::query()->find($this->workspace_id);
+        $recipientIds = array_unique(array_filter([
+            $workspace?->owner_id,
+            $this->connected_by_user_id,
+        ]));
+
+        return User::query()->whereKey($recipientIds)->get();
     }
 
     /**
@@ -110,8 +126,10 @@ class ConnectedAccount extends Model
             'disabled_at' => 'immutable_datetime',
             'capabilities' => 'array',
             'token_expires_at' => 'immutable_datetime',
+            'refresh_token_expires_at' => 'immutable_datetime',
             'last_refreshed_at' => 'immutable_datetime',
             'refresh_failed_at' => 'immutable_datetime',
+            'reconnect_reminded_at' => 'immutable_datetime',
             'metrics_captured_at' => 'immutable_datetime',
             'metrics_status' => MetricsStatus::class,
             'engagement_rate_limited_until' => 'immutable_datetime',

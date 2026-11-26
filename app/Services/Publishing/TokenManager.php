@@ -222,7 +222,7 @@ class TokenManager
     /**
      * TikTok refresh does not fit the shared `refreshOAuth()` path: the client
      * id is sent as `client_key` and failures arrive in the body, often with a
-     * 200 status. Access tokens last two hours and every refresh rotates the
+     * 200 status. Access tokens are short-lived and a refresh can rotate the
      * refresh token, so — like Bluesky — a forced retry only replaces the token
      * the failed request used and reuses one another worker minted meanwhile.
      *
@@ -273,8 +273,10 @@ class TokenManager
             throw $exception;
         }
 
-        // TikTok has already invalidated the old refresh token: persist the
-        // rotated pair before anything else can interrupt this request.
+        $rotated = $refreshed['refresh_token'] !== $secret->refresh_token;
+
+        // TikTok may have invalidated the old refresh token already: persist
+        // the returned pair before anything else can interrupt this request.
         $secret->forceFill([
             'access_token' => $refreshed['access_token'],
             'refresh_token' => $refreshed['refresh_token'],
@@ -282,6 +284,10 @@ class TokenManager
 
         $account->forceFill([
             'token_expires_at' => $refreshed['expires_at'],
+            'refresh_token_expires_at' => $refreshed['refresh_expires_at'] ?? $account->refresh_token_expires_at,
+            // A new refresh token has a lifetime of its own, so a reminder to
+            // reconnect before the old one ran out no longer applies.
+            'reconnect_reminded_at' => $rotated ? null : $account->reconnect_reminded_at,
             'last_refreshed_at' => Date::now(),
             'status' => ConnectedAccountStatus::Active->value,
             'refresh_failed_at' => null,

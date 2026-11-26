@@ -18,10 +18,12 @@ use Illuminate\Support\Facades\Date;
 use RuntimeException;
 
 /**
- * TikTok's token refresh and revoke endpoints. Access tokens live two hours;
- * refresh tokens live 180 days and rotate on every refresh (the previous one is
- * invalidated immediately), so callers must persist the returned pair before
- * doing anything else.
+ * TikTok's token refresh and revoke endpoints. Every token response reports
+ * how long the access token (`expires_in`) and the refresh token
+ * (`refresh_expires_in`) have left, and TikTok asks clients to schedule from
+ * those rather than assume fixed lifetimes. A refresh can hand back a new
+ * refresh token and invalidate the previous one at once, so callers must
+ * persist the returned pair before doing anything else.
  *
  * TikTok reports OAuth failures in the body (`{error, error_description,
  * log_id}`), so a response is classified by that, not by HTTP status alone.
@@ -45,7 +47,9 @@ class TikTokTokenClient
     public function __construct(private readonly HttpFactory $http) {}
 
     /**
-     * @return array{access_token: string, refresh_token: string, expires_at: CarbonImmutable}
+     * `refresh_expires_at` is null when TikTok leaves out the refresh token's lifetime.
+     *
+     * @return array{access_token: string, refresh_token: string, expires_at: CarbonImmutable, refresh_expires_at: CarbonImmutable|null}
      *
      * @throws TokenRefreshException when TikTok rejects the refresh token (reconnect needed)
      * @throws TransientTokenRefreshException when TikTok or the network is temporarily unavailable
@@ -73,10 +77,13 @@ class TikTokTokenClient
         $this->meter(UsageCategory::ExternalApi, UsageOperation::TOKEN_REFRESH, $account, $response, succeeded: $succeeded);
 
         if ($succeeded) {
+            $refreshExpiresIn = (int) $response->json('refresh_expires_in');
+
             return [
                 'access_token' => $accessToken,
                 'refresh_token' => $rotatedRefreshToken,
                 'expires_at' => Date::now()->addSeconds((int) $response->json('expires_in'))->toImmutable(),
+                'refresh_expires_at' => $refreshExpiresIn > 0 ? Date::now()->addSeconds($refreshExpiresIn)->toImmutable() : null,
             ];
         }
 

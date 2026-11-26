@@ -45,6 +45,26 @@ test('it flips status to needs attention on refresh failure and keeps going', fu
         ->and($account->fresh()->refresh_failure_reason)->toContain('400');
 });
 
+test('a refused refresh does not stop the sweep before the remaining accounts', function () {
+    $accounts = ConnectedAccount::factory()->count(2)->create([
+        'platform' => Platform::X->value,
+        'token_expires_at' => now()->addMinutes(5),
+    ]);
+    $accounts->each(fn (ConnectedAccount $account) => ConnectedAccountSecret::factory()->create(['connected_account_id' => $account->id, 'refresh_token' => 'r']));
+
+    Http::fake(['https://api.twitter.com/2/oauth2/token' => Http::sequence()
+        ->push([], 400)
+        ->push(['access_token' => 'fresh', 'expires_in' => 7200]),
+    ]);
+
+    $this->artisan('accounts:refresh-tokens')->assertExitCode(0);
+
+    Http::assertSentCount(2);
+    $statuses = $accounts->map(fn (ConnectedAccount $account): ConnectedAccountStatus => $account->fresh()->status);
+    expect($statuses->filter(fn (ConnectedAccountStatus $status): bool => $status === ConnectedAccountStatus::NeedsAttention))->toHaveCount(1)
+        ->and($statuses->filter(fn (ConnectedAccountStatus $status): bool => $status === ConnectedAccountStatus::Active))->toHaveCount(1);
+});
+
 test('it keeps the account active on a transient 503 without reporting', function () {
     $account = ConnectedAccount::factory()->create([
         'platform' => Platform::X->value,
