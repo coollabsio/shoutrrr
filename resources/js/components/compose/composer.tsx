@@ -40,7 +40,11 @@ import {
     syncMentionsFromText,
 } from '@/lib/compose/mentions';
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
-import { precheckAccount, precheckDestinations } from '@/lib/compose/precheck';
+import {
+    isTextBlockReason,
+    precheckAccount,
+    precheckDestinations,
+} from '@/lib/compose/precheck';
 import { readVideoMetadata, videoLimitsForTargets } from '@/lib/compose/video';
 import { failureToasts, settle } from '@/lib/http/errors';
 import {
@@ -781,7 +785,17 @@ export default function Composer({
         return account.max_text_length || limitForPlatform(account.platform);
     }
 
-    function severityFor(accountId: string): 'ok' | 'warn' | 'over' {
+    /**
+     * How an account's draft stands: `over` when something blocks it, `warn`
+     * near the character limit. With `scope: 'text'` only the text's own
+     * problems count — the character counter uses that, so a Reel without a
+     * video or a Story without media doesn't turn the count red (the tab still
+     * does).
+     */
+    function severityFor(
+        accountId: string,
+        scope: 'all' | 'text' = 'all',
+    ): 'ok' | 'warn' | 'over' {
         const account = tabAccounts.find((a) => a.id === accountId);
         if (!account) {
             return 'ok';
@@ -811,7 +825,9 @@ export default function Composer({
             format: state.formatByAccount[accountId] ?? 'feed',
             limits: platformLimits,
         });
-        if (reasons.length > 0) {
+        const blocking =
+            scope === 'text' ? reasons.filter(isTextBlockReason) : reasons;
+        if (blocking.length > 0) {
             return 'over';
         }
         const resolvedText = replaceMentionTokens(
@@ -1052,7 +1068,7 @@ export default function Composer({
                                 dispatch({ type: 'setActiveTab', tab })
                             }
                             chipFor={chipFor}
-                            stateFor={severityFor}
+                            stateFor={(accountId) => severityFor(accountId)}
                             hasOverride={(accountId) =>
                                 state.overrideByAccount[accountId] !== undefined
                             }
@@ -1277,7 +1293,7 @@ export default function Composer({
                         )}
                         limit={limitForAccount(activeAccount)}
                         sectionTotal={activeSectionTotal}
-                        state={severityFor(activeAccount.id)}
+                        state={severityFor(activeAccount.id, 'text')}
                     />
                 ) : showConnectAccountPrompt ? (
                     <div className="px-4 pb-3.5 sm:px-[26px]">

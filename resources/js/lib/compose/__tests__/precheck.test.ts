@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     describeReason,
+    isTextBlockReason,
     precheckAccount,
     precheckDestinations,
 } from '@/lib/compose/precheck';
@@ -436,5 +437,19 @@ describe('describeReason', () => {
             limitsFor({ platform: 'x', maxMedia: 4 }),
         );
         expect(text).toContain('4 media');
+    });
+});
+
+describe('isTextBlockReason', () => {
+    it('counts only problems with the text itself', () => {
+        expect(isTextBlockReason('empty')).toBe(true);
+        expect(isTextBlockReason('section_too_long')).toBe(true);
+        expect(isTextBlockReason('too_many_sections')).toBe(true);
+    });
+
+    it('leaves media and format problems out', () => {
+        expect(isTextBlockReason('media_required')).toBe(false);
+        expect(isTextBlockReason('reels_requires_video')).toBe(false);
+        expect(isTextBlockReason('story_requires_media')).toBe(false);
     });
 });
