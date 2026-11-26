@@ -45,6 +45,7 @@ const PLATFORM_LABEL: Record<string, string> = {
     instagram: 'Instagram',
     threads: 'Threads',
     discord: 'Discord',
+    tiktok: 'TikTok',
 };
 
 function platformLabel(platform: string): string {

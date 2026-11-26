@@ -9,7 +9,8 @@ export type PlatformName =
     | 'facebook'
     | 'instagram'
     | 'threads'
-    | 'discord';
+    | 'discord'
+    | 'tiktok';
 
 export type PostFormat = 'feed' | 'reels' | 'story';
 

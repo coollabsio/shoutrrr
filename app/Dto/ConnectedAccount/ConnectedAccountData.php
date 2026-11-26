@@ -96,7 +96,7 @@ final readonly class ConnectedAccountData
         $nickname = $user->getNickname();
 
         return match ($platform) {
-            Platform::X => '@'.$nickname,
+            Platform::X, Platform::TikTok => '@'.$nickname,
             default => $nickname ?? $user->getName() ?? (string) $user->getId(),
         };
     }

@@ -54,10 +54,15 @@ class AnalyticsController extends Controller
         $from = Date::now()->subDays($days);
         $previousFrom = Date::now()->subDays($days * 2);
 
-        // Discord webhooks have no follower/member metrics — omit them from the
-        // follower growth chart and account cards entirely.
+        // Platforms without account metrics (Discord webhooks, TikTok) have no
+        // follower counts — omit them from the follower growth chart and account
+        // cards entirely.
         $accounts = ConnectedAccount::query()
-            ->where('platform', '!=', Platform::Discord->value)
+            ->whereIn('platform', collect(Platform::cases())
+                ->filter(fn (Platform $platform): bool => $platform->supportsAccountMetrics())
+                ->map(fn (Platform $platform): string => $platform->value)
+                ->values()
+                ->all())
             ->with(['metrics' => fn ($q) => $q
                 ->where('captured_at', '>=', $from)
                 ->orderBy('captured_at')

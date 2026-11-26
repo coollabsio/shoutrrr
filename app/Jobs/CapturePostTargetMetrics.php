@@ -87,6 +87,12 @@ class CapturePostTargetMetrics implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if (! $account->platform->supportsPostMetrics()) {
+            $this->record($target, MetricsStatus::Unsupported);
+
+            return;
+        }
+
         // Only LinkedIn *organization* (Page) accounts reach the metrics API;
         // personal LinkedIn accounts return `unsupported` without credentials, so
         // skip the wasted token refresh (and the spurious `Failed` a transient

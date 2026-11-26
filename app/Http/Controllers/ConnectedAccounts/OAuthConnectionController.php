@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
+use App\Services\ConnectedAccounts\TikTok\TikTokGrantRevoker;
 use App\Services\ConnectedAccounts\XAccountCapabilities;
 use App\Support\InstanceSettings;
 use Illuminate\Http\RedirectResponse;
@@ -28,6 +29,7 @@ class OAuthConnectionController extends Controller
         private readonly AccountConnectionService $connections,
         private readonly XAccountCapabilities $xCapabilities,
         private readonly ThreadsTokenExchanger $threadsExchanger,
+        private readonly TikTokGrantRevoker $tikTokGrants,
         private readonly InstanceSettings $settings,
     ) {}
 
@@ -81,6 +83,19 @@ class OAuthConnectionController extends Controller
         }
 
         $data = ConnectedAccountData::fromSocialite($resolved, $oauthUser);
+
+        if ($resolved === Platform::TikTok) {
+            // TikTok lets the user switch individual permissions off on its
+            // consent screen. Without every one of them the account can't post
+            // in both modes, so refuse the partial grant and hand it back.
+            $missing = array_values(array_diff($resolved->scopes(), (array) $oauthUser->approvedScopes));
+
+            if ($missing !== []) {
+                $this->tikTokGrants->revokeRefusedConnection((string) $data->accessToken, $data->remoteAccountId);
+
+                return $this->failed('TikTok was connected without every permission Shoutrrr needs ('.implode(', ', $missing).'). Connect again and leave all permissions switched on.');
+            }
+        }
 
         if ($resolved === Platform::X) {
             // Only stamp a subscription tier we actually read from X. A transient

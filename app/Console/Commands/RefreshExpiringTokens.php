@@ -30,9 +30,10 @@ class RefreshExpiringTokens extends Command
         ConnectedAccount::query()
             ->withoutGlobalScopes()
             ->whereIn('platform', $availablePlatforms)
-            // Exclude Bluesky: its single-use tokens + ~15-30 min access tokens would
-            // rotate on every sweep. The just-in-time path refreshes it when needed.
-            ->where('platform', '!=', Platform::Bluesky->value)
+            // Exclude Bluesky and TikTok: their single-use refresh tokens and short
+            // access tokens (Bluesky ~15-30 min, TikTok 2h) would rotate on every
+            // sweep. The just-in-time path refreshes them when needed.
+            ->whereNotIn('platform', [Platform::Bluesky->value, Platform::TikTok->value])
             ->where('status', ConnectedAccountStatus::Active->value)
             ->whereNotNull('token_expires_at')
             ->where('token_expires_at', '<=', Date::now()->addHours(6))

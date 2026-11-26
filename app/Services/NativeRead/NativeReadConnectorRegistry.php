@@ -23,7 +23,7 @@ class NativeReadConnectorRegistry
             Platform::Threads => app(ThreadsNativeReadConnector::class),
             Platform::Instagram => app(InstagramNativeReadConnector::class),
             Platform::Facebook => app(FacebookNativeReadConnector::class),
-            Platform::LinkedIn, Platform::Discord => throw new RuntimeException($platform->label().' does not support native post reads.'),
+            Platform::LinkedIn, Platform::Discord, Platform::TikTok => throw new RuntimeException($platform->label().' does not support native post reads.'),
         };
     }
 }

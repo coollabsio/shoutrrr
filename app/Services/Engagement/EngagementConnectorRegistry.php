@@ -26,6 +26,7 @@ class EngagementConnectorRegistry
             Platform::Instagram => app(InstagramEngagementConnector::class),
             Platform::Threads => app(ThreadsEngagementConnector::class),
             Platform::Discord => throw new RuntimeException('Discord does not support engagement (webhooks are write-only).'),
+            Platform::TikTok => throw new RuntimeException('TikTok does not support engagement (the Content Posting API publishes only).'),
         };
     }
 }

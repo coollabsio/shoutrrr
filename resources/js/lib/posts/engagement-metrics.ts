@@ -59,6 +59,8 @@ const LAYOUT: Record<PlatformName, Slot[]> = {
     // Discord webhooks only carry a summed message-reaction count; there's no
     // comment/repost data to show alongside it.
     discord: [{ key: 'likes', label: 'reactions' }],
+    // TikTok's Content Posting API publishes only; no metrics are captured.
+    tiktok: [],
 };
 
 /**

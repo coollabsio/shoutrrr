@@ -13,6 +13,7 @@ use App\Services\Metrics\Connectors\LinkedInMetricsConnector;
 use App\Services\Metrics\Connectors\ThreadsMetricsConnector;
 use App\Services\Metrics\Connectors\XMetricsConnector;
 use App\Services\Metrics\Contracts\MetricsConnector;
+use RuntimeException;
 
 class MetricsConnectorRegistry
 {
@@ -26,6 +27,7 @@ class MetricsConnectorRegistry
             Platform::Instagram => app(InstagramMetricsConnector::class),
             Platform::Threads => app(ThreadsMetricsConnector::class),
             Platform::Discord => app(DiscordMetricsConnector::class),
+            Platform::TikTok => throw new RuntimeException('TikTok does not support metrics (the Content Posting API publishes only).'),
         };
     }
 }

@@ -13,6 +13,7 @@ use App\Models\ConnectedAccount;
 use App\Models\ConnectedAccountSecret;
 use App\Services\Atproto\DPoP;
 use App\Services\ConnectedAccounts\Threads\ThreadsTokenExchanger;
+use App\Services\ConnectedAccounts\TikTok\TikTokTokenClient;
 use App\Services\Usage\Concerns\TracksUsage;
 use App\Support\UsageOperation;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -49,6 +50,7 @@ class TokenManager
         private readonly HttpFactory $http,
         private readonly DPoP $dpop,
         private readonly ThreadsTokenExchanger $threadsExchanger,
+        private readonly TikTokTokenClient $tikTokTokens,
     ) {}
 
     /**
@@ -72,6 +74,10 @@ class TokenManager
 
         if ($account->platform === Platform::Threads) {
             return $this->threadsCredentials($account, $secret, $force);
+        }
+
+        if ($account->platform === Platform::TikTok) {
+            return $this->tikTokCredentials($account, $secret, $force, $rejectedAccessToken);
         }
 
         // Facebook/Instagram authenticate with a Page access token minted from a
@@ -211,6 +217,78 @@ class TokenManager
         ])->save();
 
         return ['access_token' => $refreshed['token']];
+    }
+
+    /**
+     * TikTok refresh does not fit the shared `refreshOAuth()` path: the client
+     * id is sent as `client_key` and failures arrive in the body, often with a
+     * 200 status. Access tokens last two hours and every refresh rotates the
+     * refresh token, so — like Bluesky — a forced retry only replaces the token
+     * the failed request used and reuses one another worker minted meanwhile.
+     *
+     * @return array<string, mixed>
+     */
+    private function tikTokCredentials(ConnectedAccount $account, ConnectedAccountSecret $secret, bool $force, ?string $rejectedAccessToken): array
+    {
+        if (! $force && ! $this->needsRefresh($account)) {
+            return ['access_token' => $secret->access_token];
+        }
+
+        $originalAccessToken = $rejectedAccessToken ?? $secret->access_token;
+
+        try {
+            return Cache::lock("connected-account-token-refresh:{$account->id}", self::REFRESH_LOCK_SECONDS)
+                ->block(10, function () use ($account, $force, $originalAccessToken): array {
+                    $freshAccount = $account->newQueryWithoutScopes()->findOrFail($account->id);
+                    $freshSecret = $freshAccount->secret()->firstOrFail();
+
+                    if (! $this->needsRefresh($freshAccount)
+                        && (! $force || $freshSecret->access_token !== $originalAccessToken)) {
+                        return ['access_token' => $freshSecret->access_token];
+                    }
+
+                    return $this->refreshTikTok($freshAccount, $freshSecret);
+                });
+        } catch (LockTimeoutException $exception) {
+            throw new TransientTokenRefreshException("Token refresh is busy for account {$account->id}.", previous: $exception);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function refreshTikTok(ConnectedAccount $account, ConnectedAccountSecret $secret): array
+    {
+        try {
+            $refreshed = $this->tikTokTokens->refresh($account, (string) $secret->refresh_token);
+        } catch (TransientTokenRefreshException $exception) {
+            throw $exception;
+        } catch (TokenRefreshException $exception) {
+            $account->forceFill([
+                'status' => ConnectedAccountStatus::NeedsAttention->value,
+                'refresh_failed_at' => Date::now(),
+                'refresh_failure_reason' => $exception->getMessage(),
+            ])->save();
+
+            throw $exception;
+        }
+
+        // TikTok has already invalidated the old refresh token: persist the
+        // rotated pair before anything else can interrupt this request.
+        $secret->forceFill([
+            'access_token' => $refreshed['access_token'],
+            'refresh_token' => $refreshed['refresh_token'],
+        ])->save();
+
+        $account->forceFill([
+            'token_expires_at' => $refreshed['expires_at'],
+            'last_refreshed_at' => Date::now(),
+            'status' => ConnectedAccountStatus::Active->value,
+            'refresh_failed_at' => null,
+            'refresh_failure_reason' => null,
+        ])->save();
+
+        return ['access_token' => $refreshed['access_token']];
     }
 
     /**
