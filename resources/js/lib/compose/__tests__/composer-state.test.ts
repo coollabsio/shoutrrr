@@ -9,6 +9,7 @@ import {
 } from '@/types/compose';
 
 import {
+    buildCreateTargets,
     buildPutBody,
     type ComposerState,
     composerHasContent,
@@ -797,6 +798,21 @@ describe('composerReducer', () => {
         expect(state.segments).toEqual(['mine']);
         expect(state.baselineUpdatedAt).toBe('2026-06-12T12:00:00+00:00');
         expect(state.saveState).toBe('dirty');
+    });
+});
+
+describe('buildCreateTargets', () => {
+    it('carries a format picked before the first save into the create', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setFormat',
+            accountId: 'ig1',
+            format: 'reels',
+        });
+
+        expect(buildCreateTargets(state, ['ig1', 'x1'])).toEqual([
+            { connected_account_id: 'ig1', format: 'reels' },
+            { connected_account_id: 'x1', format: 'feed' },
+        ]);
     });
 });
 

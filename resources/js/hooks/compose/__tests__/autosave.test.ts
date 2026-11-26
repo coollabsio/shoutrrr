@@ -60,13 +60,15 @@ function draftState(overrides: Partial<ComposerState> = {}): ComposerState {
 function Harness({
     state,
     onSaved,
+    accountIds = [],
 }: {
     state: ComposerState;
     onSaved: () => void;
+    accountIds?: string[];
 }) {
     const { flush } = useAutosave({
         state,
-        accountIds: [],
+        accountIds,
         dispatch: vi.fn(),
         onSaved,
     });
@@ -147,6 +149,36 @@ describe('useAutosave onSaved', () => {
 
         expect(httpPut).toHaveBeenCalledOnce();
         expect(onSaved).toHaveBeenCalledOnce();
+    });
+});
+
+describe('useAutosave first save', () => {
+    it('sends a format picked before the draft exists', async () => {
+        act(() => {
+            root?.render(
+                createElement(Harness, {
+                    state: draftState({
+                        postId: null,
+                        formatByAccount: { 'ig-1': 'reels' },
+                    }),
+                    onSaved: vi.fn(),
+                    accountIds: ['ig-1', 'x-1'],
+                }),
+            );
+        });
+
+        await act(async () => {
+            await flushRef?.();
+        });
+
+        expect(httpPost).toHaveBeenCalledOnce();
+        const buildBody = transform.mock.calls.at(-1)?.[0] as () => {
+            targets: unknown;
+        };
+        expect(buildBody().targets).toEqual([
+            { connected_account_id: 'ig-1', format: 'reels' },
+            { connected_account_id: 'x-1', format: 'feed' },
+        ]);
     });
 });
 

@@ -957,6 +957,26 @@ export function buildPutBody(
     };
 }
 
+/** The per-account choices the draft-creating POST accepts. */
+export type CreateTarget = Pick<PutTarget, 'connected_account_id' | 'format'>;
+
+/**
+ * Per-account choices for the first save. Without them a format picked before
+ * the draft exists would be dropped, because the create marks the composer
+ * saved and no PUT follows.
+ */
+export function buildCreateTargets(
+    state: ComposerState,
+    accountIds: string[],
+): CreateTarget[] {
+    return buildPutBody(state, accountIds).targets.map(
+        ({ connected_account_id, format }) => ({
+            connected_account_id,
+            format,
+        }),
+    );
+}
+
 /**
  * Whether the composer's editable content is byte-identical to a server post —
  * segments, the attached media set, and per-account override segments. Used to

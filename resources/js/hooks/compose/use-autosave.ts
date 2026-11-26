@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 
 import PostController from '@/actions/App/Http/Controllers/Posts/PostController';
 import {
+    buildCreateTargets,
     buildPutBody,
     type ComposerAction,
     composerHasContent,
@@ -80,6 +81,7 @@ export function useAutosave({
             // to positional fallbacks and misplace media onto the first post).
             segment_breaks: sent.segmentBreaks,
             placements: flattenPlacements(sent.placements),
+            targets: buildCreateTargets(sent, accountIds),
         }));
         const created = await http.post(PostController.store().url, {
             onNetworkError: () => dispatch({ type: 'saveFailedOffline' }),
