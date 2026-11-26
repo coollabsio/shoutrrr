@@ -11,6 +11,7 @@ use App\Services\Publishing\Connectors\FacebookConnector;
 use App\Services\Publishing\Connectors\InstagramConnector;
 use App\Services\Publishing\Connectors\LinkedInConnector;
 use App\Services\Publishing\Connectors\ThreadsConnector;
+use App\Services\Publishing\Connectors\TikTokConnector;
 use App\Services\Publishing\Connectors\XConnector;
 use App\Services\Publishing\Contracts\PublishConnector;
 
@@ -26,6 +27,7 @@ class PublishConnectorRegistry
             Platform::Instagram => app(InstagramConnector::class),
             Platform::Threads => app(ThreadsConnector::class),
             Platform::Discord => app(DiscordPublishConnector::class),
+            Platform::TikTok => app(TikTokConnector::class),
         };
     }
 }

@@ -158,6 +158,36 @@ class Post extends Model
     }
 
     /**
+     * A note for the author when deleting this post leaves something on a
+     * platform that has no API for deleting posts (see
+     * Platform::supportsRemoteDelete()), or null when it is removed everywhere
+     * it was sent. A draft handed to a TikTok inbox is not a live post, so it
+     * gets its own note.
+     */
+    public function stillLiveNotice(): ?string
+    {
+        $leftBehind = $this->targets->filter(fn (PostTarget $target): bool => $target->remainsOnPlatformWhenDeleted());
+
+        $livePlatforms = $leftBehind
+            ->reject(fn (PostTarget $target): bool => $target->wentToTikTokInbox())
+            ->map(fn (PostTarget $target): string => $target->platform->label())
+            ->unique()
+            ->values();
+
+        $notes = [];
+
+        if ($livePlatforms->isNotEmpty()) {
+            $notes[] = "It is still live on {$livePlatforms->join(', ', ' and ')}, which can't delete posts through its API — delete it there directly.";
+        }
+
+        if ($leftBehind->contains(fn (PostTarget $target): bool => $target->wentToTikTokInbox())) {
+            $notes[] = 'The draft sent to the TikTok inbox is not removed: delete it in the TikTok app, and the post too if it was published from there.';
+        }
+
+        return $notes === [] ? null : implode(' ', $notes);
+    }
+
+    /**
      * A short, single-line snippet of the post text for notifications and
      * lists. Collapses runs of whitespace and falls back to a placeholder for
      * media-only posts that carry no text.

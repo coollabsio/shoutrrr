@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services\Sync;
 
+use App\Dto\Post\DraftData;
+use App\Dto\Post\TikTokPostOptions;
 use App\Enums\ConnectedAccountStatus;
 use App\Enums\Platform;
 use App\Enums\PostOrigin;
 use App\Enums\PostStatus;
+use App\Enums\TikTokPostMode;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
 use App\Models\PostMedia;
@@ -100,9 +103,9 @@ class SyncFanOutService
         try {
             DB::transaction(function () use ($synced, $source, $destinationIds, &$copiedPaths): void {
                 $this->duplicator->copyMediaInto($synced, $this->withMediaFitFor($source, $destinationIds), $copiedPaths);
-                // No DraftData => no per-segment placements; all media rides the head
+                // The DraftData carries no placements, so all media rides the head
                 // section (SegmentMediaResolver falls back to [0 => allMedia]).
-                $this->drafts->syncTargets($synced, array_values($destinationIds), $source->segments ?? [], [], [], $source->mentions ?? [], []);
+                $this->drafts->syncTargets($synced, array_values($destinationIds), $source->segments ?? [], [], [], $source->mentions ?? [], [], $this->tikTokInboxDrafts($destinationIds));
                 $synced->forceFill(['status' => PostStatus::Publishing->value])->save();
             });
         } catch (Throwable $e) {
@@ -115,6 +118,33 @@ class SyncFanOutService
         }
 
         $this->dispatcher->dispatchForPost($synced->fresh(['targets', 'media']));
+    }
+
+    /**
+     * Send synced posts to TikTok as inbox drafts. A Direct Post needs the
+     * creator to pick who can view it by hand (TikTok's Content Sharing
+     * Guidelines), which a pipeline can't do, so the creator finishes the post
+     * in the TikTok app instead.
+     *
+     * @param  array<int, string>  $destinationIds
+     */
+    private function tikTokInboxDrafts(array $destinationIds): DraftData
+    {
+        $tikTokIds = ConnectedAccount::withoutGlobalScopes()
+            ->whereIn('id', $destinationIds)
+            ->where('platform', Platform::TikTok->value)
+            ->pluck('id')
+            ->all();
+
+        return DraftData::fromArray([
+            'targets' => array_map(
+                static fn (mixed $id): array => [
+                    'connected_account_id' => (string) $id,
+                    'tiktok' => (new TikTokPostOptions(mode: TikTokPostMode::Inbox))->toArray(),
+                ],
+                $tikTokIds,
+            ),
+        ]);
     }
 
     /**

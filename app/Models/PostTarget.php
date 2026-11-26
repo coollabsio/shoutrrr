@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\TikTokPostOptionsCast;
+use App\Dto\Post\TikTokPostOptions;
 use App\Enums\ErrorKind;
 use App\Enums\MetricsStatus;
 use App\Enums\Platform;
@@ -30,6 +32,7 @@ use Override;
  * @property array{text?: string|null, media_ids?: list<string>}|null $content_override
  * @property bool $auto_split
  * @property PostFormat $format
+ * @property TikTokPostOptions|null $tiktok_options
  * @property PostTargetStatus $status
  * @property string|null $remote_id
  * @property list<string>|null $remote_ids
@@ -62,6 +65,7 @@ use Override;
     'content_override',
     'auto_split',
     'format',
+    'tiktok_options',
     'status',
     'remote_id',
     'remote_ids',
@@ -104,6 +108,7 @@ class PostTarget extends Model
             'content_override' => 'array',
             'auto_split' => 'boolean',
             'format' => PostFormat::class,
+            'tiktok_options' => TikTokPostOptionsCast::class,
             'remote_ids' => 'array',
             'media_upload_state' => 'array',
             'error_kind' => ErrorKind::class,
@@ -157,6 +162,27 @@ class PostTarget extends Model
     public function replies(): HasMany
     {
         return $this->hasMany(PostTargetReply::class, 'post_target_id');
+    }
+
+    /**
+     * Whether this target reached a platform that can't delete posts through
+     * its API, so deleting the post here leaves what was sent on the platform.
+     */
+    public function remainsOnPlatformWhenDeleted(): bool
+    {
+        return ($this->remote_id !== null || ($this->remote_ids ?? []) !== [])
+            && ! $this->platform->supportsRemoteDelete();
+    }
+
+    /**
+     * Whether this target was handed to the creator's TikTok inbox as a draft
+     * for them to finish, rather than posted.
+     */
+    public function wentToTikTokInbox(): bool
+    {
+        return $this->platform === Platform::TikTok
+            && $this->tiktok_options instanceof TikTokPostOptions
+            && ! $this->tiktok_options->isDirectPost();
     }
 
     /** @return HasMany<PostMediaPlacement, $this> */

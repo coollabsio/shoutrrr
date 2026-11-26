@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     describeReason,
+    isTextBlockReason,
     precheckAccount,
     precheckDestinations,
 } from '@/lib/compose/precheck';
@@ -436,5 +437,139 @@ describe('describeReason', () => {
             limitsFor({ platform: 'x', maxMedia: 4 }),
         );
         expect(text).toContain('4 media');
+    });
+});
+
+describe('TikTok destinations', () => {
+    const tiktokLimits = limitsFor({
+        platform: 'tiktok',
+        maxLength: 2200,
+        maxMedia: 35,
+        requiresMedia: true,
+    });
+    const video: MediaView = {
+        id: 'v1',
+        url: 'https://cdn.example.test/v1.mp4',
+        mime: 'video/mp4',
+        kind: 'video',
+        alt_text: null,
+        duration_seconds: 90,
+        position: 0,
+        edit_settings: null,
+        source_url: null,
+        edit_url: 'https://app.example.test/media/v1/raw',
+        source_edit_url: null,
+    };
+
+    function destinations(
+        tiktokByAccount: Parameters<
+            typeof precheckDestinations
+        >[0]['tiktokByAccount'],
+        tiktokCreators: Parameters<
+            typeof precheckDestinations
+        >[0]['tiktokCreators'] = {},
+    ) {
+        return precheckDestinations({
+            accounts: [accountFor({ id: 't1', platform: 'tiktok' })],
+            segments: ['New drop'],
+            mentions: [],
+            autoSplitByAccount: {},
+            overrideByAccount: {},
+            formatByAccount: {},
+            media: [video],
+            limits: [tiktokLimits],
+            tiktokByAccount,
+            tiktokCreators,
+        });
+    }
+
+    it('blocks a Direct Post with no privacy level, the default', () => {
+        const blocks = destinations({});
+
+        expect(blocks).toHaveLength(1);
+        expect(blocks[0].reasons).toEqual(['tiktok_privacy_required']);
+    });
+
+    it('judges the video length against the creator maximum', () => {
+        const blocks = destinations(
+            {
+                t1: {
+                    post_mode: 'direct',
+                    privacy_level: 'SELF_ONLY',
+                    allow_comment: false,
+                    allow_duet: false,
+                    allow_stitch: false,
+                    disclose_commercial: false,
+                    brand_organic: false,
+                    branded_content: false,
+                },
+            },
+            {
+                t1: {
+                    status: 'available',
+                    creator: {
+                        nickname: 'Harbor',
+                        username: 'harbor',
+                        privacy_levels: [
+                            { value: 'SELF_ONLY', label: 'Only me' },
+                        ],
+                        comment_disabled: false,
+                        duet_disabled: false,
+                        stitch_disabled: false,
+                        max_video_duration_seconds: 60,
+                    },
+                },
+            },
+        );
+
+        expect(blocks[0].reasons).toEqual(['tiktok_video_too_long']);
+    });
+
+    it('lets an inbox draft through without any choices', () => {
+        expect(
+            destinations({
+                t1: {
+                    post_mode: 'inbox',
+                    privacy_level: null,
+                    allow_comment: false,
+                    allow_duet: false,
+                    allow_stitch: false,
+                    disclose_commercial: false,
+                    brand_organic: false,
+                    branded_content: false,
+                },
+            }),
+        ).toEqual([]);
+    });
+
+    it('describes each TikTok reason', () => {
+        expect(
+            describeReason(
+                'tiktok_disclosure_incomplete',
+                'tiktok',
+                tiktokLimits,
+            ),
+        ).toBe(
+            'You need to indicate if your content promotes yourself, a third party, or both.',
+        );
+        expect(
+            describeReason('tiktok_privacy_required', 'tiktok', tiktokLimits),
+        ).toBe('choose who can view this TikTok post');
+    });
+});
+
+describe('isTextBlockReason', () => {
+    it('counts only problems with the text itself', () => {
+        expect(isTextBlockReason('empty')).toBe(true);
+        expect(isTextBlockReason('section_too_long')).toBe(true);
+        expect(isTextBlockReason('too_many_sections')).toBe(true);
+    });
+
+    it('leaves media, format and TikTok setting problems out', () => {
+        expect(isTextBlockReason('media_required')).toBe(false);
+        expect(isTextBlockReason('reels_requires_video')).toBe(false);
+        expect(isTextBlockReason('story_requires_media')).toBe(false);
+        expect(isTextBlockReason('tiktok_privacy_required')).toBe(false);
+        expect(isTextBlockReason('tiktok_disclosure_incomplete')).toBe(false);
     });
 });

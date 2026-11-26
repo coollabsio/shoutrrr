@@ -34,4 +34,8 @@ describe('published post view', () => {
         expect(view).toContain('useHttp');
         expect(view).toContain("only: ['stats']");
     });
+    it('says a TikTok inbox draft went to the inbox instead of linking to a post', () => {
+        expect(view).toContain('sentToTikTokInbox(target)');
+        expect(view).toContain('Sent to the TikTok inbox');
+    });
 });

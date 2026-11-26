@@ -188,11 +188,16 @@ class PostController extends Controller
 
         $targetsToDelete->each(fn (PostTarget $target) => DeletePostTarget::dispatch($target));
 
-        return redirect()->route('posts.index')->with('success', 'Post deleted from connected accounts where possible.');
+        return redirect()->route('posts.index')->with('success', trim('Post deleted from connected accounts where possible. '.$post->stillLiveNotice()));
     }
 
+    /**
+     * Whether deleting the post must also remove this target from its platform.
+     * A target on a platform without a delete API is only removed here.
+     */
     private function hasRemotePosts(PostTarget $target): bool
     {
-        return $target->remote_id !== null || ($target->remote_ids ?? []) !== [];
+        return ($target->remote_id !== null || ($target->remote_ids ?? []) !== [])
+            && $target->platform->supportsRemoteDelete();
     }
 }

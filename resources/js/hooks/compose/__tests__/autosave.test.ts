@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
 
 import { useHttp } from '@inertiajs/react';
-import { act, createElement } from 'react';
+import { act, createElement, useReducer } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+    type ComposerAction,
     composerReducer,
     initialComposerState,
     type ComposerState,
@@ -59,13 +60,15 @@ function draftState(overrides: Partial<ComposerState> = {}): ComposerState {
 function Harness({
     state,
     onSaved,
+    accountIds = [],
 }: {
     state: ComposerState;
     onSaved: () => void;
+    accountIds?: string[];
 }) {
     const { flush } = useAutosave({
         state,
-        accountIds: [],
+        accountIds,
         dispatch: vi.fn(),
         onSaved,
     });
@@ -146,6 +149,73 @@ describe('useAutosave onSaved', () => {
 
         expect(httpPut).toHaveBeenCalledOnce();
         expect(onSaved).toHaveBeenCalledOnce();
+    });
+});
+
+describe('useAutosave first save', () => {
+    it('sends a format picked before the draft exists', async () => {
+        act(() => {
+            root?.render(
+                createElement(Harness, {
+                    state: draftState({
+                        postId: null,
+                        formatByAccount: { 'ig-1': 'reels' },
+                    }),
+                    onSaved: vi.fn(),
+                    accountIds: ['ig-1', 'x-1'],
+                }),
+            );
+        });
+
+        await act(async () => {
+            await flushRef?.();
+        });
+
+        expect(httpPost).toHaveBeenCalledOnce();
+        const buildBody = transform.mock.calls.at(-1)?.[0] as () => {
+            targets: unknown;
+        };
+        expect(buildBody().targets).toEqual([
+            { connected_account_id: 'ig-1', format: 'reels' },
+            { connected_account_id: 'x-1', format: 'feed' },
+        ]);
+    });
+
+    it('sends TikTok settings picked before the draft exists', async () => {
+        const tiktok = {
+            post_mode: 'inbox' as const,
+            privacy_level: null,
+            allow_comment: false,
+            allow_duet: false,
+            allow_stitch: false,
+            disclose_commercial: false,
+            brand_organic: false,
+            branded_content: false,
+        };
+        act(() => {
+            root?.render(
+                createElement(Harness, {
+                    state: draftState({
+                        postId: null,
+                        tiktokByAccount: { 'acc-tiktok': tiktok },
+                    }),
+                    onSaved: vi.fn(),
+                    accountIds: ['acc-tiktok', 'acc-x'],
+                }),
+            );
+        });
+
+        await act(async () => {
+            await flushRef?.();
+        });
+
+        const buildBody = transform.mock.calls.at(-1)?.[0] as () => {
+            targets: unknown;
+        };
+        expect(buildBody().targets).toEqual([
+            { connected_account_id: 'acc-tiktok', format: 'feed', tiktok },
+            { connected_account_id: 'acc-x', format: 'feed' },
+        ]);
     });
 });
 
@@ -277,5 +347,162 @@ describe('autosave debounce reset on placement-only changes', () => {
             segment_ref: '__head__',
             position: 0,
         });
+    });
+});
+
+describe('autosave keeps edits made while a save is running', () => {
+    type Live = {
+        state: ComposerState;
+        dispatch: (action: ComposerAction) => void;
+        flush: () => Promise<boolean>;
+    };
+
+    let live: Live | null = null;
+    /** The format each request carried for the account ('none' when omitted). */
+    let sentFormats: string[] = [];
+    /** Finishes the oldest request still waiting for its response. */
+    let pending: (() => void)[] = [];
+
+    function LiveHarness({ initial }: { initial: ComposerState }) {
+        const [state, dispatch] = useReducer(composerReducer, initial);
+        const { flush } = useAutosave({
+            state,
+            accountIds: ['instagram-1'],
+            dispatch,
+        });
+        live = { state, dispatch, flush };
+
+        return null;
+    }
+
+    function recordRequest(): void {
+        const buildBody = transform.mock.calls.at(-1)?.[0] as
+            | (() => { targets?: { format: string }[] })
+            | undefined;
+        sentFormats.push(buildBody?.().targets?.[0]?.format ?? 'none');
+    }
+
+    function pickReels(): void {
+        act(() => {
+            live?.dispatch({
+                type: 'setFormat',
+                accountId: 'instagram-1',
+                format: 'reels',
+            });
+        });
+    }
+
+    async function respond(): Promise<void> {
+        await act(async () => {
+            // Let a save that was just queued send its request first.
+            await vi.advanceTimersByTimeAsync(0);
+            pending.shift()?.();
+            await vi.advanceTimersByTimeAsync(0);
+        });
+    }
+
+    async function waitForDebounce(): Promise<void> {
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+        });
+    }
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        live = null;
+        sentFormats = [];
+        pending = [];
+        httpPut.mockReset().mockImplementation((_url, opts) => {
+            recordRequest();
+
+            return new Promise<void>((resolve) => {
+                pending.push(() => {
+                    opts?.onSuccess?.({ post });
+                    resolve();
+                });
+            });
+        });
+        httpPost.mockReset().mockImplementation(() => {
+            recordRequest();
+
+            return new Promise((resolve) => {
+                pending.push(() => resolve({ post }));
+            });
+        });
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    function renderDraft(overrides: Partial<ComposerState>): void {
+        act(() => {
+            root?.render(
+                createElement(LiveHarness, {
+                    initial: draftState({
+                        segments: ['caption'],
+                        baselineUpdatedAt: post.updated_at,
+                        ...overrides,
+                    }),
+                }),
+            );
+        });
+    }
+
+    it('saves a format picked while a blur flush waits on a running save', async () => {
+        renderDraft({ postId: 'post-1' });
+        await waitForDebounce();
+        expect(sentFormats).toEqual(['feed']);
+
+        // Clicking the toolbar blurs the editor (flush) and then picks the
+        // format, both while the caption's save is still running.
+        act(() => {
+            void live?.flush();
+        });
+        pickReels();
+        await respond();
+        // The flush sends the snapshot it took before the click.
+        expect(sentFormats).toEqual(['feed', 'feed']);
+        await respond();
+
+        expect(live?.state.saveState).toBe('dirty');
+        await waitForDebounce();
+        await respond();
+
+        expect(sentFormats.at(-1)).toBe('reels');
+        expect(live?.state.saveState).toBe('saved');
+    });
+
+    it('saves an edit whose debounce fires while an earlier save is running', async () => {
+        renderDraft({ postId: 'post-1' });
+        await waitForDebounce();
+        pickReels();
+        await waitForDebounce();
+        await respond();
+        await respond();
+
+        expect(sentFormats).toEqual(['feed', 'reels']);
+        expect(live?.state.saveState).toBe('saved');
+    });
+
+    it('saves a format picked while the draft is being created', async () => {
+        renderDraft({ postId: null });
+        act(() => {
+            void live?.flush();
+        });
+        pickReels();
+        await respond();
+
+        expect(live?.state.postId).toBe('post-1');
+        expect(live?.state.saveState).toBe('dirty');
+        await waitForDebounce();
+        await respond();
+
+        // The create sent the snapshot taken before the click; the update
+        // that followed sent the format.
+        expect(sentFormats).toHaveLength(2);
+        expect(sentFormats[0]).not.toBe('reels');
+        expect(sentFormats[1]).toBe('reels');
+        expect(live?.state.saveState).toBe('saved');
     });
 });

@@ -10,6 +10,7 @@ import {
     type TargetTone,
     targetStatusMeta,
 } from '@/lib/compose/publish-status';
+import { sentToTikTokInbox } from '@/lib/compose/tiktok';
 import { platformLabel, postPermalink } from '@/lib/posts/permalink';
 import { cn } from '@/lib/utils';
 import type { TargetView } from '@/types/compose';
@@ -31,7 +32,9 @@ export type ChipTarget = Pick<
     TargetView,
     'id' | 'platform' | 'status' | 'error_message' | 'attempts'
 > &
-    Partial<Pick<TargetView, 'handle' | 'display_name' | 'remote_id'>>;
+    Partial<
+        Pick<TargetView, 'handle' | 'display_name' | 'remote_id' | 'tiktok'>
+    >;
 
 type Props = {
     targets: ChipTarget[];
@@ -57,6 +60,11 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
         <ul className="flex flex-col gap-1.5">
             {targets.map((target) => {
                 const meta = targetStatusMeta(target.status);
+                // An inbox draft is done on Shoutrrr's side but not posted yet.
+                const label =
+                    target.status === 'published' && sentToTikTokInbox(target)
+                        ? 'Sent to inbox'
+                        : meta.label;
                 const isFailed = target.status === 'failed';
                 const isSkipped = target.status === 'skipped';
                 const isRetrying = retryingIds?.has(target.id) ?? false;
@@ -107,7 +115,7 @@ export function TargetStatusChips({ targets, onRetry, retryingIds }: Props) {
                             ) : isFailed ? (
                                 <X className="size-3" aria-hidden="true" />
                             ) : null}
-                            <span>{meta.label}</span>
+                            <span>{label}</span>
                         </span>
                         {(isFailed || isSkipped) && errorMessage && (
                             <span

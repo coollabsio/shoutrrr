@@ -80,6 +80,14 @@ return [
         'redirect' => env('THREADS_REDIRECT_URI'),
     ],
 
+    // TikTok calls the client id a "client key"; it is stored under the shared
+    // `client_id` name the connect flow and Platform::isConfigured() read.
+    'tiktok' => [
+        'client_id' => env('TIKTOK_CLIENT_KEY'),
+        'client_secret' => env('TIKTOK_CLIENT_SECRET'),
+        'redirect' => env('TIKTOK_REDIRECT_URI'),
+    ],
+
     'klipy' => [
         'key' => env('KLIPY_API_KEY'),
         'share_trigger' => env('KLIPY_SHARE_TRIGGER', true),

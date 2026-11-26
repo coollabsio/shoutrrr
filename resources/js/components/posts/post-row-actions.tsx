@@ -21,6 +21,7 @@ import { MoreHorizontal } from '@/components/ui/icons';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { removeById, replaceById } from '@/lib/optimistic';
 import { postCapabilities } from '@/lib/posts/capabilities';
+import { deleteConfirmationDescription } from '@/lib/posts/delete-confirmation';
 import { retry as retryRoute } from '@/routes/posts/targets';
 import type { PostView } from '@/types/compose';
 
@@ -180,10 +181,7 @@ export function PostRowActions({ post }: Props) {
     async function handleDelete() {
         const ok = await confirm({
             title: 'Delete post?',
-            description:
-                post.status === 'draft' || post.status === 'scheduled'
-                    ? 'This removes the post. The content is not kept.'
-                    : 'Published copies will be removed from connected accounts where possible.',
+            description: deleteConfirmationDescription(post),
             actionLabel: 'Delete',
             destructive: true,
         });

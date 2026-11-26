@@ -132,6 +132,34 @@ describe('linkedTextParts', () => {
         ]);
     });
 
+    it('links TikTok mentions and hashtags to TikTok, lowercasing the tag', () => {
+        expect(
+            linkedTextParts(
+                'New drop with @harbor.studio. #SpringDrop',
+                'tiktok',
+            ),
+        ).toEqual([
+            { type: 'text', text: 'New drop with ' },
+            {
+                type: 'link',
+                text: '@harbor.studio',
+                href: 'https://www.tiktok.com/@harbor.studio',
+            },
+            { type: 'text', text: '. ' },
+            {
+                type: 'link',
+                text: '#SpringDrop',
+                href: 'https://www.tiktok.com/tag/springdrop',
+            },
+        ]);
+    });
+
+    it('leaves URLs as plain text in a TikTok caption', () => {
+        expect(linkedTextParts('Shop at shoutrrr.com', 'tiktok')).toEqual([
+            { type: 'text', text: 'Shop at shoutrrr.com' },
+        ]);
+    });
+
     it('keeps a URL fragment intact instead of splitting off an inner hashtag', () => {
         expect(linkedTextParts('see example.com/#top', 'instagram')).toEqual([
             { type: 'text', text: 'see ' },

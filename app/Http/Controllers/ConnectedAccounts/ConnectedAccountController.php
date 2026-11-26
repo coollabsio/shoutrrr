@@ -12,6 +12,7 @@ use App\Models\ConnectedAccount;
 use App\Services\ConnectedAccounts\AccountConnectionService;
 use App\Services\ConnectedAccounts\BlueskyConnector;
 use App\Services\ConnectedAccounts\DiscordConnector;
+use App\Services\ConnectedAccounts\TikTok\TikTokGrantRevoker;
 use App\Services\ConnectedAccounts\XAccountCapabilities;
 use App\Services\Publishing\TokenManager;
 use App\Support\InstanceSettings;
@@ -33,6 +34,7 @@ class ConnectedAccountController extends Controller
         private readonly AccountConnectionService $connections,
         private readonly XAccountCapabilities $xCapabilities,
         private readonly TokenManager $tokens,
+        private readonly TikTokGrantRevoker $tikTokGrants,
     ) {}
 
     public function index(Request $request): Response
@@ -335,6 +337,12 @@ class ConnectedAccountController extends Controller
         $workspace = $request->user()->currentWorkspace()->first();
         if ($workspace?->default_connected_account_id === $account->id) {
             $workspace->forceFill(['default_connected_account_id' => null])->save();
+        }
+
+        if ($account->platform === Platform::TikTok) {
+            // Best effort, and without touching the account's status: see
+            // TikTokGrantRevoker::revokeOnDisconnect().
+            $this->tikTokGrants->revokeOnDisconnect($account);
         }
 
         $account->secret()->delete();

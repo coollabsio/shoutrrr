@@ -11,17 +11,18 @@ use Illuminate\Support\Facades\URL;
 
 /**
  * Resolves a publicly reachable HTTPS URL for a stored media file, for
- * platforms (Instagram, Threads) that publish by handing Meta a URL it
- * fetches server-side rather than accepting an uploaded byte stream.
+ * platforms (Instagram, Threads, TikTok) that publish by handing the platform
+ * a URL it fetches server-side rather than accepting an uploaded byte stream.
  *
  * Two things make this different from the URL the browser loads (PostMedia::url):
  *
  *  - It must be absolute. The `public` disk is configured host-relative
  *    ('url' => '/storage') so an <img> resolves it against the current origin;
  *    Meta fetches from its own servers and has no origin to resolve against.
- *  - It must point at bytes in a format the platform accepts. The byte-upload
- *    connectors re-encode in flight, but Meta reads whatever is on disk, so a
- *    non-conforming image is converted to a derived JPEG first.
+ *  - It must point at bytes in a format and size the platform accepts. The
+ *    byte-upload connectors re-encode in flight, but these platforms read
+ *    whatever is on disk, so a non-conforming image is converted to a derived
+ *    JPEG first (downscaled when the platform caps image dimensions).
  */
 class PublicMediaUrl
 {
@@ -38,20 +39,37 @@ class PublicMediaUrl
         $disk = $media->disk;
         $path = $media->path;
 
-        if ($this->needsConversion($media, $platform)) {
-            $converted = $this->converter->convert($media);
-            $disk = $converted->disk;
-            $path = $converted->path;
+        if ($platform !== null && ! $media->isVideo()) {
+            $frame = $platform->fetchedImageFrame();
+
+            if (! in_array($media->mime, $platform->allowedMime(), true) || $this->exceedsFrame($media, $frame)) {
+                $converted = $this->converter->convert($media, $frame);
+                $disk = $converted->disk;
+                $path = $converted->path;
+            }
         }
 
         return $this->absolute(FileStorage::url($path, $disk));
     }
 
-    private function needsConversion(PostMedia $media, ?Platform $platform): bool
+    /**
+     * Whether the image is larger than the platform's fetched-image frame. Unknown
+     * dimensions count as too large, so the rendition is always safe to fetch.
+     *
+     * @param  array{long_edge: int, short_edge: int}|null  $frame
+     */
+    private function exceedsFrame(PostMedia $media, ?array $frame): bool
     {
-        return $platform !== null
-            && ! $media->isVideo()
-            && ! in_array($media->mime, $platform->allowedMime(), true);
+        if ($frame === null) {
+            return false;
+        }
+
+        if ($media->width === null || $media->height === null) {
+            return true;
+        }
+
+        return max($media->width, $media->height) > $frame['long_edge']
+            || min($media->width, $media->height) > $frame['short_edge'];
     }
 
     /**

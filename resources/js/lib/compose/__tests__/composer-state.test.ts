@@ -9,6 +9,7 @@ import {
 } from '@/types/compose';
 
 import {
+    buildCreateTargets,
     buildPutBody,
     type ComposerState,
     composerHasContent,
@@ -129,6 +130,21 @@ function hydrated(): ReturnType<typeof composerReducer> {
 
     return composerReducer(initialComposerState(), { type: 'hydrate', post });
 }
+
+/** The server's answer to a successful autosave of the hydrated post. */
+const savedView: PostView = {
+    id: 'post-1',
+    base_text: 'hello',
+    segments: ['hello'],
+    status: 'draft',
+    published_at: null,
+    updated_at: '2026-06-12T11:00:00+00:00',
+    scheduled_at: null,
+    auto_repost: null,
+    destination: { kind: 'all', id: null },
+    targets: [],
+    media: [],
+};
 
 describe('pickActiveAccount', () => {
     it('returns the account matching the active tab', () => {
@@ -275,6 +291,7 @@ describe('composerReducer', () => {
             type: 'updateSegments',
             segments: ['new'],
         });
+        const sent = state;
         state = composerReducer(state, { type: 'saveStarted' });
         expect(state.saveState).toBe('saving');
 
@@ -291,13 +308,18 @@ describe('composerReducer', () => {
             targets: [],
             media: [],
         };
-        state = composerReducer(state, { type: 'saveSucceeded', post: view });
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: view,
+            sent,
+        });
         expect(state.saveState).toBe('saved');
         expect(state.baselineUpdatedAt).toBe('2026-06-12T11:00:00+00:00');
     });
 
     it('keeps dirty on save success when edits arrived mid-flight', () => {
-        let state = composerReducer(hydrated(), { type: 'saveStarted' });
+        const sent = hydrated();
+        let state = composerReducer(sent, { type: 'saveStarted' });
         // user types while the save is in flight
         state = composerReducer(state, {
             type: 'updateSegments',
@@ -318,11 +340,60 @@ describe('composerReducer', () => {
             targets: [],
             media: [],
         };
-        state = composerReducer(state, { type: 'saveSucceeded', post: view });
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: view,
+            sent,
+        });
         // stays dirty so the debounce reschedules and the edit is not lost
         expect(state.saveState).toBe('dirty');
         expect(state.baselineUpdatedAt).toBe('2026-06-12T11:30:00+00:00');
         expect(state.conflict).toBeNull();
+    });
+
+    it('keeps dirty when an edit landed before the save started but after its snapshot', () => {
+        // A forced flush takes its snapshot, then a Reels click lands before
+        // the request starts: 'saveStarted' overwrites the click's 'dirty', so
+        // only the snapshot shows the format was not sent.
+        const sent = composerReducer(hydrated(), {
+            type: 'updateSegments',
+            segments: ['caption'],
+        });
+        let state = composerReducer(sent, {
+            type: 'setFormat',
+            accountId: 'instagram-1',
+            format: 'reels',
+        });
+        state = composerReducer(state, { type: 'saveStarted' });
+        expect(state.saveState).toBe('saving');
+
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: { ...savedView, segments: ['caption'] },
+            sent,
+        });
+
+        expect(state.saveState).toBe('dirty');
+        expect(state.formatByAccount['instagram-1']).toBe('reels');
+    });
+
+    it('marks saved when nothing changed after the snapshot the save sent', () => {
+        const sent = composerReducer(hydrated(), {
+            type: 'setFormat',
+            accountId: 'instagram-1',
+            format: 'reels',
+        });
+        let state = composerReducer(sent, { type: 'saveStarted' });
+        // Switching tabs is not persisted, so it is not an unsaved edit.
+        state = composerReducer(state, { type: 'setActiveTab', tab: 'x-1' });
+
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: savedView,
+            sent,
+        });
+
+        expect(state.saveState).toBe('saved');
     });
 
     it('tracks media via addMedia and removeMedia and marks dirty', () => {
@@ -727,6 +798,21 @@ describe('composerReducer', () => {
         expect(state.segments).toEqual(['mine']);
         expect(state.baselineUpdatedAt).toBe('2026-06-12T12:00:00+00:00');
         expect(state.saveState).toBe('dirty');
+    });
+});
+
+describe('buildCreateTargets', () => {
+    it('carries a format picked before the first save into the create', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setFormat',
+            accountId: 'ig1',
+            format: 'reels',
+        });
+
+        expect(buildCreateTargets(state, ['ig1', 'x1'])).toEqual([
+            { connected_account_id: 'ig1', format: 'reels' },
+            { connected_account_id: 'x1', format: 'feed' },
+        ]);
     });
 });
 
@@ -1587,5 +1673,116 @@ describe('firstLineTitle', () => {
     it('keeps lines of exactly 80 chars untouched', () => {
         const exact = 'b'.repeat(80);
         expect(firstLineTitle([exact])).toBe(exact);
+    });
+});
+
+describe('TikTok options', () => {
+    const chosen = {
+        post_mode: 'direct' as const,
+        privacy_level: 'FOLLOWER_OF_CREATOR' as const,
+        allow_comment: true,
+        allow_duet: false,
+        allow_stitch: false,
+        disclose_commercial: true,
+        brand_organic: true,
+        branded_content: false,
+    };
+
+    function withTikTokTarget(tiktok: TargetView['tiktok']): ComposerState {
+        const post: PostView = {
+            id: 'post-tt',
+            base_text: 'clip',
+            segments: ['clip'],
+            status: 'draft',
+            published_at: null,
+            updated_at: '2026-11-22T10:00:00+00:00',
+            scheduled_at: null,
+            auto_repost: null,
+            destination: { kind: 'all', id: null },
+            targets: [
+                targetFixture('tt1', { platform: 'tiktok', tiktok }),
+                targetFixture('x1'),
+            ],
+            media: [],
+        };
+
+        return composerReducer(initialComposerState(), {
+            type: 'hydrate',
+            post,
+        });
+    }
+
+    it('hydrates the stored options for TikTok targets only', () => {
+        const state = withTikTokTarget(chosen);
+
+        expect(state.tiktokByAccount).toEqual({ tt1: chosen });
+    });
+
+    it('marks the draft dirty when the options change', () => {
+        const state = composerReducer(withTikTokTarget(null), {
+            type: 'setTikTokOptions',
+            accountId: 'tt1',
+            options: chosen,
+        });
+
+        expect(state.tiktokByAccount.tt1).toEqual(chosen);
+        expect(state.saveState).toBe('dirty');
+    });
+
+    it('sends options only for accounts that have them', () => {
+        const state = composerReducer(withTikTokTarget(null), {
+            type: 'setTikTokOptions',
+            accountId: 'tt1',
+            options: chosen,
+        });
+        const body = buildPutBody(state, ['tt1', 'x1']);
+
+        expect(body.targets[0].tiktok).toEqual(chosen);
+        expect(body.targets[1]).not.toHaveProperty('tiktok');
+    });
+
+    it('carries choices made before the first save into the create', () => {
+        const state = composerReducer(initialComposerState(), {
+            type: 'setTikTokOptions',
+            accountId: 'tt1',
+            options: chosen,
+        });
+
+        expect(buildCreateTargets(state, ['tt1', 'x1'])).toEqual([
+            { connected_account_id: 'tt1', format: 'feed', tiktok: chosen },
+            { connected_account_id: 'x1', format: 'feed' },
+        ]);
+    });
+
+    it('keeps the draft dirty when the options change after the snapshot a save sent', () => {
+        const sent = withTikTokTarget(null);
+        // The options change after the save took its snapshot, and
+        // 'saveStarted' then overwrites the change's 'dirty'.
+        let state = composerReducer(sent, {
+            type: 'setTikTokOptions',
+            accountId: 'tt1',
+            options: chosen,
+        });
+        state = composerReducer(state, { type: 'saveStarted' });
+
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: {
+                id: 'post-tt',
+                base_text: 'clip',
+                segments: ['clip'],
+                status: 'draft',
+                published_at: null,
+                updated_at: '2026-11-22T10:05:00+00:00',
+                scheduled_at: null,
+                auto_repost: null,
+                destination: { kind: 'all', id: null },
+                targets: [],
+                media: [],
+            },
+            sent,
+        });
+
+        expect(state.saveState).toBe('dirty');
     });
 });

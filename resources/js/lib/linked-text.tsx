@@ -29,6 +29,10 @@ const BLUESKY_MENTION_PATTERN =
 // trimmed back into the surrounding text since a handle can't end in one.
 const INSTAGRAM_MENTION_PATTERN = /(?<![A-Za-z0-9._@])@([A-Za-z0-9._]{1,30})/g;
 
+// TikTok usernames: 2 to 24 letters/numbers/periods/underscores, with the same
+// email guard and trailing-period trim as Instagram.
+const TIKTOK_MENTION_PATTERN = /(?<![A-Za-z0-9._@])@([A-Za-z0-9._]{2,24})/g;
+
 // Hashtags on Instagram and Facebook: a `#` at a word boundary followed by
 // letters/numbers/underscores. The lookbehind skips `#` inside a word (e.g.
 // `C#`) or an HTML entity (`&#39;`), matching how the apps detect tags.
@@ -158,12 +162,29 @@ function mentionCandidates(
             .filter((candidate) => candidate.text.length > 1);
     }
 
+    if (platform === 'tiktok') {
+        return [...text.matchAll(TIKTOK_MENTION_PATTERN)]
+            .map((match) => {
+                const handle = (match[0] ?? '').replace(/\.+$/, '');
+                const start = match.index ?? 0;
+
+                return {
+                    start,
+                    end: start + handle.length,
+                    text: handle,
+                    href: `https://www.tiktok.com/${handle}`,
+                };
+            })
+            .filter((candidate) => candidate.text.length > 1);
+    }
+
     return [];
 }
 
 /**
  * `#hashtag` links for the platforms that surface them (Instagram, Facebook,
- * Threads). Every other platform returns none, so their rendering is unchanged.
+ * Threads, TikTok). Every other platform returns none, so their rendering is
+ * unchanged.
  */
 function hashtagCandidates(
     text: string,
@@ -177,7 +198,9 @@ function hashtagCandidates(
               : platform === 'threads'
                 ? (tag: string) =>
                       `https://www.threads.net/search?q=${tag}&serp_type=tags`
-                : null;
+                : platform === 'tiktok'
+                  ? (tag: string) => `https://www.tiktok.com/tag/${tag}`
+                  : null;
 
     if (toHref === null) {
         return [];
@@ -203,8 +226,9 @@ export function linkedTextParts(
     discordLabels: Record<string, string> = {},
 ): LinkedTextPart[] {
     const parts: LinkedTextPart[] = [];
+    // TikTok captions never turn a URL into a link, so neither does the preview.
     const candidates = [
-        ...urlCandidates(text, linkExclusions),
+        ...(platform === 'tiktok' ? [] : urlCandidates(text, linkExclusions)),
         ...mentionCandidates(text, platform, discordLabels),
         ...hashtagCandidates(text, platform),
     ]

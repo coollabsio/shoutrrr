@@ -6,6 +6,7 @@ use App\Enums\Platform;
 use App\Enums\PostOrigin;
 use App\Enums\PostStatus;
 use App\Enums\PostTargetStatus;
+use App\Enums\TikTokPostMode;
 use App\Jobs\PublishPostTarget;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
@@ -244,3 +245,17 @@ test('fan-out fits mixed or oversized media to what every destination accepts', 
     'bluesky drops the video and caps at 4' => [[Platform::Bluesky], ['image', 'image', 'image', 'image']],
     'smallest limit across destinations wins' => [[Platform::Threads, Platform::X], ['image', 'image', 'image', 'image']],
 ]);
+
+test('fan-out sends TikTok destinations an inbox draft, since a pipeline cannot choose who can view a Direct Post', function () {
+    [, $workspace] = ownerActingIn();
+    $source = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::X->value]);
+    $tikTok = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::TikTok->value]);
+    $linkedIn = ConnectedAccount::factory()->linkedin()->create(['workspace_id' => $workspace->id]);
+    [$post, $target] = publishedSourceWithPipeline($source, [$tikTok, $linkedIn], $workspace->id);
+
+    app(SyncFanOutService::class)->fanOut($target);
+
+    $targets = Post::where('source_post_id', $post->id)->sole()->targets->keyBy('connected_account_id');
+    expect($targets[$tikTok->id]->tiktok_options?->mode)->toBe(TikTokPostMode::Inbox)
+        ->and($targets[$linkedIn->id]->tiktok_options)->toBeNull();
+});

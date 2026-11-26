@@ -7,6 +7,7 @@ use App\Models\PostMedia;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Auth\Socialite\ThreadsProvider;
+use App\Services\Auth\Socialite\TikTokProvider;
 use App\Services\Media\ImageCompressor;
 use App\Services\Media\ImageToJpegConverter;
 use Carbon\CarbonImmutable;
@@ -68,6 +69,13 @@ class AppServiceProvider extends ServiceProvider
         Socialite::extend('threads', fn ($app) => Socialite::buildProvider(
             ThreadsProvider::class,
             config('services.threads'),
+        ));
+
+        // TikTok Login Kit: OAuth 2.0 with a `client_key` instead of a client id
+        // and body-level token errors, which Socialite has no driver for.
+        Socialite::extend('tiktok', fn ($app) => Socialite::buildProvider(
+            TikTokProvider::class,
+            config('services.tiktok'),
         ));
 
         // OAuth tokens issued for the MCP/API integration. Without explicit

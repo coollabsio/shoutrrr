@@ -55,6 +55,7 @@ const SUPPORTED_PLATFORM_ICONS = [
     'instagram',
     'threads',
     'discord',
+    'tiktok',
 ];
 
 export function isSupportedPlatformIcon(

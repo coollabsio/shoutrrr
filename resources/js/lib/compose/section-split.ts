@@ -9,13 +9,17 @@ import type { PlatformName } from '@/types/compose';
  */
 
 /**
- * Client-side mirror of the active platform's length measure. X counts UTF-16
- * code units (JS string length); the others approximate with code points. The
- * server's grapheme/byte count remains authoritative.
+ * Client-side mirror of the active platform's length measure. X and TikTok
+ * count UTF-16 code units (JS string length); the others approximate with code
+ * points. The server's grapheme/byte count remains authoritative.
  */
 export function measure(text: string, platform: PlatformName): number {
+    if (platform === 'x' || platform === 'tiktok') {
+        return text.length;
+    }
+
     // oxlint-disable-next-line no-misused-spread -- intentional code-point count
-    return platform === 'x' ? text.length : [...text].length;
+    return [...text].length;
 }
 
 export interface Section {

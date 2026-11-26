@@ -10,6 +10,7 @@ use App\Http\Controllers\ConnectedAccounts\LinkedInPageConnectionController;
 use App\Http\Controllers\ConnectedAccounts\LinkedInPageOAuthController;
 use App\Http\Controllers\ConnectedAccounts\MetaConnectionController;
 use App\Http\Controllers\ConnectedAccounts\OAuthConnectionController;
+use App\Http\Controllers\ConnectedAccounts\TikTokCreatorInfoController;
 use App\Http\Controllers\OAuth\BlueskyClientMetadataController;
 use App\Models\ConnectedAccount;
 use Illuminate\Support\Facades\Route;
@@ -105,6 +106,10 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('accounts/{account}/refresh-x-tier', [ConnectedAccountController::class, 'refreshXAccountTier'])
         ->middleware('throttle:10,1')
         ->name('accounts.refresh-x-tier');
+
+    Route::get('accounts/{account}/tiktok/creator-info', TikTokCreatorInfoController::class)
+        ->middleware('throttle:20,1')
+        ->name('accounts.tiktok.creator-info');
 
     Route::delete('accounts/{account}', [ConnectedAccountController::class, 'destroy'])
         ->name('accounts.destroy');

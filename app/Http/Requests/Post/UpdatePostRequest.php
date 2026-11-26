@@ -6,12 +6,14 @@ namespace App\Http\Requests\Post;
 
 use App\Enums\PostFormat;
 use App\Http\Requests\Post\Concerns\DerivesMentionHandleRules;
+use App\Http\Requests\Post\Concerns\ValidatesTikTokOptions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdatePostRequest extends FormRequest
 {
-    use DerivesMentionHandleRules;
+    use DerivesMentionHandleRules, ValidatesTikTokOptions;
 
     public function authorize(): bool
     {
@@ -41,6 +43,7 @@ class UpdatePostRequest extends FormRequest
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
             'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
+            ...$this->tikTokOptionRules(),
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.segments' => ['array'],
@@ -64,6 +67,22 @@ class UpdatePostRequest extends FormRequest
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
             'skip_sync' => ['sometimes', 'boolean'],
             'expected_updated_at' => ['nullable', 'string'],
+        ];
+    }
+
+    /**
+     * @return array<int, callable(Validator): void>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $targets = $this->input('targets');
+
+                foreach ($this->tikTokOptionErrors(is_array($targets) ? $targets : []) as $key => $message) {
+                    $validator->errors()->add($key, $message);
+                }
+            },
         ];
     }
 }

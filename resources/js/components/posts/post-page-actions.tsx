@@ -23,6 +23,7 @@ import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import { dayjs } from '@/lib/datetime/dayjs';
 import { failureToasts, settle } from '@/lib/http/errors';
 import { postCapabilities } from '@/lib/posts/capabilities';
+import { deleteConfirmationDescription } from '@/lib/posts/delete-confirmation';
 import { postLiveStatus } from '@/lib/posts/live-status';
 import { index as engagementRoute } from '@/routes/engagement';
 import { index as postsRoute } from '@/routes/posts';
@@ -161,10 +162,7 @@ export function PostPageActions({ post }: Props) {
     async function handleDelete() {
         const ok = await confirm({
             title: 'Delete post?',
-            description:
-                post.status === 'draft' || post.status === 'scheduled'
-                    ? 'This removes the post. The content is not kept.'
-                    : 'Published copies will be removed from connected accounts where possible.',
+            description: deleteConfirmationDescription(post),
             actionLabel: 'Delete',
             destructive: true,
         });

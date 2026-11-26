@@ -8,6 +8,7 @@ import {
     type Placement,
     type PostFormat,
     type PostView,
+    type TikTokOptions,
 } from '@/types/compose';
 
 /** Placement key used for media added before any explicit segment break exists. */
@@ -48,6 +49,8 @@ export type ComposerState = {
     destination: Destination;
     autoSplitByAccount: Record<string, boolean>;
     formatByAccount: Record<string, PostFormat>;
+    /** TikTok accounts only; an absent entry means the guideline defaults. */
+    tiktokByAccount: Record<string, TikTokOptions>;
     overrideByAccount: Record<string, string[] | undefined>;
     media: MediaView[];
     /** Ordered ids of tiptap segment breaks; segment refs are derived from these. */
@@ -74,6 +77,7 @@ export type ComposerAction =
     | { type: 'setSkipSync'; value: boolean }
     | { type: 'toggleAutoSplit'; accountId: string }
     | { type: 'setFormat'; accountId: string; format: PostFormat }
+    | { type: 'setTikTokOptions'; accountId: string; options: TikTokOptions }
     | { type: 'disableAutoSplit'; accountIds: string[] }
     | { type: 'setOverrideSegments'; accountId: string; segments: string[] }
     | { type: 'discardOverride'; accountId: string }
@@ -98,7 +102,12 @@ export type ComposerAction =
     | { type: 'setScheduleTray'; tray: ScheduleTray }
     | { type: 'saveStarted' }
     | { type: 'saveSkippedEmpty' }
-    | { type: 'saveSucceeded'; post: PostView }
+    | {
+          type: 'saveSucceeded';
+          post: PostView;
+          /** The composer snapshot whose content the save sent. */
+          sent: ComposerState;
+      }
     | { type: 'saveFailedOffline' }
     | { type: 'saveFailedStale'; post: PostView }
     | { type: 'resolveConflictUseServer' }
@@ -151,6 +160,7 @@ export function initialComposerState(
         destination: initialDestination ?? { kind: 'all' },
         autoSplitByAccount: {},
         formatByAccount: {},
+        tiktokByAccount: {},
         overrideByAccount: {},
         media: [],
         segmentBreaks: [],
@@ -347,6 +357,7 @@ function withOrphanMediaOnHead(
 function hydrate(post: PostView): ComposerState {
     const autoSplitByAccount: Record<string, boolean> = {};
     const formatByAccount: Record<string, PostFormat> = {};
+    const tiktokByAccount: Record<string, TikTokOptions> = {};
     const overrideByAccount: Record<string, string[] | undefined> = {};
     const placementsByAccount: Record<string, Record<string, string[]>> = {};
     // Raw canonical grouping drives the per-account divergence check below;
@@ -360,6 +371,9 @@ function hydrate(post: PostView): ComposerState {
     for (const target of post.targets) {
         autoSplitByAccount[target.connected_account_id] = target.auto_split;
         formatByAccount[target.connected_account_id] = target.format;
+        if (target.tiktok) {
+            tiktokByAccount[target.connected_account_id] = target.tiktok;
+        }
         const overrideSegments = target.content_override?.segments;
         if (overrideSegments !== undefined && overrideSegments !== null) {
             overrideByAccount[target.connected_account_id] = overrideSegments;
@@ -399,6 +413,7 @@ function hydrate(post: PostView): ComposerState {
                       : { kind: 'all' },
         autoSplitByAccount,
         formatByAccount,
+        tiktokByAccount,
         overrideByAccount,
         media: post.media,
         segmentBreaks: post.segment_breaks ?? [],
@@ -524,6 +539,16 @@ export function composerReducer(
                 formatByAccount: {
                     ...state.formatByAccount,
                     [action.accountId]: action.format,
+                },
+                saveState: 'dirty',
+            };
+
+        case 'setTikTokOptions':
+            return {
+                ...state,
+                tiktokByAccount: {
+                    ...state.tiktokByAccount,
+                    [action.accountId]: action.options,
                 },
                 saveState: 'dirty',
             };
@@ -799,12 +824,19 @@ export function composerReducer(
                 : state;
 
         case 'saveSucceeded':
-            // Preserve 'dirty' if the user typed during the in-flight save so the
-            // debounce reschedules; otherwise mark 'saved'. Always advance the
-            // baseline and clear any conflict.
+            // Stay 'dirty' when the composer changed after the snapshot this
+            // save sent, so the debounce saves that change too; otherwise mark
+            // 'saved'. A flag alone can miss it: an edit that lands between a
+            // forced flush and its request (e.g. picking Reels right after
+            // typing a caption) is overwritten by 'saveStarted'. Always
+            // advance the baseline and clear any conflict.
             return {
                 ...state,
-                saveState: state.saveState === 'dirty' ? 'dirty' : 'saved',
+                saveState:
+                    state.saveState === 'dirty' ||
+                    hasEditsSince(state, action.sent)
+                        ? 'dirty'
+                        : 'saved',
                 baselineUpdatedAt: action.post.updated_at,
                 conflict: null,
             };
@@ -853,6 +885,8 @@ export type PutTarget = {
     connected_account_id: string;
     auto_split: boolean;
     format: PostFormat;
+    /** Sent only for TikTok accounts the user has set options on. */
+    tiktok?: TikTokOptions;
     content_override: { segments: string[]; media_ids: string[] } | null;
     segment_breaks?: string[];
     placements?: Placement[];
@@ -916,11 +950,13 @@ export function buildPutBody(
                 : null;
 
         const divergedPlacements = state.placementsByAccount[accountId];
+        const tiktok = state.tiktokByAccount[accountId];
 
         return {
             connected_account_id: accountId,
             auto_split: state.autoSplitByAccount[accountId] ?? true,
             format: state.formatByAccount[accountId] ?? 'feed',
+            ...(tiktok !== undefined ? { tiktok } : {}),
             content_override,
             ...(divergedPlacements !== undefined
                 ? {
@@ -943,6 +979,30 @@ export function buildPutBody(
         segment_breaks: state.segmentBreaks,
         placements: flattenPlacements(state.placements),
     };
+}
+
+/** The per-account choices the draft-creating POST accepts. */
+export type CreateTarget = Pick<
+    PutTarget,
+    'connected_account_id' | 'format' | 'tiktok'
+>;
+
+/**
+ * Per-account choices for the first save. Without them a format or TikTok
+ * setting picked before the draft exists would be dropped, because the create
+ * marks the composer saved and no PUT follows.
+ */
+export function buildCreateTargets(
+    state: ComposerState,
+    accountIds: string[],
+): CreateTarget[] {
+    return buildPutBody(state, accountIds).targets.map(
+        ({ connected_account_id, format, tiktok }) => ({
+            connected_account_id,
+            format,
+            ...(tiktok !== undefined ? { tiktok } : {}),
+        }),
+    );
 }
 
 /**
@@ -1101,4 +1161,33 @@ export function firstLineTitle(segments: string[]): string {
     ).trim();
 
     return trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;
+}
+
+/** The composer fields an autosave persists (see `buildPutBody`). */
+const PERSISTED_FIELDS = [
+    'segments',
+    'mentions',
+    'destination',
+    'autoSplitByAccount',
+    'formatByAccount',
+    'tiktokByAccount',
+    'overrideByAccount',
+    'media',
+    'segmentBreaks',
+    'placements',
+    'placementsByAccount',
+    'autoRepost',
+    'skipSync',
+] as const satisfies readonly (keyof ComposerState)[];
+
+/**
+ * Whether the composer changed after `sent`, the snapshot a save sent. The
+ * reducer replaces a field only when it changes, so a persisted field that is
+ * no longer the same value as in the snapshot was edited after it was taken.
+ */
+export function hasEditsSince(
+    state: ComposerState,
+    sent: ComposerState,
+): boolean {
+    return PERSISTED_FIELDS.some((field) => state[field] !== sent[field]);
 }

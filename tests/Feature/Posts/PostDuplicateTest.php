@@ -2,8 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Dto\Post\TikTokPostOptions;
+use App\Enums\Platform;
 use App\Enums\PostStatus;
 use App\Enums\PostTargetStatus;
+use App\Enums\TikTokPostMode;
+use App\Enums\TikTokPrivacyLevel;
 use App\Enums\WorkspaceRole;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
@@ -12,6 +16,8 @@ use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Services\Posts\PostDuplicator;
+use App\Services\Posts\PublishPrecheck;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Storage;
 
@@ -155,4 +161,61 @@ test('a post from another workspace cannot be duplicated', function (): void {
     $this->actingAs($other)
         ->post(route('posts.duplicate', $post))
         ->assertNotFound();
+});
+
+/**
+ * A published post with one TikTok target carrying the given choices.
+ */
+function publishedTikTokPost(Workspace $workspace, User $user, TikTokPostOptions $options): Post
+{
+    $account = ConnectedAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::TikTok->value]);
+    $post = Post::factory()->for($workspace)->create([
+        'author_id' => $user->id,
+        'segments' => ['New drop'],
+        'base_text' => 'New drop',
+        'status' => PostStatus::Published->value,
+        'published_at' => now(),
+    ]);
+    PostTarget::factory()->published()->create([
+        'post_id' => $post->id,
+        'connected_account_id' => $account->id,
+        'platform' => Platform::TikTok->value,
+        'sections' => ['New drop'],
+        'tiktok_options' => $options,
+    ]);
+
+    return $post->load('media', 'targets');
+}
+
+test('a copy of a post sent to the tiktok inbox is sent to the inbox too', function (): void {
+    $post = publishedTikTokPost($this->workspace, $this->user, new TikTokPostOptions(mode: TikTokPostMode::Inbox));
+
+    $copy = app(PostDuplicator::class)->duplicate($post)->targets->sole();
+
+    expect($copy->tiktok_options?->mode)->toBe(TikTokPostMode::Inbox);
+});
+
+test('a copy of a direct tiktok post asks for the per-post choices again', function (): void {
+    $post = publishedTikTokPost($this->workspace, $this->user, new TikTokPostOptions(
+        mode: TikTokPostMode::Direct,
+        privacyLevel: TikTokPrivacyLevel::PublicToEveryone,
+        allowComment: true,
+        allowDuet: true,
+        allowStitch: true,
+        discloseCommercial: true,
+        brandedContent: true,
+    ));
+
+    $draft = app(PostDuplicator::class)->duplicate($post);
+
+    expect($draft->targets->sole()->tiktok_options?->toArray())->toBe(new TikTokPostOptions(mode: TikTokPostMode::Direct)->toArray())
+        ->and(app(PublishPrecheck::class)->blockingTargets($draft->fresh())[0]['issues'] ?? [])->toContain('tiktok_privacy_required');
+});
+
+test('a copy of a target without tiktok choices stays without them', function (): void {
+    $post = publishedPostWithMediaAndTarget($this->workspace, $this->user);
+
+    $copy = app(PostDuplicator::class)->duplicate($post)->targets->sole();
+
+    expect($copy->tiktok_options)->toBeNull();
 });

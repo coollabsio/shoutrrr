@@ -42,9 +42,11 @@ class AccountConnectionService
                     'status' => ConnectedAccountStatus::Active->value,
                     'capabilities' => $data->capabilities,
                     'token_expires_at' => $data->tokenExpiresAt,
+                    'refresh_token_expires_at' => $data->refreshTokenExpiresAt,
                     'last_refreshed_at' => Date::now(),
                     'refresh_failed_at' => null,
                     'refresh_failure_reason' => null,
+                    'reconnect_reminded_at' => null,
                 ],
             );
 
@@ -87,9 +89,11 @@ class AccountConnectionService
                 'status' => ConnectedAccountStatus::Active->value,
                 'capabilities' => $data->capabilities,
                 'token_expires_at' => $data->tokenExpiresAt,
+                'refresh_token_expires_at' => $data->refreshTokenExpiresAt,
                 'last_refreshed_at' => Date::now(),
                 'refresh_failed_at' => null,
                 'refresh_failure_reason' => null,
+                'reconnect_reminded_at' => null,
             ])->save();
 
             ConnectedAccountSecret::updateOrCreate(

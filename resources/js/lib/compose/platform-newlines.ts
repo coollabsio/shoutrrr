@@ -12,7 +12,8 @@ import type { PlatformName } from '@/types/compose';
  * and Threads use the same single-blank-line default as X/LinkedIn. Discord
  * renders consecutive newlines verbatim (like Bluesky), and the webhook
  * connector publishes the raw content, so the preview must preserve them too.
- * Tune a value here if a platform changes how it collapses spacing.
+ * TikTok's collapsing is undocumented, so its preview shows the caption exactly
+ * as it is sent. Tune a value here if a platform changes how it collapses spacing.
  */
 const MAX_CONSECUTIVE_NEWLINES: Record<PlatformName, number> = {
     x: 2,
@@ -22,6 +23,7 @@ const MAX_CONSECUTIVE_NEWLINES: Record<PlatformName, number> = {
     instagram: 2,
     threads: 2,
     discord: Number.POSITIVE_INFINITY,
+    tiktok: Number.POSITIVE_INFINITY,
 };
 
 /**

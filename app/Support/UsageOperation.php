@@ -40,6 +40,8 @@ final class UsageOperation
 
     public const string MEDIA_STATUS_POLL = 'media_status_poll';
 
+    public const string CREATOR_INFO = 'creator_info';
+
     public const string DM_FETCH = 'dm_fetch';
 
     public const string DM_SEND = 'dm_send';

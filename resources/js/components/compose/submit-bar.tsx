@@ -59,6 +59,13 @@ type Props = {
     blockedAccounts: AccountBlock[];
     /** Per-platform limits, for rendering block reasons. */
     limits: PlatformLimits[];
+    /**
+     * Why publishing is held back by a choice the user still has to make; the
+     * publish button is disabled and shows this on hover.
+     */
+    blockedHint?: string | null;
+    /** A declaration the user agrees to by publishing, shown above the buttons. */
+    notice?: ReactNode;
 };
 
 export function hasBlockingIssues(blocked: AccountBlock[]): boolean {
@@ -128,6 +135,8 @@ type ShortcutEvent = Pick<
 
 type SubmitGuard = {
     disabled?: boolean;
+    /** A pending choice blocks submitting (see Props.blockedHint). */
+    hinted?: boolean;
     uploading: boolean;
     attentionBlocked?: boolean;
     processing: boolean;
@@ -146,6 +155,7 @@ export function isSubmitShortcut(event: ShortcutEvent): boolean {
 
 export function shouldAllowSubmit({
     disabled,
+    hinted,
     uploading,
     attentionBlocked,
     processing,
@@ -154,6 +164,7 @@ export function shouldAllowSubmit({
 }: SubmitGuard): boolean {
     return !(
         disabled ||
+        hinted ||
         uploading ||
         attentionBlocked ||
         processing ||
@@ -174,6 +185,8 @@ export function SubmitBar({
     onServerPost,
     blockedAccounts,
     limits,
+    blockedHint = null,
+    notice = null,
 }: Props) {
     // useHttp verbs take NO inline data — the body is injected via transform()
     // at submit time so it always reflects the latest reducer state.
@@ -210,6 +223,7 @@ export function SubmitBar({
         if (
             !shouldAllowSubmit({
                 disabled,
+                hinted: blockedHint !== null,
                 uploading,
                 attentionBlocked,
                 processing: http.processing,
@@ -349,6 +363,7 @@ export function SubmitBar({
                 !isSubmitShortcut(event) ||
                 !shouldAllowSubmit({
                     disabled,
+                    hinted: blockedHint !== null,
                     uploading,
                     attentionBlocked,
                     processing: http.processing,
@@ -370,6 +385,7 @@ export function SubmitBar({
 
     const canSubmit = shouldAllowSubmit({
         disabled,
+        hinted: blockedHint !== null,
         uploading,
         attentionBlocked,
         processing: http.processing,
@@ -394,6 +410,12 @@ export function SubmitBar({
 
     return (
         <div className="flex flex-col items-stretch gap-1.5 sm:items-end sm:justify-self-end">
+            {/* Zero width plus full min-width: the notice wraps to the
+                buttons' width instead of widening this column, which would
+                squeeze the schedule tray beside it. */}
+            {notice !== null && (
+                <div className="sm:w-0 sm:min-w-full">{notice}</div>
+            )}
             <div className="flex items-center gap-1.5">
                 <TrayButton
                     onClick={() => void onSaveDraft()}
@@ -404,7 +426,7 @@ export function SubmitBar({
                 </TrayButton>
                 {/* A disabled button emits no hover events, so wrap it in a
                     focusable span that carries the tooltip explaining the block. */}
-                {uploading ? (
+                {uploading || blockedHint !== null ? (
                     <Tooltip>
                         <TooltipTrigger
                             render={
@@ -417,7 +439,9 @@ export function SubmitBar({
                             {submitButton}
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                            Wait for media to finish uploading.
+                            {uploading
+                                ? 'Wait for media to finish uploading.'
+                                : blockedHint}
                         </TooltipContent>
                     </Tooltip>
                 ) : (

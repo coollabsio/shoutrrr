@@ -5,6 +5,7 @@ import type { BoostValue } from '@/components/compose/boost-popover';
 import { BoostPopover } from '@/components/compose/boost-popover';
 import { EmojiPopover } from '@/components/compose/emoji-popover';
 import { GifPopover } from '@/components/compose/gif-popover';
+import { TIKTOK_POST_MODES } from '@/components/compose/tiktok-post-settings';
 import {
     ImagePlay,
     Paperclip,
@@ -27,6 +28,7 @@ import type {
     PendingUpload,
     PlatformName,
     PostFormat,
+    TikTokPostMode,
 } from '@/types/compose';
 import type { GifItem } from '@/types/gifs';
 
@@ -37,6 +39,12 @@ type Props = {
     /** Per-account post format; only meaningful for Instagram & Facebook. */
     format?: PostFormat;
     onFormatChange?: (format: PostFormat) => void;
+    /**
+     * TikTok accounts only: Direct Post or inbox draft, picked in the same
+     * spot where Instagram and Facebook pick their format.
+     */
+    tiktokPostMode?: TikTokPostMode;
+    onTikTokPostModeChange?: (mode: TikTokPostMode) => void;
     overrideActive: boolean;
     /** When false, hides Override + Auto-split (generic tab has no platform). */
     showSplitControls?: boolean;
@@ -82,6 +90,8 @@ export function ComposerToolbar({
     autoSplit,
     format = 'feed',
     onFormatChange,
+    tiktokPostMode = 'direct',
+    onTikTokPostModeChange,
     overrideActive,
     showSplitControls = true,
     media,
@@ -120,6 +130,10 @@ export function ComposerToolbar({
         { value: 'reels', label: 'Reels' },
         { value: 'story', label: 'Stories' },
     ];
+    const showTikTokModePicker =
+        !readOnly &&
+        onTikTokPostModeChange !== undefined &&
+        activePlatform === 'tiktok';
     // Count confirmed media plus uploads still in flight so the badge bumps the
     // instant a file is picked, and settles back if an upload fails. "processing"
     // (client-side compression) is in flight too, so it counts.
@@ -225,28 +239,24 @@ export function ComposerToolbar({
             <div className="ml-auto sm:flex-1" />
 
             {showFormatPicker && (
-                <div
-                    role="group"
-                    aria-label="Post format"
-                    className="inline-flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5"
-                >
-                    {formatOptions.map((option) => (
-                        <button
-                            key={option.value}
-                            type="button"
-                            title={`Post as ${option.label}`}
-                            data-active={format === option.value}
-                            onClick={() => onFormatChange?.(option.value)}
-                            className={cn(
-                                'inline-flex h-7 items-center rounded-[5px] px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-6',
-                                'hover:text-foreground',
-                                'data-[active=true]:bg-muted data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
-                            )}
-                        >
-                            {option.label}
-                        </button>
-                    ))}
-                </div>
+                <SegmentedPicker
+                    label="Post format"
+                    value={format}
+                    options={formatOptions.map((option) => ({
+                        ...option,
+                        title: `Post as ${option.label}`,
+                    }))}
+                    onChange={(value) => onFormatChange?.(value)}
+                />
+            )}
+
+            {showTikTokModePicker && (
+                <SegmentedPicker
+                    label="How to send to TikTok"
+                    value={tiktokPostMode}
+                    options={TIKTOK_POST_MODES}
+                    onChange={(value) => onTikTokPostModeChange?.(value)}
+                />
             )}
 
             {showSplitControls && !readOnly && (
@@ -352,5 +362,47 @@ function EToolButton({
             <TooltipTrigger render={button} />
             <TooltipContent side="top">{tooltip}</TooltipContent>
         </Tooltip>
+    );
+}
+
+/**
+ * The toolbar's small segmented switch: Instagram and Facebook pick their
+ * format with it, TikTok picks Direct Post or inbox draft.
+ */
+function SegmentedPicker<T extends string>({
+    label,
+    value,
+    options,
+    onChange,
+}: {
+    label: string;
+    value: T;
+    options: { value: T; label: string; title: string }[];
+    onChange: (value: T) => void;
+}) {
+    return (
+        <div
+            role="group"
+            aria-label={label}
+            className="inline-flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5"
+        >
+            {options.map((option) => (
+                <button
+                    key={option.value}
+                    type="button"
+                    title={option.title}
+                    aria-pressed={value === option.value}
+                    data-active={value === option.value}
+                    onClick={() => onChange(option.value)}
+                    className={cn(
+                        'inline-flex h-7 items-center rounded-[5px] px-2.5 text-[12px] text-muted-foreground transition-colors sm:h-6',
+                        'hover:text-foreground',
+                        'data-[active=true]:bg-muted data-[active=true]:text-foreground data-[active=true]:shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]',
+                    )}
+                >
+                    {option.label}
+                </button>
+            ))}
+        </div>
     );
 }

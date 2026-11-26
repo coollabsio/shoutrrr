@@ -16,7 +16,7 @@ final class DraftData
      * @param  list<string>  $destinationIds
      * @param  list<string>  $mediaIds
      * @param  list<array{id: string, label: string, handles: array<string, string>}>  $mentions
-     * @param  array<string, array{auto_split?: bool, format?: string, content_override?: array{segments: list<string>, media_ids: list<string>}|null, placements?: list<array{media_id: string, segment_ref: string, position: int}>, segment_breaks?: list<string>}>  $targetsByAccount
+     * @param  array<string, array{auto_split?: bool, format?: string, tiktok?: TikTokPostOptions, content_override?: array{segments: list<string>, media_ids: list<string>}|null, placements?: list<array{media_id: string, segment_ref: string, position: int}>, segment_breaks?: list<string>}>  $targetsByAccount
      * @param  list<string>  $segmentBreaks
      * @param  list<array{media_id: string, segment_ref: string, position: int}>  $placements
      */
@@ -87,6 +87,9 @@ final class DraftData
             if (array_key_exists('format', $target) && $target['format'] !== null) {
                 $entry['format'] = (string) $target['format'];
             }
+            if (array_key_exists('tiktok', $target) && is_array($target['tiktok'])) {
+                $entry['tiktok'] = TikTokPostOptions::fromArray($target['tiktok']);
+            }
             if (array_key_exists('placements', $target)) {
                 $entry['placements'] = self::readPlacements($target['placements']);
             }
@@ -150,6 +153,16 @@ final class DraftData
     public function formatFor(string $accountId): string
     {
         return $this->targetsByAccount[$accountId]['format'] ?? 'feed';
+    }
+
+    public function hasTikTokOptionsFor(string $accountId): bool
+    {
+        return array_key_exists('tiktok', $this->targetsByAccount[$accountId] ?? []);
+    }
+
+    public function tikTokOptionsFor(string $accountId): TikTokPostOptions
+    {
+        return $this->targetsByAccount[$accountId]['tiktok'] ?? new TikTokPostOptions;
     }
 
     /**

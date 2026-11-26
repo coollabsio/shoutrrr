@@ -40,7 +40,9 @@ class PostPublishedNotification extends Notification implements ShouldQueue
 
         return $this->databasePayload($post->workspace_id, [
             'event' => NotificationType::PostPublished->value,
-            'title' => 'Published to '.$this->target->platform->label(),
+            'title' => $this->target->wentToTikTokInbox()
+                ? 'Sent to your TikTok inbox'
+                : 'Published to '.$this->target->platform->label(),
             'body' => $this->identifierLine($post),
             'href' => route('posts.show', $post),
             'icon' => 'check-circle',
@@ -50,6 +52,14 @@ class PostPublishedNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $post = $this->target->post()->firstOrFail();
+
+        if ($this->target->wentToTikTokInbox()) {
+            return (new MailMessage)
+                ->subject('Your post is in your TikTok inbox')
+                ->line('Your post is waiting in your TikTok inbox. Open the TikTok app to finish and post it.')
+                ->line('"'.$post->excerpt().'"')
+                ->action('View post', route('posts.show', $post));
+        }
 
         return (new MailMessage)
             ->subject('Your post was published')

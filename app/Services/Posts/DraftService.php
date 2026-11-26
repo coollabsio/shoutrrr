@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Posts;
 
 use App\Dto\Post\DraftData;
+use App\Dto\Post\TikTokPostOptions;
 use App\Enums\Platform;
 use App\Enums\PostStatus;
 use App\Models\AccountSet;
@@ -191,6 +192,17 @@ class DraftService
             $currentFormat = $current instanceof PostTarget ? $current->format->value : null;
             $format = $formatByAccount[$accountId] ?? $currentFormat ?? 'feed';
 
+            // TikTok's per-post choices live only on TikTok targets. A payload that
+            // omits them keeps what the target already has; a new TikTok target
+            // starts from the guideline defaults (nothing chosen, everything off).
+            $tikTokOptions = null;
+            if ($account->platform === Platform::TikTok) {
+                $currentTikTokOptions = $current instanceof PostTarget ? $current->tiktok_options : null;
+                $tikTokOptions = $data instanceof DraftData && $data->hasTikTokOptionsFor($accountId)
+                    ? $data->tikTokOptionsFor($accountId)
+                    : ($currentTikTokOptions ?? new TikTokPostOptions);
+            }
+
             $effectiveSegments = $override['segments'] ?? $segments;
             $resolvedSegments = array_map(
                 fn (string $segment): string => $this->resolveMentionTokens($segment, $mentions, $account->platform->value),
@@ -230,6 +242,7 @@ class DraftService
                     'content_override' => $override,
                     'auto_split' => $autoSplit,
                     'format' => $format,
+                    'tiktok_options' => $tikTokOptions,
                 ],
             );
 

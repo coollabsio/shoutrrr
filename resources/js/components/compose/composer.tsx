@@ -13,6 +13,7 @@ import { useMediaUploads } from '@/hooks/compose/use-media-uploads';
 import { useNextSlot } from '@/hooks/compose/use-next-slot';
 import { usePublishStatus } from '@/hooks/compose/use-publish-status';
 import { useSaveMention } from '@/hooks/compose/use-save-mention';
+import { useTikTokCreatorInfo } from '@/hooks/compose/use-tiktok-creator-info';
 import { useVideoEditor } from '@/hooks/compose/use-video-editor';
 import { useSchedulingTimezone } from '@/hooks/posts/use-scheduling-timezone';
 import {
@@ -40,7 +41,17 @@ import {
     syncMentionsFromText,
 } from '@/lib/compose/mentions';
 import { buildPlatformPreview } from '@/lib/compose/platform-preview';
-import { precheckAccount, precheckDestinations } from '@/lib/compose/precheck';
+import {
+    isTextBlockReason,
+    precheckAccount,
+    precheckDestinations,
+    tikTokPrecheckFor,
+} from '@/lib/compose/precheck';
+import {
+    DEFAULT_TIKTOK_OPTIONS,
+    DISCLOSURE_INCOMPLETE_HINT,
+    hasIncompleteDisclosure,
+} from '@/lib/compose/tiktok';
 import { readVideoMetadata, videoLimitsForTargets } from '@/lib/compose/video';
 import { failureToasts, settle } from '@/lib/http/errors';
 import {
@@ -78,6 +89,10 @@ import { ScheduleTray } from './schedule-tray';
 import { SegmentMediaRow } from './segment-media-row';
 import { SubmitBar } from './submit-bar';
 import { TargetStatusChips } from './target-status-chips';
+import {
+    TikTokConsentNotice,
+    TikTokPostSettings,
+} from './tiktok-post-settings';
 import { VideoEditor } from './video-editor';
 
 /** What the image editor is currently working on. */
@@ -714,6 +729,18 @@ export default function Composer({
     const readOnly = post !== null && !postCapabilities(post).canEdit;
 
     const activeAccount = pickActiveAccount(tabAccounts, state.activeTab);
+    const tikTokAccounts = tabAccounts.filter(
+        (account) => account.platform === 'tiktok',
+    );
+    const tikTok = useTikTokCreatorInfo(
+        readOnly ? [] : tikTokAccounts.map((account) => account.id),
+    );
+    const tikTokOptionsFor = (accountId: string) =>
+        state.tiktokByAccount[accountId] ?? DEFAULT_TIKTOK_OPTIONS;
+    const hasVideo = state.media.some((item) => item.kind === 'video');
+    const tikTokDirectPosts = tikTokAccounts
+        .map((account) => tikTokOptionsFor(account.id))
+        .filter((options) => options.post_mode === 'direct');
     const showConnectAccountPrompt = shouldShowConnectAccountPrompt(
         accounts,
         activeAccount,
@@ -781,7 +808,17 @@ export default function Composer({
         return account.max_text_length || limitForPlatform(account.platform);
     }
 
-    function severityFor(accountId: string): 'ok' | 'warn' | 'over' {
+    /**
+     * How an account's draft stands: `over` when something blocks it, `warn`
+     * near the character limit. With `scope: 'text'` only the text's own
+     * problems count — the character counter uses that, so a Reel without a
+     * video or a Story without media doesn't turn the count red (the tab still
+     * does).
+     */
+    function severityFor(
+        accountId: string,
+        scope: 'all' | 'text' = 'all',
+    ): 'ok' | 'warn' | 'over' {
         const account = tabAccounts.find((a) => a.id === accountId);
         if (!account) {
             return 'ok';
@@ -800,7 +837,6 @@ export default function Composer({
         // enforce media caps per whole post (see precheckDestinations), so the
         // severity a destination shows is judged against the full media set.
         const mediaCount = state.media.length;
-        const hasVideo = state.media.some((item) => item.kind === 'video');
         const reasons = precheckAccount({
             account,
             segments,
@@ -810,8 +846,18 @@ export default function Composer({
             hasVideo,
             format: state.formatByAccount[accountId] ?? 'feed',
             limits: platformLimits,
+            tiktok:
+                account.platform === 'tiktok'
+                    ? tikTokPrecheckFor(
+                          state.tiktokByAccount[accountId],
+                          tikTok.creators[accountId],
+                          state.media,
+                      )
+                    : undefined,
         });
-        if (reasons.length > 0) {
+        const blocking =
+            scope === 'text' ? reasons.filter(isTextBlockReason) : reasons;
+        if (blocking.length > 0) {
             return 'over';
         }
         const resolvedText = replaceMentionTokens(
@@ -1015,6 +1061,8 @@ export default function Composer({
         autoSplitByAccount: state.autoSplitByAccount,
         overrideByAccount: state.overrideByAccount,
         formatByAccount: state.formatByAccount,
+        tiktokByAccount: state.tiktokByAccount,
+        tiktokCreators: tikTok.creators,
         media: state.media,
         limits,
     });
@@ -1052,7 +1100,7 @@ export default function Composer({
                                 dispatch({ type: 'setActiveTab', tab })
                             }
                             chipFor={chipFor}
-                            stateFor={severityFor}
+                            stateFor={(accountId) => severityFor(accountId)}
                             hasOverride={(accountId) =>
                                 state.overrideByAccount[accountId] !== undefined
                             }
@@ -1277,7 +1325,7 @@ export default function Composer({
                         )}
                         limit={limitForAccount(activeAccount)}
                         sectionTotal={activeSectionTotal}
-                        state={severityFor(activeAccount.id)}
+                        state={severityFor(activeAccount.id, 'text')}
                     />
                 ) : showConnectAccountPrompt ? (
                     <div className="px-4 pb-3.5 sm:px-[26px]">
@@ -1320,6 +1368,22 @@ export default function Composer({
                     </div>
                 )}
 
+                {activeAccount?.platform === 'tiktok' && !readOnly && (
+                    <TikTokPostSettings
+                        options={tikTokOptionsFor(activeAccount.id)}
+                        onChange={(options) =>
+                            dispatch({
+                                type: 'setTikTokOptions',
+                                accountId: activeAccount.id,
+                                options,
+                            })
+                        }
+                        creator={tikTok.creators[activeAccount.id]}
+                        onRetryCreator={() => tikTok.reload(activeAccount.id)}
+                        isPhotoPost={state.media.length > 0 && !hasVideo}
+                    />
+                )}
+
                 {/* Toolbar — editing controls when editable; just the attached
                 media when read-only (skipped entirely if there's none). */}
                 {(!readOnly || state.media.length > 0) && (
@@ -1350,6 +1414,26 @@ export default function Composer({
                                           type: 'setFormat',
                                           accountId: activeAccount.id,
                                           format,
+                                      })
+                                : undefined
+                        }
+                        tiktokPostMode={
+                            activeAccount?.platform === 'tiktok'
+                                ? tikTokOptionsFor(activeAccount.id).post_mode
+                                : undefined
+                        }
+                        onTikTokPostModeChange={
+                            activeAccount?.platform === 'tiktok'
+                                ? (mode) =>
+                                      dispatch({
+                                          type: 'setTikTokOptions',
+                                          accountId: activeAccount.id,
+                                          options: {
+                                              ...tikTokOptionsFor(
+                                                  activeAccount.id,
+                                              ),
+                                              post_mode: mode,
+                                          },
                                       })
                                 : undefined
                         }
@@ -1532,6 +1616,22 @@ export default function Composer({
                             onServerPost={publishStatus.applyServerPost}
                             blockedAccounts={blockedAccounts}
                             limits={limits}
+                            blockedHint={
+                                tikTokDirectPosts.some(hasIncompleteDisclosure)
+                                    ? DISCLOSURE_INCOMPLETE_HINT
+                                    : null
+                            }
+                            notice={
+                                tikTokDirectPosts.length > 0 ? (
+                                    <TikTokConsentNotice
+                                        branded={tikTokDirectPosts.some(
+                                            (options) =>
+                                                options.disclose_commercial &&
+                                                options.branded_content,
+                                        )}
+                                    />
+                                ) : null
+                            }
                         />
                     </div>
                 )}
@@ -1582,7 +1682,15 @@ export default function Composer({
                 >
                     <div className="min-h-0 w-full overflow-hidden">
                         <div className="xl:min-w-[340px]">
-                            <PlatformPreviewPanel preview={platformPreview} />
+                            <PlatformPreviewPanel
+                                preview={platformPreview}
+                                tiktokPostMode={
+                                    previewAccount?.platform === 'tiktok'
+                                        ? tikTokOptionsFor(previewAccount.id)
+                                              .post_mode
+                                        : undefined
+                                }
+                            />
                         </div>
                     </div>
                 </div>

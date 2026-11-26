@@ -45,6 +45,7 @@ const PLATFORM_LABEL: Record<string, string> = {
     instagram: 'Instagram',
     threads: 'Threads',
     discord: 'Discord',
+    tiktok: 'TikTok',
 };
 
 function platformLabel(platform: string): string {
@@ -233,6 +234,17 @@ export default function CreateSyncPipelineDialog({
                                             value={id}
                                         />
                                     ))}
+                                    {accounts.some(
+                                        (account) =>
+                                            account.platform === 'tiktok' &&
+                                            destinations.includes(account.id),
+                                    ) && (
+                                        <p className="text-sm text-muted-foreground">
+                                            TikTok gets each synced post as an
+                                            inbox draft, which you finish and
+                                            post in the TikTok app.
+                                        </p>
+                                    )}
                                     <InputError
                                         message={
                                             errors.destination_connected_account_ids

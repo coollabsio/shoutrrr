@@ -12,6 +12,7 @@ import {
     TargetStatusChips,
 } from '@/components/compose/target-status-chips';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { DEFAULT_TIKTOK_OPTIONS } from '@/lib/compose/tiktok';
 
 const failedTarget = (overrides: Partial<ChipTarget> = {}): ChipTarget => ({
     id: 't1',
@@ -118,5 +119,29 @@ describe('target status chips', () => {
 
         expect(container.querySelector('button')).toBeNull();
         expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    });
+    it('labels a TikTok inbox draft as sent to the inbox, not published', () => {
+        const container = renderChips([
+            failedTarget({
+                platform: 'tiktok',
+                status: 'published',
+                error_message: null,
+                tiktok: { ...DEFAULT_TIKTOK_OPTIONS, post_mode: 'inbox' },
+            }),
+            failedTarget({
+                id: 't2',
+                platform: 'tiktok',
+                status: 'published',
+                error_message: null,
+                tiktok: { ...DEFAULT_TIKTOK_OPTIONS, post_mode: 'direct' },
+            }),
+        ]);
+        const labels = [...container.querySelectorAll('li')].map(
+            (item) => item.textContent,
+        );
+
+        expect(labels[0]).toContain('Sent to inbox');
+        expect(labels[1]).toContain('Published');
+        expect(labels[1]).not.toContain('Sent to inbox');
     });
 });

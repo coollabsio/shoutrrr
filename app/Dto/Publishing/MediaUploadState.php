@@ -42,6 +42,12 @@ final class MediaUploadState
         $this->state[$mediaId] = ['remote_ref' => $remoteRef, 'state' => 'processing'];
     }
 
+    /** Drop a media item's platform reference so the next attempt starts it over. */
+    public function forget(string $mediaId): void
+    {
+        unset($this->state[$mediaId]);
+    }
+
     /**
      * The completed transcode blob (Bluesky), or an empty array if not yet stored.
      *
@@ -76,6 +82,12 @@ final class MediaUploadState
         $this->state[self::POLLS_KEY] = $next;
 
         return $next;
+    }
+
+    /** Start the transcode-poll count over, for a fresh upload after the last one was dropped. */
+    public function resetPolls(): void
+    {
+        unset($this->state[self::POLLS_KEY]);
     }
 
     /**

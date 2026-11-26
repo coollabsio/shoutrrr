@@ -6,7 +6,7 @@
 
 **An open-source, self-hostable alternative to Buffer, Typefully & Hootsuite.**
 
-Write once, publish everywhere. Schedule posts to X, Bluesky, LinkedIn, Facebook, Instagram, Threads, and Discord from one calendar — on your own server, with your own data.
+Write once, publish everywhere. Schedule posts to X, Bluesky, LinkedIn, Facebook, Instagram, Threads, TikTok, and Discord from one calendar — on your own server, with your own data.
 
 [![License](https://img.shields.io/github/license/coollabsio/shoutrrr?style=for-the-badge&color=4c1)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/coollabsio/shoutrrr?style=for-the-badge&logo=github&color=f5c518)](https://github.com/coollabsio/shoutrrr/stargazers)
@@ -46,6 +46,7 @@ It's built for individuals and teams: invite collaborators into a shared workspa
 | **Instagram**    | OAuth 2.0 (Facebook Login)     | ✅ (media required, ≤2,200 chars, up to 10 images or 1 video/Reel) | — (single post) | likes, comments, shares, views       |
 | **Threads**      | OAuth 2.0                      | ✅ (≤500 chars, up to 10 images or 1 video)               | ✅              | likes, replies, reposts, views       |
 | **Discord**      | Channel webhook URL            | ✅ (≤2000 chars, up to 10 files ≤10 MiB)                  | ✅              | reactions                            |
+| **TikTok**       | OAuth 2.0 (Login Kit)          | ✅ (media required, ≤2,200 chars, 1 video or up to 35 photos; Direct Post or inbox draft) | — (single post) | not available                        |
 
 ## Features
 
@@ -150,7 +151,7 @@ Set `INERTIA_SSR_ENABLED=true` for server-side rendering. To run the worker/sche
     | `APP_ENV`   | `production`                                                                 |
     | `APP_DEBUG` | `false`                                                                      |
 
-    Add your `X_*`, `LINKEDIN_*`, `FACEBOOK_*`, `THREADS_*`, and optional `GOOGLE_*` credentials here too (see [Connecting your accounts](#connecting-your-accounts)).
+    Add your `X_*`, `LINKEDIN_*`, `FACEBOOK_*`, `THREADS_*`, `TIKTOK_*`, and optional `GOOGLE_*` credentials here too (see [Connecting your accounts](#connecting-your-accounts)).
 
 5. Click **Deploy**.
 
@@ -175,7 +176,7 @@ The CSP is intentionally **not** sent in `local` (`APP_ENV=local`) because it is
 - **OAuth (recommended)** — users sign in on Bluesky and authorize Shoutrrr without handing over a password. It's zero-config: Shoutrrr publishes an [ATProto OAuth](https://atproto.com/specs/oauth) client-metadata document at `${APP_URL}/oauth/bluesky/client-metadata.json` (with keys at `${APP_URL}/oauth/bluesky/jwks.json`), and Bluesky's authorization server fetches those to identify your instance. The signing key is generated once and stored encrypted — there's nothing to add to `.env`. **The one requirement:** `APP_URL` must be a public HTTPS URL, because Bluesky has to reach those two documents over the internet. (In `local` dev, Shoutrrr falls back to a loopback client so OAuth still works on `localhost`.)
 - **App password** — users paste a Bluesky [app password](https://bsky.app/settings/app-passwords). No setup, and it works anywhere — including private or LAN deployments Bluesky can't reach for OAuth.
 
-**X**, **LinkedIn**, and the **Meta** platforms (Facebook, Instagram, Threads) publish through your own developer app, so you'll register one with each provider and add the credentials to `.env`. The redirect URIs must match what you register (they default to `${APP_URL}/...`):
+**X**, **LinkedIn**, **TikTok**, and the **Meta** platforms (Facebook, Instagram, Threads) publish through your own developer app, so you'll register one with each provider and add the credentials to `.env`. The redirect URIs must match what you register (they default to `${APP_URL}/...`):
 
 ```dotenv
 # X — https://developer.x.com
@@ -200,7 +201,20 @@ FACEBOOK_REDIRECT_URI="${APP_URL}/accounts/callback/meta"
 THREADS_CLIENT_ID=
 THREADS_CLIENT_SECRET=
 THREADS_REDIRECT_URI="${APP_URL}/accounts/callback/threads"
+
+# TikTok — https://developers.tiktok.com (Login Kit + Content Posting API).
+TIKTOK_CLIENT_KEY=
+TIKTOK_CLIENT_SECRET=
+TIKTOK_REDIRECT_URI="${APP_URL}/accounts/callback/tiktok"
 ```
+
+**TikTok** also needs, in the [TikTok developer portal](https://developers.tiktok.com):
+
+- **Login Kit** with the redirect URI above (absolute HTTPS, exact match), and the **Content Posting API** with **Direct Post** turned on and the scopes `user.info.basic`, `user.info.profile`, `video.publish`, and `video.upload`. Shoutrrr refuses a connection that is missing any of them.
+- A verified **URL property** for the domain your media is served from: the `APP_URL` host, or your object storage domain. TikTok downloads every video and photo from it, so it must be public HTTPS and must not redirect.
+- For a [sandbox](https://developers.tiktok.com/doc/add-a-sandbox), your TikTok account under **Target users** (up to 10). Going live needs TikTok's [app review](https://developers.tiktok.com/doc/app-review-guidelines), which excludes apps for private or personal use.
+
+Until TikTok audits the app, Direct Post only works at **Only me** visibility on **private** accounts, for at most five users a day ([content sharing guidelines](https://developers.tiktok.com/doc/content-sharing-guidelines)). These limits apply to Direct Post only: an inbox draft is finished in the TikTok app, where you choose who can view it. Shoutrrr can't delete TikTok posts, and comments, analytics, and messages aren't available for TikTok.
 
 Optionally, let people sign in with a social account instead of a password:
 

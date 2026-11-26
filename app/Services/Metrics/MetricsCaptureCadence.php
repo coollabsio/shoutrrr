@@ -55,7 +55,9 @@ class MetricsCaptureCadence
 
     public function postTargetDue(PostTarget $target, CarbonImmutable $now): bool
     {
-        if ($target->posted_at === null) {
+        // TikTok (and any other platform without post metrics) must never be
+        // scheduled for capture.
+        if ($target->posted_at === null || ! $target->platform->supportsPostMetrics()) {
             return false;
         }
 
