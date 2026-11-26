@@ -14,11 +14,12 @@ import type {
 } from '@/lib/compose/platform-preview';
 import { LinkedText } from '@/lib/linked-text';
 import { cn } from '@/lib/utils';
-import type { PlatformName } from '@/types/compose';
+import type { PlatformName, TikTokPostMode } from '@/types/compose';
 
 import { FacebookPreview } from './preview/facebook-preview';
 import { InstagramPreview } from './preview/instagram-preview';
 import { ThreadsPreview } from './preview/threads-preview';
+import { TikTokPreview } from './preview/tiktok-preview';
 
 const PLATFORM_LABELS: Record<PlatformName, string> = {
     x: 'X',
@@ -194,8 +195,11 @@ function PlatformPreviewPost({
 
 export function PlatformPreviewPanel({
     preview,
+    tiktokPostMode = 'direct',
 }: {
     preview: PlatformPreview | null;
+    /** How the previewed TikTok account sends this post (ignored elsewhere). */
+    tiktokPostMode?: TikTokPostMode;
 }) {
     const label = preview ? PLATFORM_LABELS[preview.platform] : null;
 
@@ -250,6 +254,8 @@ export function PlatformPreviewPanel({
                 <FacebookPreview preview={preview} />
             ) : preview.platform === 'threads' ? (
                 <ThreadsPreview preview={preview} />
+            ) : preview.platform === 'tiktok' ? (
+                <TikTokPreview preview={preview} postMode={tiktokPostMode} />
             ) : (
                 <div className="p-4">
                     <div className="rounded-3xl border border-border bg-background px-4 pt-4 shadow-xs">

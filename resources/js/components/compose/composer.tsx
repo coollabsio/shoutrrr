@@ -1682,7 +1682,15 @@ export default function Composer({
                 >
                     <div className="min-h-0 w-full overflow-hidden">
                         <div className="xl:min-w-[340px]">
-                            <PlatformPreviewPanel preview={platformPreview} />
+                            <PlatformPreviewPanel
+                                preview={platformPreview}
+                                tiktokPostMode={
+                                    previewAccount?.platform === 'tiktok'
+                                        ? tikTokOptionsFor(previewAccount.id)
+                                              .post_mode
+                                        : undefined
+                                }
+                            />
                         </div>
                     </div>
                 </div>
