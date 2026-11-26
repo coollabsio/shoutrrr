@@ -1,9 +1,11 @@
 <?php
 
 use App\Enums\Platform;
+use App\Enums\PostFormat;
 use App\Enums\WorkspaceRole;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
+use App\Models\PostTarget;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
@@ -58,6 +60,34 @@ test('POST /posts persists the auto_repost override sent on create', function ()
     ])->assertCreated()->assertJsonPath('post.auto_repost', true);
 
     expect(Post::withoutGlobalScopes()->first()->auto_repost)->toBeTrue();
+});
+
+test('POST /posts keeps a format picked before the first save', function () {
+    [$user, $workspace] = actingMember(1);
+    $instagram = ConnectedAccount::factory()->create([
+        'workspace_id' => $workspace->id,
+        'platform' => Platform::Instagram->value,
+    ]);
+
+    $response = test()->postJson('/posts', [
+        'segments' => ['a reel from the first save'],
+        'destination' => ['kind' => 'all'],
+        'targets' => [['connected_account_id' => $instagram->id, 'format' => 'reels']],
+    ])->assertCreated();
+
+    $formats = collect($response->json('post.targets'))->pluck('format', 'connected_account_id');
+    expect($formats[$instagram->id])->toBe('reels')
+        ->and(PostTarget::query()->where('connected_account_id', $instagram->id)->sole()->format)->toBe(PostFormat::Reels);
+});
+
+test('POST /posts rejects an unknown format on the first save', function () {
+    [$user, $workspace, $accounts] = actingMember(1);
+
+    test()->postJson('/posts', [
+        'segments' => ['hello'],
+        'destination' => ['kind' => 'all'],
+        'targets' => [['connected_account_id' => $accounts[0]->id, 'format' => 'carousel']],
+    ])->assertUnprocessable()->assertJsonValidationErrors('targets.0.format');
 });
 
 test('POST /posts accepts a custom accounts destination', function () {

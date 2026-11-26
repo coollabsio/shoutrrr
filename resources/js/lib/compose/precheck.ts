@@ -23,6 +23,21 @@ export type BlockReason =
     | 'reels_requires_video'
     | 'story_requires_media';
 
+/**
+ * The reasons that are about the text itself. Only these turn the character
+ * counter red; a missing video, format or platform setting blocks the account
+ * (its tab still shows it) without making the caption look too long.
+ */
+const TEXT_BLOCK_REASONS: ReadonlySet<BlockReason> = new Set<BlockReason>([
+    'empty',
+    'section_too_long',
+    'too_many_sections',
+]);
+
+export function isTextBlockReason(reason: BlockReason): boolean {
+    return TEXT_BLOCK_REASONS.has(reason);
+}
+
 export type AccountBlock = {
     accountId: string;
     handle: string;

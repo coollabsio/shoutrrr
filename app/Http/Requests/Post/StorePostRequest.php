@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Post;
 
+use App\Enums\PostFormat;
 use App\Http\Requests\Post\Concerns\DerivesMentionHandleRules;
 use App\Models\Post;
 use Illuminate\Foundation\Http\FormRequest;
@@ -37,6 +38,11 @@ class StorePostRequest extends FormRequest
             'destination.id' => ['nullable', 'string', 'required_if:destination.kind,set,account'],
             'destination.ids' => ['array', 'required_if:destination.kind,accounts'],
             'destination.ids.*' => ['string'],
+            // A format picked before the draft exists rides along on the first
+            // save so it is not lost.
+            'targets' => ['array'],
+            'targets.*.connected_account_id' => ['required', 'string'],
+            'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
             'skip_sync' => ['sometimes', 'boolean'],
             'segment_breaks' => ['array'],
