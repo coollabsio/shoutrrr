@@ -38,6 +38,7 @@ final class PostListItem
                 'error_kind' => $t->error_kind?->value,
                 'error_message' => $t->error_message,
                 'attempts' => $t->attempts,
+                'tiktok' => $t->tiktok_options?->toArray(),
             ])->all(),
         ];
     }

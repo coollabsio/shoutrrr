@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Mcp\Tools;
 
 use App\Dto\Post\DraftData;
+use App\Http\Requests\Post\Concerns\ValidatesTikTokOptions;
 use App\Mcp\Tools\Concerns\WorkspaceTool;
 use App\Models\Post;
 use App\Services\Posts\DraftService;
@@ -20,6 +21,8 @@ use Laravel\Mcp\Server\Attributes\Description;
 #[Description('Update a draft post: text, destination, per-account overrides, and attached media. Pass expected_updated_at (from get_post) for optimistic concurrency; a mismatch returns a stale-write error.')]
 class UpdatePostTool extends WorkspaceTool
 {
+    use ValidatesTikTokOptions;
+
     public function handle(Request $request, DraftService $drafts): Response
     {
         if ($this->bindWorkspace($request) === null) {
@@ -45,6 +48,7 @@ class UpdatePostTool extends WorkspaceTool
             'targets' => ['array'],
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
+            ...$this->tikTokOptionRules(),
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.media_ids' => ['array'],
@@ -54,6 +58,11 @@ class UpdatePostTool extends WorkspaceTool
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
             'expected_updated_at' => ['nullable', 'string'],
         ]);
+
+        $tikTokErrors = $this->tikTokOptionErrors($validated['targets'] ?? []);
+        if ($tikTokErrors !== []) {
+            return Response::error(implode(' ', $tikTokErrors));
+        }
 
         $post = Post::query()->whereKey($validated['post_id'])->first();
         if ($post === null) {

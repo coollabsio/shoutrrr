@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Media;
 
+use App\Enums\Platform;
 use App\Models\PostMedia;
 
 /**
@@ -19,9 +20,25 @@ final class DerivedMedia
     /** Extensions the converters write; kept here so deletion can find them all. */
     private const array EXTENSIONS = ['jpg', 'mp4'];
 
-    public static function path(PostMedia $media, string $extension): string
+    /**
+     * @param  string|null  $variant  Distinguishes renditions of the same format, e.g. a
+     *                                downscaled JPEG (see frameVariant()).
+     */
+    public static function path(PostMedia $media, string $extension, ?string $variant = null): string
     {
-        return 'media/'.$media->workspace_id.'/derived/'.$media->id.'.'.$extension;
+        $suffix = $variant !== null ? '-'.$variant : '';
+
+        return 'media/'.$media->workspace_id.'/derived/'.$media->id.$suffix.'.'.$extension;
+    }
+
+    /**
+     * The variant name for a JPEG downscaled into a platform's fetched-image frame.
+     *
+     * @param  array{long_edge: int, short_edge: int}  $frame
+     */
+    public static function frameVariant(array $frame): string
+    {
+        return "fit{$frame['long_edge']}x{$frame['short_edge']}";
     }
 
     /**
@@ -31,9 +48,19 @@ final class DerivedMedia
      */
     public static function pathsFor(PostMedia $media): array
     {
-        return array_map(
+        $paths = array_map(
             static fn (string $extension): string => self::path($media, $extension),
             self::EXTENSIONS,
         );
+
+        foreach (Platform::cases() as $platform) {
+            $frame = $platform->fetchedImageFrame();
+
+            if ($frame !== null) {
+                $paths[] = self::path($media, 'jpg', self::frameVariant($frame));
+            }
+        }
+
+        return array_values(array_unique($paths));
     }
 }

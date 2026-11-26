@@ -58,6 +58,7 @@ final class PostView
                     'content_override' => $target->content_override,
                     'auto_split' => $target->auto_split,
                     'format' => $target->format->value,
+                    'tiktok' => $target->tiktok_options?->toArray(),
                     'status' => $target->status->value,
                     'error_kind' => $target->error_kind?->value,
                     'error_message' => $target->error_message,

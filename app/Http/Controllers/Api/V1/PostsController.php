@@ -7,8 +7,10 @@ namespace App\Http\Controllers\Api\V1;
 use App\Dto\Post\DraftData;
 use App\Enums\PostFormat;
 use App\Enums\PostStatus;
+use App\Enums\PostTargetStatus;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesWorkspacePost;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Post\Concerns\ValidatesTikTokOptions;
 use App\Jobs\DeletePostTarget;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
@@ -27,7 +29,7 @@ use Illuminate\Validation\ValidationException;
 
 class PostsController extends Controller
 {
-    use ResolvesWorkspacePost;
+    use ResolvesWorkspacePost, ValidatesTikTokOptions;
 
     public function index(Request $request): JsonResponse
     {
@@ -77,10 +79,11 @@ class PostsController extends Controller
             'targets' => ['array'],
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
+            ...$this->tikTokOptionRules(),
             'auto_repost' => ['sometimes', 'nullable', 'boolean'],
         ]);
 
-        $this->ensureFormatsSupported($validated['targets'] ?? []);
+        $this->ensureTargetOptionsSupported($validated['targets'] ?? []);
 
         /** @var User $user */
         $user = $request->user();
@@ -126,6 +129,7 @@ class PostsController extends Controller
             'targets.*.connected_account_id' => ['required', 'string'],
             'targets.*.auto_split' => ['boolean'],
             'targets.*.format' => ['nullable', Rule::enum(PostFormat::class)],
+            ...$this->tikTokOptionRules(),
             'targets.*.content_override' => ['nullable', 'array'],
             'targets.*.content_override.text' => ['nullable', 'string'],
             'targets.*.content_override.media_ids' => ['array'],
@@ -136,7 +140,7 @@ class PostsController extends Controller
             'expected_updated_at' => ['nullable', 'string'],
         ]);
 
-        $this->ensureFormatsSupported($validated['targets'] ?? []);
+        $this->ensureTargetOptionsSupported($validated['targets'] ?? []);
 
         try {
             $updated = $drafts->updateDraft($model, DraftData::fromArray($validated));
@@ -162,24 +166,33 @@ class PostsController extends Controller
             return response()->json(['deleted' => true, 'remote' => false]);
         }
 
-        $model->targets
-            ->filter(fn (PostTarget $t): bool => $t->remote_id !== null)
+        $remoteDeletes = $model->targets
+            ->filter(fn (PostTarget $t): bool => $t->remote_id !== null && $t->platform->supportsRemoteDelete())
             ->each(fn (PostTarget $t) => DeletePostTarget::dispatch($t));
+
+        $model->targets
+            ->filter(fn (PostTarget $t): bool => $t->remainsOnPlatformWhenDeleted())
+            ->each(fn (PostTarget $t) => $t->forceFill(['status' => PostTargetStatus::Deleted->value])->save());
 
         $model->forceFill(['status' => PostStatus::Deleted->value, 'deleted_at' => now()])->save();
 
-        return response()->json(['deleted' => true, 'remote' => true, 'message' => 'Remote deletion queued for published targets.']);
+        return response()->json([
+            'deleted' => true,
+            'remote' => $remoteDeletes->isNotEmpty(),
+            'message' => trim(($remoteDeletes->isNotEmpty() ? 'Remote deletion queued for published targets. ' : 'Post deleted. ').$model->stillLiveNotice()),
+        ]);
     }
 
     /**
      * Reject a per-target `format` the target's platform does not offer (e.g.
-     * Reels on X) — the same set the web composer exposes via PostFormat::forPlatform.
+     * Reels on X) — the same set the web composer exposes via PostFormat::forPlatform —
+     * and TikTok options that are inconsistent or sent for a non-TikTok account.
      *
-     * @param  array<int, array{connected_account_id: string, format?: string|null}>  $targets
+     * @param  array<int, array{connected_account_id: string, format?: string|null, tiktok?: array<string, mixed>}>  $targets
      *
      * @throws ValidationException
      */
-    private function ensureFormatsSupported(array $targets): void
+    private function ensureTargetOptionsSupported(array $targets): void
     {
         $accounts = ConnectedAccount::query()
             ->whereKey(array_column($targets, 'connected_account_id'))
@@ -206,6 +219,8 @@ class PostsController extends Controller
                 $errors["targets.{$index}.format"] = "The {$format->value} format is not available on {$account->platform->value}.";
             }
         }
+
+        $errors = [...$errors, ...$this->tikTokOptionErrors($targets)];
 
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);

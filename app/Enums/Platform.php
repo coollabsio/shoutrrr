@@ -210,6 +210,17 @@ enum Platform: string
     }
 
     /**
+     * Whether a published post can be removed from the platform through its
+     * API. TikTok documents no endpoint for deleting a post made through the
+     * Content Posting API, so deleting a TikTok post only removes it here — it
+     * stays live on TikTok.
+     */
+    public function supportsRemoteDelete(): bool
+    {
+        return $this !== self::TikTok;
+    }
+
+    /**
      * Whether this platform's engagement connector can like/unlike a reply.
      * Threads returns `unsupported` (its Graph API exposes no like/unlike write
      * for replies), so its heart is an inert affordance. Instagram gained the
@@ -505,6 +516,26 @@ enum Platform: string
             self::Discord => ['width' => 8192, 'height' => 8192],
             self::TikTok => ['width' => 1080, 'height' => 1920],
         };
+    }
+
+    /**
+     * The frame an image handed to the platform by URL must fit in: its
+     * {@see maxImageDimensions()} measured along the long and short edges, so
+     * it applies in either orientation. Null when the platform scales oversized
+     * images itself. TikTok rejects photos over 1080p, so larger images are
+     * published from a downscaled rendition (see PublicMediaUrl).
+     *
+     * @return array{long_edge: int, short_edge: int}|null
+     */
+    public function fetchedImageFrame(): ?array
+    {
+        if ($this !== self::TikTok) {
+            return null;
+        }
+
+        ['width' => $width, 'height' => $height] = $this->maxImageDimensions();
+
+        return ['long_edge' => max($width, $height), 'short_edge' => min($width, $height)];
     }
 
     /**

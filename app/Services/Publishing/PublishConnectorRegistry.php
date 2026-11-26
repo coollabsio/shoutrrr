@@ -11,9 +11,9 @@ use App\Services\Publishing\Connectors\FacebookConnector;
 use App\Services\Publishing\Connectors\InstagramConnector;
 use App\Services\Publishing\Connectors\LinkedInConnector;
 use App\Services\Publishing\Connectors\ThreadsConnector;
+use App\Services\Publishing\Connectors\TikTokConnector;
 use App\Services\Publishing\Connectors\XConnector;
 use App\Services\Publishing\Contracts\PublishConnector;
-use RuntimeException;
 
 class PublishConnectorRegistry
 {
@@ -27,7 +27,7 @@ class PublishConnectorRegistry
             Platform::Instagram => app(InstagramConnector::class),
             Platform::Threads => app(ThreadsConnector::class),
             Platform::Discord => app(DiscordPublishConnector::class),
-            Platform::TikTok => throw new RuntimeException('TikTok publishing is not available yet.'),
+            Platform::TikTok => app(TikTokConnector::class),
         };
     }
 }

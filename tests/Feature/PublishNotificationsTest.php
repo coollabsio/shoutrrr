@@ -1,7 +1,9 @@
 <?php
 
+use App\Dto\Post\TikTokPostOptions;
 use App\Enums\Platform;
 use App\Enums\PostTargetStatus;
+use App\Enums\TikTokPostMode;
 use App\Jobs\PublishPostTarget;
 use App\Models\ConnectedAccount;
 use App\Models\Post;
@@ -71,6 +73,21 @@ test('published notification payload identifies the post, platform and account',
         ->and($payload['body'])->toContain('@acme.bsky.social')
         ->and($payload['body'])->toContain('Launching our brand new analytics dashboard')
         ->and($payload['href'])->toBe(route('posts.show', $post));
+});
+
+test('a TikTok inbox draft is announced as sent to the inbox, not published', function () {
+    $user = User::factory()->create();
+    $post = Post::factory()->for($user, 'author')->create(['base_text' => 'Behind the scenes clip']);
+    $account = ConnectedAccount::factory()->create(['platform' => Platform::TikTok->value, 'handle' => '@clips']);
+    $target = PostTarget::factory()->for($post)->for($account, 'account')->create([
+        'platform' => Platform::TikTok->value,
+        'tiktok_options' => new TikTokPostOptions(mode: TikTokPostMode::Inbox),
+    ]);
+
+    $notification = new PostPublishedNotification($target);
+
+    expect($notification->toArray($user)['title'])->toBe('Sent to your TikTok inbox')
+        ->and($notification->toMail($user)->subject)->toBe('Your post is in your TikTok inbox');
 });
 
 test('failed notification payload identifies the post, platform and account', function () {

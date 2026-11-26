@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Posts;
 
+use App\Dto\Post\TikTokPostOptions;
 use App\Enums\Platform;
+use App\Enums\TikTokPrivacyLevel;
 use App\Models\Post;
 use App\Models\PostMedia;
 use App\Models\PostMediaPlacement;
@@ -86,6 +88,8 @@ class PublishPrecheck
             'video_bad_aspect_ratio' => "The video's aspect ratio is outside {$label}'s allowed range (widest 3:1, tallest 1:3).",
             'gif_not_mixable' => "{$label} allows only one GIF and won't mix it with other media.",
             'unplaced_media' => "Some attached media isn't placed in this post — remove it or add it to a thread section.",
+            'tiktok_privacy_required' => 'Choose who can view this TikTok post.',
+            'tiktok_disclosure_incomplete' => 'You need to indicate if your content promotes yourself, a third party, or both.',
             default => "{$label} can't publish this post yet.",
         }, $issues);
 
@@ -127,7 +131,44 @@ class PublishPrecheck
             $issues[] = $issue;
         }
 
+        foreach ($this->tikTokIssues($target) as $issue) {
+            $issues[] = $issue;
+        }
+
         return array_values(array_unique($issues));
+    }
+
+    /**
+     * Choices TikTok requires the creator to make before a Direct Post: who can
+     * view it (there is deliberately no default) and, once commercial content
+     * disclosure is on, what kind of promotion it is. Inbox drafts carry none
+     * of these — the creator sets them in the TikTok app.
+     *
+     * @return list<string>
+     */
+    private function tikTokIssues(PostTarget $target): array
+    {
+        if ($target->platform !== Platform::TikTok) {
+            return [];
+        }
+
+        $options = $target->tiktok_options ?? new TikTokPostOptions;
+
+        if (! $options->isDirectPost()) {
+            return [];
+        }
+
+        $issues = [];
+
+        if (! $options->privacyLevel instanceof TikTokPrivacyLevel) {
+            $issues[] = 'tiktok_privacy_required';
+        }
+
+        if ($options->hasIncompleteDisclosure()) {
+            $issues[] = 'tiktok_disclosure_incomplete';
+        }
+
+        return $issues;
     }
 
     /**

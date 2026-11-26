@@ -41,7 +41,8 @@ test('tiktok declares no metrics or engagement support', function () {
     expect(Platform::TikTok->supportsPostMetrics())->toBeFalse()
         ->and(Platform::TikTok->supportsAccountMetrics())->toBeFalse()
         ->and(Platform::TikTok->supportsEngagement())->toBeFalse()
-        ->and(Platform::TikTok->supportsDirectMessages())->toBeFalse();
+        ->and(Platform::TikTok->supportsDirectMessages())->toBeFalse()
+        ->and(Platform::TikTok->supportsRemoteDelete())->toBeFalse();
 });
 
 test('the metrics and engagement registries have no tiktok connector', function () {

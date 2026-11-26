@@ -11,10 +11,10 @@ use Throwable;
 
 /**
  * Re-encodes a stored image to JPEG alongside the original, for the URL-fetch platforms
- * (Instagram, Threads) that reject the source format.
+ * (Instagram, Threads, TikTok) that reject the source format or, for TikTok, its size.
  *
- * Those platforms publish by handing Meta a public URL it fetches server-side, so unlike
- * the byte-upload connectors they cannot convert in flight — the bytes Meta reads are
+ * Those platforms publish by handing the platform a public URL it fetches server-side, so
+ * unlike the byte-upload connectors they cannot convert in flight — the bytes it reads are
  * whatever is on disk. The derived file is written next to the original (mirroring
  * GifToMp4Converter) and reused on a later publish attempt or retry.
  */
@@ -28,10 +28,16 @@ class ImageToJpegConverter
      */
     public function __construct(private readonly int $maxPixels = ImageCompressor::DEFAULT_MAX_PIXELS) {}
 
-    public function convert(PostMedia $media): ConvertedImage
+    /**
+     * @param  array{long_edge: int, short_edge: int}|null  $frame  When given, the JPEG is
+     *                                                              also scaled down (never up)
+     *                                                              to fit this frame in the
+     *                                                              image's own orientation.
+     */
+    public function convert(PostMedia $media, ?array $frame = null): ConvertedImage
     {
         $disk = Storage::disk($media->disk);
-        $derivedPath = $this->derivedPath($media);
+        $derivedPath = DerivedMedia::path($media, 'jpg', $frame !== null ? DerivedMedia::frameVariant($frame) : null);
 
         if ($disk->exists($derivedPath)) {
             return new ConvertedImage($media->disk, $derivedPath);
@@ -53,7 +59,14 @@ class ImageToJpegConverter
             // JPEG has no alpha; the GD JPEG encoder flattens onto the driver's
             // configured background (white), so transparent PNGs keep a white
             // backdrop rather than picking up black fringing.
-            $encoded = Image::fromBytes($bytes)
+            $image = Image::fromBytes($bytes);
+
+            if ($frame !== null) {
+                [$width, $height] = $this->frameBounds($frame, is_array($info) ? $info[0] >= $info[1] : null);
+                $image = $image->scale($width, $height);
+            }
+
+            $encoded = $image
                 ->toJpg()
                 ->quality(self::QUALITY)
                 ->toBytes();
@@ -66,8 +79,22 @@ class ImageToJpegConverter
         return new ConvertedImage($media->disk, $derivedPath);
     }
 
-    private function derivedPath(PostMedia $media): string
+    /**
+     * Width and height bounds for the frame in the image's orientation. When the
+     * orientation is unknown, fit the short edge both ways so either one fits.
+     *
+     * @param  array{long_edge: int, short_edge: int}  $frame
+     * @return array{int<1, max>, int<1, max>}
+     */
+    private function frameBounds(array $frame, ?bool $landscape): array
     {
-        return DerivedMedia::path($media, 'jpg');
+        $long = max(1, $frame['long_edge']);
+        $short = max(1, $frame['short_edge']);
+
+        return match ($landscape) {
+            true => [$long, $short],
+            false => [$short, $long],
+            null => [$short, $short],
+        };
     }
 }
