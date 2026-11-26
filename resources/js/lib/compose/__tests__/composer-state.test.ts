@@ -130,6 +130,21 @@ function hydrated(): ReturnType<typeof composerReducer> {
     return composerReducer(initialComposerState(), { type: 'hydrate', post });
 }
 
+/** The server's answer to a successful autosave of the hydrated post. */
+const savedView: PostView = {
+    id: 'post-1',
+    base_text: 'hello',
+    segments: ['hello'],
+    status: 'draft',
+    published_at: null,
+    updated_at: '2026-06-12T11:00:00+00:00',
+    scheduled_at: null,
+    auto_repost: null,
+    destination: { kind: 'all', id: null },
+    targets: [],
+    media: [],
+};
+
 describe('pickActiveAccount', () => {
     it('returns the account matching the active tab', () => {
         const accounts = [account('a1'), account('a2')];
@@ -275,6 +290,7 @@ describe('composerReducer', () => {
             type: 'updateSegments',
             segments: ['new'],
         });
+        const sent = state;
         state = composerReducer(state, { type: 'saveStarted' });
         expect(state.saveState).toBe('saving');
 
@@ -291,13 +307,18 @@ describe('composerReducer', () => {
             targets: [],
             media: [],
         };
-        state = composerReducer(state, { type: 'saveSucceeded', post: view });
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: view,
+            sent,
+        });
         expect(state.saveState).toBe('saved');
         expect(state.baselineUpdatedAt).toBe('2026-06-12T11:00:00+00:00');
     });
 
     it('keeps dirty on save success when edits arrived mid-flight', () => {
-        let state = composerReducer(hydrated(), { type: 'saveStarted' });
+        const sent = hydrated();
+        let state = composerReducer(sent, { type: 'saveStarted' });
         // user types while the save is in flight
         state = composerReducer(state, {
             type: 'updateSegments',
@@ -318,11 +339,60 @@ describe('composerReducer', () => {
             targets: [],
             media: [],
         };
-        state = composerReducer(state, { type: 'saveSucceeded', post: view });
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: view,
+            sent,
+        });
         // stays dirty so the debounce reschedules and the edit is not lost
         expect(state.saveState).toBe('dirty');
         expect(state.baselineUpdatedAt).toBe('2026-06-12T11:30:00+00:00');
         expect(state.conflict).toBeNull();
+    });
+
+    it('keeps dirty when an edit landed before the save started but after its snapshot', () => {
+        // A forced flush takes its snapshot, then a Reels click lands before
+        // the request starts: 'saveStarted' overwrites the click's 'dirty', so
+        // only the snapshot shows the format was not sent.
+        const sent = composerReducer(hydrated(), {
+            type: 'updateSegments',
+            segments: ['caption'],
+        });
+        let state = composerReducer(sent, {
+            type: 'setFormat',
+            accountId: 'instagram-1',
+            format: 'reels',
+        });
+        state = composerReducer(state, { type: 'saveStarted' });
+        expect(state.saveState).toBe('saving');
+
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: { ...savedView, segments: ['caption'] },
+            sent,
+        });
+
+        expect(state.saveState).toBe('dirty');
+        expect(state.formatByAccount['instagram-1']).toBe('reels');
+    });
+
+    it('marks saved when nothing changed after the snapshot the save sent', () => {
+        const sent = composerReducer(hydrated(), {
+            type: 'setFormat',
+            accountId: 'instagram-1',
+            format: 'reels',
+        });
+        let state = composerReducer(sent, { type: 'saveStarted' });
+        // Switching tabs is not persisted, so it is not an unsaved edit.
+        state = composerReducer(state, { type: 'setActiveTab', tab: 'x-1' });
+
+        state = composerReducer(state, {
+            type: 'saveSucceeded',
+            post: savedView,
+            sent,
+        });
+
+        expect(state.saveState).toBe('saved');
     });
 
     it('tracks media via addMedia and removeMedia and marks dirty', () => {

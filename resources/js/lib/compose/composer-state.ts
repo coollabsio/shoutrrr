@@ -98,7 +98,12 @@ export type ComposerAction =
     | { type: 'setScheduleTray'; tray: ScheduleTray }
     | { type: 'saveStarted' }
     | { type: 'saveSkippedEmpty' }
-    | { type: 'saveSucceeded'; post: PostView }
+    | {
+          type: 'saveSucceeded';
+          post: PostView;
+          /** The composer snapshot whose content the save sent. */
+          sent: ComposerState;
+      }
     | { type: 'saveFailedOffline' }
     | { type: 'saveFailedStale'; post: PostView }
     | { type: 'resolveConflictUseServer' }
@@ -799,12 +804,19 @@ export function composerReducer(
                 : state;
 
         case 'saveSucceeded':
-            // Preserve 'dirty' if the user typed during the in-flight save so the
-            // debounce reschedules; otherwise mark 'saved'. Always advance the
-            // baseline and clear any conflict.
+            // Stay 'dirty' when the composer changed after the snapshot this
+            // save sent, so the debounce saves that change too; otherwise mark
+            // 'saved'. A flag alone can miss it: an edit that lands between a
+            // forced flush and its request (e.g. picking Reels right after
+            // typing a caption) is overwritten by 'saveStarted'. Always
+            // advance the baseline and clear any conflict.
             return {
                 ...state,
-                saveState: state.saveState === 'dirty' ? 'dirty' : 'saved',
+                saveState:
+                    state.saveState === 'dirty' ||
+                    hasEditsSince(state, action.sent)
+                        ? 'dirty'
+                        : 'saved',
                 baselineUpdatedAt: action.post.updated_at,
                 conflict: null,
             };
@@ -1101,4 +1113,32 @@ export function firstLineTitle(segments: string[]): string {
     ).trim();
 
     return trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;
+}
+
+/** The composer fields an autosave persists (see `buildPutBody`). */
+const PERSISTED_FIELDS = [
+    'segments',
+    'mentions',
+    'destination',
+    'autoSplitByAccount',
+    'formatByAccount',
+    'overrideByAccount',
+    'media',
+    'segmentBreaks',
+    'placements',
+    'placementsByAccount',
+    'autoRepost',
+    'skipSync',
+] as const satisfies readonly (keyof ComposerState)[];
+
+/**
+ * Whether the composer changed after `sent`, the snapshot a save sent. The
+ * reducer replaces a field only when it changes, so a persisted field that is
+ * no longer the same value as in the snapshot was edited after it was taken.
+ */
+export function hasEditsSince(
+    state: ComposerState,
+    sent: ComposerState,
+): boolean {
+    return PERSISTED_FIELDS.some((field) => state[field] !== sent[field]);
 }

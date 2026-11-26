@@ -68,17 +68,18 @@ export function useAutosave({
      * (e.g. a media-first upload). Returns the new post id.
      */
     async function createPost(): Promise<string> {
+        const sent = state;
         http.transform(() => ({
-            segments: state.segments,
-            mentions: state.mentions,
-            destination: state.destination,
-            auto_repost: state.autoRepost,
+            segments: sent.segments,
+            mentions: sent.mentions,
+            destination: sent.destination,
+            auto_repost: sent.autoRepost,
             // Persist the thread structure and per-segment placements on the
             // very first save too, so a reload before the next autosave PUT
             // sees a consistent post (stale break ids would otherwise degrade
             // to positional fallbacks and misplace media onto the first post).
-            segment_breaks: state.segmentBreaks,
-            placements: flattenPlacements(state.placements),
+            segment_breaks: sent.segmentBreaks,
+            placements: flattenPlacements(sent.placements),
         }));
         const created = await http.post(PostController.store().url, {
             onNetworkError: () => dispatch({ type: 'saveFailedOffline' }),
@@ -90,7 +91,7 @@ export function useAutosave({
             postId: created.post.id,
             updatedAt: created.post.updated_at,
         });
-        dispatch({ type: 'saveSucceeded', post: created.post });
+        dispatch({ type: 'saveSucceeded', post: created.post, sent });
         onSaved?.();
 
         return created.post.id;
@@ -114,8 +115,9 @@ export function useAutosave({
 
         // expected_updated_at comes from the ref (latest server version), not the
         // possibly-stale closure, so a save queued behind another never 409s.
+        const sent = state;
         http.transform(() => ({
-            ...buildPutBody(state, accountIds),
+            ...buildPutBody(sent, accountIds),
             expected_updated_at: baselineRef.current,
         }));
         let saved = false;
@@ -124,7 +126,7 @@ export function useAutosave({
             onSuccess: (data) => {
                 saved = true;
                 baselineRef.current = data.post.updated_at;
-                dispatch({ type: 'saveSucceeded', post: data.post });
+                dispatch({ type: 'saveSucceeded', post: data.post, sent });
                 onSaved?.();
             },
             // onHttpException's response.data is typed `string` but may arrive
@@ -191,9 +193,13 @@ export function useAutosave({
         return postIdRef.current ?? '';
     }
 
-    /** Debounced autosave: only when dirty and nothing already in flight. */
+    /**
+     * Debounced autosave: only when dirty. An edit made while a save is in
+     * flight queues behind it rather than being skipped, because nothing
+     * re-arms the debounce once that save lands and the composer stays dirty.
+     */
     async function save() {
-        if (inFlight.current || state.saveState !== 'dirty') {
+        if (state.saveState !== 'dirty') {
             return;
         }
         // An empty composer with no draft yet has nothing worth a POST — a
